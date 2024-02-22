@@ -32,11 +32,11 @@ import org.apache.fineract.portfolio.self.registration.service.SelfServiceRegist
 import org.apache.fineract.useradministration.domain.PasswordValidationPolicyRepository;
 import org.apache.fineract.useradministration.domain.RoleRepository;
 import org.apache.fineract.useradministration.domain.UserDomainService;
-import org.apache.fineract.useradministration.service.AppUserReadPlatformService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.apache.fineract.useradministration.service.SelfServiceAppUserReadPlatformService;
 
 @Configuration
 public class SelfRegistrationConfiguration {
@@ -57,7 +57,7 @@ public class SelfRegistrationConfiguration {
             GmailBackedPlatformEmailService gmailBackedPlatformEmailService, SmsMessageRepository smsMessageRepository,
             SmsMessageScheduledJobService smsMessageScheduledJobService,
             SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService,
-            AppUserReadPlatformService appUserReadPlatformService, RoleRepository roleRepository) {
+            SelfServiceAppUserReadPlatformService appUserReadPlatformService, RoleRepository roleRepository) {
         return new SelfServiceRegistrationWritePlatformServiceImpl(selfServiceRegistrationRepository, fromApiJsonHelper,
                 selfServiceRegistrationReadPlatformService, clientRepository, passwordValidationPolicy, userDomainService,
                 gmailBackedPlatformEmailService, smsMessageRepository, smsMessageScheduledJobService,
