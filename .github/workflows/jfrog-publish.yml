@@ -1,0 +1,26 @@
+name: Publish package to the Mifos Artifactory and GitHub Packages
+on:
+  push:
+    branches:
+      - develop
+jobs:
+  publish:
+    runs-on: ubuntu-latest 
+    permissions: 
+      contents: read
+      packages: write 
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Java for publishing to Mifos Artifactory
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+          server-id: central
+          server-username: ARTIFACTORY_USERNAME
+          server-password: ARTIFACTORY_PASSWORD
+      - name: Publish to the Mifos Artifactory
+        run: mvn -Dmaven.test.skip=true --batch-mode deploy
+        env:
+          ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
