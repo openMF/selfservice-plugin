@@ -21,7 +21,7 @@ package org.apache.fineract.useradministration.service;
 import java.util.Collection;
 import org.apache.fineract.useradministration.data.AppUserData;
 
-public interface SelfServiceAppUserReadPlatformService {
+public interface AppUserReadPlatformService {
 
     Collection<AppUserData> retrieveAllUsers();
 

@@ -45,7 +45,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 @RequiredArgsConstructor
-public class SelfServiceAppUserReadPlatformServiceImpl implements SelfServiceAppUserReadPlatformService {
+public class AppUserReadPlatformServiceImpl implements AppUserReadPlatformService {
 
     private final PlatformSecurityContext context;
     private final JdbcTemplate jdbcTemplate;

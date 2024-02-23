@@ -29,12 +29,12 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
-public class SelfServiceRoleReadPlatformServiceImpl implements SelfServiceRoleReadPlatformService {
+public class RoleReadPlatformServiceImpl implements RoleReadPlatformService {
 
     private final JdbcTemplate jdbcTemplate;
     private final RoleMapper roleRowMapper;
 
-    public SelfServiceRoleReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate) {
+    public RoleReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         this.roleRowMapper = new RoleMapper();
     }

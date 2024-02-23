@@ -36,7 +36,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.apache.fineract.useradministration.service.SelfServiceAppUserReadPlatformService;
+import org.apache.fineract.useradministration.service.AppUserReadPlatformService;
 
 @Configuration
 public class SelfRegistrationConfiguration {
@@ -51,16 +51,21 @@ public class SelfRegistrationConfiguration {
     @ConditionalOnMissingBean(SelfServiceRegistrationWritePlatformService.class)
     public SelfServiceRegistrationWritePlatformService selfServiceRegistrationWritePlatformService(
 
-            SelfServiceRegistrationRepository selfServiceRegistrationRepository, FromJsonHelper fromApiJsonHelper,
-            SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService, ClientRepositoryWrapper clientRepository,
-            PasswordValidationPolicyRepository passwordValidationPolicy, UserDomainService userDomainService,
-            GmailBackedPlatformEmailService gmailBackedPlatformEmailService, SmsMessageRepository smsMessageRepository,
+            SelfServiceRegistrationRepository selfServiceRegistrationRepository, 
+            FromJsonHelper fromApiJsonHelper,
+            SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService, 
+            ClientRepositoryWrapper clientRepository,
+            PasswordValidationPolicyRepository passwordValidationPolicy, 
+            UserDomainService userDomainService,
+            GmailBackedPlatformEmailService gmailBackedPlatformEmailService, 
+            SmsMessageRepository smsMessageRepository,
             SmsMessageScheduledJobService smsMessageScheduledJobService,
             SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService,
-            SelfServiceAppUserReadPlatformService appUserReadPlatformService, RoleRepository roleRepository) {
+            AppUserReadPlatformService selfServiceAppUserReadPlatformService, 
+            RoleRepository roleRepository) {
         return new SelfServiceRegistrationWritePlatformServiceImpl(selfServiceRegistrationRepository, fromApiJsonHelper,
                 selfServiceRegistrationReadPlatformService, clientRepository, passwordValidationPolicy, userDomainService,
                 gmailBackedPlatformEmailService, smsMessageRepository, smsMessageScheduledJobService,
-                smsCampaignDropdownReadPlatformService, appUserReadPlatformService, roleRepository);
+                smsCampaignDropdownReadPlatformService, selfServiceAppUserReadPlatformService, roleRepository);
     }
 }

@@ -21,7 +21,7 @@ package org.apache.fineract.useradministration.service;
 import java.util.Collection;
 import org.apache.fineract.useradministration.data.RoleData;
 
-public interface SelfServiceRoleReadPlatformService {
+public interface RoleReadPlatformService {
 
     Collection<RoleData> retrieveAll();
 

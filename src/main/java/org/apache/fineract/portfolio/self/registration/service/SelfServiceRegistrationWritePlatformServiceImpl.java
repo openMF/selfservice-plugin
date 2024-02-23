@@ -70,7 +70,7 @@ import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
-import org.apache.fineract.useradministration.service.SelfServiceAppUserReadPlatformService;
+import org.apache.fineract.useradministration.service.AppUserReadPlatformService;
 
 @RequiredArgsConstructor
 public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServiceRegistrationWritePlatformService {
@@ -85,7 +85,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServ
     private final SmsMessageRepository smsMessageRepository;
     private final SmsMessageScheduledJobService smsMessageScheduledJobService;
     private final SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService;
-    private final SelfServiceAppUserReadPlatformService appUserReadPlatformService;
+    private final AppUserReadPlatformService appUserReadPlatformService;
     private final RoleRepository roleRepository;
     private static final SecureRandom secureRandom = new SecureRandom();
 
