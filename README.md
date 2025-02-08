@@ -26,18 +26,18 @@ Maven
     <dependency>
         <groupId>community.mifos</groupId>
         <artifactId>selfservice-plugin</artifactId>
-        <version>1.9.0-SNAPSHOT</version>
+        <version>1.11.0-SNAPSHOT</version>
     </dependency>
 ```
 Gradle
 ```bash
-    compile(group: 'community.mifos', name: 'selfservice-plugin', version: '1.9.0-SNAPSHOT')
+    compile(group: 'community.mifos', name: 'selfservice-plugin', version: '1.11.0-SNAPSHOT')
 ```
 
 ## Build & Use For Linux Users
 
 This project is currently only tested against the very latest and greatest
-bleeding edge Fineract `develop` branch on Linux Ubuntu 22.04LTS. Building and using it against
+bleeding edge Fineract `develop` branch on Linux Ubuntu 24.04LTS. Building and using it against
 other versions may be possible, but is not tested or documented here.
 
 1. Download and compile
