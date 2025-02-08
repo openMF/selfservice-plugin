@@ -21,6 +21,7 @@
         <graal.version>22.3.1</graal.version>
         <eclipselink.version>4.0.5</eclipselink.version>
         <truth.version>1.4.4</truth.version>
+        <lombok.version>1.18.36</lombok.version>
     </properties>
 
     <dependencies>
@@ -91,7 +92,7 @@
         <dependency>
             <groupId>org.apache.fineract</groupId>
             <artifactId>fineract-loan</artifactId>
-            <version>0.0.869-f12aac1</version>
+            <version>${fineract.version}</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
@@ -103,7 +104,7 @@
         <dependency>
             <groupId>org.apache.fineract</groupId>
             <artifactId>fineract-savings</artifactId>
-            <version>0.0.869-f12aac1</version>
+            <version>${fineract.version}</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
@@ -112,19 +113,34 @@
                 </exclusion>
             </exclusions>
 	</dependency>
-        <!--LOCAL JAR FILE
         <dependency>
             <groupId>org.apache.fineract</groupId>
-            <artifactId>fineract-provider</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>$HOME/fineract/fineract-provider/build/libs/fineract-provider-0.0.0-2ac92089-plain.jar</systemPath>
-        </dependency>
-        -->
+            <artifactId>fineract-document</artifactId>
+            <version>${fineract.version}</version>
+            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.fineract</groupId>
+                    <artifactId>fineract-avro-schemas</artifactId>
+                </exclusion>
+            </exclusions>
+	</dependency>
+        <dependency>
+            <groupId>org.apache.fineract</groupId>
+            <artifactId>fineract-charge</artifactId>
+            <version>${fineract.version}</version>
+            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.fineract</groupId>
+                    <artifactId>fineract-avro-schemas</artifactId>
+                </exclusion>
+            </exclusions>
+	</dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
         
