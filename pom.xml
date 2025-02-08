@@ -91,7 +91,7 @@
         <dependency>
             <groupId>org.apache.fineract</groupId>
             <artifactId>fineract-loan</artifactId>
-            <version>0.0.526-31231f1</version>
+            <version>0.0.869-f12aac1</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
