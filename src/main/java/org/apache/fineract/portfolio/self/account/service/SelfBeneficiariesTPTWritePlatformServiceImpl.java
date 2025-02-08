@@ -100,7 +100,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
                 SelfBeneficiariesTPT beneficiary = new SelfBeneficiariesTPT(user.getId(), name, officeId, clientId, accountId, accountType,
                         transferLimit);
                 this.repository.saveAndFlush(beneficiary);
-                return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+                return new CommandProcessingResultBuilder().withEntityId((Long) beneficiary.getId()).build();
             } catch (DataAccessException dae) {
                 handleDataIntegrityIssues(command, dae);
             }
@@ -126,7 +126,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
                     this.repository.saveAndFlush(beneficiary);
 
                     return new CommandProcessingResultBuilder() //
-                            .withEntityId(beneficiary.getId()) //
+                            .withEntityId((Long)beneficiary.getId()) //
                             .with(changes).build();
                 } catch (DataAccessException dae) {
                     handleDataIntegrityIssues(command, dae);
@@ -149,7 +149,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
             this.repository.save(beneficiary);
 
             return new CommandProcessingResultBuilder() //
-                    .withEntityId(beneficiary.getId()) //
+                    .withEntityId((Long)beneficiary.getId()) //
                     .build();
         }
         throw new InvalidBeneficiaryException(beneficiaryId);

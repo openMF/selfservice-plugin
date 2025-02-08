@@ -61,7 +61,7 @@ public class PocketWritePlatformServiceImpl implements PocketWritePlatformServic
         if (pocketId == null) {
             final Pocket pocket = Pocket.instance(this.context.authenticatedUser().getId());
             this.pocketRepositoryWrapper.saveAndFlush(pocket);
-            pocketId = pocket.getId();
+            pocketId = (Long)pocket.getId();
         }
 
         final List<PocketAccountMapping> pocketAccounts = new ArrayList<>();
