@@ -47,7 +47,7 @@ other versions may be possible, but is not tested or documented here.
     cd selfservice-plugin && ./mvnw -Dmaven.test.skip=true clean package && cd ..
 ```
 
-2. Execute Apache Fineract with the location of the Mifos Pentaho Plugin library for Apache Fineract
+2. Execute Apache Fineract with the location of the Self Service Plugin library for Apache Fineract
 
 ```bash
 java -Dloader.path=$APACHE_FINERACT_PLUGIN_HOME/libs/ -jar $APACHE_FINERACT_HOME/fineract-provider.jar
