@@ -26,8 +26,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.junit.jupiter.api.AfterEach;
@@ -59,7 +61,9 @@ class SelfServiceNotificationTenantPropagationIntegrationTest {
             mock(org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService.class),
             mock(org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService.class),
             mock(NotificationCooldownCache.class),
-            mock(Environment.class)
+            mock(Environment.class),
+            mock(ExternalNotificationSystemClient.class),
+            mock(NotificationCredentialsData.class)
     );
 
     @AfterEach

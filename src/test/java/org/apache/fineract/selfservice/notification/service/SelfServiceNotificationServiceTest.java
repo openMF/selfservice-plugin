@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
+import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.core.domain.EmailDetail;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
 import org.apache.fineract.infrastructure.core.service.SmtpConfigurationUnavailableException;
@@ -52,6 +53,7 @@ import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,6 +76,8 @@ class SelfServiceNotificationServiceTest {
     @Mock private SmsCampaignDropdownReadPlatformService smsProviderService;
     @Mock private NotificationCooldownCache cooldownCache;
     @Mock private Environment env;
+    @Mock private ExternalNotificationSystemClient externalNotificationSystemClient;
+    @Mock private NotificationCredentialsData notificationCredentialsData;
 
     private SelfServiceNotificationService service;
     private ListAppender<ILoggingEvent> logAppender;
@@ -89,7 +93,8 @@ class SelfServiceNotificationServiceTest {
         ThreadLocalContextUtil.setBusinessDates(dates);
 
         service = new SelfServiceNotificationService(templateEngine, messageSource, emailService,
-                smsMessageRepository, smsScheduledJobService, smsProviderService, cooldownCache, env);
+                smsMessageRepository, smsScheduledJobService, smsProviderService, cooldownCache, env,
+                externalNotificationSystemClient, notificationCredentialsData);
 
         logger = (Logger) LoggerFactory.getLogger(SelfServiceNotificationService.class);
         originalLevel = logger.getLevel();

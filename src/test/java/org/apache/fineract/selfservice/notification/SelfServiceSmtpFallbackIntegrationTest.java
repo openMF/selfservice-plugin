@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
+import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.configuration.service.ExternalServicesPropertiesReadPlatformService;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -42,6 +43,7 @@ import org.apache.fineract.infrastructure.core.service.SmtpConfigurationUnavaila
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository;
 import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService;
+import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.notification.service.SelfServiceNotificationService;
 import org.apache.fineract.selfservice.notification.starter.SelfServiceNotificationConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -242,11 +244,13 @@ public class SelfServiceSmtpFallbackIntegrationTest {
                 org.springframework.context.MessageSource notificationMessageSource,
                 SelfServicePluginEmailService emailService,
                 NotificationCooldownCache cooldownCache,
-                Environment env) {
+                Environment env, 
+                ExternalNotificationSystemClient externalNotificationSystemClient, 
+                NotificationCredentialsData notificationCredentialsData) {
             return new SelfServiceNotificationService(
                     notificationTemplateEngine, notificationMessageSource, emailService,
                     smsMessageRepository(), smsScheduledJobService(), smsProviderService(),
-                    cooldownCache, env);
+                    cooldownCache, env, externalNotificationSystemClient, notificationCredentialsData);
         }
 
         @Bean
