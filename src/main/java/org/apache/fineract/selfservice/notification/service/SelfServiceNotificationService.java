@@ -78,8 +78,7 @@ public class SelfServiceNotificationService {
             SmsMessageRepository smsMessageRepository, SmsMessageScheduledJobService smsScheduledJobService,
             SmsCampaignDropdownReadPlatformService smsProviderService,
             NotificationCooldownCache notificationCooldownCache, Environment env, 
-            ExternalNotificationSystemClient externalNotificationSystemClient, 
-            NotificationCredentialsData notificationCredentialsData) {
+            ExternalNotificationSystemClient externalNotificationSystemClient) {
         this.notificationTemplateEngine = notificationTemplateEngine;
         this.notificationMessageSource = notificationMessageSource;
         this.emailService = emailService;

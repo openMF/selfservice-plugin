@@ -35,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
-import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.configuration.service.ExternalServicesPropertiesReadPlatformService;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -245,12 +244,11 @@ public class SelfServiceSmtpFallbackIntegrationTest {
                 SelfServicePluginEmailService emailService,
                 NotificationCooldownCache cooldownCache,
                 Environment env, 
-                ExternalNotificationSystemClient externalNotificationSystemClient, 
-                NotificationCredentialsData notificationCredentialsData) {
+                ExternalNotificationSystemClient externalNotificationSystemClient) {
             return new SelfServiceNotificationService(
                     notificationTemplateEngine, notificationMessageSource, emailService,
                     smsMessageRepository(), smsScheduledJobService(), smsProviderService(),
-                    cooldownCache, env, externalNotificationSystemClient, notificationCredentialsData);
+                    cooldownCache, env, externalNotificationSystemClient);
         }
 
         @Bean

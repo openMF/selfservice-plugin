@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
-import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.core.domain.EmailDetail;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
 import org.apache.fineract.infrastructure.core.service.SmtpConfigurationUnavailableException;
@@ -77,7 +76,6 @@ class SelfServiceNotificationServiceTest {
     @Mock private NotificationCooldownCache cooldownCache;
     @Mock private Environment env;
     @Mock private ExternalNotificationSystemClient externalNotificationSystemClient;
-    @Mock private NotificationCredentialsData notificationCredentialsData;
 
     private SelfServiceNotificationService service;
     private ListAppender<ILoggingEvent> logAppender;
@@ -94,7 +92,7 @@ class SelfServiceNotificationServiceTest {
 
         service = new SelfServiceNotificationService(templateEngine, messageSource, emailService,
                 smsMessageRepository, smsScheduledJobService, smsProviderService, cooldownCache, env,
-                externalNotificationSystemClient, notificationCredentialsData);
+                externalNotificationSystemClient);
 
         logger = (Logger) LoggerFactory.getLogger(SelfServiceNotificationService.class);
         originalLevel = logger.getLevel();
