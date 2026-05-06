@@ -192,8 +192,7 @@ public class SelfServiceNotificationService {
             catch (Exception e){
                 log.error("Error when sending to external system ", e.getMessage());
                 e.printStackTrace();
-            }
-            
+            }            
         }
         else {
             if (org.apache.commons.lang3.StringUtils.isBlank(event.getEmail())) {
