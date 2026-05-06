@@ -168,20 +168,17 @@ public class SelfServiceNotificationService {
     private void sendEmailNotification(SelfServiceNotificationEvent event, String subject, Context context) {
         
         notificationCredentialsData = externalNotificationSystemClient.resolveNotificationCredentials();
+        String templateName = "html/" + event.getType().getTemplatePrefix();
+        String htmlBody = notificationTemplateEngine.process(templateName, context);
         
         if(notificationCredentialsData.isEnabled()){
             
-            final String message = "Welcome " + event.getFirstName() + "\n"+ 
-                    "Your self-service account has been activated. " +  "\n"+ 
-                    "You can now login with your username: " + event.getUsername() +"\n"+ 
-                    "Regards \n"+ 
-                    "The Institution team \n" ;
 
             NotificationMessage notificationMessage = new NotificationMessage();
 
             notificationMessage.setEmail(event.getEmail());
             notificationMessage.setMobile(event.getMobileNumber());
-            notificationMessage.setText(message);
+            notificationMessage.setText(htmlBody);
 
             try {
 
@@ -198,9 +195,7 @@ public class SelfServiceNotificationService {
                 releaseCooldown(event);
                 return;
             }
-            String templateName = "html/" + event.getType().getTemplatePrefix();
-            String htmlBody = notificationTemplateEngine.process(templateName, context);
-
+        
             String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
             EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
             emailService.sendFormattedEmail(emailDetail);
