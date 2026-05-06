@@ -181,9 +181,16 @@ public class SelfServiceNotificationService {
             notificationMessage.setMobile(event.getMobileNumber());
             
             if(notificationCredentialsData.isWhatsapp() || notificationCredentialsData.isSms()){
+                // 1. Remove all HTML tags using regex
                 String noTags = htmlBody.replaceAll("<[^>]*>", "");
-                String finalResult = StringEscapeUtils.unescapeHtml4(noTags);
-                notificationMessage.setText(finalResult);
+
+                // 2. Unescape HTML entities (e.g., &nbsp; or &amp;)
+                String unescaped = StringEscapeUtils.unescapeHtml4(noTags);
+
+                // 3. Clean up whitespace: 
+                // Trim leading/trailing and replace 3+ consecutive newlines with 2
+                String result = unescaped.trim().replaceAll("(?m)^[ \t]*\r?\n", "").replaceAll("\n{3,}", "\n\n");
+                notificationMessage.setText(result);
             }
                 
             if(notificationCredentialsData.isEmail()){
