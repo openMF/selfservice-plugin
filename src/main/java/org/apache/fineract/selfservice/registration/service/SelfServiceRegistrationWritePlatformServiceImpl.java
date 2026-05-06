@@ -219,8 +219,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServ
 
     public void sendAuthorizationToken(SelfServiceRegistration selfServiceRegistration, Boolean isEmailAuthenticationMode, Boolean isAnyAuthenticationMode) {
         
-        notificationCredentialsData = externalNotificationSystemClient.resolveNotificationCredentials();
-                
         if (isEmailAuthenticationMode) {
             sendAuthorizationMail(selfServiceRegistration);
         } 
@@ -230,6 +228,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServ
     }
     
     private void sendAuthorizationMessage(SelfServiceRegistration selfServiceRegistration, Boolean isAnyAuthenticationMode) {        
+        
+        notificationCredentialsData = externalNotificationSystemClient.resolveNotificationCredentials();
         
         if (!isAnyAuthenticationMode) {
             Collection<SmsProviderData> smsProviders = this.smsCampaignDropdownReadPlatformService.retrieveSmsProviders(); 
@@ -260,22 +260,24 @@ public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServ
             }
         } else if(notificationCredentialsData.isEnabled()){
             
-                final String message = selfServiceRegistration.getFirstName() + " use this token for activate your account " + selfServiceRegistration.getAuthenticationToken();
-                
-                NotificationMessage notificationMessage = new NotificationMessage();
-                
-                notificationMessage.setEmail(selfServiceRegistration.getEmail());
-                notificationMessage.setMobile(selfServiceRegistration.getMobileNumber());
-                notificationMessage.setText(message);
-                
-                try {
-                    
-                    externalNotificationSystemClient.sendPostRequest(notificationMessage);
-                } 
-                catch (Exception e){
-                    log.error("Error when sending to external system ", e.getMessage());
-                    e.printStackTrace();
-                }
+            final String message = selfServiceRegistration.getFirstName() + 
+                    " use this token for activate your account " + 
+                    selfServiceRegistration.getAuthenticationToken();
+
+            NotificationMessage notificationMessage = new NotificationMessage();
+
+            notificationMessage.setEmail(selfServiceRegistration.getEmail());
+            notificationMessage.setMobile(selfServiceRegistration.getMobileNumber());
+            notificationMessage.setText(message);
+
+            try {
+
+                externalNotificationSystemClient.sendPostRequest(notificationMessage);
+            } 
+            catch (Exception e){
+                log.error("Error when sending to external system ", e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
 

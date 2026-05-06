@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
+import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
+import org.apache.fineract.infrastructure.configuration.domain.NotificationMessage;
 import org.apache.fineract.infrastructure.core.domain.EmailDetail;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -34,6 +36,7 @@ import org.apache.fineract.infrastructure.sms.domain.SmsMessage;
 import org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository;
 import org.apache.fineract.infrastructure.sms.domain.SmsMessageStatusType;
 import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService;
+import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.springframework.context.MessageSource;
@@ -41,7 +44,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.ITemplateEngine;
 import org.thymeleaf.context.Context;
 
@@ -61,6 +63,8 @@ public class SelfServiceNotificationService {
     private final SmsCampaignDropdownReadPlatformService smsProviderService;
     private final NotificationCooldownCache notificationCooldownCache;
     private final Environment env;
+    private final ExternalNotificationSystemClient externalNotificationSystemClient;
+    private NotificationCredentialsData notificationCredentialsData; 
 
     /**
      * Guards the one-time WARN log emitted when email delivery fails due to SMTP configuration
@@ -73,7 +77,9 @@ public class SelfServiceNotificationService {
             MessageSource notificationMessageSource, SelfServicePluginEmailService emailService,
             SmsMessageRepository smsMessageRepository, SmsMessageScheduledJobService smsScheduledJobService,
             SmsCampaignDropdownReadPlatformService smsProviderService,
-            NotificationCooldownCache notificationCooldownCache, Environment env) {
+            NotificationCooldownCache notificationCooldownCache, Environment env, 
+            ExternalNotificationSystemClient externalNotificationSystemClient, 
+            NotificationCredentialsData notificationCredentialsData) {
         this.notificationTemplateEngine = notificationTemplateEngine;
         this.notificationMessageSource = notificationMessageSource;
         this.emailService = emailService;
@@ -82,6 +88,8 @@ public class SelfServiceNotificationService {
         this.smsProviderService = smsProviderService;
         this.notificationCooldownCache = notificationCooldownCache;
         this.env = env;
+        this.externalNotificationSystemClient = externalNotificationSystemClient;
+        this.notificationCredentialsData = notificationCredentialsData; 
     }
 
     /**
@@ -160,17 +168,46 @@ public class SelfServiceNotificationService {
     }
 
     private void sendEmailNotification(SelfServiceNotificationEvent event, String subject, Context context) {
-        if (org.apache.commons.lang3.StringUtils.isBlank(event.getEmail())) {
-            log.warn("Email notification skipped for event {} because no email address is available", event.getType());
-            releaseCooldown(event);
-            return;
-        }
-        String templateName = "html/" + event.getType().getTemplatePrefix();
-        String htmlBody = notificationTemplateEngine.process(templateName, context);
+        
+        notificationCredentialsData = externalNotificationSystemClient.resolveNotificationCredentials();
+        
+        if(notificationCredentialsData.isEnabled()){
+            
+            final String message = "Welcome " + event.getFirstName() + "\n"+ 
+                    "Your self-service account has been activated. " +  "\n"+ 
+                    "You can now login with your username: " + event.getUsername() +"\n"+ 
+                    "Regards \n"+ 
+                    "The Institution team \n" ;
 
-        String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
-        EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
-        emailService.sendFormattedEmail(emailDetail);
+            NotificationMessage notificationMessage = new NotificationMessage();
+
+            notificationMessage.setEmail(event.getEmail());
+            notificationMessage.setMobile(event.getMobileNumber());
+            notificationMessage.setText(message);
+
+            try {
+
+                externalNotificationSystemClient.sendPostRequest(notificationMessage);
+            } 
+            catch (Exception e){
+                log.error("Error when sending to external system ", e.getMessage());
+                e.printStackTrace();
+            }
+            
+        }
+        else {
+            if (org.apache.commons.lang3.StringUtils.isBlank(event.getEmail())) {
+                log.warn("Email notification skipped for event {} because no email address is available", event.getType());
+                releaseCooldown(event);
+                return;
+            }
+            String templateName = "html/" + event.getType().getTemplatePrefix();
+            String htmlBody = notificationTemplateEngine.process(templateName, context);
+
+            String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
+            EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
+            emailService.sendFormattedEmail(emailDetail);
+        }
     }
 
     private void sendSmsNotification(SelfServiceNotificationEvent event, String subject, Context context) {
