@@ -89,7 +89,6 @@ public class SelfServiceNotificationService {
         this.notificationCooldownCache = notificationCooldownCache;
         this.env = env;
         this.externalNotificationSystemClient = externalNotificationSystemClient;
-        this.notificationCredentialsData = notificationCredentialsData; 
     }
 
     /**
