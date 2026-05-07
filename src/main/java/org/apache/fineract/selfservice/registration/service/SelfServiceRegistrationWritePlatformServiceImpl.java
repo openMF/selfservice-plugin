@@ -263,6 +263,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl implements SelfServ
             final String message = selfServiceRegistration.getFirstName() + 
                     " use this token for activate your account " + 
                     selfServiceRegistration.getAuthenticationToken();
+            log.info("Token"+selfServiceRegistration.getAuthenticationToken());
 
             NotificationMessage notificationMessage = new NotificationMessage();
 
