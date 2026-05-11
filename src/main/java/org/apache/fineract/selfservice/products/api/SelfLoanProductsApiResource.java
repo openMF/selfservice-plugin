@@ -93,7 +93,7 @@ import org.springframework.stereotype.Component;
             + "Example Values: 0=Declining Balance, 1=Flat\n"
             + "interestCalculationPeriodType\n"
             + "Example Values: 0=Daily, 1=Same as repayment period\n"
-            + "allowPartialPeriodInterestCalcualtion\n"
+            + "allowPartialPeriodInterestCalculation\n"
             + "This value will be supported along with interestCalculationPeriodType as Same as repayment period to calculate interest for partial periods. Example: Interest charged from is 5th of April , Principal is 10000 and interest is 1% per month then the interest will be (10000 * 1%)* (25/30) , it calculates for the month first then calculates exact periods between start date and end date(can be a decimal)\n"
             + "inArrearsTolerance\n"
             + "The amount that can be 'waived' at end of all loan payments because it is too small to worry about.\n"
