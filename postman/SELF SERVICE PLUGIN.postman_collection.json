@@ -41,7 +41,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"username\": \"{{smtp_username}}\",\n    \"password\": \"{{smtp_password}}\",\n    \"host\": \"{{smtp_host}}\",\n    \"port\": {{smtp_port}},\n    \"useTLS\": {{smtp_use_tls}},\n    \"fromEmail\": \"{{smtp_from_email}}\",\n    \"fromName\": \"{{smtp_from_name}}\"\n}",
+                  "raw": "{\n    \"username\": \"service@mifos.io\",\n    \"password\": \"--\",\n    \"host\": \"smtp.mifos.org\",\n    \"port\": 587,\n    \"useTLS\": \"true\",\n    \"fromEmail\": \"service@mifos.io\",\n    \"fromName\": \"service@mifos.io\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1254,7 +1254,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"requestId\": 1,\n    \"authenticationToken\": \"3917\"\n}",
+                  "raw": "{    \n    \"externalAuthenticationToken\": \"048590\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1333,7 +1333,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1380,7 +1380,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"username\": \"vilma\",\n    \"password\": \"MifosInitiative2026#\",\n    \"mobileNumber\": \"5522649497\",    \n    \"email\": \"victor.romero@infotec.mx\",\n    \"authenticationMode\": \"email\",\n    \"officeId\": 1, \n    \"legalFormId\": 1, \n    \"isStaff\": false, \n    \"active\": false, \n    \"submittedOnDate\": \"17 febrero 2026\", \n    \"firstname\": \"VILMA\", \n    \"middlename\": \"PICAPIEDRA\", \n    \"lastname\": \"PEREZ\", \n    \"externalID\": \"ID12345\", \n    \"familyMembers\": [], \n    \"dateFormat\": \"dd MMMM yyyy\", \n    \"locale\": \"es\"\n}",
+                  "raw": "{\n    \"username\": \"vilma\",\n    \"password\": \"MifosInitiative2026#\",\n    \"mobileNumber\": \"5215632956948\",    \n    \"email\": \"victor.romero@infotec.mx\",\n    \"authenticationMode\": \"any\", \n    \"legalFormId\": 1, \n    \"active\": false, \n    \"submittedOnDate\": \"17 febrero 2026\", \n    \"firstname\": \"VILMA\", \n    \"middlename\": \"PICAPIEDRA\", \n    \"lastname\": \"PEREZ\", \n    \"externalID\": \"ID123415\", \n    \"familyMembers\": [], \n    \"dateFormat\": \"dd MMMM yyyy\", \n    \"locale\": \"es\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1422,7 +1422,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"externalAuthenticationToken\": \"019d883e-cf93-71ed-a8b8-03a788066bc2\"\n}",
+                  "raw": "{\n    \"externalAuthenticationToken\": \"023123\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1502,14 +1502,14 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text",
                     "disabled": true
                   }
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"username\": \"vilma\",\n    \"authenticationMode\": \"email\"\n}",
+                  "raw": "{\n    \"username\": \"vilma\", //required\n    \"authenticationMode\": \"email\" //required\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1550,14 +1550,14 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text",
                     "disabled": true
                   }
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{    \n    \"externalAuthenticationToken\": \"019d884b-1837-744e-8000-96e518934cf9\",\n    \"password\": \"MifosInitiative2021#\",\n    \"repeatPassword\": \"MifosInitiative2021#\"\n}",
+                  "raw": "{    \n    \"externalAuthenticationToken\": \"627962\",\n    \"password\": \"MifosInitiative2021#\",\n    \"repeatPassword\": \"MifosInitiative2021#\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1596,7 +1596,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"username\": \"pedro.marmol\",\n    \"password\": \"MifosInitiative2026#\"\n}",
+                  "raw": "{\n    \"username\": \"vilma\",\n    \"password\": \"MifosInitiative2021#\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1620,6 +1620,207 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "11. LIST CLIENT IDENTIFIERS SUPPORTED",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/registration/identifiers",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "registration",
+                    "identifiers"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "12. RETRIEVE CLIENT IDENTITY DATA",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"externalId\":\"113110753\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/identity/retrieve",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "identity",
+                    "retrieve"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "13. LIST LOAN PRODUCTS AVAILABLE",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/loans/simulate/products",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "loans",
+                    "simulate",
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "14. GET LOAN PRODUCT DETAILS",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/loans/simulate/template?productId=1&templateType=individual",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "loans",
+                    "simulate",
+                    "template"
+                  ],
+                  "query": [
+                    {
+                      "key": "productId",
+                      "value": "1"
+                    },
+                    {
+                      "key": "templateType",
+                      "value": "individual"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "15. CALCULATE REPAYMENT SCHEDULE",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"productId\": 1,\n    \"submittedOnDate\": \"02 May 2026\",\n    \"expectedDisbursementDate\": \"03 May 2026\",\n    \"loanOfficerId\": \"\",\n    \"loanPurposeId\": \"\",\n    \"linkAccountId\": \"\",\n    \"createStandingInstructionAtDisbursement\": \"\",\n    \"loanTermFrequency\": 12,\n    \"loanTermFrequencyType\": 2,\n    \"numberOfRepayments\": 12,\n    \"repaymentEvery\": 1,\n    \"repaymentFrequencyType\": 2,\n    \"repaymentFrequencyNthDayType\": \"\",\n    \"repaymentFrequencyDayOfWeekType\": \"\",\n    \"repaymentsStartingFromDate\": null,\n    \"interestChargedFromDate\": null,\n    \"interestType\": 0,\n    \"isEqualAmortization\": false,\n    \"amortizationType\": 1,\n    \"interestCalculationPeriodType\": 1,\n    \"loanIdToClose\": \"\",\n    \"isTopup\": \"\",\n    \"transactionProcessingStrategyCode\": \"creocore-strategy\",\n    \"interestRateFrequencyType\": 2,\n    \"allowFullTermForTranche\": false,\n    \"interestRatePerPeriod\": 10,\n    \"maxOutstandingLoanBalance\": null,\n    \"charges\": [],\n    \"collateral\": [],\n    \"dateFormat\": \"dd MMMM yyyy\",\n    \"locale\": \"en\",\n    \"loanType\": \"individual\",\n    \"principal\": 10000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/loans/simulate?command=calculateLoanSchedule",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "loans",
+                    "simulate"
+                  ],
+                  "query": [
+                    {
+                      "key": "command",
+                      "value": "calculateLoanSchedule"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -1638,7 +1839,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1673,7 +1874,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1717,7 +1918,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1761,7 +1962,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1806,7 +2007,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1851,7 +2052,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1892,7 +2093,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1932,7 +2133,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -1976,7 +2177,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2011,7 +2212,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2048,7 +2249,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2084,7 +2285,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2133,7 +2334,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2182,7 +2383,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2225,7 +2426,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2269,7 +2470,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2324,7 +2525,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2364,7 +2565,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic dG9tYXM6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -2405,7 +2606,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2449,7 +2650,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic dG9tYXM6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -2494,7 +2695,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2529,7 +2730,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic dG9tYXM6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -2565,7 +2766,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2606,7 +2807,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2643,7 +2844,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2679,7 +2880,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2724,7 +2925,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2767,7 +2968,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2819,7 +3020,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2863,7 +3064,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2909,7 +3110,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj",
                     "type": "text"
                   }
                 ],
@@ -2963,7 +3164,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3004,7 +3205,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3054,7 +3255,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3088,7 +3289,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic YW5kcm9tZWRhOnBhc3N3b3Jk",
                     "type": "text"
                   }
                 ],
@@ -3123,7 +3324,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6RmluYWJpZW4yMDI1Iw==",
                     "type": "text"
                   }
                 ],
@@ -3158,7 +3359,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic YW5kcm9tZWRhOnBhc3N3b3Jk",
                     "type": "text"
                   }
                 ],
@@ -3194,7 +3395,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6RmluYWJpZW4yMDI1Iw==",
                     "type": "text"
                   }
                 ],
@@ -3230,7 +3431,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic YW5kcm9tZWRhOnBhc3N3b3Jk",
                     "type": "text"
                   }
                 ],
@@ -3288,7 +3489,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic YW5kcm9tZWRhOnBhc3N3b3Jk",
                     "type": "text",
                     "disabled": true
                   }
@@ -3331,7 +3532,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3367,7 +3568,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3403,7 +3604,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3439,7 +3640,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Basic {{selfservice_auth_token}}",
+                    "value": "Basic bWFyaWE6cGFzc3dvcmQ=",
                     "type": "text"
                   }
                 ],
@@ -3465,6 +3666,10 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "PUBLIC",
+          "item": []
         }
       ]
     }
