@@ -59,7 +59,8 @@ public interface SelfServiceRegistrationRepository
    */
   @Query(FIND_BY_REQUEST_TYPE_AND_AUTHENTICATION_TOKEN)
   SelfServiceRegistration getRequestByIdAndAuthenticationToken(
-      @Param("id") Long id, @Param("authenticationToken") String authenticationToken,
+      @Param("id") Long id,
+      @Param("authenticationToken") String authenticationToken,
       @Param("requestType") SelfServiceRequestType requestType);
 
   /**
@@ -78,8 +79,8 @@ public interface SelfServiceRegistrationRepository
    * Deletes all self-service registration requests whose expiry timestamp is strictly before the
    * supplied cutoff.
    *
-   * <p>This covers all request types (REGISTRATION, ENROLLMENT, PASSWORD_RESET) regardless of
-   * their consumed status — an expired token is unusable whether or not it was consumed.
+   * <p>This covers all request types (REGISTRATION, ENROLLMENT, PASSWORD_RESET) regardless of their
+   * consumed status — an expired token is unusable whether or not it was consumed.
    *
    * @param cutoff reference timestamp; rows with {@code expiresAt < cutoff} are deleted
    * @return number of rows deleted

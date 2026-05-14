@@ -159,8 +159,7 @@ public class SelfPublicLoanSimulationApiResource {
       @QueryParam("productId")
           @Parameter(description = "Loan product ID to retrieve template defaults for")
           final Long productId,
-      @QueryParam("templateType")
-          @Parameter(description = "Must be 'individual'", required = true)
+      @QueryParam("templateType") @Parameter(description = "Must be 'individual'", required = true)
           final String templateType) {
 
     if (templateType == null) {
@@ -226,8 +225,8 @@ public class SelfPublicLoanSimulationApiResource {
               schema =
                   @Schema(
                       implementation =
-                          SelfPublicLoanSimulationApiResourceSwagger
-                              .PostSelfPublicSimulationRequest.class)))
+                          SelfPublicLoanSimulationApiResourceSwagger.PostSelfPublicSimulationRequest
+                              .class)))
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -260,7 +259,6 @@ public class SelfPublicLoanSimulationApiResource {
 
     final ApiRequestJsonSerializationSettings settings =
         this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    return this.loanScheduleSerializer.serialize(
-        settings, loanSchedule.toData(), new HashSet<>());
+    return this.loanScheduleSerializer.serialize(settings, loanSchedule.toData(), new HashSet<>());
   }
 }

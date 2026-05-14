@@ -70,8 +70,8 @@ public class SelfRunReportApiResource {
   private final RunreportsApiResource runreportsApiResource;
 
   /**
-   * Comma-separated allowlist of report names permitted for self-service. Deny
-   * by default when empty to avoid IDOR via tenant-custom reports.
+   * Comma-separated allowlist of report names permitted for self-service. Deny by default when
+   * empty to avoid IDOR via tenant-custom reports.
    */
   @Value("${fineract.modules.selfservice.runreports.allowlist:}")
   private String allowlistedReportsCsv;
@@ -123,17 +123,21 @@ public class SelfRunReportApiResource {
             .collect(Collectors.toSet());
 
     if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
-      throw new NoAuthorizationException("Self-service is not permitted to run this report: " + reportName);
+      throw new NoAuthorizationException(
+          "Self-service is not permitted to run this report: " + reportName);
     }
 
     // Scrub all R_* parameters and re-inject trusted scoping params derived from the
     // authenticated self-service user mapping.
     final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
-    uriInfo.getQueryParameters(true).forEach((k, v) -> {
-      if (!k.startsWith("R_")) {
-        qp.put(k, v);
-      }
-    });
+    uriInfo
+        .getQueryParameters(true)
+        .forEach(
+            (k, v) -> {
+              if (!k.startsWith("R_")) {
+                qp.put(k, v);
+              }
+            });
 
     // Force report scope to the user's mapped clientId (if any).
     final Long mappedClientId =
@@ -144,12 +148,11 @@ public class SelfRunReportApiResource {
       qp.putSingle("R_clientId", String.valueOf(mappedClientId));
     }
 
-    return this.runreportsApiResource.runReport(reportName, new UriInfoWithQueryParams(uriInfo, qp));
+    return this.runreportsApiResource.runReport(
+        reportName, new UriInfoWithQueryParams(uriInfo, qp));
   }
 
-  /**
-   * Minimal UriInfo wrapper overriding query parameters only.
-   */
+  /** Minimal UriInfo wrapper overriding query parameters only. */
   static final class UriInfoWithQueryParams implements UriInfo {
     private final UriInfo delegate;
     private final MultivaluedMap<String, String> queryParams;

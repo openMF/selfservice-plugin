@@ -8,7 +8,6 @@ package org.apache.fineract.selfservice.loanaccount.api;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 import org.apache.fineract.selfservice.testing.support.SelfServiceIntegrationTestBase;
@@ -24,8 +23,8 @@ import org.junit.jupiter.api.TestMethodOrder;
  * End-to-end integration tests for the public loan simulation endpoints (MX-250). These tests run
  * against a real Fineract instance with the self-service plugin deployed via Testcontainers.
  *
- * <p>The test seeds a loan product via direct SQL into the tenant database before running, since the
- * default Fineract demo image starts with an empty {@code m_product_loan} table.
+ * <p>The test seeds a loan product via direct SQL into the tenant database before running, since
+ * the default Fineract demo image starts with an empty {@code m_product_loan} table.
  *
  * <p><strong>Note on error codes:</strong> Fineract's {@code PlatformDomainRuleExceptionMapper}
  * maps {@code AbstractPlatformDomainRuleException} to HTTP 403.
@@ -83,8 +82,7 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
           true
         ) ON CONFLICT (id) DO NOTHING;
         """,
-        SEEDED_PRODUCT_ID,
-        SEEDED_PRODUCT_ID);
+        SEEDED_PRODUCT_ID, SEEDED_PRODUCT_ID);
   }
 
   // =====================================================================

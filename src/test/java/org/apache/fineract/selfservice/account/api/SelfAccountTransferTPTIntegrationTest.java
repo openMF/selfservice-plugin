@@ -30,7 +30,8 @@ import org.junit.jupiter.api.Test;
 class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBase {
 
   private static final String DATE_FORMAT = "dd MMMM yyyy";
-  private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(DATE_FORMAT, Locale.ENGLISH);
+  private static final DateTimeFormatter FORMATTER =
+      DateTimeFormatter.ofPattern(DATE_FORMAT, Locale.ENGLISH);
 
   private static final String ACCOUNT_TRANSFERS_PATH =
       SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/self/accounttransfers";
@@ -92,7 +93,9 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
           .get(BENEFICIARIES_PATH)
           .then()
           .statusCode(200)
-          .body("find { it.id == " + beneficiaryId + " }.name", equalTo("Receiver-" + receiver.clientId()));
+          .body(
+              "find { it.id == " + beneficiaryId + " }.name",
+              equalTo("Receiver-" + receiver.clientId()));
 
       Map<String, Object> transferBody = new HashMap<>();
       transferBody.put("fromOfficeId", sender.officeId());
@@ -131,7 +134,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
               .path("summary.accountBalance");
 
       Assertions.assertEquals(
-          0, new BigDecimal("500.00").compareTo(BigDecimal.valueOf(senderBalance)),
+          0,
+          new BigDecimal("500.00").compareTo(BigDecimal.valueOf(senderBalance)),
           "Sender balance should be 500.00 after transfer but was: " + senderBalance);
 
       Float receiverBalance =
@@ -143,7 +147,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
               .path("summary.accountBalance");
 
       Assertions.assertEquals(
-          0, new BigDecimal("500.00").compareTo(BigDecimal.valueOf(receiverBalance)),
+          0,
+          new BigDecimal("500.00").compareTo(BigDecimal.valueOf(receiverBalance)),
           "Receiver balance should be 500.00 after transfer but was: " + receiverBalance);
     } finally {
       try {
@@ -167,7 +172,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
   }
 
   @Test
-  @DisplayName("POST /self/accounttransfers?type=tpt returns 403 when amount exceeds beneficiary limit")
+  @DisplayName(
+      "POST /self/accounttransfers?type=tpt returns 403 when amount exceeds beneficiary limit")
   void transferToThirdParty_exceedsBeneficiaryLimit_returns403() {
     String today = LocalDate.now(ZoneId.of("UTC")).format(FORMATTER);
 
@@ -225,8 +231,10 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
           .body(transferBody)
           .post(ACCOUNT_TRANSFERS_PATH + "?type=tpt")
           .then()
-          .statusCode(403); // Fineract limit exceptions are PlatformDomainRule exceptions generally mapped to 403 Forbidden
-          
+          .statusCode(
+              403); // Fineract limit exceptions are PlatformDomainRule exceptions generally mapped
+      // to 403 Forbidden
+
       Float senderBalance =
           given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), ssUsername, "password"))
               .get(SelfServiceTestUtils.SELF_SAVINGS_PATH + "/" + sender.savingsId())
@@ -236,7 +244,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
               .path("summary.accountBalance");
 
       Assertions.assertEquals(
-          0, new BigDecimal("1000.00").compareTo(BigDecimal.valueOf(senderBalance)),
+          0,
+          new BigDecimal("1000.00").compareTo(BigDecimal.valueOf(senderBalance)),
           "Sender balance should remain 1000.00 after failed transfer. Was: " + senderBalance);
 
     } finally {
@@ -329,7 +338,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
             .then()
             .statusCode(200)
             .extract()
-            .path("find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
+            .path(
+                "find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
 
     Boolean originalPermission =
         given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
@@ -354,14 +364,15 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
     if (originalPermission == null) {
       originalPermission = false;
     }
-    
+
     Integer roleId =
         given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
             .get(ADMIN_ROLES_PATH)
             .then()
             .statusCode(200)
             .extract()
-            .path("find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
+            .path(
+                "find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
 
     Map<String, Object> body = new HashMap<>();
     body.put("permissions", Map.of("CREATE_ACCOUNTTRANSFER", originalPermission));
@@ -533,9 +544,11 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
             .then()
             .statusCode(200)
             .extract()
-            .path("find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
+            .path(
+                "find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
 
-    executeSqlInPostgres("""
+    executeSqlInPostgres(
+        """
         SELECT setval(
             pg_get_serial_sequence('m_appuser', 'id'),
             GREATEST(
@@ -578,8 +591,16 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
             pg_get_serial_sequence('m_appselfservice_user', 'id'),
             (SELECT MAX(id) FROM m_appselfservice_user)
         );
-        """, officeId, username, username + "@fineract.org", roleId,
-            officeId, username, username + "@fineract.org", roleId, clientId);
+        """,
+        officeId,
+        username,
+        username + "@fineract.org",
+        roleId,
+        officeId,
+        username,
+        username + "@fineract.org",
+        roleId,
+        clientId);
 
     return username;
   }

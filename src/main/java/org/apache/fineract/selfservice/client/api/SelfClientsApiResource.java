@@ -84,6 +84,7 @@ import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatfor
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorReadPlatformService;
 import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
+import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
 import org.apache.fineract.selfservice.config.SelfServiceModuleIsEnabledCondition;
@@ -95,7 +96,6 @@ import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 
 @Path("/v1/self/clients")
 @Component
@@ -164,14 +164,22 @@ public class SelfClientsApiResource {
       @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
       @QueryParam("legalForm") final Integer legalForm) {
 
-    final SelfServiceSearchParameters searchParameters = SelfServiceSearchParameters.builder()
-        .isSelfUser(true)
-        .name(displayName).firstname(firstname).lastname(lastname)
-        .status(status).legalForm(legalForm)
-        .offset(offset).limit(limit).orderBy(orderBy).sortOrder(sortOrder)
-        .build();
+    final SelfServiceSearchParameters searchParameters =
+        SelfServiceSearchParameters.builder()
+            .isSelfUser(true)
+            .name(displayName)
+            .firstname(firstname)
+            .lastname(lastname)
+            .status(status)
+            .legalForm(legalForm)
+            .offset(offset)
+            .limit(limit)
+            .orderBy(orderBy)
+            .sortOrder(sortOrder)
+            .build();
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
-    final Page<ClientData> clientData = selfServiceClientReadPlatformService.retrieveAll(searchParameters);
+    final Page<ClientData> clientData =
+        selfServiceClientReadPlatformService.retrieveAll(searchParameters);
     final ApiRequestJsonSerializationSettings settings =
         apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     return clientSerializer.serialize(settings, clientData);
@@ -250,7 +258,8 @@ public class SelfClientsApiResource {
         accountDetailsReadPlatformService.retrieveClientAccountDetails(clientId);
     final ApiRequestJsonSerializationSettings settings =
         apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    return accountSummarySerializer.serialize(settings, accounts, ClientApiConstants.CLIENT_ACCOUNTS_DATA_PARAMETERS);
+    return accountSummarySerializer.serialize(
+        settings, accounts, ClientApiConstants.CLIENT_ACCOUNTS_DATA_PARAMETERS);
   }
 
   @GET
@@ -349,8 +358,9 @@ public class SelfClientsApiResource {
 
     final SearchParameters searchParameters =
         SearchParameters.builder().limit(limit).offset(offset).build();
-    final Page<ClientChargeData> charges = clientChargeReadPlatformService.retrieveClientCharges(
-        clientId, chargeStatus, pendingPayment, searchParameters);
+    final Page<ClientChargeData> charges =
+        clientChargeReadPlatformService.retrieveClientCharges(
+            clientId, chargeStatus, pendingPayment, searchParameters);
     final ApiRequestJsonSerializationSettings settings =
         apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     return clientChargeSerializer.serialize(settings, charges);
@@ -511,7 +521,8 @@ public class SelfClientsApiResource {
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.createImage(ImageCreateRequest.builder()
+    return this.imageWritePlatformService.createImage(
+        ImageCreateRequest.builder()
             .entityId(clientId)
             .entityType(ClientApiConstants.clientEntityName)
             .fileName(fileDetails.getFileName())
@@ -540,7 +551,8 @@ public class SelfClientsApiResource {
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.createImage(ImageCreateRequest.builder()
+    return this.imageWritePlatformService.createImage(
+        ImageCreateRequest.builder()
             .entityId(clientId)
             .entityType(ClientApiConstants.clientEntityName)
             .fileName(UUID.randomUUID().toString() + ".jpg")
@@ -559,7 +571,8 @@ public class SelfClientsApiResource {
 
     this.context.validateHasDeletePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.deleteImage(ImageDeleteRequest.builder()
+    return this.imageWritePlatformService.deleteImage(
+        ImageDeleteRequest.builder()
             .entityId(clientId)
             .entityType(ClientApiConstants.clientEntityName)
             .build());

@@ -19,9 +19,9 @@ class SelfSavingsApiIntegrationTest extends SelfServiceIntegrationTestBase {
   @DisplayName("GET /v1/self/savingsaccounts without auth returns 403")
   void retrieveAll_withoutAuth_returns403() {
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
-    .when()
+        .when()
         .get(SelfServiceTestUtils.SELF_SAVINGS_PATH)
-    .then()
+        .then()
         .statusCode(403);
   }
 
@@ -29,9 +29,9 @@ class SelfSavingsApiIntegrationTest extends SelfServiceIntegrationTestBase {
   @DisplayName("GET /v1/self/savingsaccounts with mifos returns 401 (Not a Self Service User)")
   void retrieveAll_withSuperUser_returns401() {
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-    .when()
+        .when()
         .get(SelfServiceTestUtils.SELF_SAVINGS_PATH)
-    .then()
+        .then()
         .statusCode(401);
   }
 }

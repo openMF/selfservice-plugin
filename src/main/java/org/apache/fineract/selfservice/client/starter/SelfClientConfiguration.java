@@ -14,13 +14,13 @@
  */
 package org.apache.fineract.selfservice.client.starter;
 
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadServiceImpl;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 
 @Configuration
 public class SelfClientConfiguration {

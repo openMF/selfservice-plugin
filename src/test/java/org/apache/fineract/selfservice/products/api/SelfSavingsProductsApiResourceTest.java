@@ -52,8 +52,9 @@ class SelfSavingsProductsApiResourceTest {
   private static final Long PRODUCT_ID = 1L;
 
   private static SavingsProductData defaultSavingsProductData() {
-    return SavingsProductData.template(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-        null, null, null, null);
+    return SavingsProductData.template(
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null);
   }
 
   @BeforeEach
@@ -115,8 +116,7 @@ class SelfSavingsProductsApiResourceTest {
         .when(securityContext)
         .validateHasReadPermission("SAVINGSPRODUCT");
 
-    assertThrows(
-        NoAuthorizationException.class, () -> resource.retrieveOne(PRODUCT_ID, uriInfo));
+    assertThrows(NoAuthorizationException.class, () -> resource.retrieveOne(PRODUCT_ID, uriInfo));
     verifyNoInteractions(savingsProductReadPlatformService);
   }
 

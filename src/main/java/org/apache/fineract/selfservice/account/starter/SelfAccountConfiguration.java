@@ -14,7 +14,6 @@
  */
 package org.apache.fineract.selfservice.account.starter;
 
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataValidator;
@@ -25,6 +24,7 @@ import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadP
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformServiceImpl;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformServiceImpl;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

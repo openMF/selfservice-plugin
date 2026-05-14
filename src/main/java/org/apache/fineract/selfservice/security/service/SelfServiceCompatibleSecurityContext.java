@@ -26,12 +26,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 
 /**
- * Extends the core {@link SpringSecurityPlatformSecurityContext} to handle both
- * {@link AppUser} and {@link AppSelfServiceUser} principals.
+ * Extends the core {@link SpringSecurityPlatformSecurityContext} to handle both {@link AppUser} and
+ * {@link AppSelfServiceUser} principals.
  *
- * Overrides {@code authenticatedUser()} and {@code getAuthenticatedUserIfPresent()} so that
- * when the principal is an {@link AppSelfServiceUser}, a minimal {@link AppUser} stub is
- * returned, allowing core read services to pass their guard checks.
+ * <p>Overrides {@code authenticatedUser()} and {@code getAuthenticatedUserIfPresent()} so that when
+ * the principal is an {@link AppSelfServiceUser}, a minimal {@link AppUser} stub is returned,
+ * allowing core read services to pass their guard checks.
  */
 public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatformSecurityContext {
 

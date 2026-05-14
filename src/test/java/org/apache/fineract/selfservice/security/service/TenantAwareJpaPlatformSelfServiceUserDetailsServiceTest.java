@@ -24,59 +24,58 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 @ExtendWith(MockitoExtension.class)
 class TenantAwareJpaPlatformSelfServiceUserDetailsServiceTest {
 
-    @Mock
-    private PlatformSelfServiceUserRepository platformUserRepository;
-  @Mock
-  private SelfServiceRoleReadPlatformService roleReadPlatformService;
+  @Mock private PlatformSelfServiceUserRepository platformUserRepository;
+  @Mock private SelfServiceRoleReadPlatformService roleReadPlatformService;
 
-    @InjectMocks
-    private TenantAwareJpaPlatformSelfServiceUserDetailsService service;
+  @InjectMocks private TenantAwareJpaPlatformSelfServiceUserDetailsService service;
 
-    private AppSelfServiceUser activeUser;
+  private AppSelfServiceUser activeUser;
 
-    @BeforeEach
-    void setUp() {
-        activeUser = mock(AppSelfServiceUser.class);
-    }
+  @BeforeEach
+  void setUp() {
+    activeUser = mock(AppSelfServiceUser.class);
+  }
 
-    @Test
+  @Test
   void loadUserByUsername_throwsWhenSelfServiceRoleMissingOrDisabled() {
-        when(platformUserRepository.findByUsernameAndDeletedAndEnabled("roberto@gmail.com", false, true))
-                .thenReturn(activeUser);
-        // Present but not flagged as self-service or without an enabled self-service role
-        when(activeUser.isSelfServiceUser()).thenReturn(false);
+    when(platformUserRepository.findByUsernameAndDeletedAndEnabled(
+            "roberto@gmail.com", false, true))
+        .thenReturn(activeUser);
+    // Present but not flagged as self-service or without an enabled self-service role
+    when(activeUser.isSelfServiceUser()).thenReturn(false);
 
-        assertThatThrownBy(() -> service.loadUserByUsername("roberto@gmail.com"))
-                .isInstanceOf(UsernameNotFoundException.class);
-    }
+    assertThatThrownBy(() -> service.loadUserByUsername("roberto@gmail.com"))
+        .isInstanceOf(UsernameNotFoundException.class);
+  }
 
-    @Test
-    void loadUserByUsername_throwsUsernameNotFoundException_whenUserNotFound() {
-        when(platformUserRepository.findByUsernameAndDeletedAndEnabled("unknown@test.com", false, true))
-                .thenReturn(null);
+  @Test
+  void loadUserByUsername_throwsUsernameNotFoundException_whenUserNotFound() {
+    when(platformUserRepository.findByUsernameAndDeletedAndEnabled("unknown@test.com", false, true))
+        .thenReturn(null);
 
-        assertThatThrownBy(() -> service.loadUserByUsername("unknown@test.com"))
-                .isInstanceOf(UsernameNotFoundException.class)
-                .hasMessageContaining("unknown@test.com");
-    }
+    assertThatThrownBy(() -> service.loadUserByUsername("unknown@test.com"))
+        .isInstanceOf(UsernameNotFoundException.class)
+        .hasMessageContaining("unknown@test.com");
+  }
 
-    @Test
-    void loadUserByUsername_throwsUsernameNotFoundException_whenUserIsDeleted() {
-        // deleted=false, enabled=true means we only look for active users.
-        // A deleted user won't match these criteria, so the repository returns null.
-        when(platformUserRepository.findByUsernameAndDeletedAndEnabled("deleted@test.com", false, true))
-                .thenReturn(null);
+  @Test
+  void loadUserByUsername_throwsUsernameNotFoundException_whenUserIsDeleted() {
+    // deleted=false, enabled=true means we only look for active users.
+    // A deleted user won't match these criteria, so the repository returns null.
+    when(platformUserRepository.findByUsernameAndDeletedAndEnabled("deleted@test.com", false, true))
+        .thenReturn(null);
 
-        assertThatThrownBy(() -> service.loadUserByUsername("deleted@test.com"))
-                .isInstanceOf(UsernameNotFoundException.class);
-    }
+    assertThatThrownBy(() -> service.loadUserByUsername("deleted@test.com"))
+        .isInstanceOf(UsernameNotFoundException.class);
+  }
 
-    @Test
-    void loadUserByUsername_throwsUsernameNotFoundException_whenUserIsDisabled() {
-        when(platformUserRepository.findByUsernameAndDeletedAndEnabled("disabled@test.com", false, true))
-                .thenReturn(null);
+  @Test
+  void loadUserByUsername_throwsUsernameNotFoundException_whenUserIsDisabled() {
+    when(platformUserRepository.findByUsernameAndDeletedAndEnabled(
+            "disabled@test.com", false, true))
+        .thenReturn(null);
 
-        assertThatThrownBy(() -> service.loadUserByUsername("disabled@test.com"))
-                .isInstanceOf(UsernameNotFoundException.class);
-    }
+    assertThatThrownBy(() -> service.loadUserByUsername("disabled@test.com"))
+        .isInstanceOf(UsernameNotFoundException.class);
+  }
 }

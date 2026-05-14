@@ -66,13 +66,10 @@ class SelfPublicLoanSimulationDataValidatorTest {
 
   @Test
   void validateBody_withClientId_throws() {
-    String jsonWithClientId =
-        "{\"productId\": 1, \"principal\": 10000, \"clientId\": 42}";
+    String jsonWithClientId = "{\"productId\": 1, \"principal\": 10000, \"clientId\": 42}";
     assertThrows(
         PlatformApiDataValidationException.class,
-        () ->
-            validator.validatePublicSimulationRequest(
-                "calculateLoanSchedule", jsonWithClientId));
+        () -> validator.validatePublicSimulationRequest("calculateLoanSchedule", jsonWithClientId));
   }
 
   @Test
@@ -95,12 +92,11 @@ class SelfPublicLoanSimulationDataValidatorTest {
         InvalidJsonException.class,
         () -> validator.validatePublicSimulationRequest("calculateLoanSchedule", null));
   }
+
   @Test
   void validateBody_malformedJson_throwsInvalidJsonException() {
     assertThrows(
         InvalidJsonException.class,
-        () ->
-            validator.validatePublicSimulationRequest(
-                "calculateLoanSchedule", "{bad json}"));
+        () -> validator.validatePublicSimulationRequest("calculateLoanSchedule", "{bad json}"));
   }
 }

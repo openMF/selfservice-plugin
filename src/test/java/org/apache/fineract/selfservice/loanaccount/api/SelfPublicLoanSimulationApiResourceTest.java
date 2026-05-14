@@ -142,47 +142,39 @@ class SelfPublicLoanSimulationApiResourceTest {
     Collection<SelfPublicLoanProductData> products = List.of(sampleProduct(1L));
     when(loanProductReadService.retrieveAllActiveLoanProducts()).thenReturn(products);
 
-    assertThrows(
-        ResourceNotFoundException.class, () -> resource.template(999L, "individual"));
+    assertThrows(ResourceNotFoundException.class, () -> resource.template(999L, "individual"));
   }
 
   @Test
   void template_nullTemplateType_throws() {
-    assertThrows(
-        LoanTemplateTypeRequiredException.class,
-        () -> resource.template(null, null));
+    assertThrows(LoanTemplateTypeRequiredException.class, () -> resource.template(null, null));
     verifyNoInteractions(loanProductReadService);
   }
 
   @Test
   void template_invalidTemplateType_throws() {
     assertThrows(
-        NotSupportedLoanTemplateTypeException.class,
-        () -> resource.template(null, "invalid"));
+        NotSupportedLoanTemplateTypeException.class, () -> resource.template(null, "invalid"));
     verifyNoInteractions(loanProductReadService);
   }
 
   @Test
   void template_collateralType_throws() {
     assertThrows(
-        NotSupportedLoanTemplateTypeException.class,
-        () -> resource.template(null, "collateral"));
+        NotSupportedLoanTemplateTypeException.class, () -> resource.template(null, "collateral"));
     verifyNoInteractions(loanProductReadService);
   }
 
   @Test
   void template_groupType_throws() {
     assertThrows(
-        NotSupportedLoanTemplateTypeException.class,
-        () -> resource.template(null, "group"));
+        NotSupportedLoanTemplateTypeException.class, () -> resource.template(null, "group"));
     verifyNoInteractions(loanProductReadService);
   }
 
   @Test
   void template_jlgType_throws() {
-    assertThrows(
-        NotSupportedLoanTemplateTypeException.class,
-        () -> resource.template(null, "jlg"));
+    assertThrows(NotSupportedLoanTemplateTypeException.class, () -> resource.template(null, "jlg"));
     verifyNoInteractions(loanProductReadService);
   }
 

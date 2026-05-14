@@ -1,8 +1,8 @@
 package org.apache.fineract.selfservice.registration.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,138 +48,164 @@ import org.thymeleaf.ITemplateEngine;
 @ExtendWith(MockitoExtension.class)
 class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
-    @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
-    @Mock private FromJsonHelper fromApiJsonHelper;
-    @Mock private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
-    @Mock private ClientRepositoryWrapper clientRepository;
-    @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
-    @Mock private SelfServiceUserDomainService userDomainService;
-    @Mock private SelfServicePluginEmailService selfServicePluginEmailService;
-    @Mock private SmsMessageRepository smsMessageRepository;
-    @Mock private SmsMessageScheduledJobService smsMessageScheduledJobService;
-    @Mock private SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService;
-    @Mock private AppSelfServiceUserReadPlatformService appUserReadPlatformService;
-    @Mock private RoleRepository roleRepository;
-    @Mock private AppSelfServiceUserClientMappingRepository appUserClientMappingRepository;
-    @Mock private JdbcTemplate jdbcTemplate;
-    @Mock private AppUserRepository appUserRepository;
-    @Mock private Environment env;
-    @Mock private PlatformPasswordEncoder platformPasswordEncoder;
-    @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
-    @Mock private SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
-    @Mock private ITemplateEngine registrationTemplateEngine;
-    @Mock private MessageSource registrationMessageSource;
+  @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
+  @Mock private FromJsonHelper fromApiJsonHelper;
 
-    private SelfServiceForgotPasswordWritePlatformServiceImpl service;
+  @Mock
+  private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
 
-    @BeforeEach
-    void setUp() {
-        service = new SelfServiceForgotPasswordWritePlatformServiceImpl(
-                selfServiceRegistrationRepository,
-                fromApiJsonHelper,
-                selfServiceRegistrationReadPlatformService,
-                clientRepository,
-                passwordValidationPolicyRepository,
-                userDomainService,
-                selfServicePluginEmailService,
-                smsMessageRepository,
-                smsMessageScheduledJobService,
-                smsCampaignDropdownReadPlatformService,
-                appUserReadPlatformService,
-                roleRepository,
-                appUserClientMappingRepository,
-                jdbcTemplate,
-                appUserRepository,
-                env,
-                platformPasswordEncoder,
-                appSelfServiceUserRepository,
-                selfServiceAuthorizationTokenService,
-                registrationTemplateEngine,
-                registrationMessageSource);
-    }
+  @Mock private ClientRepositoryWrapper clientRepository;
+  @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
+  @Mock private SelfServiceUserDomainService userDomainService;
+  @Mock private SelfServicePluginEmailService selfServicePluginEmailService;
+  @Mock private SmsMessageRepository smsMessageRepository;
+  @Mock private SmsMessageScheduledJobService smsMessageScheduledJobService;
+  @Mock private SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService;
+  @Mock private AppSelfServiceUserReadPlatformService appUserReadPlatformService;
+  @Mock private RoleRepository roleRepository;
+  @Mock private AppSelfServiceUserClientMappingRepository appUserClientMappingRepository;
+  @Mock private JdbcTemplate jdbcTemplate;
+  @Mock private AppUserRepository appUserRepository;
+  @Mock private Environment env;
+  @Mock private PlatformPasswordEncoder platformPasswordEncoder;
+  @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
+  @Mock private SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
+  @Mock private ITemplateEngine registrationTemplateEngine;
+  @Mock private MessageSource registrationMessageSource;
 
-    @Test
-    void createForgotPasswordRequest_persistsPasswordResetRequest() {
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any())).thenReturn("jdoe");
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.externalIdParamName), any())).thenReturn(null);
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.externalIDParamName), any())).thenReturn(null);
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.authenticationModeParamName), any())).thenReturn("email");
-        when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(true);
-        when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
-        LocalDateTime expectedExpiry = LocalDateTime.of(2026, 4, 13, 12, 0, 30);
-        when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
+  private SelfServiceForgotPasswordWritePlatformServiceImpl service;
 
-        AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
-        when(appUser.getEmail()).thenReturn("test@test.com");
-        Client client = mock(Client.class);
-        when(client.getAccountNumber()).thenReturn("0001");
-        when(client.getFirstname()).thenReturn("John");
-        when(client.getMiddlename()).thenReturn(null);
-        when(client.getLastname()).thenReturn("Doe");
-        when(client.getMobileNo()).thenReturn("5551234567");
-        AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
-        when(mapping.getAppUser()).thenReturn(appUser);
-        when(mapping.getClient()).thenReturn(client);
-        when(appUserClientMappingRepository.fetchByAppuserUsername("jdoe")).thenReturn(mapping);
+  @BeforeEach
+  void setUp() {
+    service =
+        new SelfServiceForgotPasswordWritePlatformServiceImpl(
+            selfServiceRegistrationRepository,
+            fromApiJsonHelper,
+            selfServiceRegistrationReadPlatformService,
+            clientRepository,
+            passwordValidationPolicyRepository,
+            userDomainService,
+            selfServicePluginEmailService,
+            smsMessageRepository,
+            smsMessageScheduledJobService,
+            smsCampaignDropdownReadPlatformService,
+            appUserReadPlatformService,
+            roleRepository,
+            appUserClientMappingRepository,
+            jdbcTemplate,
+            appUserRepository,
+            env,
+            platformPasswordEncoder,
+            appSelfServiceUserRepository,
+            selfServiceAuthorizationTokenService,
+            registrationTemplateEngine,
+            registrationMessageSource);
+  }
 
-        SelfServiceRegistration result = service.createForgotPasswordRequest("{}");
+  @Test
+  void createForgotPasswordRequest_persistsPasswordResetRequest() {
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.externalIdParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.externalIDParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn("email");
+    when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(true);
+    when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
+    LocalDateTime expectedExpiry = LocalDateTime.of(2026, 4, 13, 12, 0, 30);
+    when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
 
-        assertNotNull(result);
-        assertEquals(SelfServiceRequestType.PASSWORD_RESET, result.getRequestType());
-        assertEquals("123456", result.getExternalAuthorizationToken());
-        assertEquals(expectedExpiry, result.getExpiresAt());
-        verify(selfServiceRegistrationRepository).saveAndFlush(argThat(request -> expectedExpiry.equals(request.getExpiresAt())));
-    }
+    AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
+    when(appUser.getEmail()).thenReturn("test@test.com");
+    Client client = mock(Client.class);
+    when(client.getAccountNumber()).thenReturn("0001");
+    when(client.getFirstname()).thenReturn("John");
+    when(client.getMiddlename()).thenReturn(null);
+    when(client.getLastname()).thenReturn("Doe");
+    when(client.getMobileNo()).thenReturn("5551234567");
+    AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
+    when(mapping.getAppUser()).thenReturn(appUser);
+    when(mapping.getClient()).thenReturn(client);
+    when(appUserClientMappingRepository.fetchByAppuserUsername("jdoe")).thenReturn(mapping);
 
-    @Test
-    void createForgotPasswordRequest_returnsNoRequestWhenExternalIdDoesNotMatch() {
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any())).thenReturn("jdoe");
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.externalIdParamName), any())).thenReturn("wrong-id");
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.authenticationModeParamName), any())).thenReturn("email");
-        when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(true);
+    SelfServiceRegistration result = service.createForgotPasswordRequest("{}");
 
-        AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
-        Client client = mock(Client.class);
-        when(client.getExternalId()).thenReturn(new org.apache.fineract.infrastructure.core.domain.ExternalId("expected-id"));
-        AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
-        when(mapping.getAppUser()).thenReturn(appUser);
-        when(mapping.getClient()).thenReturn(client);
-        when(appUserClientMappingRepository.fetchByAppuserUsername("jdoe")).thenReturn(mapping);
+    assertNotNull(result);
+    assertEquals(SelfServiceRequestType.PASSWORD_RESET, result.getRequestType());
+    assertEquals("123456", result.getExternalAuthorizationToken());
+    assertEquals(expectedExpiry, result.getExpiresAt());
+    verify(selfServiceRegistrationRepository)
+        .saveAndFlush(argThat(request -> expectedExpiry.equals(request.getExpiresAt())));
+  }
 
-        assertNull(service.createForgotPasswordRequest("{}"));
-        verify(selfServiceRegistrationRepository, never()).saveAndFlush(any(SelfServiceRegistration.class));
-    }
+  @Test
+  void createForgotPasswordRequest_returnsNoRequestWhenExternalIdDoesNotMatch() {
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.externalIdParamName), any()))
+        .thenReturn("wrong-id");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn("email");
+    when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(true);
 
-    @Test
-    void renewPassword_updatesEncodedPasswordFromExternalToken() {
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any())).thenReturn("Strong#Abc123");
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.repeatPasswordParamName), any())).thenReturn("Strong#Abc123");
-        when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.externalAuthenticationTokenParamName), any())).thenReturn("external-token");
-        PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
-        when(policy.getRegex()).thenReturn(".*");
-        when(policy.getDescription()).thenReturn("any");
-        when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(policy);
+    AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
+    Client client = mock(Client.class);
+    when(client.getExternalId())
+        .thenReturn(new org.apache.fineract.infrastructure.core.domain.ExternalId("expected-id"));
+    AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
+    when(mapping.getAppUser()).thenReturn(appUser);
+    when(mapping.getClient()).thenReturn(client);
+    when(appUserClientMappingRepository.fetchByAppuserUsername("jdoe")).thenReturn(mapping);
 
-        SelfServiceRegistration request = mock(SelfServiceRegistration.class);
-        when(request.getUsername()).thenReturn("jdoe");
-        when(request.isConsumed()).thenReturn(false);
-        when(request.isExpired(any())).thenReturn(false);
-        when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken("external-token", SelfServiceRequestType.PASSWORD_RESET))
-                .thenReturn(request);
+    assertNull(service.createForgotPasswordRequest("{}"));
+    verify(selfServiceRegistrationRepository, never())
+        .saveAndFlush(any(SelfServiceRegistration.class));
+  }
 
-        AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
-        when(appUser.getId()).thenReturn(7L);
-        when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
-        when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
+  @Test
+  void renewPassword_updatesEncodedPasswordFromExternalToken() {
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any()))
+        .thenReturn("Strong#Abc123");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.repeatPasswordParamName), any()))
+        .thenReturn("Strong#Abc123");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName), any()))
+        .thenReturn("external-token");
+    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn(".*");
+    when(policy.getDescription()).thenReturn("any");
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
 
-        CommandProcessingResult result = service.renewPassword("{}");
+    SelfServiceRegistration request = mock(SelfServiceRegistration.class);
+    when(request.getUsername()).thenReturn("jdoe");
+    when(request.isConsumed()).thenReturn(false);
+    when(request.isExpired(any())).thenReturn(false);
+    when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+            "external-token", SelfServiceRequestType.PASSWORD_RESET))
+        .thenReturn(request);
 
-        assertNotNull(result);
-        assertEquals(7L, result.getResourceId());
-        verify(appUser).updatePassword("encoded-password");
-        verify(appUser).updatePasswordResetRequired(false);
-        verify(appSelfServiceUserRepository).saveAndFlush(appUser);
-        verify(request).markConsumed();
-        verify(selfServiceRegistrationRepository).saveAndFlush(request);
-    }
+    AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
+    when(appUser.getId()).thenReturn(7L);
+    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
+    when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
+
+    CommandProcessingResult result = service.renewPassword("{}");
+
+    assertNotNull(result);
+    assertEquals(7L, result.getResourceId());
+    verify(appUser).updatePassword("encoded-password");
+    verify(appUser).updatePasswordResetRequired(false);
+    verify(appSelfServiceUserRepository).saveAndFlush(appUser);
+    verify(request).markConsumed();
+    verify(selfServiceRegistrationRepository).saveAndFlush(request);
+  }
 }

@@ -29,7 +29,6 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
@@ -40,13 +39,14 @@ import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPT;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPTRepository;
 import org.apache.fineract.selfservice.account.exception.InvalidAccountInformationException;
 import org.apache.fineract.selfservice.account.exception.InvalidBeneficiaryException;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Implementation of {@link SelfBeneficiariesTPTWritePlatformService} 
- * handling the business logic for creating, updating, and deleting self-service beneficiaries.
+ * Implementation of {@link SelfBeneficiariesTPTWritePlatformService} handling the business logic
+ * for creating, updating, and deleting self-service beneficiaries.
  */
 @RequiredArgsConstructor
 @Slf4j
@@ -113,9 +113,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
             new SelfBeneficiariesTPT(
                 user.getId(), name, officeId, clientId, accountId, accountType, transferLimit);
         this.repository.saveAndFlush(beneficiary);
-        return new CommandProcessingResultBuilder()
-            .withEntityId(beneficiary.getId())
-            .build();
+        return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
       } catch (DataAccessException dae) {
         handleDataIntegrityIssues(command, dae);
       }

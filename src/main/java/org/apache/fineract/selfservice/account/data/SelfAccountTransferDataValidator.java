@@ -41,9 +41,9 @@ import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferReadService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -51,203 +51,214 @@ import org.springframework.stereotype.Component;
 @Component
 public class SelfAccountTransferDataValidator {
 
-    private final PlatformSelfServiceSecurityContext context;
-    private final SelfAccountTransferReadService selfAccountTransferReadService;
-    private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
-    private final FromJsonHelper fromApiJsonHelper;
+  private final PlatformSelfServiceSecurityContext context;
+  private final SelfAccountTransferReadService selfAccountTransferReadService;
+  private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
+  private final FromJsonHelper fromApiJsonHelper;
 
-    @Autowired
-    public SelfAccountTransferDataValidator(final PlatformSelfServiceSecurityContext context,
-                                          final SelfAccountTransferReadService selfAccountTransferReadService,
-                                          final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService,
-                                          final FromJsonHelper fromApiJsonHelper) {
-        this.context = context;
-        this.selfAccountTransferReadService = selfAccountTransferReadService;
-        this.tptBeneficiaryReadPlatformService = tptBeneficiaryReadPlatformService;
-        this.fromApiJsonHelper = fromApiJsonHelper;
-    }
-    
-    public Map<String, Object> validateCreate(String type, String apiRequestBodyAsJson) {
-        if (StringUtils.isBlank(apiRequestBodyAsJson)) {
-            throw new InvalidJsonException();
-          }
+  @Autowired
+  public SelfAccountTransferDataValidator(
+      final PlatformSelfServiceSecurityContext context,
+      final SelfAccountTransferReadService selfAccountTransferReadService,
+      final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService,
+      final FromJsonHelper fromApiJsonHelper) {
+    this.context = context;
+    this.selfAccountTransferReadService = selfAccountTransferReadService;
+    this.tptBeneficiaryReadPlatformService = tptBeneficiaryReadPlatformService;
+    this.fromApiJsonHelper = fromApiJsonHelper;
+  }
 
-        JsonElement element = this.fromApiJsonHelper.parse(apiRequestBodyAsJson);
-
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator =
-            new DataValidatorBuilder(dataValidationErrors).resource(ACCOUNT_TRANSFER_RESOURCE_NAME);
-
-        final Long fromOfficeId = this.fromApiJsonHelper.extractLongNamed(fromOfficeIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(fromOfficeIdParamName)
-            .value(fromOfficeId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Long fromClientId = this.fromApiJsonHelper.extractLongNamed(fromClientIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(fromClientIdParamName)
-            .value(fromClientId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Long fromAccountId = this.fromApiJsonHelper.extractLongNamed(fromAccountIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(fromAccountIdParamName)
-            .value(fromAccountId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Integer fromAccountType = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(fromAccountTypeParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(fromAccountTypeParamName)
-            .value(fromAccountType)
-            .notNull()
-            .isOneOfTheseValues(Integer.valueOf(1), Integer.valueOf(2));
-
-        final Long toOfficeId = this.fromApiJsonHelper.extractLongNamed(toOfficeIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(toOfficeIdParamName)
-            .value(toOfficeId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Long toClientId = this.fromApiJsonHelper.extractLongNamed(toClientIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(toClientIdParamName)
-            .value(toClientId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Long toAccountId = this.fromApiJsonHelper.extractLongNamed(toAccountIdParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(toAccountIdParamName)
-            .value(toAccountId)
-            .notNull()
-            .integerGreaterThanZero();
-
-        final Integer toAccountType = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(toAccountTypeParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(toAccountTypeParamName)
-            .value(toAccountType)
-            .notNull()
-            .isOneOfTheseValues(Integer.valueOf(1), Integer.valueOf(2));
-
-        if (fromAccountType != null
-            && fromAccountType == 1
-            && toAccountType != null
-            && toAccountType == 1) {
-            baseDataValidator
-              .reset()
-              .failWithCode(
-                  "loan.to.loan.transfer.not.allowed",
-                  "Cannot transfer from Loan account to another Loan account.");
-        }
-
-        final LocalDate transactionDate =
-            this.fromApiJsonHelper.extractLocalDateNamed(transferDateParamName, element);
-        baseDataValidator.reset().parameter(transferDateParamName).value(transactionDate).notNull();
-
-        final BigDecimal transactionAmount =
-            this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(transferAmountParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(transferAmountParamName)
-            .value(transactionAmount)
-            .notNull()
-            .positiveAmount();
-
-        final String transactionDescription =
-            this.fromApiJsonHelper.extractStringNamed(transferDescriptionParamName, element);
-        baseDataValidator
-            .reset()
-            .parameter(transferDescriptionParamName)
-            .value(transactionDescription)
-            .notBlank()
-            .notExceedingLengthOf(200);
-
-        throwExceptionIfValidationWarningsExist(dataValidationErrors);
-
-        SelfAccountTemplateData fromAccount =
-            new SelfAccountTemplateData(fromAccountId, fromAccountType, fromClientId, fromOfficeId);
-        SelfAccountTemplateData toAccount =
-            new SelfAccountTemplateData(toAccountId, toAccountType, toClientId, toOfficeId);
-
-        validateUserAccounts(fromAccount, toAccount, baseDataValidator, type);
-        throwExceptionIfValidationWarningsExist(dataValidationErrors);
-
-        Map<String, Object> ret = new HashMap<>();
-        ret.put("fromAccount", fromAccount);
-        ret.put("toAccount", toAccount);
-        ret.put("transactionDate", transactionDate);
-        ret.put("transactionAmount", transactionAmount);
-
-        return ret;
+  public Map<String, Object> validateCreate(String type, String apiRequestBodyAsJson) {
+    if (StringUtils.isBlank(apiRequestBodyAsJson)) {
+      throw new InvalidJsonException();
     }
 
-    private void validateUserAccounts(final SelfAccountTemplateData fromAccount,
-                                    final SelfAccountTemplateData toAccount,
-                                    final DataValidatorBuilder baseDataValidator,
-                                    final String type) {
-        AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-        Collection<SelfAccountTemplateData> validFromAccounts = this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
+    JsonElement element = this.fromApiJsonHelper.parse(apiRequestBodyAsJson);
 
-        Collection<SelfAccountTemplateData> validToAccounts = validFromAccounts;
-        if (type.equals("tpt")) {
-            validToAccounts = this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
-        }
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    final DataValidatorBuilder baseDataValidator =
+        new DataValidatorBuilder(dataValidationErrors).resource(ACCOUNT_TRANSFER_RESOURCE_NAME);
 
-        boolean validFromAccount = false;
-        for (SelfAccountTemplateData validAccount : validFromAccounts) {
-            if (validAccount.equals(fromAccount)) {
-                validFromAccount = true;
-                break;
-            }
-        }
+    final Long fromOfficeId =
+        this.fromApiJsonHelper.extractLongNamed(fromOfficeIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(fromOfficeIdParamName)
+        .value(fromOfficeId)
+        .notNull()
+        .integerGreaterThanZero();
 
-        boolean validToAccount = false;
-        for (SelfAccountTemplateData validAccount : validToAccounts) {
-            if (validAccount.equals(toAccount)) {
-                validToAccount = true;
-                break;
-            }
-        }
+    final Long fromClientId =
+        this.fromApiJsonHelper.extractLongNamed(fromClientIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(fromClientIdParamName)
+        .value(fromClientId)
+        .notNull()
+        .integerGreaterThanZero();
 
-        if (!validFromAccount) {
-          baseDataValidator
-              .reset()
-              .failWithCode(
-                  "invalid.from.account.details",
-                  "Source account details doesn't match with valid user account details.");
-        }
+    final Long fromAccountId =
+        this.fromApiJsonHelper.extractLongNamed(fromAccountIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(fromAccountIdParamName)
+        .value(fromAccountId)
+        .notNull()
+        .integerGreaterThanZero();
 
-        if (!validToAccount) {
-          baseDataValidator
-              .reset()
-              .failWithCode("invalid.to.account.details",
-                  "Destination account details doesn't match with valid user account details.");
-        }
+    final Integer fromAccountType =
+        this.fromApiJsonHelper.extractIntegerSansLocaleNamed(fromAccountTypeParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(fromAccountTypeParamName)
+        .value(fromAccountType)
+        .notNull()
+        .isOneOfTheseValues(Integer.valueOf(1), Integer.valueOf(2));
 
-        if (fromAccount.equals(toAccount)) {
-          baseDataValidator
-              .reset()
-              .failWithCode("same.from.to.account.details", 
-                      "Source and Destination account details are same.");
-        }
+    final Long toOfficeId = this.fromApiJsonHelper.extractLongNamed(toOfficeIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(toOfficeIdParamName)
+        .value(toOfficeId)
+        .notNull()
+        .integerGreaterThanZero();
+
+    final Long toClientId = this.fromApiJsonHelper.extractLongNamed(toClientIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(toClientIdParamName)
+        .value(toClientId)
+        .notNull()
+        .integerGreaterThanZero();
+
+    final Long toAccountId = this.fromApiJsonHelper.extractLongNamed(toAccountIdParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(toAccountIdParamName)
+        .value(toAccountId)
+        .notNull()
+        .integerGreaterThanZero();
+
+    final Integer toAccountType =
+        this.fromApiJsonHelper.extractIntegerSansLocaleNamed(toAccountTypeParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(toAccountTypeParamName)
+        .value(toAccountType)
+        .notNull()
+        .isOneOfTheseValues(Integer.valueOf(1), Integer.valueOf(2));
+
+    if (fromAccountType != null
+        && fromAccountType == 1
+        && toAccountType != null
+        && toAccountType == 1) {
+      baseDataValidator
+          .reset()
+          .failWithCode(
+              "loan.to.loan.transfer.not.allowed",
+              "Cannot transfer from Loan account to another Loan account.");
     }
 
-    private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
-        if (!dataValidationErrors.isEmpty()) {
-            throw new PlatformApiDataValidationException(dataValidationErrors);
-        }
+    final LocalDate transactionDate =
+        this.fromApiJsonHelper.extractLocalDateNamed(transferDateParamName, element);
+    baseDataValidator.reset().parameter(transferDateParamName).value(transactionDate).notNull();
+
+    final BigDecimal transactionAmount =
+        this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(transferAmountParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(transferAmountParamName)
+        .value(transactionAmount)
+        .notNull()
+        .positiveAmount();
+
+    final String transactionDescription =
+        this.fromApiJsonHelper.extractStringNamed(transferDescriptionParamName, element);
+    baseDataValidator
+        .reset()
+        .parameter(transferDescriptionParamName)
+        .value(transactionDescription)
+        .notBlank()
+        .notExceedingLengthOf(200);
+
+    throwExceptionIfValidationWarningsExist(dataValidationErrors);
+
+    SelfAccountTemplateData fromAccount =
+        new SelfAccountTemplateData(fromAccountId, fromAccountType, fromClientId, fromOfficeId);
+    SelfAccountTemplateData toAccount =
+        new SelfAccountTemplateData(toAccountId, toAccountType, toClientId, toOfficeId);
+
+    validateUserAccounts(fromAccount, toAccount, baseDataValidator, type);
+    throwExceptionIfValidationWarningsExist(dataValidationErrors);
+
+    Map<String, Object> ret = new HashMap<>();
+    ret.put("fromAccount", fromAccount);
+    ret.put("toAccount", toAccount);
+    ret.put("transactionDate", transactionDate);
+    ret.put("transactionAmount", transactionAmount);
+
+    return ret;
+  }
+
+  private void validateUserAccounts(
+      final SelfAccountTemplateData fromAccount,
+      final SelfAccountTemplateData toAccount,
+      final DataValidatorBuilder baseDataValidator,
+      final String type) {
+    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+    Collection<SelfAccountTemplateData> validFromAccounts =
+        this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
+
+    Collection<SelfAccountTemplateData> validToAccounts = validFromAccounts;
+    if (type.equals("tpt")) {
+      validToAccounts =
+          this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
     }
+
+    boolean validFromAccount = false;
+    for (SelfAccountTemplateData validAccount : validFromAccounts) {
+      if (validAccount.equals(fromAccount)) {
+        validFromAccount = true;
+        break;
+      }
+    }
+
+    boolean validToAccount = false;
+    for (SelfAccountTemplateData validAccount : validToAccounts) {
+      if (validAccount.equals(toAccount)) {
+        validToAccount = true;
+        break;
+      }
+    }
+
+    if (!validFromAccount) {
+      baseDataValidator
+          .reset()
+          .failWithCode(
+              "invalid.from.account.details",
+              "Source account details doesn't match with valid user account details.");
+    }
+
+    if (!validToAccount) {
+      baseDataValidator
+          .reset()
+          .failWithCode(
+              "invalid.to.account.details",
+              "Destination account details doesn't match with valid user account details.");
+    }
+
+    if (fromAccount.equals(toAccount)) {
+      baseDataValidator
+          .reset()
+          .failWithCode(
+              "same.from.to.account.details", "Source and Destination account details are same.");
+    }
+  }
+
+  private void throwExceptionIfValidationWarningsExist(
+      final List<ApiParameterError> dataValidationErrors) {
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
+    }
+  }
 }

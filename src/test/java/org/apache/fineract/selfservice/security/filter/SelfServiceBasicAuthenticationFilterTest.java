@@ -20,19 +20,26 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 
 class SelfServiceBasicAuthenticationFilterTest {
 
-    @Test
-    void onSuccessfulAuthentication_doesNotThrow_withAppSelfServiceUserPrincipal() {
-        HttpServletRequest request = mock(HttpServletRequest.class);
-        HttpServletResponse response = mock(HttpServletResponse.class);
-        Authentication auth = mock(Authentication.class);
-        AppSelfServiceUser selfServiceUser = mock(AppSelfServiceUser.class);
-        when(auth.getPrincipal()).thenReturn(selfServiceUser);
+  @Test
+  void onSuccessfulAuthentication_doesNotThrow_withAppSelfServiceUserPrincipal() {
+    HttpServletRequest request = mock(HttpServletRequest.class);
+    HttpServletResponse response = mock(HttpServletResponse.class);
+    Authentication auth = mock(Authentication.class);
+    AppSelfServiceUser selfServiceUser = mock(AppSelfServiceUser.class);
+    when(auth.getPrincipal()).thenReturn(selfServiceUser);
 
-        SelfServiceBasicAuthenticationFilter filter = new SelfServiceBasicAuthenticationFilter(
-                mock(AuthenticationManager.class), mock(AuthenticationEntryPoint.class),
-                null, null, null, null, null, null);
+    SelfServiceBasicAuthenticationFilter filter =
+        new SelfServiceBasicAuthenticationFilter(
+            mock(AuthenticationManager.class),
+            mock(AuthenticationEntryPoint.class),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
 
-        assertThatCode(() -> filter.onSuccessfulAuthentication(request, response, auth))
-                .doesNotThrowAnyException();
-    }
+    assertThatCode(() -> filter.onSuccessfulAuthentication(request, response, auth))
+        .doesNotThrowAnyException();
+  }
 }

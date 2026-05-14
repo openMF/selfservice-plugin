@@ -33,35 +33,43 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/**
- * JAX-RS resource exposing self-service registration and enrollment endpoints.
- */
+/** JAX-RS resource exposing self-service registration and enrollment endpoints. */
 @Path("/v1/self/identity")
 @Component
 @Tag(name = "Person Identity", description = "")
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    name = "mifos.self.service.external.identity.system.enabled",   // property name
-    havingValue = "true",                         // enable when value is "true"
-    matchIfMissing = false                        // disabled by default if property is missing
-)
+    name = "mifos.self.service.external.identity.system.enabled", // property name
+    havingValue = "true", // enable when value is "true"
+    matchIfMissing = false // disabled by default if property is missing
+    )
 public class SelfServiceIdentityResource {
 
-    private final DefaultToApiJsonSerializer<AppSelfServiceUser> toApiJsonSerializer;
-    private final SelfServiceClientIdentityDataReadPlatformService selfServiceClientIdentityDataReadPlatformService;
-    
-    @POST
-    @Path("retrieve")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    @Operation(summary = "Retrieve Identity Data", description = "Retrieve Identity Information from Third Party System.")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfServiceRetrieveIdentityRequest.class)))
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "OK"),
-        @ApiResponse(responseCode = "400", description = "Bad Request")
-    })    
-    public String retrieveIdentity(final SelfServiceRetrieveIdentityRequest selfServiceRetrieveIdentityRequest) throws Exception{
-                
-        return this.toApiJsonSerializer.serialize(this.selfServiceClientIdentityDataReadPlatformService.retrieveClientIdentityData(selfServiceRetrieveIdentityRequest));
-    }
+  private final DefaultToApiJsonSerializer<AppSelfServiceUser> toApiJsonSerializer;
+  private final SelfServiceClientIdentityDataReadPlatformService
+      selfServiceClientIdentityDataReadPlatformService;
+
+  @POST
+  @Path("retrieve")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve Identity Data",
+      description = "Retrieve Identity Information from Third Party System.")
+  @RequestBody(
+      required = true,
+      content =
+          @Content(schema = @Schema(implementation = SelfServiceRetrieveIdentityRequest.class)))
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "400", description = "Bad Request")
+  })
+  public String retrieveIdentity(
+      final SelfServiceRetrieveIdentityRequest selfServiceRetrieveIdentityRequest)
+      throws Exception {
+
+    return this.toApiJsonSerializer.serialize(
+        this.selfServiceClientIdentityDataReadPlatformService.retrieveClientIdentityData(
+            selfServiceRetrieveIdentityRequest));
+  }
 }

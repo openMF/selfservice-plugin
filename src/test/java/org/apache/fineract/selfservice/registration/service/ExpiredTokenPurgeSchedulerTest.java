@@ -44,8 +44,8 @@ import org.springframework.core.env.Environment;
  *
  * <p>These tests call the real {@link ThreadLocalContextUtil} static methods (set/clear) rather
  * than attempting static mocking, which is consistent with the testing pattern used across this
- * codebase (see {@code SelfServiceRegistrationWritePlatformServiceImplTest},
- * {@code AppSelfServiceUserTest}, etc.).
+ * codebase (see {@code SelfServiceRegistrationWritePlatformServiceImplTest}, {@code
+ * AppSelfServiceUserTest}, etc.).
  *
  * <p>After each test, the {@code @AfterEach} method resets the ThreadLocal to prevent leaking state
  * into subsequent tests.
@@ -419,9 +419,9 @@ class ExpiredTokenPurgeSchedulerTest {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   /**
-   * Creates a real {@link FineractPlatformTenant} instance suitable for setting on
-   * {@link ThreadLocalContextUtil}. Uses "UTC" as the timezone, matching the pattern in
-   * {@code SelfServiceRegistrationWritePlatformServiceImplTest}.
+   * Creates a real {@link FineractPlatformTenant} instance suitable for setting on {@link
+   * ThreadLocalContextUtil}. Uses "UTC" as the timezone, matching the pattern in {@code
+   * SelfServiceRegistrationWritePlatformServiceImplTest}.
    */
   private FineractPlatformTenant createTenant(String identifier) {
     return new FineractPlatformTenant(1L, identifier, identifier, "UTC", null);

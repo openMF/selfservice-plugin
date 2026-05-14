@@ -83,4 +83,3 @@ class SelfRunReportApiResourceTest {
     org.junit.jupiter.api.Assertions.assertEquals("true", forwarded.getFirst("exportCSV"));
   }
 }
-

@@ -39,8 +39,8 @@ import org.springframework.stereotype.Component;
  * Fineract Instance Types</a>.
  *
  * <p><strong>Multi-instance safety:</strong> The purge queries are idempotent {@code DELETE WHERE
- * expired < cutoff} statements. If multiple batch instances load this plugin, concurrent
- * execution is safe — worst case some queries delete 0 rows.
+ * expired < cutoff} statements. If multiple batch instances load this plugin, concurrent execution
+ * is safe — worst case some queries delete 0 rows.
  *
  * <p><strong>Tenant context:</strong> Each tenant is processed in its own {@code try/finally} block
  * that sets and clears {@link ThreadLocalContextUtil}. This is mandatory because Spring's
@@ -85,8 +85,7 @@ public class ExpiredTokenPurgeScheduler {
           purgeService.purgeExpiredTwoFactorAccessTokens();
         }
       } catch (Exception e) {
-        log.error(
-            "Expired token purge failed for tenant: {}", tenant.getTenantIdentifier(), e);
+        log.error("Expired token purge failed for tenant: {}", tenant.getTenantIdentifier(), e);
         // Continue to next tenant — one failure must not block others
       } finally {
         ThreadLocalContextUtil.clearTenant();

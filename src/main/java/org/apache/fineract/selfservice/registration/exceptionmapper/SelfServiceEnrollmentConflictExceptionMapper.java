@@ -23,29 +23,35 @@ import org.springframework.stereotype.Component;
  */
 @Provider
 @Component
-public class SelfServiceEnrollmentConflictExceptionMapper implements ExceptionMapper<SelfServiceEnrollmentConflictException> {
+public class SelfServiceEnrollmentConflictExceptionMapper
+    implements ExceptionMapper<SelfServiceEnrollmentConflictException> {
 
-    /**
-     * Builds the conflict response body for a self-enrollment constraint violation.
-     *
-     * @param exception the enrollment conflict to serialize
-     * @return HTTP 409 response containing the conflict details
-     */
-    @Override
-    public Response toResponse(SelfServiceEnrollmentConflictException exception) {
-        Map<String, Object> error = new LinkedHashMap<>();
-        error.put("defaultUserMessage", exception.getMessage());
-        error.put("parameterName", exception.getParameterName());
-        error.put("developerMessage", exception.getMessage());
-        error.put("userMessageGlobalisationCode", exception.getUserMessageGlobalisationCode());
+  /**
+   * Builds the conflict response body for a self-enrollment constraint violation.
+   *
+   * @param exception the enrollment conflict to serialize
+   * @return HTTP 409 response containing the conflict details
+   */
+  @Override
+  public Response toResponse(SelfServiceEnrollmentConflictException exception) {
+    Map<String, Object> error = new LinkedHashMap<>();
+    error.put("defaultUserMessage", exception.getMessage());
+    error.put("parameterName", exception.getParameterName());
+    error.put("developerMessage", exception.getMessage());
+    error.put("userMessageGlobalisationCode", exception.getUserMessageGlobalisationCode());
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("developerMessage", "The request caused a data integrity issue to be fired by the database.");
-        body.put("httpStatusCode", "409");
-        body.put("defaultUserMessage", exception.getMessage());
-        body.put("userMessageGlobalisationCode", exception.getUserMessageGlobalisationCode());
-        body.put("errors", List.of(error));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put(
+        "developerMessage",
+        "The request caused a data integrity issue to be fired by the database.");
+    body.put("httpStatusCode", "409");
+    body.put("defaultUserMessage", exception.getMessage());
+    body.put("userMessageGlobalisationCode", exception.getUserMessageGlobalisationCode());
+    body.put("errors", List.of(error));
 
-        return Response.status(Response.Status.CONFLICT).type(MediaType.APPLICATION_JSON).entity(body).build();
-    }
+    return Response.status(Response.Status.CONFLICT)
+        .type(MediaType.APPLICATION_JSON)
+        .entity(body)
+        .build();
+  }
 }

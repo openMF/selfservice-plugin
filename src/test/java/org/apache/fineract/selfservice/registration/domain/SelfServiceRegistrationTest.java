@@ -11,7 +11,6 @@ import static org.mockito.Mockito.mock;
 
 import java.time.LocalDateTime;
 import org.apache.fineract.portfolio.client.domain.Client;
-import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
 import org.junit.jupiter.api.Test;
 
 class SelfServiceRegistrationTest {

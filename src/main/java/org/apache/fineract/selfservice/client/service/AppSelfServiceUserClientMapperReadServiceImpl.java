@@ -16,21 +16,23 @@ package org.apache.fineract.selfservice.client.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @RequiredArgsConstructor
 @Slf4j
-public class AppSelfServiceUserClientMapperReadServiceImpl implements AppSelfServiceUserClientMapperReadService {
+public class AppSelfServiceUserClientMapperReadServiceImpl
+    implements AppSelfServiceUserClientMapperReadService {
 
   private final JdbcTemplate jdbcTemplate;
   private final PlatformSelfServiceSecurityContext context;
 
   @Override
-  public Boolean isClientMappedToSelfServiceUser(Long clientId, Long appUserId) {      
-    return this.jdbcTemplate.queryForObject("select case when (count(*) > 0) then true else false end from m_selfservice_user_client_mapping where client_id = ? and appuser_id = ?",
+  public Boolean isClientMappedToSelfServiceUser(Long clientId, Long appUserId) {
+    return this.jdbcTemplate.queryForObject(
+        "select case when (count(*) > 0) then true else false end from m_selfservice_user_client_mapping where client_id = ? and appuser_id = ?",
         Boolean.class,
         clientId,
         appUserId);

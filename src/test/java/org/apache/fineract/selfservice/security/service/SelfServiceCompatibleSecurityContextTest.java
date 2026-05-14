@@ -92,9 +92,7 @@ class SelfServiceCompatibleSecurityContextTest {
 
   // ── authenticatedUser() ──────────────────────────────────────────────────
 
-  /**
-   * Tests that a valid self-service principal returns an AppUser stub.
-   */
+  /** Tests that a valid self-service principal returns an AppUser stub. */
   @Test
   void authenticatedUser_selfServicePrincipal_returnsStub() {
     AppSelfServiceUser principal = mockSelfServiceUser(42L, "ssuser");
@@ -110,9 +108,7 @@ class SelfServiceCompatibleSecurityContextTest {
     assertThat(stub.getLastname()).isEqualTo("Last");
   }
 
-  /**
-   * Tests that missing principal throws UnAuthenticatedUserException.
-   */
+  /** Tests that missing principal throws UnAuthenticatedUserException. */
   @Test
   void authenticatedUser_noPrincipal_throwsUnAuthenticatedUserException() {
     assertThatThrownBy(() -> ctx.authenticatedUser())
@@ -121,9 +117,7 @@ class SelfServiceCompatibleSecurityContextTest {
 
   // ── authenticatedUser(CommandWrapper) ────────────────────────────────────
 
-  /**
-   * Tests context resolution with a command wrapper for self-service users.
-   */
+  /** Tests context resolution with a command wrapper for self-service users. */
   @Test
   void authenticatedUserWithCommandWrapper_selfServicePrincipal_returnsStubWithCorrectFields() {
     AppSelfServiceUser principal = mockSelfServiceUser(99L, "ssuser3");
@@ -139,9 +133,7 @@ class SelfServiceCompatibleSecurityContextTest {
     assertThat(stub.getLastname()).isEqualTo("Last");
   }
 
-  /**
-   * Tests command wrapper resolution throws when no principal is found.
-   */
+  /** Tests command wrapper resolution throws when no principal is found. */
   @Test
   void authenticatedUserWithCommandWrapper_noPrincipal_throwsUnAuthenticatedUserException() {
     assertThatThrownBy(() -> ctx.authenticatedUser(beneficiaryCommandWrapper()))
@@ -149,10 +141,12 @@ class SelfServiceCompatibleSecurityContextTest {
   }
 
   /**
-   * Tests that password-expired self-service users are returned without throwing ResetPasswordException.
+   * Tests that password-expired self-service users are returned without throwing
+   * ResetPasswordException.
    */
   @Test
-  void authenticatedUserWithCommandWrapper_passwordExpiredSelfServiceUser_returnsStubWithoutThrowingResetPasswordException() {
+  void
+      authenticatedUserWithCommandWrapper_passwordExpiredSelfServiceUser_returnsStubWithoutThrowingResetPasswordException() {
     AppSelfServiceUser principal = mockSelfServiceUser(55L, "expireduser");
     when(principal.isPasswordResetRequired()).thenReturn(true);
     setSecurityPrincipal(principal);
@@ -164,9 +158,7 @@ class SelfServiceCompatibleSecurityContextTest {
 
   // ── getAuthenticatedUserIfPresent() ──────────────────────────────────────
 
-  /**
-   * Tests getAuthenticatedUserIfPresent returns a stub for self-service user.
-   */
+  /** Tests getAuthenticatedUserIfPresent returns a stub for self-service user. */
   @Test
   void getAuthenticatedUserIfPresent_selfServicePrincipal_returnsStub() {
     AppSelfServiceUser principal = mockSelfServiceUser(7L, "ssuser2");
@@ -179,9 +171,7 @@ class SelfServiceCompatibleSecurityContextTest {
     assertThat(stub.getOffice()).isSameAs(office);
   }
 
-  /**
-   * Tests getAuthenticatedUserIfPresent returns null when absent.
-   */
+  /** Tests getAuthenticatedUserIfPresent returns null when absent. */
   @Test
   void getAuthenticatedUserIfPresent_noPrincipal_returnsNull() {
     AppUser result = ctx.getAuthenticatedUserIfPresent();

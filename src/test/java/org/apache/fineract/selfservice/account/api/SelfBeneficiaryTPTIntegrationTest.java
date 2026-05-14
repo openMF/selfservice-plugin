@@ -19,9 +19,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * E2E tests for self-service beneficiary TPT operations (add, update, delete).
- */
+/** E2E tests for self-service beneficiary TPT operations (add, update, delete). */
 public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTestBase {
 
   private static final String BENEFICIARIES_PATH =
@@ -33,7 +31,7 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     Integer productId = createSavingsProduct(uniqueSuffix);
     Integer savingsId = openSavingsAccount(clientId, productId);
     String accountNumber = activateAndGetSavingsAccountNumber(savingsId);
-    
+
     Integer roleId = getSelfServiceRoleId();
     String username = insertSelfServiceUserDirectly(uniqueSuffix, clientId, roleId);
 
@@ -110,7 +108,11 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     approveBody.put("approvedOnDate", "01 January 2026");
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
         .body(approveBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsaccounts/" + savingsId + "?command=approve")
+        .post(
+            SelfServiceTestUtils.CONTEXT_PATH
+                + "/api/v1/savingsaccounts/"
+                + savingsId
+                + "?command=approve")
         .then()
         .statusCode(200);
 
@@ -120,7 +122,11 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     activateBody.put("activatedOnDate", "01 January 2026");
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
         .body(activateBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsaccounts/" + savingsId + "?command=activate")
+        .post(
+            SelfServiceTestUtils.CONTEXT_PATH
+                + "/api/v1/savingsaccounts/"
+                + savingsId
+                + "?command=activate")
         .then()
         .statusCode(200);
 
@@ -141,10 +147,12 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
         .path("find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
   }
 
-  private String insertSelfServiceUserDirectly(String uniqueSuffix, Integer clientId, Integer roleId) {
+  private String insertSelfServiceUserDirectly(
+      String uniqueSuffix, Integer clientId, Integer roleId) {
     String username = "ssuser_" + uniqueSuffix;
 
-    executeSqlInPostgres("""
+    executeSqlInPostgres(
+        """
         SELECT setval(
             pg_get_serial_sequence('m_appuser', 'id'),
             GREATEST(
@@ -187,16 +195,20 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
             pg_get_serial_sequence('m_appselfservice_user', 'id'),
             (SELECT MAX(id) FROM m_appselfservice_user)
         );
-        """.formatted(
-            sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId,
-            sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
+        """
+            .formatted(
+                sqlLiteral(username),
+                sqlLiteral(username + "@fineract.org"),
+                roleId,
+                sqlLiteral(username),
+                sqlLiteral(username + "@fineract.org"),
+                roleId,
+                clientId));
 
     return username;
   }
 
-  /**
-   * Tests successfully adding a beneficiary using a self-service user context.
-   */
+  /** Tests successfully adding a beneficiary using a self-service user context. */
   @Test
   @DisplayName("POST /self/beneficiaries/tpt returns 200 for self-service user")
   void addBeneficiary_selfServiceUser_returns200() {
@@ -211,7 +223,9 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     body.put("transferLimit", 500);
 
     Response response =
-        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
+        given(
+                SelfServiceTestUtils.requestSpecWithAuth(
+                    getFineractPort(), seed.username(), "password"))
             .body(body)
             .post(BENEFICIARIES_PATH)
             .then()
@@ -226,9 +240,7 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     Assertions.assertNotNull(resourceId, "resourceId should be present in response");
   }
 
-  /**
-   * Tests successfully updating an existing beneficiary using a self-service user context.
-   */
+  /** Tests successfully updating an existing beneficiary using a self-service user context. */
   @Test
   @DisplayName("PUT /self/beneficiaries/tpt/{id} returns 200 for self-service user")
   void updateBeneficiary_selfServiceUser_returns200() {
@@ -243,7 +255,9 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     addBody.put("transferLimit", 500);
 
     Integer beneficiaryId =
-        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
+        given(
+                SelfServiceTestUtils.requestSpecWithAuth(
+                    getFineractPort(), seed.username(), "password"))
             .body(addBody)
             .post(BENEFICIARIES_PATH)
             .then()
@@ -256,7 +270,9 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     updateBody.put("transferLimit", 1000);
 
     Response updateResponse =
-        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
+        given(
+                SelfServiceTestUtils.requestSpecWithAuth(
+                    getFineractPort(), seed.username(), "password"))
             .body(updateBody)
             .put(BENEFICIARIES_PATH + "/" + beneficiaryId)
             .then()
@@ -266,19 +282,24 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     Assertions.assertEquals(
         200,
         updateResponse.statusCode(),
-        "PUT returned: " + updateResponse.statusCode() + ". Body: " + updateResponse.body().asString());
+        "PUT returned: "
+            + updateResponse.statusCode()
+            + ". Body: "
+            + updateResponse.body().asString());
 
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
         .get(BENEFICIARIES_PATH)
         .then()
         .statusCode(200)
-        .body("find { it.id == " + beneficiaryId + " }.name", org.hamcrest.Matchers.equalTo("Updated Name"))
-        .body("find { it.id == " + beneficiaryId + " }.transferLimit", org.hamcrest.Matchers.equalTo(1000));
+        .body(
+            "find { it.id == " + beneficiaryId + " }.name",
+            org.hamcrest.Matchers.equalTo("Updated Name"))
+        .body(
+            "find { it.id == " + beneficiaryId + " }.transferLimit",
+            org.hamcrest.Matchers.equalTo(1000));
   }
 
-  /**
-   * Tests successfully deleting a beneficiary using a self-service user context.
-   */
+  /** Tests successfully deleting a beneficiary using a self-service user context. */
   @Test
   @DisplayName("DELETE /self/beneficiaries/tpt/{id} returns 200 for self-service user")
   void deleteBeneficiary_selfServiceUser_returns200() {
@@ -293,7 +314,9 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     addBody.put("transferLimit", 500);
 
     Integer beneficiaryId =
-        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
+        given(
+                SelfServiceTestUtils.requestSpecWithAuth(
+                    getFineractPort(), seed.username(), "password"))
             .body(addBody)
             .post(BENEFICIARIES_PATH)
             .then()
@@ -302,7 +325,9 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
             .path("resourceId");
 
     Response deleteResponse =
-        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
+        given(
+                SelfServiceTestUtils.requestSpecWithAuth(
+                    getFineractPort(), seed.username(), "password"))
             .delete(BENEFICIARIES_PATH + "/" + beneficiaryId)
             .then()
             .extract()
@@ -311,7 +336,10 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     Assertions.assertEquals(
         200,
         deleteResponse.statusCode(),
-        "DELETE returned: " + deleteResponse.statusCode() + ". Body: " + deleteResponse.body().asString());
+        "DELETE returned: "
+            + deleteResponse.statusCode()
+            + ". Body: "
+            + deleteResponse.body().asString());
 
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), seed.username(), "password"))
         .get(BENEFICIARIES_PATH)

@@ -17,12 +17,14 @@ import org.apache.fineract.selfservice.testing.support.SelfServiceTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class SelfServicePermissionEnforcementIntegrationTest extends SelfServiceIntegrationTestBase {
+public class SelfServicePermissionEnforcementIntegrationTest
+    extends SelfServiceIntegrationTestBase {
 
   @Test
-  @DisplayName("Verify that Self-Service Users strictly require explicit READ_SAVINGSPRODUCT grant to access /v1/self/savingsproducts")
+  @DisplayName(
+      "Verify that Self-Service Users strictly require explicit READ_SAVINGSPRODUCT grant to access /v1/self/savingsproducts")
   void testSavingsProductsRequireReadSavingsProductPermission() {
-    
+
     // 1. Create a Client
     String clientName = UUID.randomUUID().toString().substring(0, 8);
     Map<String, Object> clientBody = new HashMap<>();
@@ -36,18 +38,22 @@ public class SelfServicePermissionEnforcementIntegrationTest extends SelfService
     clientBody.put("active", true);
     clientBody.put("activationDate", "01 January 2026");
 
-    Integer clientId = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .body(clientBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/clients")
-        .then()
-        .statusCode(200)
-        .extract()
-        .path("clientId");
+    Integer clientId =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .body(clientBody)
+            .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/clients")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("clientId");
 
-    // 2. Clear ALL_FUNCTIONS and ALL_FUNCTIONS_READ from 'Self Service User' role, and ensure READ_SAVINGSPRODUCT is false
-    Response getRolesResponse = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/roles");
-    Integer roleId = getRolesResponse.jsonPath().getInt("find { it.name == 'Self Service User' }.id");
+    // 2. Clear ALL_FUNCTIONS and ALL_FUNCTIONS_READ from 'Self Service User' role, and ensure
+    // READ_SAVINGSPRODUCT is false
+    Response getRolesResponse =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/roles");
+    Integer roleId =
+        getRolesResponse.jsonPath().getInt("find { it.name == 'Self Service User' }.id");
 
     Map<String, Object> permissions = new HashMap<>();
     permissions.put("ALL_FUNCTIONS", false);
@@ -66,7 +72,8 @@ public class SelfServicePermissionEnforcementIntegrationTest extends SelfService
     // 3. Seed AppSelfServiceUser directly via SQL (self-service table only)
     String username = "user_" + UUID.randomUUID().toString().substring(0, 8);
 
-    executeSqlInPostgres("""
+    executeSqlInPostgres(
+        """
         WITH new_self_user AS (
             INSERT INTO m_appselfservice_user(
                 office_id, username, password, email, firstname, lastname, is_deleted,
@@ -84,7 +91,9 @@ public class SelfServicePermissionEnforcementIntegrationTest extends SelfService
         )
         INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
         SELECT id, %d FROM new_self_user;
-        """.formatted(sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
+        """
+            .formatted(
+                sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
 
     // 4. Test the API without the permission: Expect 403
     given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), username, "password"))
@@ -93,7 +102,8 @@ public class SelfServicePermissionEnforcementIntegrationTest extends SelfService
         .then()
         .statusCode(403);
 
-    // 4b. Even if ALL_FUNCTIONS is set, self-service must still require explicit READ_SAVINGSPRODUCT
+    // 4b. Even if ALL_FUNCTIONS is set, self-service must still require explicit
+    // READ_SAVINGSPRODUCT
     permissions.clear();
     permissions.put("ALL_FUNCTIONS", true);
     permissions.put("ALL_FUNCTIONS_READ", true);

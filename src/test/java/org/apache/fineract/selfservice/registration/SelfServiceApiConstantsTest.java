@@ -61,10 +61,15 @@ class SelfServiceApiConstantsTest {
   @Test
   void forgotPasswordRenewDataParameters_shouldContainRequiredFields() {
     assertTrue(SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("requestId"));
-    assertTrue(SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("authenticationToken"));
-    assertTrue(SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("externalAuthenticationToken"));
+    assertTrue(
+        SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains(
+            "authenticationToken"));
+    assertTrue(
+        SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains(
+            "externalAuthenticationToken"));
     assertTrue(SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("password"));
-    assertTrue(SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("repeatPassword"));
+    assertTrue(
+        SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.contains("repeatPassword"));
     assertEquals(5, SelfServiceApiConstants.FORGOT_PASSWORD_RENEW_DATA_PARAMETERS.size());
   }
 

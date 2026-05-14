@@ -6,14 +6,14 @@
  */
 package org.apache.fineract.selfservice.registration.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 @Data
 @NoArgsConstructor
 public class SelfServiceRetrieveIdentityRequest {
 
-    @Schema(example = "ID12345", requiredMode = Schema.RequiredMode.REQUIRED)
-    public String externalId;
+  @Schema(example = "ID12345", requiredMode = Schema.RequiredMode.REQUIRED)
+  public String externalId;
 }

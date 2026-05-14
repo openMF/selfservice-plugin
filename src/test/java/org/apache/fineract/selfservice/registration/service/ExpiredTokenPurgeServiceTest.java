@@ -110,8 +110,7 @@ class ExpiredTokenPurgeServiceTest {
 
     assertEquals(10, deleted);
     verify(jdbcTemplate).update(sqlCaptor.capture());
-    assertEquals(
-        "DELETE FROM twofactor_access_token WHERE valid_to < NOW()", sqlCaptor.getValue());
+    assertEquals("DELETE FROM twofactor_access_token WHERE valid_to < NOW()", sqlCaptor.getValue());
   }
 
   @Test

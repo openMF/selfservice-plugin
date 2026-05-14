@@ -15,8 +15,8 @@ import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanProductDat
  * <p>This service bypasses all core Fineract service-layer auth checks by using direct SQL queries.
  * Only active products are returned, with simulation-relevant fields only.
  *
- * <p>Bytecode analysis performed against {@code fineract-provider:1.15.0-SNAPSHOT} (artifact
- * {@code 20260329.095314-5}).
+ * <p>Bytecode analysis performed against {@code fineract-provider:1.15.0-SNAPSHOT} (artifact {@code
+ * 20260329.095314-5}).
  */
 public interface SelfPublicLoanProductReadService {
 

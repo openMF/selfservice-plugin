@@ -31,59 +31,62 @@ import org.springframework.test.util.ReflectionTestUtils;
 @WebAppConfiguration
 class SelfServiceSecurityWiringTest {
 
-    @Autowired
-    private ApplicationContext ctx;
+  @Autowired private ApplicationContext ctx;
 
-    @Qualifier("selfServiceAuthenticationProvider")
-    @Autowired
-    private DaoAuthenticationProvider selfServiceProvider;
+  @Qualifier("selfServiceAuthenticationProvider")
+  @Autowired
+  private DaoAuthenticationProvider selfServiceProvider;
 
-    @Test
-    void selfServiceAuthProvider_usesSelfServiceUserDetailsService() {
-        UserDetailsService uds = (UserDetailsService)
-                ReflectionTestUtils.getField(selfServiceProvider, "userDetailsService");
-        assertInstanceOf(TenantAwareJpaPlatformSelfServiceUserDetailsService.class, uds);
+  @Test
+  void selfServiceAuthProvider_usesSelfServiceUserDetailsService() {
+    UserDetailsService uds =
+        (UserDetailsService)
+            ReflectionTestUtils.getField(selfServiceProvider, "userDetailsService");
+    assertInstanceOf(TenantAwareJpaPlatformSelfServiceUserDetailsService.class, uds);
+  }
+
+  @Test
+  void selfServiceAuthProvider_isDistinctFromCoreProvider() {
+    DaoAuthenticationProvider coreProvider =
+        ctx.getBean("customAuthenticationProvider", DaoAuthenticationProvider.class);
+    assertNotSame(coreProvider, selfServiceProvider);
+  }
+
+  @Test
+  void coreAuthProvider_usesCoreUserDetailsService() {
+    DaoAuthenticationProvider coreProvider =
+        ctx.getBean("customAuthenticationProvider", DaoAuthenticationProvider.class);
+    UserDetailsService uds =
+        (UserDetailsService) ReflectionTestUtils.getField(coreProvider, "userDetailsService");
+    assertInstanceOf(TenantAwareJpaPlatformUserDetailsService.class, uds);
+  }
+
+  @Test
+  void selfServiceEntryPoint_exists() {
+    assertNotNull(ctx.getBean("selfServiceBasicAuthenticationEntryPoint"));
+  }
+
+  @Test
+  void selfServiceFilterChain_exists() {
+    assertNotNull(ctx.getBean("selfServiceSecurityFilterChain"));
+  }
+
+  @Test
+  void authResourceConstructor_hasQualifierAnnotation() throws NoSuchMethodException {
+    java.lang.reflect.Constructor<?> ctor =
+        org.apache.fineract.selfservice.security.api.SelfAuthenticationApiResource.class
+            .getDeclaredConstructors()[0];
+    java.lang.annotation.Annotation[][] paramAnnotations = ctor.getParameterAnnotations();
+    boolean found = false;
+    for (java.lang.annotation.Annotation ann : paramAnnotations[0]) {
+      if (ann instanceof Qualifier q) {
+        org.junit.jupiter.api.Assertions.assertEquals(
+            "selfServiceAuthenticationProvider", q.value());
+        found = true;
+      }
     }
-
-    @Test
-    void selfServiceAuthProvider_isDistinctFromCoreProvider() {
-        DaoAuthenticationProvider coreProvider =
-                ctx.getBean("customAuthenticationProvider", DaoAuthenticationProvider.class);
-        assertNotSame(coreProvider, selfServiceProvider);
-    }
-
-    @Test
-    void coreAuthProvider_usesCoreUserDetailsService() {
-        DaoAuthenticationProvider coreProvider =
-                ctx.getBean("customAuthenticationProvider", DaoAuthenticationProvider.class);
-        UserDetailsService uds = (UserDetailsService)
-                ReflectionTestUtils.getField(coreProvider, "userDetailsService");
-        assertInstanceOf(TenantAwareJpaPlatformUserDetailsService.class, uds);
-    }
-
-    @Test
-    void selfServiceEntryPoint_exists() {
-        assertNotNull(ctx.getBean("selfServiceBasicAuthenticationEntryPoint"));
-    }
-
-    @Test
-    void selfServiceFilterChain_exists() {
-        assertNotNull(ctx.getBean("selfServiceSecurityFilterChain"));
-    }
-
-    @Test
-    void authResourceConstructor_hasQualifierAnnotation() throws NoSuchMethodException {
-        java.lang.reflect.Constructor<?> ctor = org.apache.fineract.selfservice.security.api.SelfAuthenticationApiResource.class
-                .getDeclaredConstructors()[0];
-        java.lang.annotation.Annotation[][] paramAnnotations = ctor.getParameterAnnotations();
-        boolean found = false;
-        for (java.lang.annotation.Annotation ann : paramAnnotations[0]) {
-            if (ann instanceof Qualifier q) {
-                org.junit.jupiter.api.Assertions.assertEquals("selfServiceAuthenticationProvider", q.value());
-                found = true;
-            }
-        }
-        org.junit.jupiter.api.Assertions.assertTrue(found,
-                "@Qualifier annotation missing on constructor parameter. Check lombok.config has: lombok.copyableAnnotations += org.springframework.beans.factory.annotation.Qualifier");
-    }
+    org.junit.jupiter.api.Assertions.assertTrue(
+        found,
+        "@Qualifier annotation missing on constructor parameter. Check lombok.config has: lombok.copyableAnnotations += org.springframework.beans.factory.annotation.Qualifier");
+  }
 }

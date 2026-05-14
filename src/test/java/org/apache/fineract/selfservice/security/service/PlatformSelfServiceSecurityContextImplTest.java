@@ -86,9 +86,19 @@ class PlatformSelfServiceSecurityContextImplTest {
     }
 
     User springUser = new User("ssuser", "password123", true, true, true, true, authorities);
-    AppSelfServiceUser ssUser = new AppSelfServiceUser(
-        office, springUser, roles, "ss@test.com", "Self", "User", null, true, true,
-        new ArrayList<Client>(), false);
+    AppSelfServiceUser ssUser =
+        new AppSelfServiceUser(
+            office,
+            springUser,
+            roles,
+            "ss@test.com",
+            "Self",
+            "User",
+            null,
+            true,
+            true,
+            new ArrayList<Client>(),
+            false);
 
     UsernamePasswordAuthenticationToken auth =
         new UsernamePasswordAuthenticationToken(ssUser, null, ssUser.getAuthorities());
@@ -141,7 +151,8 @@ class PlatformSelfServiceSecurityContextImplTest {
 
   @Test
   void validateHasReadPermission_throwsWhenPrincipalIsNotSelfServiceUser() {
-    SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("mifos", null));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new TestingAuthenticationToken("mifos", null));
 
     assertThrows(
         UnAuthenticatedUserException.class,
@@ -214,5 +225,4 @@ class PlatformSelfServiceSecurityContextImplTest {
     createAndSetSelfServiceUser(new HashSet<>());
     assertThat(context.officeHierarchy()).isEqualTo(".");
   }
-
 }

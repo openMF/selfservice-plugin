@@ -22,52 +22,56 @@ import org.springframework.context.annotation.DependsOn;
 @Configuration
 public class SelfServiceLiquibaseConfig {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SelfServiceLiquibaseConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SelfServiceLiquibaseConfig.class);
 
-    @Autowired
-    private TenantDetailsService tenantDetailsService;
+  @Autowired private TenantDetailsService tenantDetailsService;
 
-    @Autowired
-    private DataSource routingDataSource;
+  @Autowired private DataSource routingDataSource;
 
-    @Bean
-    @DependsOn("tenantDatabaseUpgradeService") // Must run AFTER Fineract core DB is set up
-    public String runSelfServicePluginMigrations() {
-        LOG.info("*******************************************************");
-        LOG.info("*   Starting Self-Service Plugin Database Migrations  *");
-        LOG.info("*******************************************************");
+  @Bean
+  @DependsOn("tenantDatabaseUpgradeService") // Must run AFTER Fineract core DB is set up
+  public String runSelfServicePluginMigrations() {
+    LOG.info("*******************************************************");
+    LOG.info("*   Starting Self-Service Plugin Database Migrations  *");
+    LOG.info("*******************************************************");
 
-        List<FineractPlatformTenant> tenants = tenantDetailsService.findAllTenants();
+    List<FineractPlatformTenant> tenants = tenantDetailsService.findAllTenants();
 
-        for (FineractPlatformTenant tenant : tenants) {
-            LOG.info("Running plugin migrations for tenant: {}", tenant.getTenantIdentifier());
-            try {
-                // 1. Force the database connection to route to THIS specific tenant
-                ThreadLocalContextUtil.setTenant(tenant);
+    for (FineractPlatformTenant tenant : tenants) {
+      LOG.info("Running plugin migrations for tenant: {}", tenant.getTenantIdentifier());
+      try {
+        // 1. Force the database connection to route to THIS specific tenant
+        ThreadLocalContextUtil.setTenant(tenant);
 
-                // 2. Initialize Liquibase for the tenant
-                SpringLiquibase liquibase = new SpringLiquibase();
-                liquibase.setDataSource(routingDataSource);
-                
-                // Ensure this matches the exact path of the plugin's master changelog
-                liquibase.setChangeLog("classpath:/db/changelog/tenant/module/selfservice/module-changelog-master.xml");
-                liquibase.setShouldRun(true);
-                
-                // 3. Execute the migration
-                liquibase.afterPropertiesSet();
-                
-                LOG.info("Successfully migrated Self-Service tables for tenant: {}", tenant.getTenantIdentifier());
-            } catch (Exception e) {
-                LOG.error("Failed to migrate Self-Service tables for tenant: {}", tenant.getTenantIdentifier(), e);
-                throw new RuntimeException("Plugin Database Migration Failed", e);
-            } finally {
-                // 4. Always clear the context so we don't leak connections
-                ThreadLocalContextUtil.clearTenant();
-            }
-        }
-        LOG.info("*******************************************************");
-        LOG.info("*     Self-Service Plugin Migrations Completed        *");        
-        LOG.info("*******************************************************");
-        return "Self-Service Migrations Completed";
+        // 2. Initialize Liquibase for the tenant
+        SpringLiquibase liquibase = new SpringLiquibase();
+        liquibase.setDataSource(routingDataSource);
+
+        // Ensure this matches the exact path of the plugin's master changelog
+        liquibase.setChangeLog(
+            "classpath:/db/changelog/tenant/module/selfservice/module-changelog-master.xml");
+        liquibase.setShouldRun(true);
+
+        // 3. Execute the migration
+        liquibase.afterPropertiesSet();
+
+        LOG.info(
+            "Successfully migrated Self-Service tables for tenant: {}",
+            tenant.getTenantIdentifier());
+      } catch (Exception e) {
+        LOG.error(
+            "Failed to migrate Self-Service tables for tenant: {}",
+            tenant.getTenantIdentifier(),
+            e);
+        throw new RuntimeException("Plugin Database Migration Failed", e);
+      } finally {
+        // 4. Always clear the context so we don't leak connections
+        ThreadLocalContextUtil.clearTenant();
+      }
     }
+    LOG.info("*******************************************************");
+    LOG.info("*     Self-Service Plugin Migrations Completed        *");
+    LOG.info("*******************************************************");
+    return "Self-Service Migrations Completed";
+  }
 }

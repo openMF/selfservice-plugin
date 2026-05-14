@@ -69,8 +69,7 @@ class SelfPublicLoanProductReadServiceImplTest {
     String executedSql = sqlCaptor.getValue();
     assertTrue(executedSql.contains("principal_amount"), "Should select principal");
     assertTrue(
-        executedSql.contains("nominal_interest_rate_per_period"),
-        "Should select interest rate");
+        executedSql.contains("nominal_interest_rate_per_period"), "Should select interest rate");
     assertTrue(executedSql.contains("number_of_repayments"), "Should select repayments");
     assertTrue(executedSql.contains("currency_code"), "Should select currency");
     assertTrue(executedSql.contains("m_currency"), "Should join currency table");

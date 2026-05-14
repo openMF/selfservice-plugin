@@ -84,8 +84,7 @@ class SelfLoanProductsApiResourceTest {
         .when(securityContext)
         .validateHasReadPermission("LOANPRODUCT");
 
-    assertThrows(
-        NoAuthorizationException.class, () -> resource.retrieveAllLoanProducts(uriInfo));
+    assertThrows(NoAuthorizationException.class, () -> resource.retrieveAllLoanProducts(uriInfo));
     verifyNoInteractions(loanProductReadPlatformService);
   }
 

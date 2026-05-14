@@ -20,10 +20,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Overrides the core {@code springSecurityPlatformSecurityContext} bean with a subclass
- * that handles both {@code AppUser} and {@code AppSelfServiceUser} principals.
+ * Overrides the core {@code springSecurityPlatformSecurityContext} bean with a subclass that
+ * handles both {@code AppUser} and {@code AppSelfServiceUser} principals.
  *
- * The return type is {@link SpringSecurityPlatformSecurityContext} so that injection points
+ * <p>The return type is {@link SpringSecurityPlatformSecurityContext} so that injection points
  * depending on the concrete type (e.g. {@code AuthenticationApiResource}) are satisfied.
  */
 @Configuration

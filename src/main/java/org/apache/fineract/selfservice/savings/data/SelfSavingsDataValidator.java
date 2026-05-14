@@ -15,6 +15,7 @@
 package org.apache.fineract.selfservice.savings.data;
 
 import com.google.gson.JsonElement;
+import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,6 +67,39 @@ public class SelfSavingsDataValidator {
     }
 
     throwExceptionIfReqd(unsupportedParams);
+
+    // New validation for month and year
+    final MultivaluedMap<String, String> queryParams = uriInfo.getQueryParameters();
+
+    String monthStr = queryParams.getFirst("month");
+    String yearStr = queryParams.getFirst("year");
+
+    if (monthStr != null || yearStr != null) {
+      if (monthStr == null || yearStr == null) {
+        throw new PlatformApiDataValidationException(
+            "validation.msg.savingsaccount.month.and.year.both.required",
+            "Both 'month' and 'year' parameters are required when filtering by date.",
+            "month",
+            "year");
+      }
+
+      Integer month = Integer.valueOf(monthStr);
+      Integer year = Integer.valueOf(yearStr);
+
+      if (month < 1 || month > 12) {
+        throw new PlatformApiDataValidationException(
+            "validation.msg.savingsaccount.invalid.month",
+            "Month must be between 1 and 12.",
+            "month");
+      }
+
+      if (year < 2000 || year > 2050) { // reasonable range
+        throw new PlatformApiDataValidationException(
+            "validation.msg.savingsaccount.invalid.year",
+            "Year must be between 2000 and 2050.",
+            "year");
+      }
+    }
   }
 
   public void validateRetrieveSavingsTransaction(final UriInfo uriInfo) {

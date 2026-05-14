@@ -21,28 +21,38 @@ import java.util.Set;
 
 public final class SelfAccountTransferApiConstants {
 
-    private SelfAccountTransferApiConstants() {
+  private SelfAccountTransferApiConstants() {}
 
-    }
+  // Funds Transfer parameters
+  public static final String toOfficeIdParamName = "toOfficeId";
+  public static final String toClientIdParamName = "toClientId";
+  public static final String toAccountTypeParamName = "toAccountType";
+  public static final String toAccountIdParamName = "toAccountId";
+  public static final String transferDateParamName = "transferDate";
+  public static final String transferAmountParamName = "transferAmount";
+  public static final String transferDescriptionParamName = "transferDescription";
+  public static final String dateFormatParamName = "dateFormat";
+  public static final String localeParamName = "locale";
+  public static final String fromAccountIdParamName = "fromAccountId";
+  public static final String fromAccountTypeParamName = "fromAccountType";
+  public static final String fromClientIdParamName = "fromClientId";
+  public static final String fromOfficeIdParamName = "fromOfficeId";
 
-    //Funds Transfer parameters
-    public static final String toOfficeIdParamName = "toOfficeId";
-    public static final String toClientIdParamName = "toClientId";
-    public static final String toAccountTypeParamName = "toAccountType";
-    public static final String toAccountIdParamName = "toAccountId";
-    public static final String transferDateParamName = "transferDate";
-    public static final String transferAmountParamName = "transferAmount";
-    public static final String transferDescriptionParamName = "transferDescription";
-    public static final String dateFormatParamName = "dateFormat";
-    public static final String localeParamName = "locale";
-    public static final String fromAccountIdParamName = "fromAccountId";
-    public static final String fromAccountTypeParamName = "fromAccountType";
-    public static final String fromClientIdParamName = "fromClientId";
-    public static final String fromOfficeIdParamName = "fromOfficeId";
-        
-    public static final Set<String> CREATE_TRANSFER_REQUEST_DATA_PARAMETERS = Collections
-            .unmodifiableSet(new HashSet<>(Arrays.asList(toOfficeIdParamName, toClientIdParamName, toAccountTypeParamName, toAccountIdParamName, 
-                    transferDateParamName, transferAmountParamName, transferDescriptionParamName, dateFormatParamName, localeParamName, 
-                            fromAccountIdParamName, fromAccountTypeParamName, fromClientIdParamName, fromOfficeIdParamName)));
-        
+  public static final Set<String> CREATE_TRANSFER_REQUEST_DATA_PARAMETERS =
+      Collections.unmodifiableSet(
+          new HashSet<>(
+              Arrays.asList(
+                  toOfficeIdParamName,
+                  toClientIdParamName,
+                  toAccountTypeParamName,
+                  toAccountIdParamName,
+                  transferDateParamName,
+                  transferAmountParamName,
+                  transferDescriptionParamName,
+                  dateFormatParamName,
+                  localeParamName,
+                  fromAccountIdParamName,
+                  fromAccountTypeParamName,
+                  fromClientIdParamName,
+                  fromOfficeIdParamName)));
 }

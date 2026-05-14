@@ -14,8 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration Test ensuring the Spring Context starts, Testcontainers database connects,
- * and RestAssured correctly maps HTTP traffic to the embedded Fineract endpoints.
+ * Integration Test ensuring the Spring Context starts, Testcontainers database connects, and
+ * RestAssured correctly maps HTTP traffic to the embedded Fineract endpoints.
  *
  * <p>Named *IntegrationTest.java so it is executed during the Failsafe 'verify' phase.
  */
@@ -29,24 +29,24 @@ class SelfAuthenticationApiResourceIntegrationTest extends SelfServiceIntegratio
 
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body(emptyBody)
-    .when()
+        .when()
         .post(SelfServiceTestUtils.SELF_AUTH_PATH)
-    .then()
+        .then()
         .statusCode(500);
   }
 
   @Test
   @DisplayName("POST /v1/self/authentication with invalid credentials returns 401 Unauthorized")
   void authenticate_invalidCredentials_returns401() {
-    // Proves that the Spring Security filter chain and the custom Self Service 
+    // Proves that the Spring Security filter chain and the custom Self Service
     // Authentication provider are actively rejecting bad credentials
     String invalidBody = "{\"username\":\"fakeUser\",\"password\":\"fakePass\"}";
 
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body(invalidBody)
-    .when()
+        .when()
         .post(SelfServiceTestUtils.SELF_AUTH_PATH)
-    .then()
+        .then()
         .statusCode(401);
   }
 }

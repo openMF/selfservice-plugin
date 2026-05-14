@@ -8,13 +8,13 @@ package org.apache.fineract.selfservice.runreport;
 
 import static io.restassured.RestAssured.given;
 
+import io.restassured.response.Response;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.testing.support.SelfServiceIntegrationTestBase;
 import org.apache.fineract.selfservice.testing.support.SelfServiceTestUtils;
-import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
-import io.restassured.response.Response;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,10 +22,9 @@ import org.junit.jupiter.api.Test;
 /**
  * Container-level integration tests for the self-service runreport wrapper.
  *
- * <p>These tests assume that the underlying Fineract instance has at least one
- * report named "Client Details" configured and that the
- * fineract.modules.selfservice.runreports.allowlist property is set to include
- * that name for the test profile.</p>
+ * <p>These tests assume that the underlying Fineract instance has at least one report named "Client
+ * Details" configured and that the fineract.modules.selfservice.runreports.allowlist property is
+ * set to include that name for the test profile.
  */
 public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase {
 
@@ -54,7 +53,11 @@ public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase
     Response rolesResponse =
         given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
             .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/roles");
-    Integer roleId = rolesResponse.jsonPath().getInt("find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
+    Integer roleId =
+        rolesResponse
+            .jsonPath()
+            .getInt(
+                "find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
     if (roleId == null || roleId <= 0) {
       throw new IllegalStateException(
           "Could not resolve role id for '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "'");
@@ -62,7 +65,8 @@ public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase
 
     String username = "user_" + UUID.randomUUID().toString().substring(0, 8);
 
-    executeSqlInPostgres("""
+    executeSqlInPostgres(
+        """
         WITH new_self_user AS (
             INSERT INTO m_appselfservice_user(
                 office_id, username, password, email, firstname, lastname, is_deleted,
@@ -80,7 +84,9 @@ public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase
         )
         INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
         SELECT id, %d FROM new_self_user;
-        """.formatted(sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
+        """
+            .formatted(
+                sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
 
     return username;
   }
@@ -125,6 +131,9 @@ public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase
     int statusCode = runReportResponse.statusCode();
     Assertions.assertTrue(
         statusCode == 200 || statusCode == 400 || statusCode == 404,
-        "Expected successful execution (200), validation failure (400), or report missing in DB (404), but got: " + statusCode + ". Body: " + runReportResponse.body().asString());
+        "Expected successful execution (200), validation failure (400), or report missing in DB (404), but got: "
+            + statusCode
+            + ". Body: "
+            + runReportResponse.body().asString());
   }
 }

@@ -50,7 +50,8 @@ class AppSelfServiceUserExplicitReadPermissionTest {
   @Test
   void validateHasReadPermission_requiresExplicitReadGrant_evenIfAllFunctionsPresent() {
     AppSelfServiceUser user =
-        newUserWithRolePermissions(Set.of("ALL_FUNCTIONS" /* intentionally missing READ_SAVINGSPRODUCT */));
+        newUserWithRolePermissions(
+            Set.of("ALL_FUNCTIONS" /* intentionally missing READ_SAVINGSPRODUCT */));
 
     assertThrows(
         NoAuthorizationException.class,
@@ -88,4 +89,3 @@ class AppSelfServiceUserExplicitReadPermissionTest {
         false);
   }
 }
-

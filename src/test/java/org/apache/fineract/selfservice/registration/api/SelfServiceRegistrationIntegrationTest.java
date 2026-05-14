@@ -20,16 +20,17 @@ class SelfServiceRegistrationIntegrationTest extends SelfServiceIntegrationTestB
   void createRegistration_emptyBody_returns500() {
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body("{}")
-    .when()
+        .when()
         .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
-    .then()
-        .statusCode(500); 
+        .then()
+        .statusCode(500);
   }
 
   @Test
   @DisplayName("POST /v1/self/registration with invalid client logic returns 404")
   void createRegistration_invalidClient_returns404() {
-    String payload = """
+    String payload =
+        """
         {
           "accountNumber": "000000000",
           "firstName": "Inv",
@@ -43,9 +44,9 @@ class SelfServiceRegistrationIntegrationTest extends SelfServiceIntegrationTestB
 
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body(payload)
-    .when()
+        .when()
         .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
-    .then()
+        .then()
         .statusCode(404);
   }
 }

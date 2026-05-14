@@ -27,53 +27,59 @@ import org.apache.fineract.portfolio.client.domain.Client;
 @Table(name = "m_selfservice_user_client_mapping")
 public class AppSelfServiceUserClientMapping extends AbstractPersistableCustom<Long> {
 
-    @ManyToOne(optional = false, cascade = CascadeType.ALL)
-    @JoinColumn(name = "appuser_id", nullable = false, foreignKey = @ForeignKey(name = "users_appusers"))
-    private AppSelfServiceUser appUser;
+  @ManyToOne(optional = false, cascade = CascadeType.ALL)
+  @JoinColumn(
+      name = "appuser_id",
+      nullable = false,
+      foreignKey = @ForeignKey(name = "users_appusers"))
+  private AppSelfServiceUser appUser;
 
-    @ManyToOne(optional = false, cascade = CascadeType.ALL)
-    @JoinColumn(name = "client_id", nullable = false, foreignKey = @ForeignKey(name = "clients_appusers"))
-    private Client client;
+  @ManyToOne(optional = false, cascade = CascadeType.ALL)
+  @JoinColumn(
+      name = "client_id",
+      nullable = false,
+      foreignKey = @ForeignKey(name = "clients_appusers"))
+  private Client client;
 
-    public AppSelfServiceUserClientMapping() {}
+  public AppSelfServiceUserClientMapping() {}
 
-    public AppSelfServiceUserClientMapping(AppSelfServiceUser appUser, Client client) {
-      this.appUser = appUser;
-      this.client = client;
+  public AppSelfServiceUserClientMapping(AppSelfServiceUser appUser, Client client) {
+    this.appUser = appUser;
+    this.client = client;
+  }
+
+  public Client getClient() {
+    return this.client;
+  }
+
+  public AppSelfServiceUser getAppUser() {
+    return appUser;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+
+    if (null == obj) {
+      return false;
     }
 
-    public Client getClient() {
-      return this.client;
+    if (this == obj) {
+      return true;
     }
 
-    public AppSelfServiceUser getAppUser() {
-      return appUser;
+    if (!(obj instanceof AppSelfServiceUserClientMapping)) {
+      return false;
     }
 
-    @Override
-    public boolean equals(Object obj) {
+    AppSelfServiceUserClientMapping that = (AppSelfServiceUserClientMapping) obj;
+    return null == this.client.getId() ? false : this.client.getId().equals(that.client.getId());
+  }
 
-      if (null == obj) {
-        return false;
-      }
+  @Override
+  public int hashCode() {
 
-      if (this == obj) {
-        return true;
-      }
-
-      if (!(obj instanceof AppSelfServiceUserClientMapping)) {
-        return false;
-      }
-
-      AppSelfServiceUserClientMapping that = (AppSelfServiceUserClientMapping) obj;
-      return null == this.client.getId() ? false : this.client.getId().equals(that.client.getId());
-    }
-
-    @Override
-    public int hashCode() {
-
-      int hashCode = 17;
-      hashCode += null == this.client ? 0 : this.client.getId().hashCode() * 31;
-      return hashCode;
-    }
+    int hashCode = 17;
+    hashCode += null == this.client ? 0 : this.client.getId().hashCode() * 31;
+    return hashCode;
+  }
 }

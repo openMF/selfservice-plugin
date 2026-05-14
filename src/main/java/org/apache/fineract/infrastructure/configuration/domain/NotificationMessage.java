@@ -11,9 +11,8 @@ import lombok.ToString;
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
-public class NotificationMessage {	
-        private String mobile;        
-        private String email;        
-        private String text;
-        
+public class NotificationMessage {
+  private String mobile;
+  private String email;
+  private String text;
 }

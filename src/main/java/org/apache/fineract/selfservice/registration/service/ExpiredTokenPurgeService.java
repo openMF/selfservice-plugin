@@ -51,7 +51,8 @@ public class ExpiredTokenPurgeService {
    * Deletes all rows from {@code request_audit_table} where {@code expires_at < cutoff}.
    *
    * <p>Uses {@link DateUtils#getLocalDateTimeOfSystem()} as the cutoff — the same clock source used
-   * by {@link org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration#isExpired(LocalDateTime)}
+   * by {@link
+   * org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration#isExpired(LocalDateTime)}
    * and throughout the registration service when creating tokens. This eliminates timezone
    * divergence between token creation and purge evaluation.
    *
@@ -73,8 +74,8 @@ public class ExpiredTokenPurgeService {
    * Deletes all rows from {@code twofactor_access_token} where {@code valid_to < NOW()}.
    *
    * <p>Uses database-side {@code NOW()} to match Fineract core's {@code TFAccessToken.isValid()}
-   * which delegates to the database server's clock via {@code DateUtils.getLocalDateTimeOfTenant()}.
-   * This avoids Java-to-DB clock skew.
+   * which delegates to the database server's clock via {@code
+   * DateUtils.getLocalDateTimeOfTenant()}. This avoids Java-to-DB clock skew.
    *
    * @return number of rows deleted
    */

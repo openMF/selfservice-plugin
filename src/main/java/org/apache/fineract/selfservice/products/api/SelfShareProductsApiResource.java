@@ -40,36 +40,39 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SelfShareProductsApiResource {
 
-    private final PlatformSelfServiceSecurityContext context;
-    private final ShareProductReadPlatformService shareProductReadPlatformService;
-    private final DefaultToApiJsonSerializer<ProductData> toApiJsonSerializer;
-    private final ApiRequestParameterHelper apiRequestParameterHelper;
+  private final PlatformSelfServiceSecurityContext context;
+  private final ShareProductReadPlatformService shareProductReadPlatformService;
+  private final DefaultToApiJsonSerializer<ProductData> toApiJsonSerializer;
+  private final ApiRequestParameterHelper apiRequestParameterHelper;
 
-    @GET
-    @Path("{productId}")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    public String retrieveProduct(
-        @PathParam("productId") final Long productId,
-        @Context final UriInfo uriInfo) {
+  @GET
+  @Path("{productId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  public String retrieveProduct(
+      @PathParam("productId") final Long productId, @Context final UriInfo uriInfo) {
 
-        this.context.authenticatedSelfServiceUser();
-        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        final ProductData productData = this.shareProductReadPlatformService.retrieveOne(productId, false);
-        return this.toApiJsonSerializer.serialize(settings, productData);
-    }
+    this.context.authenticatedSelfServiceUser();
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final ProductData productData =
+        this.shareProductReadPlatformService.retrieveOne(productId, false);
+    return this.toApiJsonSerializer.serialize(settings, productData);
+  }
 
-    @GET
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    public String retrieveAllProducts(
-        @QueryParam("offset") final Integer offset,
-        @QueryParam("limit") final Integer limit,
-        @Context final UriInfo uriInfo) {
+  @GET
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  public String retrieveAllProducts(
+      @QueryParam("offset") final Integer offset,
+      @QueryParam("limit") final Integer limit,
+      @Context final UriInfo uriInfo) {
 
-        this.context.authenticatedSelfServiceUser();
-        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        final Page<ProductData> products = this.shareProductReadPlatformService.retrieveAllProducts(offset, limit);
-        return this.toApiJsonSerializer.serialize(settings, products);
-    }
+    this.context.authenticatedSelfServiceUser();
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final Page<ProductData> products =
+        this.shareProductReadPlatformService.retrieveAllProducts(offset, limit);
+    return this.toApiJsonSerializer.serialize(settings, products);
+  }
 }

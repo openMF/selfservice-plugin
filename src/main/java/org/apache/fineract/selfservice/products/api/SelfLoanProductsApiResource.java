@@ -173,33 +173,37 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SelfLoanProductsApiResource {
 
-    private final PlatformSelfServiceSecurityContext context;
-    private final LoanProductReadPlatformService loanProductReadPlatformService;
-    private final DefaultToApiJsonSerializer<LoanProductData> toApiJsonSerializer;
-    private final ApiRequestParameterHelper apiRequestParameterHelper;
+  private final PlatformSelfServiceSecurityContext context;
+  private final LoanProductReadPlatformService loanProductReadPlatformService;
+  private final DefaultToApiJsonSerializer<LoanProductData> toApiJsonSerializer;
+  private final ApiRequestParameterHelper apiRequestParameterHelper;
 
-    @GET
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    public String retrieveAllLoanProducts(@Context final UriInfo uriInfo) {
+  @GET
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  public String retrieveAllLoanProducts(@Context final UriInfo uriInfo) {
 
-        this.context.validateHasReadPermission("LOANPRODUCT");
-        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        final Collection<LoanProductData> products = this.loanProductReadPlatformService.retrieveAllLoanProducts();
-        return this.toApiJsonSerializer.serialize(settings, products);
-    }
+    this.context.validateHasReadPermission("LOANPRODUCT");
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final Collection<LoanProductData> products =
+        this.loanProductReadPlatformService.retrieveAllLoanProducts();
+    return this.toApiJsonSerializer.serialize(settings, products);
+  }
 
-    @GET
-    @Path("{productId}")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    public String retrieveLoanProductDetails(
-        @PathParam(LoanApiConstants.productIdParameterName) final Long productId,
-        @Context final UriInfo uriInfo) {
+  @GET
+  @Path("{productId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  public String retrieveLoanProductDetails(
+      @PathParam(LoanApiConstants.productIdParameterName) final Long productId,
+      @Context final UriInfo uriInfo) {
 
-        this.context.validateHasReadPermission("LOANPRODUCT");
-        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        final LoanProductData loanProduct = this.loanProductReadPlatformService.retrieveLoanProduct(productId);
-        return this.toApiJsonSerializer.serialize(settings, loanProduct);
-    }
+    this.context.validateHasReadPermission("LOANPRODUCT");
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final LoanProductData loanProduct =
+        this.loanProductReadPlatformService.retrieveLoanProduct(productId);
+    return this.toApiJsonSerializer.serialize(settings, loanProduct);
+  }
 }

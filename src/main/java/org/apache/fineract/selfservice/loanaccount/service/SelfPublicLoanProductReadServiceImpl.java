@@ -21,8 +21,8 @@ import org.springframework.jdbc.core.RowMapper;
  * (unauthenticated) self-service endpoints using direct SQL.
  *
  * <p><strong>Why this service exists:</strong> All core loan product read methods call {@code
- * PlatformSecurityContext.authenticatedUser()} either directly or through sub-services (e.g., {@code
- * ChargeReadPlatformService.retrieveLoanProductCharges()}, {@code
+ * PlatformSecurityContext.authenticatedUser()} either directly or through sub-services (e.g.,
+ * {@code ChargeReadPlatformService.retrieveLoanProductCharges()}, {@code
  * RateReadService.retrieveProductLoanRates()}). Using direct SQL with a custom {@link RowMapper}
  * bypasses all auth barriers while returning the exact field set needed for a simulation UI.
  *

@@ -21,46 +21,46 @@ import org.apache.fineract.useradministration.domain.AppUser;
 
 public interface PlatformSelfServiceSecurityContext extends PlatformUserRightsContext {
 
+  AppSelfServiceUser authenticatedSelfServiceUser();
 
-    AppSelfServiceUser authenticatedSelfServiceUser();
+  /**
+   * Convenience method returns null (does not throw an exception) if an authenticated user is not
+   * present
+   *
+   * <p>To be used only in service layer methods that can be triggered via both the API and batch
+   * Jobs (which do not have an authenticated user)
+   *
+   * @return
+   */
+  AppSelfServiceUser getAuthenticatedUserIfPresent();
 
-    /**
-     * Convenience method returns null (does not throw an exception) if an authenticated user is not present
-     *
-     * To be used only in service layer methods that can be triggered via both the API and batch Jobs (which do not have
-     * an authenticated user)
-     *
-     * @return
-     */
-    AppSelfServiceUser getAuthenticatedUserIfPresent();
+  void validateAccessRights(String resourceOfficeHierarchy);
 
-    void validateAccessRights(String resourceOfficeHierarchy);
+  String officeHierarchy();
 
-    String officeHierarchy();
+  boolean doesPasswordHasToBeRenewed(AppSelfServiceUser currentUser);
 
-    boolean doesPasswordHasToBeRenewed(AppSelfServiceUser currentUser);
+  AppSelfServiceUser authenticatedUser(CommandWrapper commandWrapper);
 
-    AppSelfServiceUser authenticatedUser(CommandWrapper commandWrapper);
+  /**
+   * Validates that the authenticated self-service user has read permission for the given resource
+   * type, using core Fineract's permission model via {@link AppUser#validateHasReadPermission}.
+   *
+   * @param resourceType the resource type (e.g. "LOANPRODUCT", "SAVINGSPRODUCT")
+   * @throws org.apache.fineract.infrastructure.security.exception.NoAuthorizationException if the
+   *     user lacks the permission
+   */
+  void validateHasReadPermission(String resourceType);
 
-    /**
-     * Validates that the authenticated self-service user has read permission for the given resource
-     * type, using core Fineract's permission model via {@link AppUser#validateHasReadPermission}.
-     *
-     * @param resourceType the resource type (e.g. "LOANPRODUCT", "SAVINGSPRODUCT")
-     * @throws org.apache.fineract.infrastructure.security.exception.NoAuthorizationException if the
-     *     user lacks the permission
-     */
-    void validateHasReadPermission(String resourceType);
+  /**
+   * Validates that the authenticated self-service user has create permission for the given resource
+   * type, using core Fineract's permission model via {@link AppUser#validateHasCreatePermission}.
+   */
+  void validateHasCreatePermission(String resourceType);
 
-    /**
-     * Validates that the authenticated self-service user has create permission for the given resource
-     * type, using core Fineract's permission model via {@link AppUser#validateHasCreatePermission}.
-     */
-    void validateHasCreatePermission(String resourceType);
-
-    /**
-     * Validates that the authenticated self-service user has delete permission for the given resource
-     * type, using core Fineract's permission model via {@link AppUser#validateHasDeletePermission}.
-     */
-    void validateHasDeletePermission(String resourceType);
+  /**
+   * Validates that the authenticated self-service user has delete permission for the given resource
+   * type, using core Fineract's permission model via {@link AppUser#validateHasDeletePermission}.
+   */
+  void validateHasDeletePermission(String resourceType);
 }

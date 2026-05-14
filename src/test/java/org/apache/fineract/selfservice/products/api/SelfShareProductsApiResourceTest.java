@@ -110,8 +110,7 @@ class SelfShareProductsApiResourceTest {
         .authenticatedSelfServiceUser();
 
     assertThrows(
-        UnAuthenticatedUserException.class,
-        () -> resource.retrieveProduct(PRODUCT_ID, uriInfo));
+        UnAuthenticatedUserException.class, () -> resource.retrieveProduct(PRODUCT_ID, uriInfo));
     verifyNoInteractions(shareProductReadPlatformService);
   }
 

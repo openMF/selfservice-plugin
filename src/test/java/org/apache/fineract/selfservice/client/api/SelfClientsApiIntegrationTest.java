@@ -41,9 +41,10 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
   }
 
   @Test
-  @DisplayName("Verify ?fields=savingsAccounts preserves internal fields and strips unwanted wrappers")
+  @DisplayName(
+      "Verify ?fields=savingsAccounts preserves internal fields and strips unwanted wrappers")
   void verifyFieldsParameterSerializationWorks() {
-    
+
     // 1. Create Client
     String clientName = UUID.randomUUID().toString().substring(0, 8);
     Map<String, Object> clientBody = new HashMap<>();
@@ -57,13 +58,14 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
     clientBody.put("active", true);
     clientBody.put("activationDate", "01 January 2026");
 
-    Integer clientId = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .body(clientBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/clients")
-        .then()
-        .statusCode(200)
-        .extract()
-        .path("clientId");
+    Integer clientId =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .body(clientBody)
+            .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/clients")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("clientId");
 
     // 2. Create Savings Product
     Map<String, Object> productBody = new HashMap<>();
@@ -81,13 +83,14 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
     productBody.put("accountingRule", 1);
     productBody.put("nominalAnnualInterestRate", 5.0);
 
-    Integer productId = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .body(productBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsproducts")
-        .then()
-        .statusCode(200)
-        .extract()
-        .path("resourceId");
+    Integer productId =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .body(productBody)
+            .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsproducts")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("resourceId");
 
     // 3. Create Savings Account Application
     Map<String, Object> savingsBody = new HashMap<>();
@@ -97,26 +100,30 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
     savingsBody.put("dateFormat", "dd MMMM yyyy");
     savingsBody.put("submittedOnDate", "01 January 2026");
 
-    Integer accountId = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .body(savingsBody)
-        .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsaccounts")
-        .then()
-        .statusCode(200)
-        .extract()
-        .path("savingsId");
+    Integer accountId =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .body(savingsBody)
+            .post(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/savingsaccounts")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("savingsId");
 
     // 4. Create Self Service User directly in the self-service tables
     String selfUser = "user_" + clientName;
 
     // Get the Fineract roleId for 'Self Service User'
-    Integer roleId = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
-        .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/roles")
-        .jsonPath().getInt("find { it.name == 'Self Service User' }.id");
+    Integer roleId =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), "mifos", "password"))
+            .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/roles")
+            .jsonPath()
+            .getInt("find { it.name == 'Self Service User' }.id");
 
     assertThat(roleId).as("Self Service User role must exist").isNotNull();
     assertThat(clientId).as("Created clientId must be present").isNotNull();
 
-    executeSqlInPostgres("""
+    executeSqlInPostgres(
+        """
         WITH new_self_user AS (
             INSERT INTO m_appselfservice_user(
                 office_id, username, password, email, firstname, lastname, is_deleted,
@@ -134,23 +141,31 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
         )
         INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
         SELECT id, %d FROM new_self_user;
-        """.formatted(sqlLiteral(selfUser), sqlLiteral(selfUser + "@fineract.org"), roleId, clientId));
+        """
+            .formatted(
+                sqlLiteral(selfUser), sqlLiteral(selfUser + "@fineract.org"), roleId, clientId));
 
     // 5. Test Serialization Logic!
-    Response response = given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), selfUser, "password"))
-        .queryParam("fields", "savingsAccounts")
-        .when()
-        .get(SelfServiceTestUtils.CONTEXT_PATH + "/api/v1/self/clients/" + clientId + "/accounts")
-        .then()
-        .statusCode(200)
-        .extract()
-        .response();
+    Response response =
+        given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), selfUser, "password"))
+            .queryParam("fields", "savingsAccounts")
+            .when()
+            .get(
+                SelfServiceTestUtils.CONTEXT_PATH
+                    + "/api/v1/self/clients/"
+                    + clientId
+                    + "/accounts")
+            .then()
+            .statusCode(200)
+            .extract()
+            .response();
 
     // Inclusion Proof: Verify the savings accounts array is fetched AND its elements are populated
     String accountNo = response.jsonPath().getString("savingsAccounts[0].accountNo");
     assertThat(accountNo).isNotNull();
-    
-    // Exclusion Proof: Verify other wrappers (e.g. loanAccounts or shareAccounts) are stripped entirely 
+
+    // Exclusion Proof: Verify other wrappers (e.g. loanAccounts or shareAccounts) are stripped
+    // entirely
     // because we requested `fields=savingsAccounts`
     assertThat((Object) response.jsonPath().get("loanAccounts")).isNull();
     assertThat((Object) response.jsonPath().get("shareAccounts")).isNull();

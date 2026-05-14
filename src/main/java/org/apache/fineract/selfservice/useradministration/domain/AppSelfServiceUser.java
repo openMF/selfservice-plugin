@@ -42,750 +42,786 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.security.domain.PlatformUser;
-import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUser;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.infrastructure.security.service.RandomPasswordGenerator;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.staff.domain.Staff;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUser;
+import org.apache.fineract.selfservice.useradministration.service.AppSelfServiceUserConstants;
 import org.apache.fineract.useradministration.domain.Permission;
 import org.apache.fineract.useradministration.domain.Role;
-import org.apache.fineract.selfservice.useradministration.service.AppSelfServiceUserConstants;
 import org.apache.fineract.useradministration.service.AppUserConstants;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 
 @Entity
-@Table(name = "m_appselfservice_user", uniqueConstraints = @UniqueConstraint(columnNames = {"username"}, name = "username_org"))
-public class AppSelfServiceUser extends AbstractPersistableCustom<Long> implements PlatformUser, PlatformSelfServiceUser {
+@Table(
+    name = "m_appselfservice_user",
+    uniqueConstraints =
+        @UniqueConstraint(
+            columnNames = {"username"},
+            name = "username_org"))
+public class AppSelfServiceUser extends AbstractPersistableCustom<Long>
+    implements PlatformUser, PlatformSelfServiceUser {
 
-    @Column(name = "email", nullable = false, length = 100)
-    private String email;
+  @Column(name = "email", nullable = false, length = 100)
+  private String email;
 
-    @Column(name = "username", nullable = false, length = 100)
-    private String username;
+  @Column(name = "username", nullable = false, length = 100)
+  private String username;
 
-    @Column(name = "firstname", nullable = false, length = 100)
-    private String firstname;
+  @Column(name = "firstname", nullable = false, length = 100)
+  private String firstname;
 
-    @Column(name = "lastname", nullable = false, length = 100)
-    private String lastname;
+  @Column(name = "lastname", nullable = false, length = 100)
+  private String lastname;
 
-    @Column(name = "password", nullable = false)
-    private String password;
+  @Column(name = "password", nullable = false)
+  private String password;
 
-    @Column(name = "nonexpired", nullable = false)
-    private boolean accountNonExpired;
+  @Column(name = "nonexpired", nullable = false)
+  private boolean accountNonExpired;
 
-    @Column(name = "nonlocked", nullable = false)
-    private boolean accountNonLocked;
+  @Column(name = "nonlocked", nullable = false)
+  private boolean accountNonLocked;
 
-    @Column(name = "nonexpired_credentials", nullable = false)
-    private boolean credentialsNonExpired;
+  @Column(name = "nonexpired_credentials", nullable = false)
+  private boolean credentialsNonExpired;
 
-    @Column(name = "enabled", nullable = false)
-    private boolean enabled;
+  @Column(name = "enabled", nullable = false)
+  private boolean enabled;
 
-    @Column(name = "firsttime_login_remaining", nullable = false)
-    private boolean firstTimeLoginRemaining;
+  @Column(name = "firsttime_login_remaining", nullable = false)
+  private boolean firstTimeLoginRemaining;
 
-    @Column(name = "is_deleted", nullable = false)
-    private boolean deleted;
+  @Column(name = "is_deleted", nullable = false)
+  private boolean deleted;
 
-    @ManyToOne
-    @JoinColumn(name = "office_id", nullable = false)
-    private Office office;
+  @ManyToOne
+  @JoinColumn(name = "office_id", nullable = false)
+  private Office office;
 
-    @ManyToOne
-    @JoinColumn(name = "staff_id", nullable = true)
-    private Staff staff;
+  @ManyToOne
+  @JoinColumn(name = "staff_id", nullable = true)
+  private Staff staff;
 
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(name = "m_appselfservice_user_role", joinColumns = @JoinColumn(name = "appuser_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
-    private Set<Role> roles;
+  @ManyToMany(fetch = FetchType.EAGER)
+  @JoinTable(
+      name = "m_appselfservice_user_role",
+      joinColumns = @JoinColumn(name = "appuser_id"),
+      inverseJoinColumns = @JoinColumn(name = "role_id"))
+  private Set<Role> roles;
 
-    @Column(name = "last_time_password_updated")
-    private LocalDate lastTimePasswordUpdated;
+  @Column(name = "last_time_password_updated")
+  private LocalDate lastTimePasswordUpdated;
 
-    @Column(name = "password_never_expires", nullable = false)
-    private boolean passwordNeverExpires;
+  @Column(name = "password_never_expires", nullable = false)
+  private boolean passwordNeverExpires;
 
-    @Column(name = "is_self_service_user", nullable = false)
-    private boolean isSelfServiceUser;
+  @Column(name = "is_self_service_user", nullable = false)
+  private boolean isSelfServiceUser;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    @JoinColumn(name = "appuser_id", referencedColumnName = "id", nullable = false)
-    private Set<AppSelfServiceUserClientMapping> appUserClientMappings = new HashSet<>();
+  @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+  @JoinColumn(name = "appuser_id", referencedColumnName = "id", nullable = false)
+  private Set<AppSelfServiceUserClientMapping> appUserClientMappings = new HashSet<>();
 
-    @Column(name = "cannot_change_password", nullable = true)
-    private Boolean cannotChangePassword;
-    
-    @Column(name = "password_reset_required", nullable = false)
-    private boolean passwordResetRequired;
-    
-    public boolean isPasswordResetRequired() {
-        return this.passwordResetRequired;
+  @Column(name = "cannot_change_password", nullable = true)
+  private Boolean cannotChangePassword;
+
+  @Column(name = "password_reset_required", nullable = false)
+  private boolean passwordResetRequired;
+
+  public boolean isPasswordResetRequired() {
+    return this.passwordResetRequired;
+  }
+
+  public void updatePasswordResetRequired(final boolean required) {
+    this.passwordResetRequired = required;
+  }
+
+  public static AppSelfServiceUser fromJson(
+      final Office userOffice,
+      final Staff linkedStaff,
+      final Set<Role> allRoles,
+      final Collection<Client> clients,
+      final JsonCommand command) {
+
+    final String username = command.stringValueOfParameterNamed("username");
+    String password = command.stringValueOfParameterNamed("password");
+    final Boolean sendPasswordToEmail =
+        command.booleanObjectValueOfParameterNamed("sendPasswordToEmail");
+
+    if (sendPasswordToEmail) {
+      password = new RandomPasswordGenerator(13).generate();
     }
 
-    public void updatePasswordResetRequired(final boolean required) {
-        this.passwordResetRequired = required;
+    boolean passwordNeverExpire = false;
+
+    if (command.parameterExists(AppUserConstants.PASSWORD_NEVER_EXPIRES)) {
+      passwordNeverExpire =
+          command.booleanPrimitiveValueOfParameterNamed(AppUserConstants.PASSWORD_NEVER_EXPIRES);
     }
 
-    public static AppSelfServiceUser fromJson(
-                                        final Office userOffice,
-                                        final Staff linkedStaff,
-                                        final Set<Role> allRoles,
-                                        final Collection<Client> clients,
-                                        final JsonCommand command) {
-
-        final String username = command.stringValueOfParameterNamed("username");
-        String password = command.stringValueOfParameterNamed("password");
-        final Boolean sendPasswordToEmail = command.booleanObjectValueOfParameterNamed("sendPasswordToEmail");
-
-        if (sendPasswordToEmail) {
-            password = new RandomPasswordGenerator(13).generate();
-        }
-
-        boolean passwordNeverExpire = false;
-
-        if (command.parameterExists(AppUserConstants.PASSWORD_NEVER_EXPIRES)) {
-            passwordNeverExpire = command.booleanPrimitiveValueOfParameterNamed(AppUserConstants.PASSWORD_NEVER_EXPIRES);
-        }
-
-        final boolean userEnabled = true;
-        final boolean userAccountNonExpired = true;
-        final boolean userCredentialsNonExpired = true;
-        final boolean userAccountNonLocked = true;
-        final boolean cannotChangePassword = false;
-
-        final Collection<SimpleGrantedAuthority> authorities = new ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority("DUMMY_ROLE_NOT_USED_OR_PERSISTED_TO_AVOID_EXCEPTION"));
-
-        final User user = new User(
-                                username,
-                                password,
-                                userEnabled,
-                                userAccountNonExpired,
-                                userCredentialsNonExpired,
-                                userAccountNonLocked,
-                                authorities);
-
-        final String email = command.stringValueOfParameterNamed("email");
-        final String firstname = command.stringValueOfParameterNamed("firstname");
-        final String lastname = command.stringValueOfParameterNamed("lastname");
-
-        final boolean isSelfServiceUser = command.booleanPrimitiveValueOfParameterNamed(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER);
-
-        return new AppSelfServiceUser(
-                                userOffice,
-                                user,
-                                allRoles,
-                                email,
-                                firstname,
-                                lastname,
-                                linkedStaff,
-                                passwordNeverExpire,
-                                isSelfServiceUser,
-                                clients,
-                                cannotChangePassword);
-    }
-
-    protected AppSelfServiceUser() {
-      this.accountNonLocked = false;
-      this.credentialsNonExpired = false;
-      this.roles = new HashSet<>();
-    }
-
-    public AppSelfServiceUser(
-                        final Office office,
-                        final User user,
-                        final Set<Role> roles,
-                        final String email,
-                        final String firstname,
-                        final String lastname,
-                        final Staff staff,
-                        final boolean passwordNeverExpire,
-                        final boolean isSelfServiceUser,
-                        final Collection<Client> clients,
-                        final Boolean cannotChangePassword) {
-        this.office = office;
-        this.email = email.trim();
-        this.username = user.getUsername().trim();
-        this.firstname = firstname.trim();
-        this.lastname = lastname.trim();
-        this.password = user.getPassword().trim();
-        this.accountNonExpired = user.isAccountNonExpired();
-        this.accountNonLocked = user.isAccountNonLocked();
-        this.credentialsNonExpired = user.isCredentialsNonExpired();
-        this.enabled = user.isEnabled();
-        this.roles = roles;
-        this.firstTimeLoginRemaining = true;
-        this.lastTimePasswordUpdated = DateUtils.getLocalDateOfTenant();
-        this.staff = staff;
-        this.passwordNeverExpires = passwordNeverExpire;
-        this.isSelfServiceUser = isSelfServiceUser;
-        this.appUserClientMappings = createAppUserClientMappings(clients);
-        this.cannotChangePassword = cannotChangePassword;
-    }
-
-    public EnumOptionData organisationalRoleData() {
-        EnumOptionData organisationalRole = null;
-        return organisationalRole;
-    }
-
-    public Map<String, Object> changePassword(final JsonCommand command, final PlatformPasswordEncoder platformPasswordEncoder) {
-        // unencoded password provided
-        final Map<String, Object> actualChanges = new LinkedHashMap<>(1);
-        updatePassword(command, platformPasswordEncoder, actualChanges);
-        return actualChanges;
-    }
-
-    private void updatePassword(JsonCommand command, PlatformPasswordEncoder platformPasswordEncoder, Map<String, Object> actualChanges) {
-        final String passwordParamName = PASSWORD;
-        if (command.hasParameter(passwordParamName)) {
-            if (command.isChangeInPasswordParameterNamed(passwordParamName, this.password, platformPasswordEncoder, getId())) {
-                final String passwordEncodedValue = command.passwordValueOfParameterNamed(passwordParamName, platformPasswordEncoder, getId());
-                actualChanges.put(passwordParamName, true);
-                updatePassword(passwordEncodedValue);
-            }
-        }
-    }
-
-    public void updatePassword(final String encodePassword) {
-        if (Boolean.TRUE.equals(cannotChangePassword)) {
-            throw new NoAuthorizationException("Password of this user may not be modified");
-        }
-
-        this.password = encodePassword;
-        this.firstTimeLoginRemaining = false;
-        this.lastTimePasswordUpdated = DateUtils.getBusinessLocalDate();
-    }
-
-    public void changeOffice(final Office differentOffice) {
-        this.office = differentOffice;
-    }
-
-    public void changeStaff(final Staff differentStaff) {
-        this.staff = differentStaff;
-    }
-
-    public void updateRoles(final Set<Role> allRoles) {
-        if (!allRoles.isEmpty()) {
-            this.roles.clear();
-            this.roles = allRoles;
-        }
-    }
-
-    public Map<String, Object> update(final JsonCommand command, final PlatformPasswordEncoder platformPasswordEncoder, final Collection<Client> clients) {
-        final Map<String, Object> actualChanges = new LinkedHashMap<>(7);
-        // unencoded password provided
-        updatePassword(command, platformPasswordEncoder, actualChanges);
-        final String officeIdParamName = "officeId";
-        if (command.isChangeInLongParameterNamed(officeIdParamName, this.office.getId())) {
-          final Long newValue = command.longValueOfParameterNamed(officeIdParamName);
-          actualChanges.put(officeIdParamName, newValue);
-        }
-
-        final String staffIdParamName = "staffId";
-        if (command.hasParameter(staffIdParamName)
-            && (this.staff == null
-            || command.isChangeInLongParameterNamed(staffIdParamName, this.staff.getId()))) {
-            final Long newValue = command.longValueOfParameterNamed(staffIdParamName);
-            actualChanges.put(staffIdParamName, newValue);
-        }
-
-        final String rolesParamName = "roles";
-        if (command.isChangeInArrayParameterNamed(rolesParamName, getRolesAsIdStringArray())) {
-            final String[] newValue = command.arrayValueOfParameterNamed(rolesParamName);
-            actualChanges.put(rolesParamName, newValue);
-        }
-
-        final String usernameParamName = "username";
-        if (command.isChangeInStringParameterNamed(usernameParamName, this.username)) {
-
-            // TODO Remove this check once we are identifying system user based on user ID
-            if (isSystemUser()) {
-                throw new NoAuthorizationException("User name of current system user may not be modified");
-            }
-
-            final String newValue = command.stringValueOfParameterNamed(usernameParamName);
-            actualChanges.put(usernameParamName, newValue);
-            this.username = newValue;
-        }
-
-        final String firstnameParamName = "firstname";
-        if (command.isChangeInStringParameterNamed(firstnameParamName, this.firstname)) {
-            final String newValue = command.stringValueOfParameterNamed(firstnameParamName);
-            actualChanges.put(firstnameParamName, newValue);
-            this.firstname = newValue;
-        }
-
-        final String lastnameParamName = "lastname";
-        if (command.isChangeInStringParameterNamed(lastnameParamName, this.lastname)) {
-            final String newValue = command.stringValueOfParameterNamed(lastnameParamName);
-            actualChanges.put(lastnameParamName, newValue);
-            this.lastname = newValue;
-        }
-
-        final String emailParamName = "email";
-        if (command.isChangeInStringParameterNamed(emailParamName, this.email)) {
-            final String newValue = command.stringValueOfParameterNamed(emailParamName);
-            actualChanges.put(emailParamName, newValue);
-            this.email = newValue;
-        }
-
-        final String passwordNeverExpire = "passwordNeverExpires";
-
-        if (command.hasParameter(passwordNeverExpire)) {
-            if (command.isChangeInBooleanParameterNamed(passwordNeverExpire, this.passwordNeverExpires)) {
-                final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(passwordNeverExpire);
-                actualChanges.put(passwordNeverExpire, newValue);
-                this.passwordNeverExpires = newValue;
-            }
-        }
-
-        if (command.hasParameter(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER)) {
-            if (command.isChangeInBooleanParameterNamed(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER, this.isSelfServiceUser)) {
-                final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER);
-                actualChanges.put(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER, newValue);
-                this.isSelfServiceUser = newValue;
-            }
-        }
-
-        if (this.isSelfServiceUser && command.hasParameter(AppSelfServiceUserConstants.CLIENTS)) {
-            actualChanges.put(AppSelfServiceUserConstants.CLIENTS, command.arrayValueOfParameterNamed(AppSelfServiceUserConstants.CLIENTS));
-            Set<AppSelfServiceUserClientMapping> newClients = createAppUserClientMappings(clients);
-            if (this.appUserClientMappings == null) {
-                this.appUserClientMappings = new HashSet<>();
-            } 
-            else {
-                this.appUserClientMappings.retainAll(newClients);
-            }
-            this.appUserClientMappings.addAll(newClients);
-        } 
-        else if (!this.isSelfServiceUser && actualChanges.containsKey(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER)) {
-            actualChanges.put(AppSelfServiceUserConstants.CLIENTS, new ArrayList<>());
-            if (this.appUserClientMappings != null) {
-                this.appUserClientMappings.clear();
-            }
-        }
-        return actualChanges;
-    }
-
-    private String[] getRolesAsIdStringArray() {
-        final List<String> roleIds = new ArrayList<>();
-        for (final Role role : this.roles) {
-            roleIds.add(role.getId().toString());
-        }
-        return roleIds.toArray(new String[roleIds.size()]);
-    }
-
-    /**
-     * Delete is a <i>soft delete</i>. Updates flag so it wont appear in query/report results.
-     *
-     * <p>Any fields with unique constraints and prepended with id of record.
-     */
-    public void delete() {
-        if (isSystemUser()) {
-            throw new NoAuthorizationException("User configured as the system user cannot be deleted");
-        }
-        this.deleted = true;
-        this.enabled = false;
-        this.accountNonExpired = false;
-        this.firstTimeLoginRemaining = true;
-        this.username = getId() + "_DELETED_" + this.username;
-        this.roles.clear();
-    }
-
-    public boolean isDeleted() {
-        return this.deleted;
-    }
-
-    /**
-     * Activates the self-service user and restores the account flags required for authentication.
-     */
-    public void enable() {
-        this.enabled = true;
-        this.accountNonExpired = true;
-        this.accountNonLocked = true;
-        this.credentialsNonExpired = true;
-        this.deleted = false;
-    }
-
-    public boolean isSystemUser() {
-        // TODO Determine system user by ID not by user name
-        if (this.username.equals(AppUserConstants.SYSTEM_USER_NAME)) {
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public Collection<GrantedAuthority> getAuthorities() {
-        return populateGrantedAuthorities();
-    }
-
-    private List<GrantedAuthority> populateGrantedAuthorities() {
-        final List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
-        for (final Role role : this.roles) {
-            final Collection<Permission> permissions = role.getPermissions();
-            for (final Permission permission : permissions) {
-                grantedAuthorities.add(new SimpleGrantedAuthority(permission.getCode()));
-            }
-        }
-        return grantedAuthorities;
-    }
-
-    @Override
-    public String getPassword() {
-        return this.password;
-    }
-
-    @Override
-    public String getUsername() {
-        return this.username;
-    }
-
-    public String getDisplayName() {
-
-        String firstName = StringUtils.isNotBlank(this.firstname) ? this.firstname : "";
-        if (StringUtils.isNotBlank(this.lastname)) {
-            return firstName + " " + this.lastname;
-        }
-        return firstName;
-    }
-
-    @Override
-    public boolean isAccountNonExpired() {
-        return this.accountNonExpired;
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return this.accountNonLocked;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return this.credentialsNonExpired;
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return this.enabled;
-    }
-
-    public boolean isBypassUser() {
-        return hasAnyPermission("BYPASS_LOAN_WRITE_PROTECTION");
-    }
-
-    public String getFirstname() {
-        return this.firstname;
-    }
-
-    public String getLastname() {
-        return this.lastname;
-    }
-
-    public String getEmail() {
-        return this.email;
-    }
-
-    public Set<Role> getRoles() {
-        return this.roles;
-    }
-
-    public Office getOffice() {
-        return this.office;
-    }
-
-    public Staff getStaff() {
-        return this.staff;
-    }
-
-    public boolean getPasswordNeverExpires() {
-        return this.passwordNeverExpires;
-    }
-
-    public LocalDate getLastTimePasswordUpdated() {
-        return this.lastTimePasswordUpdated;
-    }
-
-    public boolean canNotApproveLoanInPast() {
-        return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "APPROVEINPAST_LOAN");
-    }
-
-    public boolean canNotRejectLoanInPast() {
-        return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "REJECTINPAST_LOAN");
-    }
-
-    public boolean canNotWithdrawByClientLoanInPast() {
-        return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "WITHDRAWINPAST_LOAN");
-    }
-
-    public boolean canNotDisburseLoanInPast() {
-        return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "DISBURSEINPAST_LOAN");
-    }
-
-    public boolean canNotMakeRepaymentOnLoanInPast() {
-        return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "REPAYMENTINPAST_LOAN");
-    }
-
-    public boolean hasNotPermissionForReport(final String reportName) {
-
-        if(hasNotPermissionForAnyOf("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", "REPORTING_SUPER_USER", "READ_REPORT", "READ_" + reportName)) {
-            return true;
-        }
-        return false;
-    }
-
-    public boolean hasNotPermissionForDatatable(final String datatable, final String accessType) {
-
-        final String matchPermission = accessType + "_" + datatable;
-
-        if (accessType.equalsIgnoreCase("READ")) {
-            if (hasNotPermissionForAnyOf("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", matchPermission)) {
-                return true;
-            }
-        return false;
-        }
-
-        if (hasNotPermissionForAnyOf("ALL_FUNCTIONS", matchPermission)) {
-            return true;
-        }
-        return false;
-    }
-
-    public boolean hasNotPermissionForAnyOf(final String... permissionCodes) {
-        boolean hasNotPermission = true;
-        for (final String permissionCode : permissionCodes) {
-            final boolean checkPermission = hasPermissionTo(permissionCode);
-            if (checkPermission) {
-                hasNotPermission = false;
-                break;
-            }
-        }
-        return hasNotPermission;
-    }
-
-    /**
-     * Checks whether the user has a given permission explicitly.
-     *
-     * @param permissionCode the permission code to check for.
-     * @return whether the user has the specified permission
-     */
-    public boolean hasSpecificPermissionTo(final String permissionCode) {
-        boolean hasPermission = false;
-        for (final Role role : this.roles) {
-            if (role.hasPermissionTo(permissionCode)) {
-                hasPermission = true;
-                break;
-            }
-        }
-        return hasPermission;
-    }
-
-    public void validateHasReadPermission(final String resourceType) {
-        validateHasPermission("READ", resourceType);
-    }
-
-    /**
-     * Self-service read permission check that requires an explicit READ_* grant
-     * for the given resource type.
-     *
-     * <p>This intentionally does <strong>not</strong> honor broad grants such as
-     * ALL_FUNCTIONS or ALL_FUNCTIONS_READ, to ensure that self-service APIs
-     * follow a strict explicit-grant model without affecting core Fineract
-     * authorization semantics.</p>
-     *
-     * @param resourceType the resource type token (e.g. "SAVINGSPRODUCT")
-     * @throws NoAuthorizationException when the self-service user does not have
-     *         an explicit READ_* grant for the resource
-     */
-    public void validateHasSelfServiceReadPermission(final String resourceType) {
-        final String authorizationMessage =
-                "Self-service user has no authority to read " + resourceType.toLowerCase() + "s";
-        final String matchPermission = "READ_" + resourceType.toUpperCase();
-
-        if (hasSpecificPermissionTo(matchPermission)) {
-            return;
-        }
-
-        throw new NoAuthorizationException(authorizationMessage);
-    }
-
-    public void validateHasCreatePermission(final String resourceType) {
-        validateHasPermission("CREATE", resourceType);
-    }
-
-    public void validateHasUpdatePermission(final String resourceType) {
-        validateHasPermission("UPDATE", resourceType);
-    }
-
-    public void validateHasDeletePermission(final String resourceType) {
-        validateHasPermission("DELETE", resourceType);
-    }
-
-    private void validateHasPermission(final String prefix, final String resourceType) {
-        final String authorizationMessage = "User has no authority to " + prefix + " " + resourceType.toLowerCase() + "s";
-        final String matchPermission = prefix + "_" + resourceType.toUpperCase();
-
-        if (!hasNotPermissionForAnyOf("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", matchPermission)) {
-            return;
-        }
-
-        throw new NoAuthorizationException(authorizationMessage);
-    }
-
-    private boolean hasNotPermissionTo(final String permissionCode) {
-        return !hasPermissionTo(permissionCode);
-    }
-
-    private boolean hasPermissionTo(final String permissionCode) {
-        boolean hasPermission = hasAllFunctionsPermission();
-        if (!hasPermission) {
-            for (final Role role : this.roles) {
-                if (role.hasPermissionTo(permissionCode)) {
-                    hasPermission = true;
-                    break;
-                }
-            }
+    final boolean userEnabled = true;
+    final boolean userAccountNonExpired = true;
+    final boolean userCredentialsNonExpired = true;
+    final boolean userAccountNonLocked = true;
+    final boolean cannotChangePassword = false;
+
+    final Collection<SimpleGrantedAuthority> authorities = new ArrayList<>();
+    authorities.add(
+        new SimpleGrantedAuthority("DUMMY_ROLE_NOT_USED_OR_PERSISTED_TO_AVOID_EXCEPTION"));
+
+    final User user =
+        new User(
+            username,
+            password,
+            userEnabled,
+            userAccountNonExpired,
+            userCredentialsNonExpired,
+            userAccountNonLocked,
+            authorities);
+
+    final String email = command.stringValueOfParameterNamed("email");
+    final String firstname = command.stringValueOfParameterNamed("firstname");
+    final String lastname = command.stringValueOfParameterNamed("lastname");
+
+    final boolean isSelfServiceUser =
+        command.booleanPrimitiveValueOfParameterNamed(
+            AppSelfServiceUserConstants.IS_SELF_SERVICE_USER);
+
+    return new AppSelfServiceUser(
+        userOffice,
+        user,
+        allRoles,
+        email,
+        firstname,
+        lastname,
+        linkedStaff,
+        passwordNeverExpire,
+        isSelfServiceUser,
+        clients,
+        cannotChangePassword);
+  }
+
+  protected AppSelfServiceUser() {
+    this.accountNonLocked = false;
+    this.credentialsNonExpired = false;
+    this.roles = new HashSet<>();
+  }
+
+  public AppSelfServiceUser(
+      final Office office,
+      final User user,
+      final Set<Role> roles,
+      final String email,
+      final String firstname,
+      final String lastname,
+      final Staff staff,
+      final boolean passwordNeverExpire,
+      final boolean isSelfServiceUser,
+      final Collection<Client> clients,
+      final Boolean cannotChangePassword) {
+    this.office = office;
+    this.email = email.trim();
+    this.username = user.getUsername().trim();
+    this.firstname = firstname.trim();
+    this.lastname = lastname.trim();
+    this.password = user.getPassword().trim();
+    this.accountNonExpired = user.isAccountNonExpired();
+    this.accountNonLocked = user.isAccountNonLocked();
+    this.credentialsNonExpired = user.isCredentialsNonExpired();
+    this.enabled = user.isEnabled();
+    this.roles = roles;
+    this.firstTimeLoginRemaining = true;
+    this.lastTimePasswordUpdated = DateUtils.getLocalDateOfTenant();
+    this.staff = staff;
+    this.passwordNeverExpires = passwordNeverExpire;
+    this.isSelfServiceUser = isSelfServiceUser;
+    this.appUserClientMappings = createAppUserClientMappings(clients);
+    this.cannotChangePassword = cannotChangePassword;
+  }
+
+  public EnumOptionData organisationalRoleData() {
+    EnumOptionData organisationalRole = null;
+    return organisationalRole;
+  }
+
+  public Map<String, Object> changePassword(
+      final JsonCommand command, final PlatformPasswordEncoder platformPasswordEncoder) {
+    // unencoded password provided
+    final Map<String, Object> actualChanges = new LinkedHashMap<>(1);
+    updatePassword(command, platformPasswordEncoder, actualChanges);
+    return actualChanges;
+  }
+
+  private void updatePassword(
+      JsonCommand command,
+      PlatformPasswordEncoder platformPasswordEncoder,
+      Map<String, Object> actualChanges) {
+    final String passwordParamName = PASSWORD;
+    if (command.hasParameter(passwordParamName)) {
+      if (command.isChangeInPasswordParameterNamed(
+          passwordParamName, this.password, platformPasswordEncoder, getId())) {
+        final String passwordEncodedValue =
+            command.passwordValueOfParameterNamed(
+                passwordParamName, platformPasswordEncoder, getId());
+        actualChanges.put(passwordParamName, true);
+        updatePassword(passwordEncodedValue);
       }
-      return hasPermission;
+    }
+  }
+
+  public void updatePassword(final String encodePassword) {
+    if (Boolean.TRUE.equals(cannotChangePassword)) {
+      throw new NoAuthorizationException("Password of this user may not be modified");
     }
 
-    private boolean hasAllFunctionsPermission() {
-        boolean match = false;
-        for (final Role role : this.roles) {
-            if (role.hasPermissionTo("ALL_FUNCTIONS")) {
-                match = true;
-                break;
-            }
+    this.password = encodePassword;
+    this.firstTimeLoginRemaining = false;
+    this.lastTimePasswordUpdated = DateUtils.getBusinessLocalDate();
+  }
+
+  public void changeOffice(final Office differentOffice) {
+    this.office = differentOffice;
+  }
+
+  public void changeStaff(final Staff differentStaff) {
+    this.staff = differentStaff;
+  }
+
+  public void updateRoles(final Set<Role> allRoles) {
+    if (!allRoles.isEmpty()) {
+      this.roles.clear();
+      this.roles = allRoles;
+    }
+  }
+
+  public Map<String, Object> update(
+      final JsonCommand command,
+      final PlatformPasswordEncoder platformPasswordEncoder,
+      final Collection<Client> clients) {
+    final Map<String, Object> actualChanges = new LinkedHashMap<>(7);
+    // unencoded password provided
+    updatePassword(command, platformPasswordEncoder, actualChanges);
+    final String officeIdParamName = "officeId";
+    if (command.isChangeInLongParameterNamed(officeIdParamName, this.office.getId())) {
+      final Long newValue = command.longValueOfParameterNamed(officeIdParamName);
+      actualChanges.put(officeIdParamName, newValue);
+    }
+
+    final String staffIdParamName = "staffId";
+    if (command.hasParameter(staffIdParamName)
+        && (this.staff == null
+            || command.isChangeInLongParameterNamed(staffIdParamName, this.staff.getId()))) {
+      final Long newValue = command.longValueOfParameterNamed(staffIdParamName);
+      actualChanges.put(staffIdParamName, newValue);
+    }
+
+    final String rolesParamName = "roles";
+    if (command.isChangeInArrayParameterNamed(rolesParamName, getRolesAsIdStringArray())) {
+      final String[] newValue = command.arrayValueOfParameterNamed(rolesParamName);
+      actualChanges.put(rolesParamName, newValue);
+    }
+
+    final String usernameParamName = "username";
+    if (command.isChangeInStringParameterNamed(usernameParamName, this.username)) {
+
+      // TODO Remove this check once we are identifying system user based on user ID
+      if (isSystemUser()) {
+        throw new NoAuthorizationException("User name of current system user may not be modified");
+      }
+
+      final String newValue = command.stringValueOfParameterNamed(usernameParamName);
+      actualChanges.put(usernameParamName, newValue);
+      this.username = newValue;
+    }
+
+    final String firstnameParamName = "firstname";
+    if (command.isChangeInStringParameterNamed(firstnameParamName, this.firstname)) {
+      final String newValue = command.stringValueOfParameterNamed(firstnameParamName);
+      actualChanges.put(firstnameParamName, newValue);
+      this.firstname = newValue;
+    }
+
+    final String lastnameParamName = "lastname";
+    if (command.isChangeInStringParameterNamed(lastnameParamName, this.lastname)) {
+      final String newValue = command.stringValueOfParameterNamed(lastnameParamName);
+      actualChanges.put(lastnameParamName, newValue);
+      this.lastname = newValue;
+    }
+
+    final String emailParamName = "email";
+    if (command.isChangeInStringParameterNamed(emailParamName, this.email)) {
+      final String newValue = command.stringValueOfParameterNamed(emailParamName);
+      actualChanges.put(emailParamName, newValue);
+      this.email = newValue;
+    }
+
+    final String passwordNeverExpire = "passwordNeverExpires";
+
+    if (command.hasParameter(passwordNeverExpire)) {
+      if (command.isChangeInBooleanParameterNamed(passwordNeverExpire, this.passwordNeverExpires)) {
+        final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(passwordNeverExpire);
+        actualChanges.put(passwordNeverExpire, newValue);
+        this.passwordNeverExpires = newValue;
+      }
+    }
+
+    if (command.hasParameter(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER)) {
+      if (command.isChangeInBooleanParameterNamed(
+          AppSelfServiceUserConstants.IS_SELF_SERVICE_USER, this.isSelfServiceUser)) {
+        final boolean newValue =
+            command.booleanPrimitiveValueOfParameterNamed(
+                AppSelfServiceUserConstants.IS_SELF_SERVICE_USER);
+        actualChanges.put(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER, newValue);
+        this.isSelfServiceUser = newValue;
+      }
+    }
+
+    if (this.isSelfServiceUser && command.hasParameter(AppSelfServiceUserConstants.CLIENTS)) {
+      actualChanges.put(
+          AppSelfServiceUserConstants.CLIENTS,
+          command.arrayValueOfParameterNamed(AppSelfServiceUserConstants.CLIENTS));
+      Set<AppSelfServiceUserClientMapping> newClients = createAppUserClientMappings(clients);
+      if (this.appUserClientMappings == null) {
+        this.appUserClientMappings = new HashSet<>();
+      } else {
+        this.appUserClientMappings.retainAll(newClients);
+      }
+      this.appUserClientMappings.addAll(newClients);
+    } else if (!this.isSelfServiceUser
+        && actualChanges.containsKey(AppSelfServiceUserConstants.IS_SELF_SERVICE_USER)) {
+      actualChanges.put(AppSelfServiceUserConstants.CLIENTS, new ArrayList<>());
+      if (this.appUserClientMappings != null) {
+        this.appUserClientMappings.clear();
+      }
+    }
+    return actualChanges;
+  }
+
+  private String[] getRolesAsIdStringArray() {
+    final List<String> roleIds = new ArrayList<>();
+    for (final Role role : this.roles) {
+      roleIds.add(role.getId().toString());
+    }
+    return roleIds.toArray(new String[roleIds.size()]);
+  }
+
+  /**
+   * Delete is a <i>soft delete</i>. Updates flag so it wont appear in query/report results.
+   *
+   * <p>Any fields with unique constraints and prepended with id of record.
+   */
+  public void delete() {
+    if (isSystemUser()) {
+      throw new NoAuthorizationException("User configured as the system user cannot be deleted");
+    }
+    this.deleted = true;
+    this.enabled = false;
+    this.accountNonExpired = false;
+    this.firstTimeLoginRemaining = true;
+    this.username = getId() + "_DELETED_" + this.username;
+    this.roles.clear();
+  }
+
+  public boolean isDeleted() {
+    return this.deleted;
+  }
+
+  /** Activates the self-service user and restores the account flags required for authentication. */
+  public void enable() {
+    this.enabled = true;
+    this.accountNonExpired = true;
+    this.accountNonLocked = true;
+    this.credentialsNonExpired = true;
+    this.deleted = false;
+  }
+
+  public boolean isSystemUser() {
+    // TODO Determine system user by ID not by user name
+    if (this.username.equals(AppUserConstants.SYSTEM_USER_NAME)) {
+      return true;
+    }
+    return false;
+  }
+
+  @Override
+  public Collection<GrantedAuthority> getAuthorities() {
+    return populateGrantedAuthorities();
+  }
+
+  private List<GrantedAuthority> populateGrantedAuthorities() {
+    final List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
+    for (final Role role : this.roles) {
+      final Collection<Permission> permissions = role.getPermissions();
+      for (final Permission permission : permissions) {
+        grantedAuthorities.add(new SimpleGrantedAuthority(permission.getCode()));
+      }
+    }
+    return grantedAuthorities;
+  }
+
+  @Override
+  public String getPassword() {
+    return this.password;
+  }
+
+  @Override
+  public String getUsername() {
+    return this.username;
+  }
+
+  public String getDisplayName() {
+
+    String firstName = StringUtils.isNotBlank(this.firstname) ? this.firstname : "";
+    if (StringUtils.isNotBlank(this.lastname)) {
+      return firstName + " " + this.lastname;
+    }
+    return firstName;
+  }
+
+  @Override
+  public boolean isAccountNonExpired() {
+    return this.accountNonExpired;
+  }
+
+  @Override
+  public boolean isAccountNonLocked() {
+    return this.accountNonLocked;
+  }
+
+  @Override
+  public boolean isCredentialsNonExpired() {
+    return this.credentialsNonExpired;
+  }
+
+  @Override
+  public boolean isEnabled() {
+    return this.enabled;
+  }
+
+  public boolean isBypassUser() {
+    return hasAnyPermission("BYPASS_LOAN_WRITE_PROTECTION");
+  }
+
+  public String getFirstname() {
+    return this.firstname;
+  }
+
+  public String getLastname() {
+    return this.lastname;
+  }
+
+  public String getEmail() {
+    return this.email;
+  }
+
+  public Set<Role> getRoles() {
+    return this.roles;
+  }
+
+  public Office getOffice() {
+    return this.office;
+  }
+
+  public Staff getStaff() {
+    return this.staff;
+  }
+
+  public boolean getPasswordNeverExpires() {
+    return this.passwordNeverExpires;
+  }
+
+  public LocalDate getLastTimePasswordUpdated() {
+    return this.lastTimePasswordUpdated;
+  }
+
+  public boolean canNotApproveLoanInPast() {
+    return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "APPROVEINPAST_LOAN");
+  }
+
+  public boolean canNotRejectLoanInPast() {
+    return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "REJECTINPAST_LOAN");
+  }
+
+  public boolean canNotWithdrawByClientLoanInPast() {
+    return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "WITHDRAWINPAST_LOAN");
+  }
+
+  public boolean canNotDisburseLoanInPast() {
+    return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "DISBURSEINPAST_LOAN");
+  }
+
+  public boolean canNotMakeRepaymentOnLoanInPast() {
+    return hasNotPermissionForAnyOf("ALL_FUNCTIONS", "REPAYMENTINPAST_LOAN");
+  }
+
+  public boolean hasNotPermissionForReport(final String reportName) {
+
+    if (hasNotPermissionForAnyOf(
+        "ALL_FUNCTIONS",
+        "ALL_FUNCTIONS_READ",
+        "REPORTING_SUPER_USER",
+        "READ_REPORT",
+        "READ_" + reportName)) {
+      return true;
+    }
+    return false;
+  }
+
+  public boolean hasNotPermissionForDatatable(final String datatable, final String accessType) {
+
+    final String matchPermission = accessType + "_" + datatable;
+
+    if (accessType.equalsIgnoreCase("READ")) {
+      if (hasNotPermissionForAnyOf("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", matchPermission)) {
+        return true;
+      }
+      return false;
+    }
+
+    if (hasNotPermissionForAnyOf("ALL_FUNCTIONS", matchPermission)) {
+      return true;
+    }
+    return false;
+  }
+
+  public boolean hasNotPermissionForAnyOf(final String... permissionCodes) {
+    boolean hasNotPermission = true;
+    for (final String permissionCode : permissionCodes) {
+      final boolean checkPermission = hasPermissionTo(permissionCode);
+      if (checkPermission) {
+        hasNotPermission = false;
+        break;
+      }
+    }
+    return hasNotPermission;
+  }
+
+  /**
+   * Checks whether the user has a given permission explicitly.
+   *
+   * @param permissionCode the permission code to check for.
+   * @return whether the user has the specified permission
+   */
+  public boolean hasSpecificPermissionTo(final String permissionCode) {
+    boolean hasPermission = false;
+    for (final Role role : this.roles) {
+      if (role.hasPermissionTo(permissionCode)) {
+        hasPermission = true;
+        break;
+      }
+    }
+    return hasPermission;
+  }
+
+  public void validateHasReadPermission(final String resourceType) {
+    validateHasPermission("READ", resourceType);
+  }
+
+  /**
+   * Self-service read permission check that requires an explicit READ_* grant for the given
+   * resource type.
+   *
+   * <p>This intentionally does <strong>not</strong> honor broad grants such as ALL_FUNCTIONS or
+   * ALL_FUNCTIONS_READ, to ensure that self-service APIs follow a strict explicit-grant model
+   * without affecting core Fineract authorization semantics.
+   *
+   * @param resourceType the resource type token (e.g. "SAVINGSPRODUCT")
+   * @throws NoAuthorizationException when the self-service user does not have an explicit READ_*
+   *     grant for the resource
+   */
+  public void validateHasSelfServiceReadPermission(final String resourceType) {
+    final String authorizationMessage =
+        "Self-service user has no authority to read " + resourceType.toLowerCase() + "s";
+    final String matchPermission = "READ_" + resourceType.toUpperCase();
+
+    if (hasSpecificPermissionTo(matchPermission)) {
+      return;
+    }
+
+    throw new NoAuthorizationException(authorizationMessage);
+  }
+
+  public void validateHasCreatePermission(final String resourceType) {
+    validateHasPermission("CREATE", resourceType);
+  }
+
+  public void validateHasUpdatePermission(final String resourceType) {
+    validateHasPermission("UPDATE", resourceType);
+  }
+
+  public void validateHasDeletePermission(final String resourceType) {
+    validateHasPermission("DELETE", resourceType);
+  }
+
+  private void validateHasPermission(final String prefix, final String resourceType) {
+    final String authorizationMessage =
+        "User has no authority to " + prefix + " " + resourceType.toLowerCase() + "s";
+    final String matchPermission = prefix + "_" + resourceType.toUpperCase();
+
+    if (!hasNotPermissionForAnyOf("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", matchPermission)) {
+      return;
+    }
+
+    throw new NoAuthorizationException(authorizationMessage);
+  }
+
+  private boolean hasNotPermissionTo(final String permissionCode) {
+    return !hasPermissionTo(permissionCode);
+  }
+
+  private boolean hasPermissionTo(final String permissionCode) {
+    boolean hasPermission = hasAllFunctionsPermission();
+    if (!hasPermission) {
+      for (final Role role : this.roles) {
+        if (role.hasPermissionTo(permissionCode)) {
+          hasPermission = true;
+          break;
         }
-        return match;
+      }
     }
+    return hasPermission;
+  }
 
-    public boolean hasIdOf(final Long userId) {
-        return getId().equals(userId);
+  private boolean hasAllFunctionsPermission() {
+    boolean match = false;
+    for (final Role role : this.roles) {
+      if (role.hasPermissionTo("ALL_FUNCTIONS")) {
+        match = true;
+        break;
+      }
     }
+    return match;
+  }
 
-    private boolean hasNotAnyPermission(final List<String> permissions) {
-        return !hasAnyPermission(permissions);
+  public boolean hasIdOf(final Long userId) {
+    return getId().equals(userId);
+  }
+
+  private boolean hasNotAnyPermission(final List<String> permissions) {
+    return !hasAnyPermission(permissions);
+  }
+
+  public boolean hasAnyPermission(String... permissions) {
+    return hasAnyPermission(Arrays.asList(permissions));
+  }
+
+  public boolean hasAnyPermission(final List<String> permissions) {
+    boolean hasAtLeastOneOf = false;
+
+    for (final String permissionCode : permissions) {
+      if (hasPermissionTo(permissionCode)) {
+        hasAtLeastOneOf = true;
+        break;
+      }
     }
+    return hasAtLeastOneOf;
+  }
 
-    public boolean hasAnyPermission(String... permissions) {
-        return hasAnyPermission(Arrays.asList(permissions));
+  public void validateHasPermissionTo(
+      final String function, final List<String> allowedPermissions) {
+    if (hasNotAnyPermission(allowedPermissions)) {
+      final String authorizationMessage = "User has no authority to: " + function;
+      throw new NoAuthorizationException(authorizationMessage);
     }
+  }
 
-    public boolean hasAnyPermission(final List<String> permissions) {
-        boolean hasAtLeastOneOf = false;
-
-        for (final String permissionCode : permissions) {
-            if (hasPermissionTo(permissionCode)) {
-                hasAtLeastOneOf = true;
-                break;        
-            }
-        }
-        return hasAtLeastOneOf;
+  public void validateHasPermissionTo(final String function) {
+    if (hasNotPermissionTo(function)) {
+      final String authorizationMessage = "User has no authority to: " + function;
+      throw new NoAuthorizationException(authorizationMessage);
     }
+  }
 
-    public void validateHasPermissionTo(final String function, final List<String> allowedPermissions) {
-        if (hasNotAnyPermission(allowedPermissions)) {
-            final String authorizationMessage = "User has no authority to: " + function;
-            throw new NoAuthorizationException(authorizationMessage);
-        }
+  public void validateHasReadPermission(final String function, final Long userId) {
+    if (!("USER".equalsIgnoreCase(function) && userId.equals(getId()))) {
+      validateHasReadPermission(function);
     }
+  }
 
-    public void validateHasPermissionTo(final String function) {
-        if (hasNotPermissionTo(function)) {
-            final String authorizationMessage = "User has no authority to: " + function;
-            throw new NoAuthorizationException(authorizationMessage);
-        }
+  public void validateHasCheckerPermissionTo(final String function) {
+    final String checkerPermissionName = function.toUpperCase() + "_CHECKER";
+    if (hasNotPermissionTo("CHECKER_SUPER_USER") && hasNotPermissionTo(checkerPermissionName)) {
+      final String authorizationMessage = "User has no authority to be a checker for: " + function;
+      throw new NoAuthorizationException(authorizationMessage);
     }
+  }
 
-    public void validateHasReadPermission(final String function, final Long userId) {
-        if (!("USER".equalsIgnoreCase(function) && userId.equals(getId()))) {
-            validateHasReadPermission(function);
-        }
+  public boolean isCheckerSuperUser() {
+    return hasPermissionTo("CHECKER_SUPER_USER");
+  }
+
+  public void validateHasDatatableReadPermission(final String datatable) {
+    if (hasNotPermissionForDatatable(datatable, "READ")) {
+      throw new NoAuthorizationException("Not authorised to read datatable: " + datatable);
     }
+  }
 
-    public void validateHasCheckerPermissionTo(final String function) {
-        final String checkerPermissionName = function.toUpperCase() + "_CHECKER";
-        if (hasNotPermissionTo("CHECKER_SUPER_USER") && hasNotPermissionTo(checkerPermissionName)) {
-            final String authorizationMessage = "User has no authority to be a checker for: " + function;
-            throw new NoAuthorizationException(authorizationMessage);
-        }
+  public Long getStaffId() {
+    Long staffId = null;
+    if (this.staff != null) {
+      staffId = this.staff.getId();
     }
+    return staffId;
+  }
 
-    public boolean isCheckerSuperUser() {
-        return hasPermissionTo("CHECKER_SUPER_USER");
+  public String getStaffDisplayName() {
+    String staffDisplayName = null;
+    return staffDisplayName;
+  }
+
+  public String getEncodedPassword(
+      final JsonCommand command, final PlatformPasswordEncoder platformPasswordEncoder) {
+    final String passwordParamName = "password";
+    final String passwordEncodedParamName = "passwordEncoded";
+    String passwordEncodedValue = null;
+
+    if (command.hasParameter(passwordParamName)) {
+      if (command.isChangeInPasswordParameterNamed(
+          passwordParamName, this.password, platformPasswordEncoder, getId())) {
+        passwordEncodedValue =
+            command.passwordValueOfParameterNamed(
+                passwordParamName, platformPasswordEncoder, getId());
+      }
+    } else if (command.hasParameter(passwordEncodedParamName)) {
+      if (command.isChangeInStringParameterNamed(passwordEncodedParamName, this.password)) {
+        passwordEncodedValue = command.stringValueOfParameterNamed(passwordEncodedParamName);
+      }
     }
+    return passwordEncodedValue;
+  }
 
-    public void validateHasDatatableReadPermission(final String datatable) {
-        if (hasNotPermissionForDatatable(datatable, "READ")) {
-            throw new NoAuthorizationException("Not authorised to read datatable: " + datatable);
-        }
+  public boolean isNotEnabled() {
+    return !isEnabled();
+  }
+
+  public boolean isSelfServiceUser() {
+    return this.isSelfServiceUser;
+  }
+
+  public Set<AppSelfServiceUserClientMapping> getAppUserClientMappings() {
+    return this.appUserClientMappings;
+  }
+
+  private Set<AppSelfServiceUserClientMapping> createAppUserClientMappings(
+      Collection<Client> clients) {
+    Set<AppSelfServiceUserClientMapping> newAppUserClientMappings = null;
+    if (clients != null && clients.size() > 0) {
+      newAppUserClientMappings = new HashSet<>();
+      for (Client client : clients) {
+        newAppUserClientMappings.add(new AppSelfServiceUserClientMapping(this, client));
+      }
     }
+    return newAppUserClientMappings;
+  }
 
-    public Long getStaffId() {
-        Long staffId = null;
-        if (this.staff != null) {
-            staffId = this.staff.getId();
-        }
-        return staffId;
-    }
-
-    public String getStaffDisplayName() {
-        String staffDisplayName = null;
-        return staffDisplayName;
-    }
-
-    public String getEncodedPassword(
-        final JsonCommand command, final PlatformPasswordEncoder platformPasswordEncoder) {
-        final String passwordParamName = "password";
-        final String passwordEncodedParamName = "passwordEncoded";
-        String passwordEncodedValue = null;
-
-        if (command.hasParameter(passwordParamName)) {
-            if (command.isChangeInPasswordParameterNamed(passwordParamName, this.password, platformPasswordEncoder, getId())) {
-                passwordEncodedValue = command.passwordValueOfParameterNamed(passwordParamName, platformPasswordEncoder, getId());
-            }
-        } 
-        else if (command.hasParameter(passwordEncodedParamName)) {
-            if (command.isChangeInStringParameterNamed(passwordEncodedParamName, this.password)) {
-                passwordEncodedValue = command.stringValueOfParameterNamed(passwordEncodedParamName);
-            }
-        }
-        return passwordEncodedValue;
-    }
-
-    public boolean isNotEnabled() {
-        return !isEnabled();
-    }
-
-    public boolean isSelfServiceUser() {
-        return this.isSelfServiceUser;
-    }
-
-    public Set<AppSelfServiceUserClientMapping> getAppUserClientMappings() {
-        return this.appUserClientMappings;
-    }
-
-    private Set<AppSelfServiceUserClientMapping> createAppUserClientMappings(Collection<Client> clients) {
-        Set<AppSelfServiceUserClientMapping> newAppUserClientMappings = null;
-        if (clients != null && clients.size() > 0) {
-            newAppUserClientMappings = new HashSet<>();
-            for (Client client : clients) {
-                newAppUserClientMappings.add(new AppSelfServiceUserClientMapping(this, client));
-            }
-        }
-        return newAppUserClientMappings;
-    }
-
-    @Override
-    public String toString() {
-        return "AppSelfServiceUser [username=" + this.username + ", getId()=" + this.getId() + "]";
-    }
+  @Override
+  public String toString() {
+    return "AppSelfServiceUser [username=" + this.username + ", getId()=" + this.getId() + "]";
+  }
 }
