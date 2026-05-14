@@ -34,13 +34,20 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
@@ -49,6 +56,7 @@ import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadS
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
 
 @Path("/v1/self/savingsaccounts")
 @Component
@@ -120,12 +128,43 @@ public class SelfSavingsAccountApiResource {
       dateRange = fromDate + "," + toDate; // Fineract format: fromDate,toDate
     }
 
-    return this.savingsAccountsApiResource.retrieveOne(
+    SavingsAccountData savingsAccountData = this.savingsAccountsApiResource.retrieveOne(
         accountId,
         staffInSelectedOfficeOnly,
         chargeStatus,
         dateRange, // Pass the constructed date range
         uriInfo);
+    
+    // ====================== FILTER TRANSACTIONS ======================
+    if (month != null && year != null) {
+        Collection<SavingsAccountTransactionData> transactions = savingsAccountData.getTransactions();
+
+        if (!CollectionUtils.isEmpty(transactions)) {
+            List<SavingsAccountTransactionData> filteredTransactions = transactions.stream()
+                .filter(Objects::nonNull)
+                .filter(t -> {
+                    LocalDate txDate = t.getTransactionDate();   // Preferred field
+                    if (txDate == null) {
+                        txDate = t.getDate();                    // Fallback
+                    }
+                    return txDate != null 
+                        && txDate.getYear() == year 
+                        && txDate.getMonthValue() == month;
+                })
+                .collect(Collectors.toList());
+
+            // After filtering
+            // Since SavingsAccountData is immutable (no setter), we use reflection (safe & common pattern in Fineract)
+            try {
+                Field transactionsField = SavingsAccountData.class.getDeclaredField("transactions");
+                transactionsField.setAccessible(true);
+                transactionsField.set(savingsAccountData, filteredTransactions);
+            } catch (Exception e) {
+                //error
+            }
+        }
+    }
+    return savingsAccountData;
   }
 
   private int getLastDayOfMonth(int year, int month) {
