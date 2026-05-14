@@ -134,7 +134,7 @@ class SelfSavingsAccountApiResourceTest {
             eq(ACCOUNT_ID), eq(false), eq("all"), eq(""), eq(uriInfo)))
         .thenReturn(data);
 
-    SavingsAccountData result = resource.retrieveSavings(ACCOUNT_ID, "all", null, null, uriInfo);
+    SavingsAccountData result = resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo);
 
     assertNotNull(result);
     verify(dataValidator).validateRetrieveSavings(uriInfo);
@@ -148,7 +148,7 @@ class SelfSavingsAccountApiResourceTest {
 
     assertThrows(
         SavingsAccountNotFoundException.class,
-        () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, uriInfo));
+        () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo));
   }
 
   // --- retrieveSavingsTransaction ---

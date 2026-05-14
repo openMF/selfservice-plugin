@@ -36,6 +36,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -73,99 +74,109 @@ public class SelfSavingsAccountApiResource {
   private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
 
   @GET
-  @Path("{accountId}")
-  @Consumes({MediaType.APPLICATION_JSON})
-  @Produces({MediaType.APPLICATION_JSON})
-  @Operation(
-      summary = "Retrieve a savings account",
-      description =
-          "Retrieves a savings account\n\n"
-              + "Example Requests :\n\n"
-              + "self/savingsaccounts/1\n\n"
-              + "self/savingsaccounts/1?associations=transactions\n\n"
-              + "self/savingsaccounts/1?associations=transactions&month=5&year=2026")
-  @ApiResponses({
-    @ApiResponse(
-        responseCode = "200",
-        description = "OK",
-        content =
-            @Content(
-                schema =
-                    @Schema(
-                        implementation =
-                            SelfSavingsAccountApiResourceSwagger.GetSelfSavingsAccountsResponse
-                                .class)))
-  })
-  public SavingsAccountData retrieveSavings(
-      @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
-      @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
-          final String chargeStatus,
+    @Path("{accountId}")
+    @Consumes({MediaType.APPLICATION_JSON})
+    @Produces({MediaType.APPLICATION_JSON})
+    @Operation(
+        summary = "Retrieve a savings account",
+        description = "Retrieves a savings account\n\n"
+            + "Example Requests:\n\n"
+            + "self/savingsaccounts/1\n\n"
+            + "self/savingsaccounts/1?associations=transactions\n\n"
+            + "self/savingsaccounts/1?associations=transactions&month=5&year=2026\n\n"
+            + "self/savingsaccounts/1?associations=transactions&lastTransactions=10\n\n"
+            + "self/savingsaccounts/1?associations=transactions&month=5&year=2026&lastTransactions=5")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "OK",
+            content = @Content(schema = @Schema(
+                implementation = SelfSavingsAccountApiResourceSwagger.GetSelfSavingsAccountsResponse.class)))
+    })
+    public SavingsAccountData retrieveSavings(
+        @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
+        @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
+            final String chargeStatus,
 
-      // New filters
-      @QueryParam("month") @Parameter(description = "Filter transactions by month (1-12)")
-          final Integer month,
-      @QueryParam("year") @Parameter(description = "Filter transactions by year")
-          final Integer year,
-      @Context final UriInfo uriInfo) {
+        // Date filters
+        @QueryParam("month") @Parameter(description = "Filter transactions by month (1-12)")
+            final Integer month,
+        @QueryParam("year") @Parameter(description = "Filter transactions by year")
+            final Integer year,
 
-    this.dataValidator.validateRetrieveSavings(uriInfo);
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+        // New: Last N transactions filter
+        @QueryParam("lastTransactions") @Parameter(description = "Return only the last N transactions (most recent)")
+            final Integer lastTransactions,
 
-    final boolean staffInSelectedOfficeOnly = false;
+        @Context final UriInfo uriInfo) {
 
-    // Build date range for the core Fineract API if month/year provided
-    String dateRange = "";
-    if (month != null && year != null) {
-      // Validate month range
-      if (month < 1 || month > 12) {
-        throw new IllegalArgumentException("Month must be between 1 and 12");
-      }
+        this.dataValidator.validateRetrieveSavings(uriInfo);
+        validateAppSelfServiceUserSavingsAccountMapping(accountId);
 
-      // Create fromDate = 1st of the month, toDate = last day of the month
-      String fromDate = String.format("%d-%02d-01", year, month);
-      String toDate = String.format("%d-%02d-%02d", year, month, getLastDayOfMonth(year, month));
+        final boolean staffInSelectedOfficeOnly = false;
 
-      dateRange = fromDate + "," + toDate; // Fineract format: fromDate,toDate
-    }
+        // Build date range for core Fineract API
+        String dateRange = null;
+        if (month != null && year != null) {
+            if (month < 1 || month > 12) {
+                throw new IllegalArgumentException("Month must be between 1 and 12");
+            }
+            String fromDate = String.format("%d-%02d-01", year, month);
+            String toDate = String.format("%d-%02d-%02d", year, month, getLastDayOfMonth(year, month));
+            dateRange = fromDate + "," + toDate;
+        }
 
-    SavingsAccountData savingsAccountData = this.savingsAccountsApiResource.retrieveOne(
-        accountId,
-        staffInSelectedOfficeOnly,
-        chargeStatus,
-        dateRange, // Pass the constructed date range
-        uriInfo);
-    
-    // ====================== FILTER TRANSACTIONS ======================
-    if (month != null && year != null) {
+        SavingsAccountData savingsAccountData = this.savingsAccountsApiResource.retrieveOne(
+            accountId, staffInSelectedOfficeOnly, chargeStatus, dateRange, uriInfo);
+
+        // ====================== APPLY FILTERS ======================
         Collection<SavingsAccountTransactionData> transactions = savingsAccountData.getTransactions();
 
         if (!CollectionUtils.isEmpty(transactions)) {
-            List<SavingsAccountTransactionData> filteredTransactions = transactions.stream()
-                .filter(Objects::nonNull)
-                .filter(t -> {
-                    LocalDate txDate = t.getTransactionDate();   // Preferred field
-                    if (txDate == null) {
-                        txDate = t.getDate();                    // Fallback
-                    }
-                    return txDate != null 
-                        && txDate.getYear() == year 
-                        && txDate.getMonthValue() == month;
-                })
-                .collect(Collectors.toList());
+            List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
-            // After filtering
-            // Since SavingsAccountData is immutable (no setter), we use reflection (safe & common pattern in Fineract)
+            // 1. Filter by Month & Year (if provided)
+            if (month != null && year != null) {
+                filtered = filtered.stream()
+                    .filter(Objects::nonNull)
+                    .filter(t -> {
+                        LocalDate txDate = t.getTransactionDate();
+                        if (txDate == null) {
+                            txDate = t.getDate();
+                        }
+                        return txDate != null 
+                               && txDate.getYear() == year 
+                               && txDate.getMonthValue() == month;
+                    })
+                    .collect(Collectors.toList());
+            }
+
+            // 2. Filter Last N Transactions (most recent first)
+            if (lastTransactions != null && lastTransactions > 0) {
+                // Sort by transaction date descending (newest first)
+                filtered.sort((t1, t2) -> {
+                    LocalDate d1 = t1.getTransactionDate() != null ? t1.getTransactionDate() : t1.getDate();
+                    LocalDate d2 = t2.getTransactionDate() != null ? t2.getTransactionDate() : t2.getDate();
+                    return d2.compareTo(d1); // descending
+                });
+
+                // Limit to last N transactions
+                if (filtered.size() > lastTransactions) {
+                    filtered = filtered.subList(0, lastTransactions);
+                }
+            }
+
+            // Apply filtered list using reflection (since SavingsAccountData has no setter)
             try {
                 Field transactionsField = SavingsAccountData.class.getDeclaredField("transactions");
                 transactionsField.setAccessible(true);
-                transactionsField.set(savingsAccountData, filteredTransactions);
+                transactionsField.set(savingsAccountData, filtered);
             } catch (Exception e) {
-                //error
+                // Log in production environment
+                System.err.println("Warning: Could not set filtered transactions - " + e.getMessage());
             }
         }
+
+        return savingsAccountData;
     }
-    return savingsAccountData;
-  }
 
   private int getLastDayOfMonth(int year, int month) {
     java.time.YearMonth yearMonth = java.time.YearMonth.of(year, month);
