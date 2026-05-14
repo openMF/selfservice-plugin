@@ -93,10 +93,10 @@ public class SelfSavingsDataValidator {
             "month");
       }
 
-      if (year < 2000 || year > 2050) { // reasonable range
+      if (year < 2000 || year > 2100) { // reasonable range
         throw new PlatformApiDataValidationException(
             "validation.msg.savingsaccount.invalid.year",
-            "Year must be between 2000 and 2050.",
+            "Year must be between 2000 and 2100.",
             "year");
       }
     }
