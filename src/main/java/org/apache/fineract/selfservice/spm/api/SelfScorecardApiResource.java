@@ -14,6 +14,9 @@
  */
 package org.apache.fineract.selfservice.spm.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -48,6 +51,14 @@ public class SelfScorecardApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Transactional
+  @Operation(
+      summary = "List Scorecards for Client",
+      description = "Retrieves all scorecards associated with the given client.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not Found")
+  })
   public List<ScorecardData> findByClient(@PathParam("clientId") final Long clientId) {
 
     validateAppSelfServiceUserClientsMapping(clientId);
@@ -59,6 +70,14 @@ public class SelfScorecardApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Transactional
+  @Operation(
+      summary = "Create a Scorecard",
+      description = "Submits a scorecard entry for the specified survey.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not Found")
+  })
   public void createScorecard(
       @PathParam("surveyId") final Long surveyId, final ScorecardData scorecardData) {
     if (scorecardData.getClientId() != null) {

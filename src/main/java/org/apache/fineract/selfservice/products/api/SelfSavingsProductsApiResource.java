@@ -14,6 +14,9 @@
  */
 package org.apache.fineract.selfservice.products.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -48,6 +51,13 @@ public class SelfSavingsProductsApiResource {
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "List Savings Products",
+      description = "Lists all available savings products for the authenticated self-service user.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+  })
   public String retrieveAll(@Context final UriInfo uriInfo) {
 
     this.context.validateHasReadPermission("SAVINGSPRODUCT");
@@ -62,6 +72,14 @@ public class SelfSavingsProductsApiResource {
   @Path("{productId}")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve a Savings Product",
+      description = "Retrieves a savings product by its identifier.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not Found")
+  })
   public String retrieveOne(
       @PathParam(SavingsApiConstants.productIdParamName) final Long productId,
       @Context final UriInfo uriInfo) {
