@@ -14,6 +14,9 @@
  */
 package org.apache.fineract.selfservice.products.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -49,6 +52,14 @@ public class SelfShareProductsApiResource {
   @Path("{productId}")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve a Share Product",
+      description = "Retrieves a share product by its identifier.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not Found")
+  })
   public String retrieveProduct(
       @PathParam("productId") final Long productId, @Context final UriInfo uriInfo) {
 
@@ -63,6 +74,13 @@ public class SelfShareProductsApiResource {
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "List Share Products",
+      description = "Lists all available share products with optional pagination.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+  })
   public String retrieveAllProducts(
       @QueryParam("offset") final Integer offset,
       @QueryParam("limit") final Integer limit,

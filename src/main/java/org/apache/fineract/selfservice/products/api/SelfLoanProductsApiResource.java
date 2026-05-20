@@ -14,6 +14,9 @@
  */
 package org.apache.fineract.selfservice.products.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -181,6 +184,13 @@ public class SelfLoanProductsApiResource {
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "List Loan Products",
+      description = "Lists all available loan products for the authenticated self-service user.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+  })
   public String retrieveAllLoanProducts(@Context final UriInfo uriInfo) {
 
     this.context.validateHasReadPermission("LOANPRODUCT");
@@ -195,6 +205,14 @@ public class SelfLoanProductsApiResource {
   @Path("{productId}")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve a Loan Product",
+      description = "Retrieves a loan product by its identifier.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not Found")
+  })
   public String retrieveLoanProductDetails(
       @PathParam(LoanApiConstants.productIdParameterName) final Long productId,
       @Context final UriInfo uriInfo) {

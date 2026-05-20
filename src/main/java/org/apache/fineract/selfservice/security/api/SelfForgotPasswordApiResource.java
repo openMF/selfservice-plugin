@@ -1,6 +1,9 @@
 package org.apache.fineract.selfservice.security.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -26,6 +29,13 @@ public class SelfForgotPasswordApiResource {
   @POST
   @Path("/request")
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Request Password Reset",
+      description = "Initiates a password reset request for the self-service user.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "400", description = "Bad Request")
+  })
   public String requestResetPassword(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
     this.selfServiceForgotPassworWritePlatformService.createForgotPasswordRequest(
         apiRequestBodyAsJson);
@@ -35,6 +45,13 @@ public class SelfForgotPasswordApiResource {
   @POST
   @Path("/renew")
   @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Renew Password",
+      description = "Renews the password using a valid reset token.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "400", description = "Bad Request")
+  })
   public String renewPassword(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
     CommandProcessingResult result =
         this.selfServiceForgotPassworWritePlatformService.renewPassword(apiRequestBodyAsJson);

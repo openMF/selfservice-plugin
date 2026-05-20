@@ -14,6 +14,9 @@
  */
 package org.apache.fineract.selfservice.spm.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -41,6 +44,14 @@ public class SelfSpmApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Transactional
+  @Operation(
+      summary = "List Active Surveys",
+      description =
+          "Retrieves all active surveys available for the authenticated self-service user.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+  })
   public List<SurveyData> fetchAllSurveys() {
     securityContext.authenticatedSelfServiceUser();
     final Boolean isActive = true;
