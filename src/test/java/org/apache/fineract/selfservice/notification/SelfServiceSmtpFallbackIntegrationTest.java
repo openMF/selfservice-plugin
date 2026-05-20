@@ -280,7 +280,8 @@ public class SelfServiceSmtpFallbackIntegrationTest {
         SelfServicePluginEmailService emailService,
         NotificationCooldownCache cooldownCache,
         Environment env,
-        ExternalNotificationSystemClient externalNotificationSystemClient) {
+        @jakarta.annotation.Nullable
+            ExternalNotificationSystemClient externalNotificationSystemClient) {
       return new SelfServiceNotificationService(
           notificationTemplateEngine,
           notificationMessageSource,

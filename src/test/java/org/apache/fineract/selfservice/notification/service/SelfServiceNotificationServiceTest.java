@@ -43,6 +43,7 @@ import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
 import org.apache.fineract.infrastructure.core.service.SmtpConfigurationUnavailableException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
 import org.apache.fineract.infrastructure.sms.domain.SmsMessage;
 import org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository;
 import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService;
@@ -157,11 +158,18 @@ class SelfServiceNotificationServiceTest {
         .thenReturn(true);
   }
 
+  private void stubExternalNotificationDisabled() {
+    NotificationCredentialsData creds = new NotificationCredentialsData();
+    creds.setEnabled(false);
+    when(externalNotificationSystemClient.resolveNotificationCredentials()).thenReturn(creds);
+  }
+
   // ---- Email happy path ----
 
   @Test
   void handleNotification_EmailMode_SendsEmail() {
     stubNotificationEnabled();
+    stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
     when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
     when(messageSource.getMessage(
@@ -254,6 +262,7 @@ class SelfServiceNotificationServiceTest {
   @Test
   void handleNotification_EmailMode_SkipsWhenBlankEmail() {
     stubNotificationEnabled();
+    stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
     when(messageSource.getMessage(
             eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
@@ -291,6 +300,7 @@ class SelfServiceNotificationServiceTest {
   @Test
   void handleNotification_EmailMode_ReleaseCooldownOnConfigError() {
     stubNotificationEnabled();
+    stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
     when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
     when(messageSource.getMessage(
@@ -312,6 +322,7 @@ class SelfServiceNotificationServiceTest {
   @Test
   void handleNotification_EmailMode_LogsWarnOnFirstConfigError_ThenDebug() {
     stubNotificationEnabled();
+    stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
     when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
     when(messageSource.getMessage(
@@ -348,6 +359,7 @@ class SelfServiceNotificationServiceTest {
   @Test
   void handleNotification_EmailMode_ReleaseCooldownOnGeneralError() {
     stubNotificationEnabled();
+    stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
     when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
     when(messageSource.getMessage(
