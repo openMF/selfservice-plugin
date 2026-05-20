@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -131,7 +132,7 @@ class SelfSavingsAccountApiResourceTest {
     mockSavingsMapped();
     SavingsAccountData data = createDefaultSavingsAccountData();
     when(savingsAccountsApiResource.retrieveOne(
-            eq(ACCOUNT_ID), eq(false), eq("all"), eq(""), eq(uriInfo)))
+            eq(ACCOUNT_ID), eq(false), eq("all"), isNull(), eq(uriInfo)))
         .thenReturn(data);
 
     SavingsAccountData result = resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo);

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;
@@ -61,7 +62,6 @@ public class SelfServiceNotificationService {
   private final NotificationCooldownCache notificationCooldownCache;
   private final Environment env;
   private final ExternalNotificationSystemClient externalNotificationSystemClient;
-  private NotificationCredentialsData notificationCredentialsData;
 
   /**
    * Guards the one-time WARN log emitted when email delivery fails due to SMTP configuration being
@@ -79,7 +79,7 @@ public class SelfServiceNotificationService {
       SmsCampaignDropdownReadPlatformService smsProviderService,
       NotificationCooldownCache notificationCooldownCache,
       Environment env,
-      ExternalNotificationSystemClient externalNotificationSystemClient) {
+      @Nullable ExternalNotificationSystemClient externalNotificationSystemClient) {
     this.notificationTemplateEngine = notificationTemplateEngine;
     this.notificationMessageSource = notificationMessageSource;
     this.emailService = emailService;
@@ -182,18 +182,21 @@ public class SelfServiceNotificationService {
   private void sendEmailNotification(
       SelfServiceNotificationEvent event, String subject, Context context) {
 
-    notificationCredentialsData = externalNotificationSystemClient.resolveNotificationCredentials();
+    NotificationCredentialsData notificationCredentials = null;
+    if (externalNotificationSystemClient != null) {
+      notificationCredentials = externalNotificationSystemClient.resolveNotificationCredentials();
+    }
     String templateName = "html/" + event.getType().getTemplatePrefix();
     String htmlBody = notificationTemplateEngine.process(templateName, context);
 
-    if (notificationCredentialsData.isEnabled()) {
+    if (notificationCredentials != null && notificationCredentials.isEnabled()) {
 
       NotificationMessage notificationMessage = new NotificationMessage();
 
       notificationMessage.setEmail(event.getEmail());
       notificationMessage.setMobile(event.getMobileNumber());
 
-      if (notificationCredentialsData.isWhatsapp() || notificationCredentialsData.isSms()) {
+      if (notificationCredentials.isWhatsapp() || notificationCredentials.isSms()) {
         // 1. Remove all HTML tags using regex
         String noTags = htmlBody.replaceAll("<[^>]*>", "");
 
@@ -207,7 +210,7 @@ public class SelfServiceNotificationService {
         notificationMessage.setText(result);
       }
 
-      if (notificationCredentialsData.isEmail()) {
+      if (notificationCredentials.isEmail()) {
         notificationMessage.setText(htmlBody);
       }
 

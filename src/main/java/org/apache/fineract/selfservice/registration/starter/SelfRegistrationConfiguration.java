@@ -39,6 +39,7 @@ import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.apache.fineract.useradministration.domain.PasswordValidationPolicyRepository;
 import org.apache.fineract.useradministration.domain.RoleRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import jakarta.annotation.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
@@ -119,7 +120,7 @@ public class SelfRegistrationConfiguration {
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
       ApplicationEventPublisher applicationEventPublisher,
-      ExternalNotificationSystemClient externalNotificationSystemClient) {
+      @Nullable ExternalNotificationSystemClient externalNotificationSystemClient) {
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
         fromApiJsonHelper,
