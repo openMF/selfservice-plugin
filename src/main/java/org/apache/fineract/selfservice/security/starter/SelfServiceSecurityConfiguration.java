@@ -169,7 +169,11 @@ public class SelfServiceSecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/loans/simulate")
                     .permitAll()
-
+                    // Public offices endpoints (MX-263)
+                    .requestMatchers(HttpMethod.GET, "/api/v1/self/offices")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/v1/self/offices")
+                    .permitAll()
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
                     // traffic).

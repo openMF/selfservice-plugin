@@ -14,14 +14,6 @@
   <name>selfservice-plugin</name>
   <description>Mifos Self Service Plugin for Apache Fineract</description>
 
-  <distributionManagement>
-    <repository>
-      <id>central</id>
-      <name>Mifos Artifactory</name>
-      <url>https://mifos.jfrog.io/artifactory/libs-snapshot-local/</url>
-    </repository>
-  </distributionManagement>
-
   <properties>
     <java.version>21</java.version>
     <fineract.version>1.15.0-SNAPSHOT</fineract.version>    
@@ -439,6 +431,12 @@
       </exclusions>
 
     </dependency>
+    <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>1.6.3</version>
+        <scope>compile</scope>
+    </dependency>
   </dependencies>
 
   <repositories>
@@ -655,5 +653,13 @@
       </plugins>
     </pluginManagement>
   </build>
+  
+  <distributionManagement>
+    <repository>
+      <id>central</id>
+      <name>Mifos Artifactory</name>
+      <url>https://mifos.jfrog.io/artifactory/libs-snapshot-local/</url>
+    </repository>
+  </distributionManagement>
 
 </project>
