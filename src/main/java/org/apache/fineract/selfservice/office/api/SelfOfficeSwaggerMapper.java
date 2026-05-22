@@ -25,7 +25,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.organisation.office.data.OfficeData;
 import org.mapstruct.Mapper;
 
-@Mapper(config = MapstructMapperConfig.class)
+@Mapper(config = MapstructMapperConfig.class, componentModel = "spring")
 public interface SelfOfficeSwaggerMapper {
 
     SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse toPutOfficesOfficeIdResponse(CommandProcessingResult commandProcessingResult);
