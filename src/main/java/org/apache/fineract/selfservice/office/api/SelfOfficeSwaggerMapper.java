@@ -26,16 +26,16 @@ import org.apache.fineract.organisation.office.data.OfficeData;
 import org.mapstruct.Mapper;
 
 @Mapper(config = MapstructMapperConfig.class)
-public interface OfficeSwaggerMapper {
+public interface SelfOfficeSwaggerMapper {
 
-    OfficesApiResourceSwagger.PutOfficesOfficeIdResponse toPutOfficesOfficeIdResponse(CommandProcessingResult commandProcessingResult);
+    SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse toPutOfficesOfficeIdResponse(CommandProcessingResult commandProcessingResult);
 
-    default OfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges toPutOfficesOfficeIdResponseChanges(
+    default SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges toPutOfficesOfficeIdResponseChanges(
             Map<String, Object> changes) {
-        OfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges response = new OfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges();
+        SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges response = new SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse.PutOfficesOfficeIdResponseChanges();
         Optional.ofNullable(changes).map(c -> c.get("name")).ifPresent(c -> response.name = String.valueOf(c));
         return response;
     }
 
-    OfficesApiResourceSwagger.GetOfficesResponse toGetOfficesResponse(OfficeData officeData);
+    SelfOfficesApiResourceSwagger.GetOfficesResponse toGetOfficesResponse(OfficeData officeData);
 }

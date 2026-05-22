@@ -25,9 +25,9 @@ import java.util.Collection;
 /**
  * Created by sanyam on 14/8/17.
  */
-final class OfficesApiResourceSwagger {
+final class SelfOfficesApiResourceSwagger {
 
-    private OfficesApiResourceSwagger() {
+    private SelfOfficesApiResourceSwagger() {
 
     }
 

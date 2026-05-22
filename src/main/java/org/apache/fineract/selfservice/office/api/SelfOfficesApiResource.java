@@ -68,7 +68,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Tag(name = "Offices", description = "Offices are used to model an MFIs structure. A hierarchical representation of offices is supported. There will always be at least one office (which represents the MFI or an MFIs head office). All subsequent offices added must have a parent office.")
 @RequiredArgsConstructor
-public class OfficesApiResource {
+public class SelfOfficesApiResource {
 
     /**
      * The set of parameters that are supported in response for {@link OfficeData}.
@@ -78,7 +78,7 @@ public class OfficesApiResource {
 
     private static final String RESOURCE_NAME_FOR_PERMISSIONS = "OFFICE";
 
-    private final OfficeSwaggerMapper officeSwaggerMapper;
+    private final SelfOfficeSwaggerMapper officeSwaggerMapper;
     private final PlatformSecurityContext context;
     private final OfficeReadPlatformService readPlatformService;
     private final DefaultToApiJsonSerializer<OfficeData> toApiJsonSerializer;
@@ -94,7 +94,7 @@ public class OfficesApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "List Offices", description = "Example Requests:\n" + "\n" + "offices\n" + "\n" + "\n"
             + "offices?fields=id,name,openingDate")
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = OfficesApiResourceSwagger.GetOfficesResponse.class))))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesResponse.class))))
     public String retrieveOffices(@Context final UriInfo uriInfo,
             @DefaultValue("false") @QueryParam("includeAllOffices") @Parameter(description = "includeAllOffices") final boolean onlyManualEntries,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
@@ -114,7 +114,7 @@ public class OfficesApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve Office Details Template", description = "This is a convenience resource. It can be useful when building maintenance user interface screens for client applications. The template data returned consists of any or all of:\n"
             + "\n" + "Field Defaults\n" + "Allowed description Lists\n" + "Example Request:\n" + "\n" + "offices/template")
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.GetOfficesTemplateResponse.class)))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesTemplateResponse.class)))
     public String retrieveOfficeTemplate(@Context final UriInfo uriInfo) {
         context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         OfficeData office = readPlatformService.retrieveNewOfficeTemplate();
@@ -128,8 +128,8 @@ public class OfficesApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Create an Office", description = "Mandatory Fields\n" + "name, openingDate, parentId")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.PostOfficesRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.PostOfficesResponse.class)))
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.PostOfficesRequest.class)))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.PostOfficesResponse.class)))
     public String createOffice(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
         final CommandWrapper commandRequest = new CommandWrapperBuilder() //
                 .createOffice() //
@@ -144,7 +144,7 @@ public class OfficesApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve an Office", description = "Example Requests:\n" + "\n" + "offices/1\n" + "\n" + "\n"
             + "offices/1?template=true\n" + "\n" + "\n" + "offices/1?fields=id,name,parentName")
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.GetOfficesResponse.class)))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesResponse.class)))
     public String retrieveOffice(@PathParam("officeId") @Parameter(description = "officeId") final Long officeId,
             @Context final UriInfo uriInfo) {
         context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
@@ -163,7 +163,7 @@ public class OfficesApiResource {
     @Operation(summary = "Retrieve an Office using external id", description = "Example Requests:\n" + "\n" + "offices/external-id/asd123\n"
             + "\n" + "\n" + "offices/external-id/asd123?template=true\n" + "\n" + "\n"
             + "offices/external-id/asd123?fields=id,name,parentName")
-    public OfficesApiResourceSwagger.GetOfficesResponse retrieveOfficeByExternalId(
+    public SelfOfficesApiResourceSwagger.GetOfficesResponse retrieveOfficeByExternalId(
             @PathParam("externalId") @Parameter(description = "externalId") final String externalId, @Context final UriInfo uriInfo) {
         context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
@@ -180,8 +180,8 @@ public class OfficesApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Update Office", description = "")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.PutOfficesOfficeIdRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.PutOfficesOfficeIdResponse.class)))
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.PutOfficesOfficeIdRequest.class)))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse.class)))
     public String updateOffice(@PathParam("officeId") @Parameter(description = "officeId") final Long officeId,
             @Parameter(hidden = true) final String apiRequestBodyAsJson) {
         final CommandWrapper commandRequest = new CommandWrapperBuilder() //
@@ -197,10 +197,10 @@ public class OfficesApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Update Office", description = "")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = OfficesApiResourceSwagger.PutOfficesOfficeIdRequest.class)))
-    public OfficesApiResourceSwagger.PutOfficesOfficeIdResponse updateOfficeWithExternalId(
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.PutOfficesOfficeIdRequest.class)))
+    public SelfOfficesApiResourceSwagger.PutOfficesOfficeIdResponse updateOfficeWithExternalId(
             @Parameter(description = "externalId") @PathParam("externalId") final String externalId,
-            final OfficesApiResourceSwagger.PutOfficesOfficeIdRequest apiRequestBody) {
+            final SelfOfficesApiResourceSwagger.PutOfficesOfficeIdRequest apiRequestBody) {
         OfficeData office = readPlatformService.retrieveOfficeWithExternalId(ExternalIdFactory.produce(externalId));
         final CommandWrapper commandRequest = new CommandWrapperBuilder() //
                 .updateOffice(office.getId()) //
