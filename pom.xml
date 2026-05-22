@@ -24,6 +24,7 @@
     <swagger.version>2.2.48</swagger.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <mockito.version>5.17.0</mockito.version>
+    <mapstruct.version>1.6.3</mapstruct.version>
   </properties>
 
   <dependencyManagement>
@@ -434,7 +435,7 @@
     <dependency>
         <groupId>org.mapstruct</groupId>
         <artifactId>mapstruct</artifactId>
-        <version>1.6.3</version>
+        <version>${mapstruct.version}</version>
         <scope>compile</scope>
     </dependency>
   </dependencies>
