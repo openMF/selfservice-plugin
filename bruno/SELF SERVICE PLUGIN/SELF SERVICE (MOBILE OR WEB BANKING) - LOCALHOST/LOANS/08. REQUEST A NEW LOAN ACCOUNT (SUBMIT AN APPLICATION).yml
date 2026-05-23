@@ -1,0 +1,59 @@
+info:
+  name: 08. REQUEST A NEW LOAN ACCOUNT (SUBMIT AN APPLICATION)
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/loans
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |-
+      {
+          "productId": 1,
+          "submittedOnDate": "12 April 2026",
+          "expectedDisbursementDate": "12 April 2026",
+          "loanOfficerId": "",
+          "loanPurposeId": "",
+          "linkAccountId": "",
+          "createStandingInstructionAtDisbursement": "",
+          "loanTermFrequency": 12,
+          "loanTermFrequencyType": 2,
+          "numberOfRepayments": 12,
+          "repaymentEvery": 1,
+          "repaymentFrequencyType": 2,
+          "repaymentFrequencyNthDayType": "",
+          "repaymentFrequencyDayOfWeekType": "",
+          "repaymentsStartingFromDate": null,
+          "interestChargedFromDate": null,
+          "interestType": 0,
+          "isEqualAmortization": false,
+          "amortizationType": 1,
+          "interestCalculationPeriodType": 1,
+          "loanIdToClose": "",
+          "isTopup": "",
+          "transactionProcessingStrategyCode": "creocore-strategy",
+          "interestRateFrequencyType": 2,
+          "allowFullTermForTranche": false,
+          "interestRatePerPeriod": 10,
+          "maxOutstandingLoanBalance": null,
+          "charges": [],
+          "collateral": [],
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en",
+          "clientId": 1,
+          "loanType": "individual",
+          "principal": 10000
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

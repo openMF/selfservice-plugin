@@ -1,0 +1,7 @@
+info:
+  name: SELF SERVICE (MOBILE OR WEB BANKING) - LOCALHOST
+  type: folder
+  seq: 1
+
+request:
+  auth: inherit

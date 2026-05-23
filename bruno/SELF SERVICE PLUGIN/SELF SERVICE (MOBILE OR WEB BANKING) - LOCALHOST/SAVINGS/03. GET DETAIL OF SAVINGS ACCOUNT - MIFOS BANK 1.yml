@@ -1,0 +1,20 @@
+info:
+  name: 03. GET DETAIL OF SAVINGS ACCOUNT - MIFOS BANK 1
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: https://mifos-bank-1.mifos.community/fineract-provider/api/v1/self/savingsaccounts/1
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: mifos-bank-1
+    - name: Authorization
+      value: Basic dG9tYXM6cGFzc3dvcmQ=
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

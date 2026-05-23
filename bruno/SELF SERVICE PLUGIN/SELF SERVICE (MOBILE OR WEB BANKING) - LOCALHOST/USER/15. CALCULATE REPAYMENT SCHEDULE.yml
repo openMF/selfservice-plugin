@@ -1,0 +1,59 @@
+info:
+  name: 15. CALCULATE REPAYMENT SCHEDULE
+  type: http
+  seq: 15
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/loans/simulate?command=calculateLoanSchedule
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  params:
+    - name: command
+      value: calculateLoanSchedule
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "productId": 1,
+          "submittedOnDate": "02 May 2026",
+          "expectedDisbursementDate": "03 May 2026",
+          "loanOfficerId": "",
+          "loanPurposeId": "",
+          "linkAccountId": "",
+          "createStandingInstructionAtDisbursement": "",
+          "loanTermFrequency": 12,
+          "loanTermFrequencyType": 2,
+          "numberOfRepayments": 12,
+          "repaymentEvery": 1,
+          "repaymentFrequencyType": 2,
+          "repaymentFrequencyNthDayType": "",
+          "repaymentFrequencyDayOfWeekType": "",
+          "repaymentsStartingFromDate": null,
+          "interestChargedFromDate": null,
+          "interestType": 0,
+          "isEqualAmortization": false,
+          "amortizationType": 1,
+          "interestCalculationPeriodType": 1,
+          "loanIdToClose": "",
+          "isTopup": "",
+          "transactionProcessingStrategyCode": "creocore-strategy",
+          "interestRateFrequencyType": 2,
+          "allowFullTermForTranche": false,
+          "interestRatePerPeriod": 10,
+          "maxOutstandingLoanBalance": null,
+          "charges": [],
+          "collateral": [],
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en",
+          "loanType": "individual",
+          "principal": 10000
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

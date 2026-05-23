@@ -1,0 +1,27 @@
+info:
+  name: 05. UPDATE BENEFICIARY - LOAN
+  type: http
+  seq: 5
+
+http:
+  method: PUT
+  url: http://localhost:8080/fineract-provider/api/v1/self/beneficiaries/tpt/2
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |-
+      {
+          "name": "PEDRO MARMOL - LOAN",
+          "transferLimit": 3000
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

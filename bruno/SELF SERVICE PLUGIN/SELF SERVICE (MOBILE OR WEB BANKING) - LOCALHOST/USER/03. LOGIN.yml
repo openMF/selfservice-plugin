@@ -1,0 +1,25 @@
+info:
+  name: 03. LOGIN
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/authentication
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "username": "pedro.marmol",
+          "password": "MifosInitiative2026#"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

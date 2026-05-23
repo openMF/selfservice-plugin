@@ -1,0 +1,32 @@
+info:
+  name: 02. ADD BENEFICIARY - SAVINGS
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/beneficiaries/tpt
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |
+      {
+          "locale": "en",
+      	"name": "PABLO PICAPIEDRA MARTINEZ",
+      	"officeName": "Head Office",
+      	"accountNumber": "000000002",
+      	"accountType": 2,
+      	"transferLimit": 1000
+
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

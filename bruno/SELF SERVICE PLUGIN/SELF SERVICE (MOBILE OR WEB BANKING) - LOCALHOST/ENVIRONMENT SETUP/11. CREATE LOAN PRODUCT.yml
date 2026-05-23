@@ -1,0 +1,85 @@
+info:
+  name: 11. CREATE LOAN PRODUCT
+  type: http
+  seq: 16
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/loanproducts
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "name": "BNPL",
+          "shortName": "BN01",
+          "includeInBorrowerCycle": false,
+          "currencyCode": "USD",
+          "digitsAfterDecimal": 2,
+          "inMultiplesOf": "",
+          "installmentAmountInMultiplesOf": "",
+          "useBorrowerCycle": false,
+          "principal": 10000,
+          "numberOfRepayments": 12,
+          "isLinkedToFloatingInterestRates": false,
+          "allowApprovedDisbursedAmountsOverApplied": false,
+          "overAppliedCalculationType": null,
+          "overAppliedNumber": null,
+          "interestRatePerPeriod": 10,
+          "interestRateFrequencyType": 2,
+          "repaymentEvery": 1,
+          "repaymentFrequencyType": 2,
+          "repaymentStartDateType": 1,
+          "fixedLength": null,
+          "interestRecognitionOnDisbursementDate": false,
+          "principalVariationsForBorrowerCycle": [],
+          "numberOfRepaymentVariationsForBorrowerCycle": [],
+          "interestRateVariationsForBorrowerCycle": [],
+          "amortizationType": 1,
+          "interestType": 0,
+          "isEqualAmortization": false,
+          "interestCalculationPeriodType": 1,
+          "transactionProcessingStrategyCode": "creocore-strategy",
+          "daysInYearType": 1,
+          "daysInMonthType": 1,
+          "canDefineInstallmentAmount": false,
+          "accountMovesOutOfNPAOnlyOnArrearsCompletion": false,
+          "allowVariableInstallments": false,
+          "disallowExpectedDisbursements": false,
+          "canUseForTopup": false,
+          "isInterestRecalculationEnabled": false,
+          "holdGuaranteeFunds": false,
+          "allowFullTermForTranche": false,
+          "allowAttributeOverrides": {
+              "amortizationType": true,
+              "interestType": true,
+              "transactionProcessingStrategyCode": true,
+              "interestCalculationPeriodType": true,
+              "inArrearsTolerance": true,
+              "repaymentEvery": true,
+              "graceOnPrincipalAndInterestPayment": true,
+              "graceOnArrearsAgeing": true
+          },
+          "delinquencyBucketId": null,
+          "enableDownPayment": false,
+          "enableInstallmentLevelDelinquency": false,
+          "dueDaysForRepaymentEvent": 1,
+          "overDueDaysForRepaymentEvent": 1,
+          "loanScheduleType": "CUMULATIVE",
+          "charges": [],
+          "accountingRule": 1,
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

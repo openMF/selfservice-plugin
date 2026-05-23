@@ -1,0 +1,27 @@
+info:
+  name: 07. GET SAVINGS ACCOUNT TEMPLATE
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: http://localhost:8080/fineract-provider/api/v1/self/savingsaccounts/template?clientId=1&productId=1
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  params:
+    - name: clientId
+      value: "1"
+      type: query
+    - name: productId
+      value: "1"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

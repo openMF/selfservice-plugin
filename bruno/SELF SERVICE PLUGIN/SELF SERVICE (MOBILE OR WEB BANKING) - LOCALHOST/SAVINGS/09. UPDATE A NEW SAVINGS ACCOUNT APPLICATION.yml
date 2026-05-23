@@ -1,0 +1,44 @@
+info:
+  name: 09. UPDATE A NEW SAVINGS ACCOUNT APPLICATION
+  type: http
+  seq: 12
+
+http:
+  method: PUT
+  url: http://localhost:8080/fineract-provider/api/v1/self/savingsaccounts/4
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |-
+      {
+          "productId": 1,
+          "submittedOnDate": "05 April 2026",
+          "fieldOfficerId": "",
+          "externalId": "12345",
+          "nominalAnnualInterestRate": 0,
+          "interestCompoundingPeriodType": 1,
+          "interestPostingPeriodType": 4,
+          "interestCalculationType": 1,
+          "interestCalculationDaysInYearType": 365,
+          "withdrawalFeeForTransfers": false,
+          "lockinPeriodFrequency": "",
+          "lockinPeriodFrequencyType": "",
+          "allowOverdraft": false,
+          "enforceMinRequiredBalance": false,
+          "charges": [],
+          "dateFormat": "dd MMMM yyyy",
+          "monthDayFormat": "dd MMMM",
+          "locale": "en",
+          "clientId": 1
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

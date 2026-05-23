@@ -1,0 +1,37 @@
+info:
+  name: 16.  LOAN ACCOUNT REPAYMENT
+  type: http
+  seq: 21
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/loans/1/transactions?command=repayment
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  params:
+    - name: command
+      value: repayment
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "transactionDate": "12 April 2026",
+          "externalId": "",
+          "paymentTypeId": 1,
+          "note": "",
+          "transactionAmount": 1467.63,
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

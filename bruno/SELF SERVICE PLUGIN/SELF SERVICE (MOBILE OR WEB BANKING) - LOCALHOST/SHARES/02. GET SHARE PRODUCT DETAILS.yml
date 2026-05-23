@@ -1,0 +1,27 @@
+info:
+  name: 02. GET SHARE PRODUCT DETAILS
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: http://localhost:8080/fineract-provider/api/v1/self/products/share?clientId=104&productId=1
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic bWFyaWE6cGFzc3dvcmQ=
+  params:
+    - name: clientId
+      value: "104"
+      type: query
+    - name: productId
+      value: "1"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

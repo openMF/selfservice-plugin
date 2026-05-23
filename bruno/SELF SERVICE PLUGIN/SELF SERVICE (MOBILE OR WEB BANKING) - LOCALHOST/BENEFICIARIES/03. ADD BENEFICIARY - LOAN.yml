@@ -1,0 +1,31 @@
+info:
+  name: 03. ADD BENEFICIARY - LOAN
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/beneficiaries/tpt
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |-
+      {
+          "locale": "en",
+          "name": "PEDRO MARMOL - LOAN",
+          "officeName": "Head Office",
+          "accountNumber": "000000001",
+          "accountType": 1,
+          "transferLimit": 1800
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

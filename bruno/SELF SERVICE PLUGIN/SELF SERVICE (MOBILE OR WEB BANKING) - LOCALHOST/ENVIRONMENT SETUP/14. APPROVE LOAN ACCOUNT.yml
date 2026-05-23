@@ -1,0 +1,36 @@
+info:
+  name: 14. APPROVE LOAN ACCOUNT
+  type: http
+  seq: 19
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/loans/1?command=approve
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  params:
+    - name: command
+      value: approve
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "approvedOnDate": "12 April 2026",
+          "expectedDisbursementDate": "12 April 2026",
+          "approvedLoanAmount": 10000,
+          "note": "",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

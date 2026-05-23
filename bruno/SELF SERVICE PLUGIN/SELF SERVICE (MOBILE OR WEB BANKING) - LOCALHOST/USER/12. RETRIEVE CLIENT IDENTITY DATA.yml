@@ -1,0 +1,23 @@
+info:
+  name: 12. RETRIEVE CLIENT IDENTITY DATA
+  type: http
+  seq: 12
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/identity/retrieve
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  body:
+    type: json
+    data: |
+      {
+          "externalId":"113110753"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

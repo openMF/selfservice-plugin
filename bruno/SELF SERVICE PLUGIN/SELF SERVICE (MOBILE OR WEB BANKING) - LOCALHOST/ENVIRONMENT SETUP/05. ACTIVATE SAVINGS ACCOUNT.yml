@@ -1,0 +1,33 @@
+info:
+  name: 05. ACTIVATE SAVINGS ACCOUNT
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/savingsaccounts/1?command=activate
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  params:
+    - name: command
+      value: activate
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "activatedOnDate": "05 April 2026",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

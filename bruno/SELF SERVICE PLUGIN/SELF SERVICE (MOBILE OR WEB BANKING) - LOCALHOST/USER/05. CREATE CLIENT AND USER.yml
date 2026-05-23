@@ -1,0 +1,37 @@
+info:
+  name: 05. CREATE CLIENT AND USER
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/registration/client-user
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "username": "vilma",
+          "password": "MifosInitiative2026#",
+          "mobileNumber": "5215632956948",    
+          "email": "victor.romero@infotec.mx",
+          "authenticationMode": "any", 
+          "legalFormId": 1, 
+          "active": false, 
+          "submittedOnDate": "17 febrero 2026", 
+          "firstname": "VILMA", 
+          "middlename": "PICAPIEDRA", 
+          "lastname": "PEREZ", 
+          "externalID": "ID123415", 
+          "familyMembers": [], 
+          "dateFormat": "dd MMMM yyyy", 
+          "locale": "es"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

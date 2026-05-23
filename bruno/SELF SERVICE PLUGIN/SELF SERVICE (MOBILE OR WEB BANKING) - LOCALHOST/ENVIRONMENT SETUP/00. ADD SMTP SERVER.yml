@@ -1,0 +1,33 @@
+info:
+  name: 00. ADD SMTP SERVER
+  type: http
+  seq: 1
+
+http:
+  method: PUT
+  url: http://localhost:8080/fineract-provider/api/v1/externalservice/SMTP
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "username": "service@mifos.io",
+          "password": "--",
+          "host": "smtp.mifos.org",
+          "port": 587,
+          "useTLS": "true",
+          "fromEmail": "service@mifos.io",
+          "fromName": "service@mifos.io"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

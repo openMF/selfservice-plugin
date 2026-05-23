@@ -1,0 +1,34 @@
+info:
+  name: 09. APPROVE SAVINGS ACCOUNT 2
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/savingsaccounts/2?command=approve
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  params:
+    - name: command
+      value: approve
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "approvedOnDate": "05 April 2026",
+          "note": "",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,7 @@
+info:
+  name: SHARES
+  type: folder
+  seq: 8
+
+request:
+  auth: inherit

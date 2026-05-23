@@ -1,0 +1,23 @@
+info:
+  name: 02. CONFIRM SELF SERVICE USER REGISTRATION
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/registration/user
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  body:
+    type: json
+    data: |-
+      {    
+          "externalAuthenticationToken": "048590"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

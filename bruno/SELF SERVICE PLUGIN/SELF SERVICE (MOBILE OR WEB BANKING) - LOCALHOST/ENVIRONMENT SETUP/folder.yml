@@ -1,0 +1,7 @@
+info:
+  name: ENVIRONMENT SETUP
+  type: folder
+  seq: 2
+
+request:
+  auth: inherit

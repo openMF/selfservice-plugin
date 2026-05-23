@@ -1,0 +1,31 @@
+info:
+  name: 01. REGISTER SELF SERVICE FOR EXISTING CLIENT
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/registration
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "username": "pedro.marmol",
+          "accountNumber": "000000001",
+          "password": "MifosInitiative2026#",
+          "firstName": "PEDRO",
+          "middleName": "MARMOL",
+          "lastName": "PEREZ",
+          "mobileNumber": "5522649498",    
+          "email": "victor.romero@fintecheando.mx",
+          "authenticationMode": "email"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

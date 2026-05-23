@@ -1,0 +1,20 @@
+info:
+  name: 06. DELETE BENEFICIARY
+  type: http
+  seq: 6
+
+http:
+  method: DELETE
+  url: http://localhost:8080/fineract-provider/api/v1/self/beneficiaries/tpt/2
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,20 @@
+info:
+  name: 07. GET LIST OF CLIENT TRANSACTION DETAIL
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: http://localhost:8080/fineract-provider/api/v1/self/clients/104/transactions/233
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic bWFyaWE6cGFzc3dvcmQ=
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

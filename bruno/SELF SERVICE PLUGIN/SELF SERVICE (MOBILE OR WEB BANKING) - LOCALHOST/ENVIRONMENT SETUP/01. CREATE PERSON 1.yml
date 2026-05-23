@@ -1,0 +1,38 @@
+info:
+  name: 01. CREATE PERSON 1
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/clients
+  headers:
+    - name: fineract-platform-tenantid
+      value: default
+  body:
+    type: json
+    data: |-
+      {
+          "officeId": 1,
+          "legalFormId": 1,
+          "isStaff": false,
+          "active": true,
+          "submittedOnDate": "17 febrero 2026",
+          "firstname": "PEDRO",
+          "middlename": "MARMOL",
+          "lastname": "PEREZ",
+          "activationDate": "17 febrero 2026",
+          "familyMembers": [],
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "es"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

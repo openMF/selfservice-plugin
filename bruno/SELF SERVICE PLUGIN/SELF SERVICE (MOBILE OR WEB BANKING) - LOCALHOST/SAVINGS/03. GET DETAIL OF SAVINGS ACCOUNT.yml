@@ -1,0 +1,20 @@
+info:
+  name: 03. GET DETAIL OF SAVINGS ACCOUNT
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: http://localhost:8080/fineract-provider/api/v1/self/savingsaccounts/1
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

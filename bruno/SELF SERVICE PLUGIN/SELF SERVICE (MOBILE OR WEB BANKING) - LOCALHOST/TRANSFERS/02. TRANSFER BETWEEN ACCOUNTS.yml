@@ -1,0 +1,37 @@
+info:
+  name: 02. TRANSFER BETWEEN ACCOUNTS
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/accounttransfers
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  body:
+    type: json
+    data: |-
+      {
+          "toOfficeId": 1,
+          "toClientId": 1,
+          "toAccountType": 2,
+          "toAccountId": "000000003",
+          "transferAmount": 10.53,
+          "transferDate": "11 April 2026",
+          "transferDescription": "TV PAYMENT",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en",
+          "fromAccountId": "000000001",
+          "fromAccountType": 2,
+          "fromClientId": 1,
+          "fromOfficeId": 1
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

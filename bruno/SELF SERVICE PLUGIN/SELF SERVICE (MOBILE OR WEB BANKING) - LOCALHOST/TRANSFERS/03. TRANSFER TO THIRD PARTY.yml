@@ -1,0 +1,41 @@
+info:
+  name: 03. TRANSFER TO THIRD PARTY
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/accounttransfers?type=tpt
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+  params:
+    - name: type
+      value: tpt
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "toOfficeId": 1,
+          "toClientId": 2,
+          "toAccountType": 2,
+          "toAccountId": 2,
+          "transferDate": "11 April 2026",
+          "transferAmount": 15.36,
+          "transferDescription": "BILL PAYMENT",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en",
+          "fromAccountId": "1",
+          "fromAccountType": "2",
+          "fromClientId": 1,
+          "fromOfficeId": 1
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

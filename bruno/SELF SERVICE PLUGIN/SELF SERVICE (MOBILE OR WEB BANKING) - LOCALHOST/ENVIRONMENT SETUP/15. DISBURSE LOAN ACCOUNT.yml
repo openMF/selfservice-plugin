@@ -1,0 +1,37 @@
+info:
+  name: 15. DISBURSE LOAN ACCOUNT
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/loans/1?command=disburse
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+  params:
+    - name: command
+      value: disburse
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "actualDisbursementDate": "12 April 2026",
+          "transactionAmount": 10000,
+          "externalId": "",
+          "paymentTypeId": "",
+          "note": "",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth:
+    type: basic
+    username: mifos
+    password: password
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
