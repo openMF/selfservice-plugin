@@ -28,5 +28,4 @@
   <include file="parts/016-add-external-authorization-token.xml" relativeToChangelogFile="true"/>  
   <include file="parts/017-add-external-national-id-system.xml" relativeToChangelogFile="true"/>
   <include file="parts/018-add-external-notifications-system.xml" relativeToChangelogFile="true"/>
-  <include file="parts/019-add-office-address.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
