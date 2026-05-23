@@ -14,7 +14,6 @@
  */
 package org.apache.fineract.selfservice.office.api;
 
-import com.google.gson.Gson;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -36,13 +35,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
-import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookPopulatorService;
-import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
-import org.apache.fineract.infrastructure.core.serialization.GoogleGsonSerializerHelper;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
@@ -70,12 +65,7 @@ public class SelfOfficesApiResource {
     private final OfficeReadPlatformService readPlatformService;
     private final DefaultToApiJsonSerializer<OfficeData> toApiJsonSerializer;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
-    private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
-    private final BulkImportWorkbookService bulkImportWorkbookService;
-    private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
     private final SqlValidator sqlValidator;
-
-    private final Gson gson = GoogleGsonSerializerHelper.createSimpleGson();
 
     @GET
     @Produces({ MediaType.APPLICATION_JSON })
@@ -86,7 +76,7 @@ public class SelfOfficesApiResource {
             @DefaultValue("false") @QueryParam("includeAllOffices") @Parameter(description = "includeAllOffices") final boolean onlyManualEntries,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
-        //context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         sqlValidator.validate(orderBy);
         sqlValidator.validate(sortOrder);
         final SearchParameters searchParameters = SearchParameters.builder().orphansOnly(false).orderBy(orderBy).sortOrder(sortOrder)
@@ -103,7 +93,7 @@ public class SelfOfficesApiResource {
             + "\n" + "Field Defaults\n" + "Allowed description Lists\n" + "Example Request:\n" + "\n" + "offices/template")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesTemplateResponse.class)))
     public String retrieveOfficeTemplate(@Context final UriInfo uriInfo) {
-        //context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         OfficeData office = readPlatformService.retrieveNewOfficeTemplate();
         final Collection<OfficeData> allowedParents = readPlatformService.retrieveAllOfficesForDropdown();
         office = OfficeData.appendedTemplate(office, allowedParents);
@@ -120,7 +110,7 @@ public class SelfOfficesApiResource {
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesResponse.class)))
     public String retrieveOffice(@PathParam("officeId") @Parameter(description = "officeId") final Long officeId,
             @Context final UriInfo uriInfo) {
-        //context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         OfficeData office = readPlatformService.retrieveOffice(officeId);
         if (settings.isTemplate()) {
@@ -138,7 +128,7 @@ public class SelfOfficesApiResource {
             + "offices/external-id/asd123?fields=id,name,parentName")
     public SelfOfficesApiResourceSwagger.GetOfficesResponse retrieveOfficeByExternalId(
             @PathParam("externalId") @Parameter(description = "externalId") final String externalId, @Context final UriInfo uriInfo) {
-        //context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         OfficeData office = readPlatformService.retrieveOfficeWithExternalId(ExternalIdFactory.produce(externalId));
         if (settings.isTemplate()) {
@@ -147,5 +137,6 @@ public class SelfOfficesApiResource {
         }
         return officeSwaggerMapper.toGetOfficesResponse(office);
     }
+
     
 }
