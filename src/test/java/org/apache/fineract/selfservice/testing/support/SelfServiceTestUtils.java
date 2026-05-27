@@ -40,6 +40,7 @@ public final class SelfServiceTestUtils {
   public static final String SELF_LOAN_PRODUCTS_PATH = CONTEXT_PATH + "/api/v1/self/loanproducts";
   public static final String SELF_SAVINGS_PRODUCTS_PATH =
       CONTEXT_PATH + "/api/v1/self/savingsproducts";
+  public static final String SELF_OFFICES_PATH = CONTEXT_PATH + "/api/v1/self/offices";
 
   public static final String SELF_LOAN_SIMULATION_PATH =
       CONTEXT_PATH + "/api/v1/self/loans/simulate";
