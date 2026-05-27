@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+ 
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="ss-0020-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_office_geolocation"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_office_geolocation">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="office_id" type="BIGINT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="latitude" type="DECIMAL(10,7)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="longitude" type="DECIMAL(10,7)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE m_selfservice_office_geolocation
+                ADD CONSTRAINT chk_ss_geolocation_latitude CHECK (latitude BETWEEN -90 AND 90);
+            ALTER TABLE m_selfservice_office_geolocation
+                ADD CONSTRAINT chk_ss_geolocation_longitude CHECK (longitude BETWEEN -180 AND 180);
+        </sql>
+
+        <addForeignKeyConstraint constraintName="fk_ss_office_geolocation_office"
+                                 baseTableName="m_selfservice_office_geolocation" baseColumnNames="office_id"
+                                 referencedTableName="m_office" referencedColumnNames="id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+    </changeSet>
+
+</databaseChangeLog>
