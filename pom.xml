@@ -171,6 +171,12 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+        <groupId>community.mifos</groupId>
+        <artifactId>savings-plugin</artifactId>
+        <version>${fineract.version}</version>
+        <scope>compile</scope>
+    </dependency>
     <!-- Apache Fineract Libraries -->
     <dependency>
       <groupId>org.apache.fineract</groupId>
