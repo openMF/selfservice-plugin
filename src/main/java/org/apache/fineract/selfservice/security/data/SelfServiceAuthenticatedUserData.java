@@ -72,6 +72,6 @@ public class SelfServiceAuthenticatedUserData {
   private String country;
   
   @SuppressWarnings("unused")
-  private Collection<SelfServiceAuthenticatedUserKycData> kycValidations;
+  private SelfServiceAuthenticatedUserKycData kycValidations;
   
 }

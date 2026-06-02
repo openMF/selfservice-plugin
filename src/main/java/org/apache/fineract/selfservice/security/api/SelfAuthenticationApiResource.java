@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -45,9 +46,11 @@ import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
+import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
 import org.apache.fineract.selfservice.notification.NotificationContext;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUserData;
+import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUserKycData;
 import org.apache.fineract.selfservice.security.exception.SelfServiceDisabledException;
 import org.apache.fineract.selfservice.security.exception.SelfServiceLockedException;
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
@@ -100,6 +103,8 @@ public class SelfAuthenticationApiResource {
   private final org.apache.fineract.selfservice.useradministration.domain
           .AppSelfServiceUserRepository
       appUserRepository;
+  
+  private final KycFeatureStatusReadService kycFeatureStatusReadService;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -325,12 +330,27 @@ public class SelfAuthenticationApiResource {
                 .setClients(
                     returnClientList
                         ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
-                        : null);
+                        : null)
+                .setKycValidations(getKycStatusForUser(getClientId(clientReadPlatformService.retrieveSelfServiceUserClients(userId))));
       }
     }
 
     return this.apiJsonSerializerService.serialize(authenticatedUserData);
   }
+  
+  private SelfServiceAuthenticatedUserKycData getKycStatusForUser(final Long clientId) {
+        // 1. Retrieve KYC feature flags
+        return kycFeatureStatusReadService.getKycFeatureStatus(clientId);
+    }
+  
+    private Long getClientId(Collection<Long> clientList){
+        Iterator<Long> iterator = clientList.iterator();
+          if (iterator.hasNext()) {
+              Long element = iterator.next();
+              return element;            
+          }
+          return null;
+    }
 
   private String extractClientIp(HttpServletRequest httpRequest) {
     if (httpRequest == null) {

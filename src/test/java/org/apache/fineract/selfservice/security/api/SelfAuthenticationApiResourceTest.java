@@ -19,6 +19,7 @@ import java.util.Set;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
+import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
@@ -49,6 +50,7 @@ class SelfAuthenticationApiResourceTest {
   @Mock private Environment environment;
   @Mock private HttpServletRequest httpServletRequest;
   @Mock private AppSelfServiceUserRepository appUserRepository;
+  @Mock private KycFeatureStatusReadService kycFeatureStatusReadService;
 
   private SelfAuthenticationApiResource resource;
 
@@ -62,7 +64,8 @@ class SelfAuthenticationApiResourceTest {
             clientReadPlatformService,
             applicationEventPublisher,
             environment,
-            appUserRepository);
+            appUserRepository,
+            kycFeatureStatusReadService);
   }
 
   @Test
