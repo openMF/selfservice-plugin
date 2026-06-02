@@ -171,6 +171,7 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <!-- Mifos Library -->
     <dependency>
         <groupId>community.mifos</groupId>
         <artifactId>savings-plugin</artifactId>

@@ -1,4 +1,9 @@
-
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.kyc.service;
 
 
@@ -19,37 +24,22 @@ public class KycFeatureStatusReadService {
         this.kycFeatureStatusRepository = kycFeatureStatusRepository;
     }
 
-    /**
-     * Retrieves the KYC feature status for a client's latest verification.
-     * Returns a DTO with all booleans set to FALSE if no verification exists.
-     *
-     * @param clientId the m_client ID
-     * @return SelfServiceAuthenticatedUserKycData with the feature flags
-     */
     @Transactional(readOnly = true)
     public SelfServiceAuthenticatedUserKycData getKycFeatureStatus(final Long clientId) {
-        final Optional<KycFeatureStatus> featureStatusOpt =
-                kycFeatureStatusRepository.findLatestByClientId(clientId);
-
-        return featureStatusOpt
+        return kycFeatureStatusRepository
+                .findFirstByKycVerification_ClientIdOrderByKycVerification_IdDesc(clientId)
                 .map(this::toData)
                 .orElseGet(this::defaultData);
     }
 
-    /**
-     * Retrieves the KYC feature status only if the latest verification is Approved.
-     */
     @Transactional(readOnly = true)
     public SelfServiceAuthenticatedUserKycData getApprovedKycFeatureStatus(final Long clientId) {
-        final Optional<KycFeatureStatus> featureStatusOpt =
-                kycFeatureStatusRepository.findLatestApprovedByClientId(clientId);
-
-        return featureStatusOpt
+        return kycFeatureStatusRepository
+                .findFirstByKycVerification_ClientIdAndKycVerification_KycStatusOrderByKycVerification_IdDesc(
+                        clientId, "Approved")
                 .map(this::toData)
                 .orElseGet(this::defaultData);
     }
-
-    // ── Mappers ──────────────────────────────────────────────
 
     private SelfServiceAuthenticatedUserKycData toData(final KycFeatureStatus entity) {
         return new SelfServiceAuthenticatedUserKycData(
@@ -61,7 +51,6 @@ public class KycFeatureStatusReadService {
     }
 
     private SelfServiceAuthenticatedUserKycData defaultData() {
-        // No KYC verification exists — all features are unavailable
         return new SelfServiceAuthenticatedUserKycData(
                 Boolean.FALSE,
                 Boolean.FALSE,
