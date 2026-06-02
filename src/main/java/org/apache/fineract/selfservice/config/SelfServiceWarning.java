@@ -29,6 +29,7 @@ public class SelfServiceWarning implements InitializingBean {
     log.warn("*******************************************************");
     log.warn("*                                                     *");
     log.warn("*            DO NOT USE THIS IN PRODUCTION!           *");
+    log.warn("*           WITHOUT SECURITY BEST PRACTICES           *");    
     log.warn("*           Self Service Plugin capabilities          *");
     log.warn("*                for Apache Fineract                  *");
     log.warn("*                   ARE NOT SAFE!                     *");

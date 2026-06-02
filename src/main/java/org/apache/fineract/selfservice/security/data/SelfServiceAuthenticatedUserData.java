@@ -67,4 +67,11 @@ public class SelfServiceAuthenticatedUserData {
 
   @SuppressWarnings("unused")
   private boolean isTwoFactorAuthenticationRequired;
+  
+  @SuppressWarnings("unused")
+  private String country;
+  
+  @SuppressWarnings("unused")
+  private Collection<SelfServiceAuthenticatedUserKycData> kycValidations;
+  
 }
