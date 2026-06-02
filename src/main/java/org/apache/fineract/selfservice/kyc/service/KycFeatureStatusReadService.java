@@ -11,7 +11,6 @@ import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUse
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
 import org.apache.fineract.kyc.domain.KycFeatureStatus;
 import org.apache.fineract.kyc.repository.KycFeatureStatusRepository;
 
