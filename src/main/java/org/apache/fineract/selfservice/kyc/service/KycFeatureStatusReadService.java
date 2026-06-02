@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import org.apache.fineract.kyc.domain.KycFeatureStatus;
-import org.apache.fineract.selfservice.kyc.domain.KycFeatureStatusRepository;
+import org.apache.fineract.kyc.repository.KycFeatureStatusRepository;
 
 @Service
 public class KycFeatureStatusReadService {
