@@ -4,16 +4,12 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 
 /** Generates self-service authorization tokens and resolves their expiry configuration. */
 public class SelfServiceAuthorizationTokenService {
     
-    private static final Logger LOG = LoggerFactory.getLogger(SelfServiceAuthorizationTokenService.class);
-
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final String STRING_ALPHABET =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -22,9 +18,10 @@ public class SelfServiceAuthorizationTokenService {
   private static final int DEFAULT_STRING_LENGTH = 32;
   private static final int MAX_TOKEN_LENGTH = 100;
   private static final String DEFAULT_TOKEN_TYPE = "uuidv7";
-  
+  private static final int DEFAULT_EXPIRY_SECONDS = 30;  // Constant for clarity/default docs
+  // Keep @Value for Spring bean (backward compat + config override)
   @Value("${mifos.self.service.token.expiry.time:30}")
-  private int DEFAULT_EXPIRY_SECONDS;
+  private int configuredExpirySeconds;  // Renamed for clarity
   
   private final Environment env;
 
@@ -72,7 +69,8 @@ public class SelfServiceAuthorizationTokenService {
    * @return token expiry duration in seconds
    */
   public int resolveExpirySeconds() {
-    int expirySeconds = DEFAULT_EXPIRY_SECONDS;    
+    Integer expiryFromEnv = env.getProperty("mifos.self.service.token.expiry.time", Integer.class, DEFAULT_EXPIRY_SECONDS);
+    int expirySeconds = (expiryFromEnv != null) ? expiryFromEnv : configuredExpirySeconds;    
     if (expirySeconds < 1) {
       throw new IllegalStateException(
           "mifos.self.service.token.expiry.time must be greater than 0");
