@@ -30,5 +30,6 @@ public class SelfServiceAuthenticatedUserKycData {
     private final Boolean idVerifications;
     private final Boolean amlScreenings;
     private final Boolean decision;
+    private final String status;
 
 }

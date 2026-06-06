@@ -45,7 +45,9 @@ public class KycFeatureStatusReadService {
                 entity.getFaceMatches(),
                 entity.getIdVerifications(),
                 entity.getAmlScreenings(),
-                entity.getDecision()
+                entity.getDecision(),
+                entity.getKycStatus()
+                
         );
     }
 
@@ -54,7 +56,8 @@ public class KycFeatureStatusReadService {
                 Boolean.FALSE,
                 Boolean.FALSE,
                 Boolean.FALSE,
-                Boolean.FALSE
+                Boolean.FALSE,
+                "In Review"
         );
     }
 }
