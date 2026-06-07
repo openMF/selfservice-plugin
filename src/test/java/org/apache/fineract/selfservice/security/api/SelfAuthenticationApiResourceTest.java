@@ -37,6 +37,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.core.Authentication;
+import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
@@ -51,6 +52,7 @@ class SelfAuthenticationApiResourceTest {
   @Mock private HttpServletRequest httpServletRequest;
   @Mock private AppSelfServiceUserRepository appUserRepository;
   @Mock private KycFeatureStatusReadService kycFeatureStatusReadService;
+  @Mock private SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
 
   private SelfAuthenticationApiResource resource;
 
@@ -65,7 +67,8 @@ class SelfAuthenticationApiResourceTest {
             applicationEventPublisher,
             environment,
             appUserRepository,
-            kycFeatureStatusReadService);
+            kycFeatureStatusReadService,
+            officeAddressReadPlatformService);
   }
 
   @Test

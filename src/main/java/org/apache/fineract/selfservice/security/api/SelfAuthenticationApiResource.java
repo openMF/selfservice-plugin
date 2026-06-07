@@ -71,6 +71,7 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 
 @Slf4j
 @Component
@@ -105,6 +106,8 @@ public class SelfAuthenticationApiResource {
       appUserRepository;
   
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
+  
+  private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -311,6 +314,18 @@ public class SelfAuthenticationApiResource {
             log.warn("Failed to publish login success notification", e);
           }
         }
+        
+        // Resolve the client list for this user
+        Collection<Long> clientList =
+            returnClientList
+                ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
+                : null;
+        
+        // Resolve the first clientId for KYC and country lookups
+        Long clientId = getClientId(clientList);
+
+        // Resolve the country from the office address of the client's office
+        String country = officeAddressReadPlatformService.retrieveOfficeCountryByClientId(clientId);
 
         authenticatedUserData =
             new SelfServiceAuthenticatedUserData()
@@ -331,7 +346,8 @@ public class SelfAuthenticationApiResource {
                     returnClientList
                         ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
                         : null)
-                .setKycValidations(getKycStatusForUser(getClientId(clientReadPlatformService.retrieveSelfServiceUserClients(userId))));
+                .setKycValidations(getKycStatusForUser(clientId))
+                .setCountry(country);
       }
     }
 
