@@ -27,9 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class SelfServiceOfficeAddressReadServiceImpl implements SelfServiceOfficeAddressReadService {
 
     private static final String COUNTRY_QUERY =
-            "SELECT cv.value "
+            "SELECT cv.code_value "
                     + "FROM m_client c "
-                    + "INNER JOIN m_selfservice_office_address oa ON c.office_id = oa.office_id AND oa.is_active = true "
+                    + "INNER JOIN m_office_address oa ON c.office_id = oa.office_id AND oa.is_active = true "
                     + "INNER JOIN m_address a ON oa.address_id = a.id "
                     + "INNER JOIN m_code_value cv ON a.country_id = cv.id "
                     + "WHERE c.id = ?";
