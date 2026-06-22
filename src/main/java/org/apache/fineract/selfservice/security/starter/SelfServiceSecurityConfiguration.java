@@ -35,7 +35,10 @@ import org.apache.fineract.infrastructure.security.service.AuthTenantDetailsServ
 import org.apache.fineract.infrastructure.security.service.PlatformUserDetailsChecker;
 import org.apache.fineract.infrastructure.security.service.TwoFactorService;
 import org.apache.fineract.notification.service.UserNotificationService;
+import org.apache.fineract.selfservice.security.filter.SelfServiceAuthenticationConverter;
 import org.apache.fineract.selfservice.security.filter.SelfServiceBasicAuthenticationFilter;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfServiceTokenAuthenticationProvider;
 import org.apache.fineract.selfservice.security.service.SelfServiceUserAuthorizationManager;
 import org.apache.fineract.selfservice.security.service.TenantAwareJpaPlatformSelfServiceUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +88,8 @@ public class SelfServiceSecurityConfiguration {
 
   @Autowired private IdempotencyStoreHelper idempotencyStoreHelper;
   @Autowired private PlatformUserDetailsChecker platformUserDetailsChecker;
+  
+  @Autowired private SelfServiceAuthenticationTokenService tokenService;
 
   @Bean
   public SecurityFilterChain selfServiceSecurityFilterChain(HttpSecurity http) throws Exception {
@@ -227,6 +232,9 @@ public class SelfServiceSecurityConfiguration {
             userNotificationService,
             basicAuthTenantDetailsService,
             businessDateReadPlatformService);
+    
+    // Inject custom converter to handle both Password and Token auth
+    filter.setAuthenticationConverter(new SelfServiceAuthenticationConverter());
 
     // Must match both /api/v1/self/** and /v1/self/** endpoints.
     // Some self-service resources (e.g. runreports) are registered under /v1/self/** without
@@ -235,6 +243,12 @@ public class SelfServiceSecurityConfiguration {
         new org.springframework.security.web.util.matcher.OrRequestMatcher(
             API_MATCHER.matcher("/api/v1/self/**"), API_MATCHER.matcher("/v1/self/**")));
     return filter;
+  }
+  
+  // Add new Bean for Token Provider:
+  @Bean(name = "selfServiceTokenAuthenticationProvider")
+  public SelfServiceTokenAuthenticationProvider selfServiceTokenAuthProvider() {
+    return new SelfServiceTokenAuthenticationProvider(tokenService, userDetailsService);
   }
 
   @Bean(name = "selfServiceBasicAuthenticationEntryPoint")
@@ -261,7 +275,8 @@ public class SelfServiceSecurityConfiguration {
   }
 
   public AuthenticationManager selfServiceAuthenticationManager() throws Exception {
-    ProviderManager providerManager = new ProviderManager(selfServiceAuthProvider());
+    ProviderManager providerManager = new ProviderManager(selfServiceAuthProvider(), 
+                                                          selfServiceTokenAuthProvider());
     providerManager.setEraseCredentialsAfterAuthentication(false);
     return providerManager;
   }

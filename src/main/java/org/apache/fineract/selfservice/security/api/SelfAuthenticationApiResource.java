@@ -35,7 +35,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +57,7 @@ import org.apache.fineract.selfservice.security.exception.SelfServiceDisabledExc
 import org.apache.fineract.selfservice.security.exception.SelfServiceLockedException;
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -108,6 +111,9 @@ public class SelfAuthenticationApiResource {
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
   
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
+  
+  // Add final field (Lombok @RequiredArgsConstructor will inject it):
+  private final SelfServiceAuthenticationTokenService tokenService;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -256,11 +262,13 @@ public class SelfAuthenticationApiResource {
         permissions.add(grantedAuthority.getAuthority());
       }
 
-      final byte[] base64EncodedAuthenticationKey =
-          Base64.getEncoder()
-              .encode((request.username + ":" + request.password).getBytes(StandardCharsets.UTF_8));
-
-      final AppSelfServiceUser principal = (AppSelfServiceUser) authenticationCheck.getPrincipal();
+      // Extract principal early to get the user ID for token generation
+      final AppSelfServiceUser principal = (AppSelfServiceUser) authenticationCheck.getPrincipal();      
+      
+      // NEW:
+      final String authToken = tokenService.generateToken(principal.getId(), request.username);
+      final byte[] base64EncodedAuthenticationKey = Base64.getEncoder().encode(authToken.getBytes(StandardCharsets.UTF_8));
+      
       final Collection<RoleData> roles = new ArrayList<>();
       final Set<Role> userRoles = principal.getRoles();
       for (final Role role : userRoles) {
@@ -404,4 +412,47 @@ public class SelfAuthenticationApiResource {
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
+  
+    @POST
+    @Path("/logout")
+    @Consumes({MediaType.APPLICATION_JSON})
+    @Produces({MediaType.APPLICATION_JSON})
+    @Operation(
+            summary = "Logout user",
+            description = "Invalidates the current authentication token, effectively logging the user out.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    public String logout(@Context HttpServletRequest httpRequest) {
+        // Extract the raw token from the Authorization header
+        String token = extractTokenFromRequest(httpRequest);
+        
+        // Invalidate the token in the database
+        if (token != null) {
+            tokenService.invalidateToken(token);
+        }
+
+        // Return a success response
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("message", "Logged out successfully");
+        
+        return this.apiJsonSerializerService.serialize(response);
+    }
+
+    /**
+     * Helper method to extract and decode the token from the Authorization header.
+     */
+    private String extractTokenFromRequest(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.toLowerCase().startsWith("basic ")) {
+            String base64Token = header.substring(6).trim();
+            try {
+                // Decode the Base64 string to get the raw token
+                return new String(Base64.getDecoder().decode(base64Token), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+  
 }

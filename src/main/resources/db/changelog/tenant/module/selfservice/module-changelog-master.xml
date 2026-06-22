@@ -31,4 +31,6 @@
   <include file="parts/019-create-selfservice-office-service-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/020-create-selfservice-office-geolocation-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/021-grant-selfservice-office-read-permissions.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/022-create-self-service-auth-token.xml" relativeToChangelogFile="true"/>  
+  
 </databaseChangeLog>

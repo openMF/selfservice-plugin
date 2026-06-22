@@ -23,6 +23,7 @@ import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -53,6 +54,7 @@ class SelfAuthenticationApiResourceTest {
   @Mock private AppSelfServiceUserRepository appUserRepository;
   @Mock private KycFeatureStatusReadService kycFeatureStatusReadService;
   @Mock private SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
+  @Mock private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   private SelfAuthenticationApiResource resource;
 
@@ -68,7 +70,8 @@ class SelfAuthenticationApiResourceTest {
             environment,
             appUserRepository,
             kycFeatureStatusReadService,
-            officeAddressReadPlatformService);
+            officeAddressReadPlatformService,
+            selfServiceAuthenticationTokenService);
   }
 
   @Test
