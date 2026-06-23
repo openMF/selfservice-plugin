@@ -11,36 +11,43 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 
 public class SelfServiceTokenAuthenticationProvider implements AuthenticationProvider {
 
-    private final SelfServiceAuthenticationTokenService tokenService;
-    private final UserDetailsService userDetailsService;
+  private final SelfServiceAuthenticationTokenService tokenService;
+  private final UserDetailsService userDetailsService;
 
-    public SelfServiceTokenAuthenticationProvider(
-            SelfServiceAuthenticationTokenService tokenService,
-            UserDetailsService userDetailsService) {
-        this.tokenService = tokenService;
-        this.userDetailsService = userDetailsService;
+  public SelfServiceTokenAuthenticationProvider(
+      SelfServiceAuthenticationTokenService tokenService, UserDetailsService userDetailsService) {
+    this.tokenService = tokenService;
+    this.userDetailsService = userDetailsService;
+  }
+
+  @Override
+  public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+
+    SelfServiceTokenAuthenticationToken authToken =
+        (SelfServiceTokenAuthenticationToken) authentication;
+    String token = (String) authToken.getCredentials();
+
+    // 1. Validate it's an ACCESS token
+    String username = tokenService.getUsernameForAccessToken(token);
+    if (username == null) {
+      throw new BadCredentialsException("Invalid or expired access token");
     }
 
-    @Override
-    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-        SelfServiceTokenAuthenticationToken authToken = (SelfServiceTokenAuthenticationToken) authentication;
-        String token = (String) authToken.getCredentials();
+    // 2. Sliding Expiration: Extend the token life on every successful request
+    // This ensures the current frontend never gets logged out while active
+    tokenService.extendAccessTokenExpiry(token, 7);
 
-        String username = tokenService.getUsernameForToken(token);
-        if (username == null) {
-            throw new BadCredentialsException("Invalid or expired token");
-        }
+    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        
-        UsernamePasswordAuthenticationToken result = new UsernamePasswordAuthenticationToken(
-                userDetails, userDetails.getPassword(), userDetails.getAuthorities());
-        result.setDetails(authToken.getDetails());
-        return result;
-    }
+    UsernamePasswordAuthenticationToken result =
+        new UsernamePasswordAuthenticationToken(
+            userDetails, userDetails.getPassword(), userDetails.getAuthorities());
+    result.setDetails(authToken.getDetails());
+    return result;
+  }
 
-    @Override
-    public boolean supports(Class<?> authentication) {
-        return SelfServiceTokenAuthenticationToken.class.isAssignableFrom(authentication);
-    }
+  @Override
+  public boolean supports(Class<?> authentication) {
+    return SelfServiceTokenAuthenticationToken.class.isAssignableFrom(authentication);
+  }
 }

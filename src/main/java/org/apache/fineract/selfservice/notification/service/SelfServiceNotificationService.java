@@ -14,11 +14,11 @@
  */
 package org.apache.fineract.selfservice.notification.service;
 
+import jakarta.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;

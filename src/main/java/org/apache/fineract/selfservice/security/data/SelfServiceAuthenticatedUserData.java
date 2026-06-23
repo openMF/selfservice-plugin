@@ -67,15 +67,27 @@ public class SelfServiceAuthenticatedUserData {
 
   @SuppressWarnings("unused")
   private boolean isTwoFactorAuthenticationRequired;
-  
+
   /**
-   * The country name derived from the office address of the client's associated office.
-   * Empty string when no country is available (fallback).
-  */
+   * The country name derived from the office address of the client's associated office. Empty
+   * string when no country is available (fallback).
+   */
   @SuppressWarnings("unused")
   private String country;
-  
+
   @SuppressWarnings("unused")
   private SelfServiceAuthenticatedUserKycData kycValidations;
-  
+
+  // Add the new field
+  private String refreshToken;
+
+  // Add getter and setter (or rely on Lombok if applicable)
+  public String getRefreshToken() {
+    return refreshToken;
+  }
+
+  public SelfServiceAuthenticatedUserData setRefreshToken(String refreshToken) {
+    this.refreshToken = refreshToken;
+    return this;
+  }
 }

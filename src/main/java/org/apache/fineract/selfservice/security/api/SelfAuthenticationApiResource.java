@@ -58,6 +58,7 @@ import org.apache.fineract.selfservice.security.exception.SelfServiceLockedExcep
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -74,7 +75,6 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
-import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 
 @Slf4j
 @Component
@@ -107,11 +107,11 @@ public class SelfAuthenticationApiResource {
   private final org.apache.fineract.selfservice.useradministration.domain
           .AppSelfServiceUserRepository
       appUserRepository;
-  
+
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
-  
+
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
-  
+
   // Add final field (Lombok @RequiredArgsConstructor will inject it):
   private final SelfServiceAuthenticationTokenService tokenService;
 
@@ -263,12 +263,17 @@ public class SelfAuthenticationApiResource {
       }
 
       // Extract principal early to get the user ID for token generation
-      final AppSelfServiceUser principal = (AppSelfServiceUser) authenticationCheck.getPrincipal();      
-      
-      // NEW:
-      final String authToken = tokenService.generateToken(principal.getId(), request.username);
-      final byte[] base64EncodedAuthenticationKey = Base64.getEncoder().encode(authToken.getBytes(StandardCharsets.UTF_8));
-      
+      final AppSelfServiceUser principal = (AppSelfServiceUser) authenticationCheck.getPrincipal();
+
+      // Generate both Access and Refresh tokens
+      final SelfServiceAuthenticationTokenService.TokenPair tokens =
+          tokenService.generateTokens(principal.getId(), request.username);
+
+      final byte[] base64AccessKey =
+          Base64.getEncoder().encode(tokens.accessToken().getBytes(StandardCharsets.UTF_8));
+      final byte[] base64RefreshKey =
+          Base64.getEncoder().encode(tokens.refreshToken().getBytes(StandardCharsets.UTF_8));
+
       final Collection<RoleData> roles = new ArrayList<>();
       final Set<Role> userRoles = principal.getRoles();
       for (final Role role : userRoles) {
@@ -294,7 +299,8 @@ public class SelfAuthenticationApiResource {
                 .setUsername(request.username)
                 .setUserId(userId)
                 .setBase64EncodedAuthenticationKey(
-                    new String(base64EncodedAuthenticationKey, StandardCharsets.UTF_8))
+                    new String(base64AccessKey, StandardCharsets.UTF_8))
+                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8)) // New field
                 .setAuthenticated(true)
                 .setShouldRenewPassword(true)
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
@@ -322,13 +328,13 @@ public class SelfAuthenticationApiResource {
             log.warn("Failed to publish login success notification", e);
           }
         }
-        
+
         // Resolve the client list for this user
         Collection<Long> clientList =
             returnClientList
                 ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
                 : null;
-        
+
         // Resolve the first clientId for KYC and country lookups
         Long clientId = getClientId(clientList);
 
@@ -348,7 +354,8 @@ public class SelfAuthenticationApiResource {
                 .setUserId(principal.getId())
                 .setAuthenticated(true)
                 .setBase64EncodedAuthenticationKey(
-                    new String(base64EncodedAuthenticationKey, StandardCharsets.UTF_8))
+                    new String(base64AccessKey, StandardCharsets.UTF_8))
+                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8)) // New field
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired)
                 .setClients(
                     returnClientList
@@ -361,20 +368,20 @@ public class SelfAuthenticationApiResource {
 
     return this.apiJsonSerializerService.serialize(authenticatedUserData);
   }
-  
+
   private SelfServiceAuthenticatedUserKycData getKycStatusForUser(final Long clientId) {
-        // 1. Retrieve KYC feature flags
-        return kycFeatureStatusReadService.getKycFeatureStatus(clientId);
+    // 1. Retrieve KYC feature flags
+    return kycFeatureStatusReadService.getKycFeatureStatus(clientId);
+  }
+
+  private Long getClientId(Collection<Long> clientList) {
+    Iterator<Long> iterator = clientList.iterator();
+    if (iterator.hasNext()) {
+      Long element = iterator.next();
+      return element;
     }
-  
-    private Long getClientId(Collection<Long> clientList){
-        Iterator<Long> iterator = clientList.iterator();
-          if (iterator.hasNext()) {
-              Long element = iterator.next();
-              return element;            
-          }
-          return null;
-    }
+    return null;
+  }
 
   private String extractClientIp(HttpServletRequest httpRequest) {
     if (httpRequest == null) {
@@ -412,47 +419,82 @@ public class SelfAuthenticationApiResource {
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
-  
-    @POST
-    @Path("/logout")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    @Operation(
-            summary = "Logout user",
-            description = "Invalidates the current authentication token, effectively logging the user out.")
-    @ApiResponse(responseCode = "200", description = "OK")
-    public String logout(@Context HttpServletRequest httpRequest) {
-        // Extract the raw token from the Authorization header
-        String token = extractTokenFromRequest(httpRequest);
-        
-        // Invalidate the token in the database
-        if (token != null) {
-            tokenService.invalidateToken(token);
-        }
 
-        // Return a success response
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "success");
-        response.put("message", "Logged out successfully");
-        
-        return this.apiJsonSerializerService.serialize(response);
+  public static class RefreshTokenRequest {
+    public String refreshToken;
+  }
+
+  @POST
+  @Path("/token")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Refresh authentication token",
+      description =
+          "Exchanges a valid refresh token for a new access token and refresh token pair.")
+  @ApiResponse(responseCode = "200", description = "OK")
+  public String refreshToken(final String apiRequestBodyAsJson) {
+    RefreshTokenRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, RefreshTokenRequest.class);
+    if (request == null || StringUtils.isBlank(request.refreshToken)) {
+      throw new IllegalArgumentException("Refresh token is missing in the request body.");
     }
 
-    /**
-     * Helper method to extract and decode the token from the Authorization header.
-     */
-    private String extractTokenFromRequest(HttpServletRequest request) {
-        String header = request.getHeader("Authorization");
-        if (header != null && header.toLowerCase().startsWith("basic ")) {
-            String base64Token = header.substring(6).trim();
-            try {
-                // Decode the Base64 string to get the raw token
-                return new String(Base64.getDecoder().decode(base64Token), StandardCharsets.UTF_8);
-            } catch (IllegalArgumentException e) {
-                return null;
-            }
-        }
+    // Exchange the old refresh token for a new pair
+    SelfServiceAuthenticationTokenService.TokenPair newTokens =
+        tokenService.refreshTokens(request.refreshToken);
+
+    byte[] base64AccessKey =
+        Base64.getEncoder().encode(newTokens.accessToken().getBytes(StandardCharsets.UTF_8));
+    byte[] base64RefreshKey =
+        Base64.getEncoder().encode(newTokens.refreshToken().getBytes(StandardCharsets.UTF_8));
+
+    Map<String, String> response = new HashMap<>();
+    response.put(
+        "base64EncodedAuthenticationKey", new String(base64AccessKey, StandardCharsets.UTF_8));
+    response.put("refreshToken", new String(base64RefreshKey, StandardCharsets.UTF_8));
+
+    return this.apiJsonSerializerService.serialize(response);
+  }
+
+  @POST
+  @Path("/logout")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Logout user",
+      description =
+          "Invalidates the current authentication token, effectively logging the user out.")
+  @ApiResponse(responseCode = "200", description = "OK")
+  public String logout(@Context HttpServletRequest httpRequest) {
+    // Extract the raw token from the Authorization header
+    String token = extractTokenFromRequest(httpRequest);
+
+    // Invalidate the token in the database
+    if (token != null) {
+      tokenService.invalidateToken(token);
+    }
+
+    // Return a success response
+    Map<String, String> response = new HashMap<>();
+    response.put("status", "success");
+    response.put("message", "Logged out successfully");
+
+    return this.apiJsonSerializerService.serialize(response);
+  }
+
+  /** Helper method to extract and decode the token from the Authorization header. */
+  private String extractTokenFromRequest(HttpServletRequest request) {
+    String header = request.getHeader("Authorization");
+    if (header != null && header.toLowerCase().startsWith("basic ")) {
+      String base64Token = header.substring(6).trim();
+      try {
+        // Decode the Base64 string to get the raw token
+        return new String(Base64.getDecoder().decode(base64Token), StandardCharsets.UTF_8);
+      } catch (IllegalArgumentException e) {
         return null;
+      }
     }
-  
+    return null;
+  }
 }

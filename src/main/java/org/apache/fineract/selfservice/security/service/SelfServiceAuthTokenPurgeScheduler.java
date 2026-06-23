@@ -9,15 +9,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class SelfServiceAuthTokenPurgeScheduler {
 
-    private final SelfServiceAuthenticationTokenRepository repository;
+  private final SelfServiceAuthenticationTokenRepository repository;
 
-    public SelfServiceAuthTokenPurgeScheduler(SelfServiceAuthenticationTokenRepository repository) {
-        this.repository = repository;
-    }
+  public SelfServiceAuthTokenPurgeScheduler(SelfServiceAuthenticationTokenRepository repository) {
+    this.repository = repository;
+  }
 
-    @Scheduled(cron = "0 0 * * * *") // Runs every hour
-    @Transactional
-    public void purgeExpiredTokens() {
-        repository.deleteByExpiresAtBefore(LocalDateTime.now());
-    }
+  @Scheduled(cron = "0 0 * * * *") // Runs every hour
+  @Transactional
+  public void purgeExpiredTokens() {
+    repository.deleteByExpiresAtBefore(LocalDateTime.now());
+  }
 }

@@ -41,4 +41,17 @@
             <column name="expires_at"/>
         </createIndex>
     </changeSet>
+    
+    <changeSet author="fineract" id="ss-0022-3">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="self_service_auth_token" columnName="token_type"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="self_service_auth_token">
+            <column name="token_type" type="VARCHAR(20)" defaultValue="ACCESS">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

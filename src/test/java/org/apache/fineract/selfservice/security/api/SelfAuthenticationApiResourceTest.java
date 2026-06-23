@@ -24,6 +24,7 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -38,7 +39,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.core.Authentication;
-import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")

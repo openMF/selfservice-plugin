@@ -88,7 +88,7 @@ public class SelfServiceSecurityConfiguration {
 
   @Autowired private IdempotencyStoreHelper idempotencyStoreHelper;
   @Autowired private PlatformUserDetailsChecker platformUserDetailsChecker;
-  
+
   @Autowired private SelfServiceAuthenticationTokenService tokenService;
 
   @Bean
@@ -173,7 +173,7 @@ public class SelfServiceSecurityConfiguration {
                     .requestMatchers(HttpMethod.POST, "/api/v1/self/loans/simulate")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/loans/simulate")
-                    .permitAll()                    
+                    .permitAll()
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
                     // traffic).
@@ -232,7 +232,7 @@ public class SelfServiceSecurityConfiguration {
             userNotificationService,
             basicAuthTenantDetailsService,
             businessDateReadPlatformService);
-    
+
     // Inject custom converter to handle both Password and Token auth
     filter.setAuthenticationConverter(new SelfServiceAuthenticationConverter());
 
@@ -244,7 +244,7 @@ public class SelfServiceSecurityConfiguration {
             API_MATCHER.matcher("/api/v1/self/**"), API_MATCHER.matcher("/v1/self/**")));
     return filter;
   }
-  
+
   // Add new Bean for Token Provider:
   @Bean(name = "selfServiceTokenAuthenticationProvider")
   public SelfServiceTokenAuthenticationProvider selfServiceTokenAuthProvider() {
@@ -275,8 +275,8 @@ public class SelfServiceSecurityConfiguration {
   }
 
   public AuthenticationManager selfServiceAuthenticationManager() throws Exception {
-    ProviderManager providerManager = new ProviderManager(selfServiceAuthProvider(), 
-                                                          selfServiceTokenAuthProvider());
+    ProviderManager providerManager =
+        new ProviderManager(selfServiceAuthProvider(), selfServiceTokenAuthProvider());
     providerManager.setEraseCredentialsAfterAuthentication(false);
     return providerManager;
   }

@@ -14,6 +14,7 @@
  */
 package org.apache.fineract.selfservice.registration.starter;
 
+import jakarta.annotation.Nullable;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -39,7 +40,6 @@ import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.apache.fineract.useradministration.domain.PasswordValidationPolicyRepository;
 import org.apache.fineract.useradministration.domain.RoleRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import jakarta.annotation.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;

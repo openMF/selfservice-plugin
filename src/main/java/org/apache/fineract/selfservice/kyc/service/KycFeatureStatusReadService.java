@@ -6,58 +6,49 @@
  */
 package org.apache.fineract.selfservice.kyc.service;
 
-
+import org.apache.fineract.kyc.domain.KycFeatureStatus;
+import org.apache.fineract.kyc.repository.KycFeatureStatusRepository;
 import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUserKycData;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import org.apache.fineract.kyc.domain.KycFeatureStatus;
-import org.apache.fineract.kyc.repository.KycFeatureStatusRepository;
-
 @Service
 public class KycFeatureStatusReadService {
 
-    private final KycFeatureStatusRepository kycFeatureStatusRepository;
+  private final KycFeatureStatusRepository kycFeatureStatusRepository;
 
-    public KycFeatureStatusReadService(final KycFeatureStatusRepository kycFeatureStatusRepository) {
-        this.kycFeatureStatusRepository = kycFeatureStatusRepository;
-    }
+  public KycFeatureStatusReadService(final KycFeatureStatusRepository kycFeatureStatusRepository) {
+    this.kycFeatureStatusRepository = kycFeatureStatusRepository;
+  }
 
-    @Transactional(readOnly = true)
-    public SelfServiceAuthenticatedUserKycData getKycFeatureStatus(final Long clientId) {
-        return kycFeatureStatusRepository
-                .findFirstByKycVerification_ClientIdOrderByKycVerification_IdDesc(clientId)
-                .map(this::toData)
-                .orElseGet(this::defaultData);
-    }
+  @Transactional(readOnly = true)
+  public SelfServiceAuthenticatedUserKycData getKycFeatureStatus(final Long clientId) {
+    return kycFeatureStatusRepository
+        .findFirstByKycVerification_ClientIdOrderByKycVerification_IdDesc(clientId)
+        .map(this::toData)
+        .orElseGet(this::defaultData);
+  }
 
-    @Transactional(readOnly = true)
-    public SelfServiceAuthenticatedUserKycData getApprovedKycFeatureStatus(final Long clientId) {
-        return kycFeatureStatusRepository
-                .findFirstByKycVerification_ClientIdAndKycVerification_KycStatusOrderByKycVerification_IdDesc(
-                        clientId, "Approved")
-                .map(this::toData)
-                .orElseGet(this::defaultData);
-    }
+  @Transactional(readOnly = true)
+  public SelfServiceAuthenticatedUserKycData getApprovedKycFeatureStatus(final Long clientId) {
+    return kycFeatureStatusRepository
+        .findFirstByKycVerification_ClientIdAndKycVerification_KycStatusOrderByKycVerification_IdDesc(
+            clientId, "Approved")
+        .map(this::toData)
+        .orElseGet(this::defaultData);
+  }
 
-    private SelfServiceAuthenticatedUserKycData toData(final KycFeatureStatus entity) {
-        return new SelfServiceAuthenticatedUserKycData(
-                entity.getFaceMatches(),
-                entity.getIdVerifications(),
-                entity.getAmlScreenings(),
-                entity.getDecision(),
-                entity.getKycStatus()
-                
-        );
-    }
+  private SelfServiceAuthenticatedUserKycData toData(final KycFeatureStatus entity) {
+    return new SelfServiceAuthenticatedUserKycData(
+        entity.getFaceMatches(),
+        entity.getIdVerifications(),
+        entity.getAmlScreenings(),
+        entity.getDecision(),
+        entity.getKycStatus());
+  }
 
-    private SelfServiceAuthenticatedUserKycData defaultData() {
-        return new SelfServiceAuthenticatedUserKycData(
-                Boolean.FALSE,
-                Boolean.FALSE,
-                Boolean.FALSE,
-                Boolean.FALSE,
-                "In Review"
-        );
-    }
+  private SelfServiceAuthenticatedUserKycData defaultData() {
+    return new SelfServiceAuthenticatedUserKycData(
+        Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, "In Review");
+  }
 }

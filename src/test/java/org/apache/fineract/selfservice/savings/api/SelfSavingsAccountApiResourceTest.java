@@ -135,11 +135,12 @@ class SelfSavingsAccountApiResourceTest {
             eq(ACCOUNT_ID), eq(false), eq("all"), isNull(), eq(uriInfo)))
         .thenReturn(data);
 
-    SavingsAccountData result = resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo);
+    SavingsAccountData result =
+        resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo);
 
     assertNotNull(result);
     verify(dataValidator).validateRetrieveSavings(uriInfo);
-    //TODO
+    // TODO
     /*verify(savingsAccountsApiResource)
     .retrieveOne(eq(ACCOUNT_ID), eq(false), eq("all"), eq(""), eq(uriInfo));*/
   }

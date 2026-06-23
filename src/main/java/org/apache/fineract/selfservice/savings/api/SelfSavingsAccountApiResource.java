@@ -74,109 +74,123 @@ public class SelfSavingsAccountApiResource {
   private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
 
   @GET
-    @Path("{accountId}")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    @Operation(
-        summary = "Retrieve a savings account",
-        description = "Retrieves a savings account\n\n"
-            + "Example Requests:\n\n"
-            + "self/savingsaccounts/1\n\n"
-            + "self/savingsaccounts/1?associations=transactions\n\n"
-            + "self/savingsaccounts/1?associations=transactions&month=5&year=2026\n\n"
-            + "self/savingsaccounts/1?associations=transactions&lastTransactions=10\n\n"
-            + "self/savingsaccounts/1?associations=transactions&month=5&year=2026&lastTransactions=5")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "OK",
-            content = @Content(schema = @Schema(
-                implementation = SelfSavingsAccountApiResourceSwagger.GetSelfSavingsAccountsResponse.class)))
-    })
-    public SavingsAccountData retrieveSavings(
-        @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
-        @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
-            final String chargeStatus,
+  @Path("{accountId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve a savings account",
+      description =
+          "Retrieves a savings account\n\n"
+              + "Example Requests:\n\n"
+              + "self/savingsaccounts/1\n\n"
+              + "self/savingsaccounts/1?associations=transactions\n\n"
+              + "self/savingsaccounts/1?associations=transactions&month=5&year=2026\n\n"
+              + "self/savingsaccounts/1?associations=transactions&lastTransactions=10\n\n"
+              + "self/savingsaccounts/1?associations=transactions&month=5&year=2026&lastTransactions=5")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                schema =
+                    @Schema(
+                        implementation =
+                            SelfSavingsAccountApiResourceSwagger.GetSelfSavingsAccountsResponse
+                                .class)))
+  })
+  public SavingsAccountData retrieveSavings(
+      @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
+      @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
+          final String chargeStatus,
 
-        // Date filters
-        @QueryParam("month") @Parameter(description = "Filter transactions by month (1-12)")
-            final Integer month,
-        @QueryParam("year") @Parameter(description = "Filter transactions by year")
-            final Integer year,
+      // Date filters
+      @QueryParam("month") @Parameter(description = "Filter transactions by month (1-12)")
+          final Integer month,
+      @QueryParam("year") @Parameter(description = "Filter transactions by year")
+          final Integer year,
 
-        // New: Last N transactions filter
-        @QueryParam("lastTransactions") @Parameter(description = "Return only the last N transactions (most recent)")
-            final Integer lastTransactions,
+      // New: Last N transactions filter
+      @QueryParam("lastTransactions")
+          @Parameter(description = "Return only the last N transactions (most recent)")
+          final Integer lastTransactions,
+      @Context final UriInfo uriInfo) {
 
-        @Context final UriInfo uriInfo) {
+    this.dataValidator.validateRetrieveSavings(uriInfo);
+    validateAppSelfServiceUserSavingsAccountMapping(accountId);
 
-        this.dataValidator.validateRetrieveSavings(uriInfo);
-        validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    final boolean staffInSelectedOfficeOnly = false;
 
-        final boolean staffInSelectedOfficeOnly = false;
+    // Build date range for core Fineract API
+    String dateRange = null;
+    if (month != null && year != null) {
+      if (month < 1 || month > 12) {
+        throw new IllegalArgumentException("Month must be between 1 and 12");
+      }
+      String fromDate = String.format("%d-%02d-01", year, month);
+      String toDate = String.format("%d-%02d-%02d", year, month, getLastDayOfMonth(year, month));
+      dateRange = fromDate + "," + toDate;
+    }
 
-        // Build date range for core Fineract API
-        String dateRange = null;
-        if (month != null && year != null) {
-            if (month < 1 || month > 12) {
-                throw new IllegalArgumentException("Month must be between 1 and 12");
-            }
-            String fromDate = String.format("%d-%02d-01", year, month);
-            String toDate = String.format("%d-%02d-%02d", year, month, getLastDayOfMonth(year, month));
-            dateRange = fromDate + "," + toDate;
-        }
-
-        SavingsAccountData savingsAccountData = this.savingsAccountsApiResource.retrieveOne(
+    SavingsAccountData savingsAccountData =
+        this.savingsAccountsApiResource.retrieveOne(
             accountId, staffInSelectedOfficeOnly, chargeStatus, dateRange, uriInfo);
 
-        // ====================== APPLY FILTERS ======================
-        Collection<SavingsAccountTransactionData> transactions = savingsAccountData.getTransactions();
+    // ====================== APPLY FILTERS ======================
+    Collection<SavingsAccountTransactionData> transactions = savingsAccountData.getTransactions();
 
-        if (!CollectionUtils.isEmpty(transactions)) {
-            List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
+    if (!CollectionUtils.isEmpty(transactions)) {
+      List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
-            // 1. Filter by Month & Year (if provided)
-            if (month != null && year != null) {
-                filtered = filtered.stream()
-                    .filter(Objects::nonNull)
-                    .filter(t -> {
-                        LocalDate txDate = t.getTransactionDate();
-                        if (txDate == null) {
-                            txDate = t.getDate();
-                        }
-                        return txDate != null 
-                               && txDate.getYear() == year 
-                               && txDate.getMonthValue() == month;
+      // 1. Filter by Month & Year (if provided)
+      if (month != null && year != null) {
+        filtered =
+            filtered.stream()
+                .filter(Objects::nonNull)
+                .filter(
+                    t -> {
+                      LocalDate txDate = t.getTransactionDate();
+                      if (txDate == null) {
+                        txDate = t.getDate();
+                      }
+                      return txDate != null
+                          && txDate.getYear() == year
+                          && txDate.getMonthValue() == month;
                     })
-                    .collect(Collectors.toList());
-            }
+                .collect(Collectors.toList());
+      }
 
-            // 2. Filter Last N Transactions (most recent first)
-            if (lastTransactions != null && lastTransactions > 0) {
-                // Sort by transaction date descending (newest first)
-                filtered.sort((t1, t2) -> {
-                    LocalDate d1 = t1.getTransactionDate() != null ? t1.getTransactionDate() : t1.getDate();
-                    LocalDate d2 = t2.getTransactionDate() != null ? t2.getTransactionDate() : t2.getDate();
-                    return d2.compareTo(d1); // descending
-                });
+      // 2. Filter Last N Transactions (most recent first)
+      if (lastTransactions != null && lastTransactions > 0) {
+        // Sort by transaction date descending (newest first)
+        filtered.sort(
+            (t1, t2) -> {
+              LocalDate d1 =
+                  t1.getTransactionDate() != null ? t1.getTransactionDate() : t1.getDate();
+              LocalDate d2 =
+                  t2.getTransactionDate() != null ? t2.getTransactionDate() : t2.getDate();
+              return d2.compareTo(d1); // descending
+            });
 
-                // Limit to last N transactions
-                if (filtered.size() > lastTransactions) {
-                    filtered = filtered.subList(0, lastTransactions);
-                }
-            }
-
-            // Apply filtered list using reflection (since SavingsAccountData has no setter)
-            try {
-                Field transactionsField = SavingsAccountData.class.getDeclaredField("transactions");
-                transactionsField.setAccessible(true);
-                transactionsField.set(savingsAccountData, filtered);
-            } catch (Exception e) {
-                // Log in production environment
-                System.err.println("Warning: Could not set filtered transactions - " + e.getMessage());
-            }
+        // Limit to last N transactions
+        if (filtered.size() > lastTransactions) {
+          filtered = filtered.subList(0, lastTransactions);
         }
+      }
 
-        return savingsAccountData;
+      // Apply filtered list using reflection (since SavingsAccountData has no setter)
+      try {
+        Field transactionsField = SavingsAccountData.class.getDeclaredField("transactions");
+        transactionsField.setAccessible(true);
+        transactionsField.set(savingsAccountData, filtered);
+      } catch (Exception e) {
+        // Log in production environment
+        System.err.println("Warning: Could not set filtered transactions - " + e.getMessage());
+      }
     }
+
+    return savingsAccountData;
+  }
 
   private int getLastDayOfMonth(int year, int month) {
     java.time.YearMonth yearMonth = java.time.YearMonth.of(year, month);
