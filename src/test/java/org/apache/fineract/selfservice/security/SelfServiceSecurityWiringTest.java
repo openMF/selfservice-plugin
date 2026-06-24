@@ -24,12 +24,18 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = SelfServiceSecurityTestConfig.class)
 @TestPropertySource("classpath:application-test.properties")
 @WebAppConfiguration
 class SelfServiceSecurityWiringTest {
+    
+  @MockitoBean 
+  private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   @Autowired private ApplicationContext ctx;
 

@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.security;
 
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -16,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 
@@ -29,6 +31,9 @@ import org.springframework.test.web.servlet.ResultMatcher;
 class SelfServiceSecurityFilterChainIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
+  
+  @MockitoBean
+  private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   @Test
   void registrationEndpoint_isPublicAndReturns200() throws Exception {

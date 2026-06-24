@@ -24,6 +24,7 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService.TokenPair;
 import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
@@ -39,6 +40,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.core.Authentication;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
@@ -57,9 +60,18 @@ class SelfAuthenticationApiResourceTest {
   @Mock private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   private SelfAuthenticationApiResource resource;
+  
 
   @BeforeEach
   void setUp() {
+    // 1. Create a dummy TokenPair
+    TokenPair mockTokens = new TokenPair("mock-access-token-123", "mock-refresh-token-456");
+
+    // 2. Stub the generateTokens method using lenient() 
+    // FIX: Use any() instead of anyLong() because the parameter is a boxed Long, not primitive long.
+    // This ensures Mockito correctly matches the argument and returns the mockTokens instead of null.
+    lenient().when(selfServiceAuthenticationTokenService.generateTokens(any(), any())).thenReturn(mockTokens);
+  
     resource =
         new SelfAuthenticationApiResource(
             daoAuthenticationProvider,
@@ -115,6 +127,11 @@ class SelfAuthenticationApiResourceTest {
         .thenReturn(auth);
     when(securityContext.doesPasswordHasToBeRenewed(principal)).thenReturn(false);
     when(toApiJsonSerializer.serialize(any())).thenReturn("{}");
+
+    // FIX: Mock downstream service calls to prevent NullPointerExceptions after token generation
+    when(clientReadPlatformService.retrieveSelfServiceUserClients(any())).thenReturn(Collections.emptyList());
+    when(officeAddressReadPlatformService.retrieveOfficeCountryByClientId(any())).thenReturn("US");
+    when(kycFeatureStatusReadService.getKycFeatureStatus(any())).thenReturn(null);
 
     String result = resource.authenticate(requestBody, true, httpServletRequest);
 
