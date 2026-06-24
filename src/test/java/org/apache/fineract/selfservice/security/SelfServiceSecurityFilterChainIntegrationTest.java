@@ -6,10 +6,10 @@
  */
 package org.apache.fineract.selfservice.security;
 
-import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,9 +31,8 @@ import org.springframework.test.web.servlet.ResultMatcher;
 class SelfServiceSecurityFilterChainIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
-  
-  @MockitoBean
-  private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
+
+  @MockitoBean private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   @Test
   void registrationEndpoint_isPublicAndReturns200() throws Exception {

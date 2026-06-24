@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 import org.apache.fineract.infrastructure.security.service.TenantAwareJpaPlatformUserDetailsService;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.security.service.TenantAwareJpaPlatformSelfServiceUserDetailsService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,21 +22,18 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = SelfServiceSecurityTestConfig.class)
 @TestPropertySource("classpath:application-test.properties")
 @WebAppConfiguration
 class SelfServiceSecurityWiringTest {
-    
-  @MockitoBean 
-  private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
+
+  @MockitoBean private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
 
   @Autowired private ApplicationContext ctx;
 
