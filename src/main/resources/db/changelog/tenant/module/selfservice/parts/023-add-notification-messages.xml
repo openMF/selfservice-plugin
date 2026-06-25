@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+
+    <changeSet author="fineract" id="ss-0023-1">
+        <!-- Add initial templates for Self Service notifications-->        
+        <!-- LOGIN_SUCCESS Templates -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/> <!-- CLIENT entity to satisfy enum mapping -->
+            <column name="type" valueNumeric="2"/> <!-- EMAIL type to satisfy enum mapping -->
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL"/>
+            <column name="text" value="Hello ${firstname} ${lastname}, you have successfully logged in to your account from IP ${clientIp}. If this was not you, please contact support immediately."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
+            <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_WHATSAPP"/>
+            <column name="text" value="Hello ${firstname}, you have successfully logged in to your account."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_IN_APP"/>
+            <column name="text" value="Login successful for user ${username}."/>
+        </insert>
+        
+        <!-- LOGIN_FAILURE Templates -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL"/>
+            <column name="text" value="Hello ${firstname}, a failed login attempt was detected for your account from IP ${clientIp}. If this was not you, please reset your password immediately."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_SMS"/>
+            <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_WHATSAPP"/>
+            <column name="text" value="Hello ${firstname}, a failed login attempt was detected for your account."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="1"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_IN_APP"/>
+            <column name="text" value="Failed login attempt for user ${username}."/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

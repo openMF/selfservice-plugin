@@ -109,6 +109,8 @@ public class SelfServiceAuthenticationTokenService {
     entity.setUserId(userId);
     entity.setUsername(username);
     entity.setToken(token);
+    // FIX: The token_type column is NOT NULL. We must set it to avoid PersistenceException.
+    entity.setTokenType(SelfServiceAuthenticationToken.TokenType.ACCESS);
     entity.setCreatedAt(LocalDateTime.now());
     entity.setExpiresAt(LocalDateTime.now().plusDays(7)); // 7 days validity
     repository.save(entity);
