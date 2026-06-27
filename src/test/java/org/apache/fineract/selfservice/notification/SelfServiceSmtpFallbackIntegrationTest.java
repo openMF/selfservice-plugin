@@ -273,9 +273,18 @@ public class SelfServiceSmtpFallbackIntegrationTest {
       return new SelfServicePluginEmailService(externalServicesReadPlatformService, env);
     }
 
+    /**
+     * Provides a mock SelfServiceTemplateService since the updated notification service relies on
+     * Fineract core Templates instead of Thymeleaf.
+     */
+    @Bean
+    public SelfServiceTemplateService selfServiceTemplateService() {
+      return org.mockito.Mockito.mock(SelfServiceTemplateService.class);
+    }
+
     @Bean
     public SelfServiceNotificationService selfServiceNotificationService(
-        org.thymeleaf.ITemplateEngine notificationTemplateEngine,
+        SelfServiceTemplateService selfServiceTemplateService,
         org.springframework.context.MessageSource notificationMessageSource,
         SelfServicePluginEmailService emailService,
         NotificationCooldownCache cooldownCache,
@@ -283,7 +292,7 @@ public class SelfServiceSmtpFallbackIntegrationTest {
         @jakarta.annotation.Nullable
             ExternalNotificationSystemClient externalNotificationSystemClient) {
       return new SelfServiceNotificationService(
-          notificationTemplateEngine,
+          selfServiceTemplateService,
           notificationMessageSource,
           emailService,
           smsMessageRepository(),

@@ -8,54 +8,56 @@
         <!-- Add initial templates for Self Service notifications-->        
         <!-- LOGIN_SUCCESS Templates -->
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/> <!-- CLIENT entity to satisfy enum mapping -->
-            <column name="type" valueNumeric="2"/> <!-- EMAIL type to satisfy enum mapping -->
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="1"/>   <!-- 2 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL"/>
             <column name="text" value="Hello ${firstname} ${lastname}, you have successfully logged in to your account from IP ${clientIp}. If this was not you, please contact support immediately."/>
         </insert>
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
+            <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="2"/>
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
         </insert>
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
-            <column name="type" valueNumeric="2"/>
-            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_WHATSAPP"/>
-            <column name="text" value="Hello ${firstname}, you have successfully logged in to your account."/>
-        </insert>
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
-            <column name="type" valueNumeric="2"/>
-            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_IN_APP"/>
-            <column name="text" value="Login successful for user ${username}."/>
-        </insert>
-        
+
         <!-- LOGIN_FAILURE Templates -->
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
-            <column name="type" valueNumeric="2"/>
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL"/>
             <column name="text" value="Hello ${firstname}, a failed login attempt was detected for your account from IP ${clientIp}. If this was not you, please reset your password immediately."/>
         </insert>
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
+            <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="2"/>
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_SMS"/>
             <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
         </insert>
+
+        <!-- USER_ACTIVATED Templates (NEW) -->
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
-            <column name="type" valueNumeric="2"/>
-            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_WHATSAPP"/>
-            <column name="text" value="Hello ${firstname}, a failed login attempt was detected for your account."/>
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_EMAIL"/>
+            <column name="text" value="Hello ${firstname} ${lastname}, your account has been successfully activated. You can now log in to your account."/>
         </insert>
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="1"/>
+            <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="2"/>
-            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_IN_APP"/>
-            <column name="text" value="Failed login attempt for user ${username}."/>
+            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_SMS"/>
+            <column name="text" value="Hi ${firstname}, your account has been successfully activated. Welcome!"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_WHATSAPP"/>
+            <column name="text" value="Hello ${firstname}, your account is now active. You can log in at your convenience."/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="2"/>
+            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_IN_APP"/>
+            <column name="text" value="Account activated successfully for user ${username}."/>
         </insert>
     </changeSet>
 </databaseChangeLog>

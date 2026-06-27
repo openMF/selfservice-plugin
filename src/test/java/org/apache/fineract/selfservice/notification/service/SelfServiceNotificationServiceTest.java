@@ -50,6 +50,7 @@ import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobSe
 import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.SelfServiceTemplateService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,12 +60,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
 import org.springframework.core.env.Environment;
-import org.thymeleaf.ITemplateEngine;
 
 @ExtendWith(MockitoExtension.class)
 class SelfServiceNotificationServiceTest {
 
-  @Mock private ITemplateEngine templateEngine;
+  @Mock private SelfServiceTemplateService selfServiceTemplateService;
   @Mock private MessageSource messageSource;
   @Mock private SelfServicePluginEmailService emailService;
   @Mock private SmsMessageRepository smsMessageRepository;
@@ -89,7 +89,7 @@ class SelfServiceNotificationServiceTest {
 
     service =
         new SelfServiceNotificationService(
-            templateEngine,
+            selfServiceTemplateService,
             messageSource,
             emailService,
             smsMessageRepository,
@@ -171,7 +171,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
+    when(selfServiceTemplateService.mergeTemplate(
+            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
+        .thenReturn("<html>body</html>");
     when(messageSource.getMessage(
             eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
         .thenReturn("New Login");
@@ -192,7 +194,9 @@ class SelfServiceNotificationServiceTest {
     SmsProviderData provider = mock(SmsProviderData.class);
     when(provider.getId()).thenReturn(5L);
     when(smsProviderService.retrieveSmsProviders()).thenReturn(Collections.singletonList(provider));
-    when(templateEngine.process(eq("text/login-success"), any())).thenReturn("Hello text body");
+    when(selfServiceTemplateService.mergeTemplate(
+            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("SMS"), any()))
+        .thenReturn("Hello text body");
     when(smsMessageRepository.save(any(SmsMessage.class))).thenAnswer(i -> i.getArgument(0));
 
     service.handleNotification(smsEvent());
@@ -254,7 +258,7 @@ class SelfServiceNotificationServiceTest {
     service.handleNotification(emailEvent());
 
     verify(emailService, never()).sendFormattedEmail(any());
-    verify(templateEngine, never()).process(any(String.class), any());
+    verify(selfServiceTemplateService, never()).mergeTemplate(any(), any(String.class), any());
   }
 
   // ---- Blank email skip ----
@@ -264,9 +268,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(messageSource.getMessage(
-            eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
-        .thenReturn("Subject");
+
+    // REMOVED: The messageSource stubbing was removed because the service
+    // returns early when the email is blank, never reaching the code that fetches the subject.
 
     SelfServiceNotificationEvent event =
         new SelfServiceNotificationEvent(
@@ -276,7 +280,7 @@ class SelfServiceNotificationServiceTest {
             "Test",
             "User",
             "testuser",
-            "  ",
+            "  ", // Blank email triggers the early return
             "1234567890",
             true,
             "127.0.0.1",
@@ -302,7 +306,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
+    when(selfServiceTemplateService.mergeTemplate(
+            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
+        .thenReturn("<html>body</html>");
     when(messageSource.getMessage(
             eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
         .thenReturn("Subject");
@@ -324,7 +330,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
+    when(selfServiceTemplateService.mergeTemplate(
+            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
+        .thenReturn("<html>body</html>");
     when(messageSource.getMessage(
             eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
         .thenReturn("Subject");
@@ -361,7 +369,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(templateEngine.process(eq("html/login-success"), any())).thenReturn("<html>body</html>");
+    when(selfServiceTemplateService.mergeTemplate(
+            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
+        .thenReturn("<html>body</html>");
     when(messageSource.getMessage(
             eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
         .thenReturn("Subject");

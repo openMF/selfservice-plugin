@@ -91,7 +91,6 @@ public class SelfAuthenticationApiResource {
   private boolean twoFactorEnabled;
 
   public static class AuthenticateRequest {
-
     public String username;
     public String password;
   }
@@ -107,12 +106,8 @@ public class SelfAuthenticationApiResource {
   private final org.apache.fineract.selfservice.useradministration.domain
           .AppSelfServiceUserRepository
       appUserRepository;
-
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
-
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
-
-  // Add final field (Lombok @RequiredArgsConstructor will inject it):
   private final SelfServiceAuthenticationTokenService tokenService;
 
   @POST
@@ -147,8 +142,7 @@ public class SelfAuthenticationApiResource {
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @QueryParam("returnClientList") @DefaultValue("true") boolean returnClientList,
       @Context HttpServletRequest httpRequest) {
-    // TODO FINERACT-819: sort out Jersey so JSON conversion does not have
-    // to be done explicitly via GSON here, but implicit by arg
+
     AuthenticateRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
     if (request == null) {
@@ -163,88 +157,35 @@ public class SelfAuthenticationApiResource {
 
     final Authentication authentication =
         new UsernamePasswordAuthenticationToken(request.username, request.password);
-
     Authentication authenticationCheck = null;
+
     try {
       authenticationCheck = this.customAuthenticationProvider.authenticate(authentication);
     } catch (SelfServiceDisabledException ex) {
       AppSelfServiceUser failedUser = ex.getUser();
-      String mobileNumber = extractMobile(failedUser);
-      boolean emailMode = determineMode(failedUser.getEmail(), mobileNumber);
-
-      try (NotificationContext.Scope ignored =
-          NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGIN_FAILURE.name())) {
-        try {
-          applicationEventPublisher.publishEvent(
-              SelfServiceNotificationEvent.withTenantContext(
-                  this,
-                  SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
-                  failedUser.getId(),
-                  failedUser.getFirstname(),
-                  failedUser.getLastname(),
-                  request.username,
-                  failedUser.getEmail(),
-                  mobileNumber,
-                  emailMode,
-                  extractClientIp(httpRequest),
-                  httpRequest.getLocale()));
-        } catch (Exception publishEx) {
-          log.warn("Failed to publish login failure notification", publishEx);
-        }
-      }
+      publishNotificationEvent(
+          SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
+          failedUser,
+          request.username,
+          httpRequest);
       throw ex;
     } catch (SelfServiceLockedException ex) {
       AppSelfServiceUser failedUser = ex.getUser();
-      String mobileNumber = extractMobile(failedUser);
-      boolean emailMode = determineMode(failedUser.getEmail(), mobileNumber);
-
-      try (NotificationContext.Scope ignored =
-          NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGIN_FAILURE.name())) {
-        try {
-          applicationEventPublisher.publishEvent(
-              SelfServiceNotificationEvent.withTenantContext(
-                  this,
-                  SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
-                  failedUser.getId(),
-                  failedUser.getFirstname(),
-                  failedUser.getLastname(),
-                  request.username,
-                  failedUser.getEmail(),
-                  mobileNumber,
-                  emailMode,
-                  extractClientIp(httpRequest),
-                  httpRequest.getLocale()));
-        } catch (Exception publishEx) {
-          log.warn("Failed to publish login failure notification", publishEx);
-        }
-      }
+      publishNotificationEvent(
+          SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
+          failedUser,
+          request.username,
+          httpRequest);
       throw ex;
     } catch (BadCredentialsException ex) {
       AppSelfServiceUser failedUser =
           this.appUserRepository.findAppSelfServiceUserByName(request.username);
       if (failedUser != null) {
-        String mobileNumber = extractMobile(failedUser);
-        boolean emailMode = determineMode(failedUser.getEmail(), mobileNumber);
-        try (NotificationContext.Scope ignored =
-            NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGIN_FAILURE.name())) {
-          try {
-            applicationEventPublisher.publishEvent(
-                SelfServiceNotificationEvent.withTenantContext(
-                    this,
-                    SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
-                    failedUser.getId(),
-                    failedUser.getFirstname(),
-                    failedUser.getLastname(),
-                    request.username,
-                    failedUser.getEmail(),
-                    mobileNumber,
-                    emailMode,
-                    extractClientIp(httpRequest),
-                    httpRequest.getLocale()));
-          } catch (Exception publishEx) {
-            log.warn("Failed to publish login failure notification", publishEx);
-          }
-        }
+        publishNotificationEvent(
+            SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
+            failedUser,
+            request.username,
+            httpRequest);
       }
       throw ex;
     }
@@ -262,10 +203,7 @@ public class SelfAuthenticationApiResource {
         permissions.add(grantedAuthority.getAuthority());
       }
 
-      // Extract principal early to get the user ID for token generation
       final AppSelfServiceUser principal = (AppSelfServiceUser) authenticationCheck.getPrincipal();
-
-      // Generate both Access and Refresh tokens
       final SelfServiceAuthenticationTokenService.TokenPair tokens =
           tokenService.generateTokens(principal.getId(), request.username);
 
@@ -282,10 +220,8 @@ public class SelfAuthenticationApiResource {
 
       final Long officeId = principal.getOffice().getId();
       final String officeName = principal.getOffice().getName();
-
       final Long staffId = principal.getStaffId();
       final String staffDisplayName = principal.getStaffDisplayName();
-
       final EnumOptionData organisationalRole = principal.organisationalRoleData();
 
       boolean isTwoFactorRequired =
@@ -293,6 +229,7 @@ public class SelfAuthenticationApiResource {
               && !principal.hasSpecificPermissionTo(
                   TwoFactorConstants.BYPASS_TWO_FACTOR_PERMISSION);
       Long userId = principal.getId();
+
       if (this.springSecurityPlatformSecurityContext.doesPasswordHasToBeRenewed(principal)) {
         authenticatedUserData =
             new SelfServiceAuthenticatedUserData()
@@ -300,45 +237,24 @@ public class SelfAuthenticationApiResource {
                 .setUserId(userId)
                 .setBase64EncodedAuthenticationKey(
                     new String(base64AccessKey, StandardCharsets.UTF_8))
-                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8)) // New field
+                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8))
                 .setAuthenticated(true)
                 .setShouldRenewPassword(true)
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         throw new SelfServicePasswordResetRequiredException(authenticatedUserData);
       } else {
-        String mobileNumber = extractMobile(principal);
-        boolean emailMode = determineMode(principal.getEmail(), mobileNumber);
-        try (NotificationContext.Scope ignored =
-            NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS.name())) {
-          try {
-            applicationEventPublisher.publishEvent(
-                SelfServiceNotificationEvent.withTenantContext(
-                    this,
-                    SelfServiceNotificationEvent.Type.LOGIN_SUCCESS,
-                    principal.getId(),
-                    principal.getFirstname(),
-                    principal.getLastname(),
-                    request.username,
-                    principal.getEmail(),
-                    mobileNumber,
-                    emailMode,
-                    extractClientIp(httpRequest),
-                    httpRequest.getLocale()));
-          } catch (Exception e) {
-            log.warn("Failed to publish login success notification", e);
-          }
-        }
+        // Publish Success Notification Event
+        publishNotificationEvent(
+            SelfServiceNotificationEvent.Type.LOGIN_SUCCESS,
+            principal,
+            request.username,
+            httpRequest);
 
-        // Resolve the client list for this user
         Collection<Long> clientList =
             returnClientList
                 ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
                 : null;
-
-        // Resolve the first clientId for KYC and country lookups
         Long clientId = getClientId(clientList);
-
-        // Resolve the country from the office address of the client's office
         String country = officeAddressReadPlatformService.retrieveOfficeCountryByClientId(clientId);
 
         authenticatedUserData =
@@ -355,7 +271,7 @@ public class SelfAuthenticationApiResource {
                 .setAuthenticated(true)
                 .setBase64EncodedAuthenticationKey(
                     new String(base64AccessKey, StandardCharsets.UTF_8))
-                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8)) // New field
+                .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8))
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired)
                 .setClients(
                     returnClientList
@@ -369,30 +285,53 @@ public class SelfAuthenticationApiResource {
     return this.apiJsonSerializerService.serialize(authenticatedUserData);
   }
 
+  /** Helper method to publish the notification event asynchronously. */
+  private void publishNotificationEvent(
+      SelfServiceNotificationEvent.Type type,
+      AppSelfServiceUser user,
+      String username,
+      HttpServletRequest httpRequest) {
+    String mobileNumber = extractMobile(user);
+    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
+    try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              type,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              username,
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              httpRequest.getLocale()));
+    } catch (Exception e) {
+      log.warn("Failed to publish {} notification event", type, e);
+    }
+  }
+
   private SelfServiceAuthenticatedUserKycData getKycStatusForUser(final Long clientId) {
-    // 1. Retrieve KYC feature flags
     return kycFeatureStatusReadService.getKycFeatureStatus(clientId);
   }
 
   private Long getClientId(Collection<Long> clientList) {
+    if (clientList == null) return null;
     Iterator<Long> iterator = clientList.iterator();
     if (iterator.hasNext()) {
-      Long element = iterator.next();
-      return element;
+      return iterator.next();
     }
     return null;
   }
 
   private String extractClientIp(HttpServletRequest httpRequest) {
-    if (httpRequest == null) {
-      return null;
-    }
+    if (httpRequest == null) return null;
     String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
     if (StringUtils.isNotBlank(xForwardedFor)) {
       String firstToken = xForwardedFor.split(",")[0].trim();
-      if (StringUtils.isNotBlank(firstToken)) {
-        return firstToken;
-      }
+      if (StringUtils.isNotBlank(firstToken)) return firstToken;
     }
     return httpRequest.getRemoteAddr();
   }
@@ -411,10 +350,8 @@ public class SelfAuthenticationApiResource {
   private boolean determineMode(String email, String mobileNumber) {
     boolean hasEmail = StringUtils.isNotBlank(email);
     boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-
     if (hasEmail && !hasMobile) return true;
     if (hasMobile && !hasEmail) return false;
-
     String pref =
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
@@ -440,10 +377,8 @@ public class SelfAuthenticationApiResource {
       throw new IllegalArgumentException("Refresh token is missing in the request body.");
     }
 
-    // Exchange the old refresh token for a new pair
     SelfServiceAuthenticationTokenService.TokenPair newTokens =
         tokenService.refreshTokens(request.refreshToken);
-
     byte[] base64AccessKey =
         Base64.getEncoder().encode(newTokens.accessToken().getBytes(StandardCharsets.UTF_8));
     byte[] base64RefreshKey =
@@ -467,29 +402,22 @@ public class SelfAuthenticationApiResource {
           "Invalidates the current authentication token, effectively logging the user out.")
   @ApiResponse(responseCode = "200", description = "OK")
   public String logout(@Context HttpServletRequest httpRequest) {
-    // Extract the raw token from the Authorization header
     String token = extractTokenFromRequest(httpRequest);
-
-    // Invalidate the token in the database
     if (token != null) {
       tokenService.invalidateToken(token);
     }
 
-    // Return a success response
     Map<String, String> response = new HashMap<>();
     response.put("status", "success");
     response.put("message", "Logged out successfully");
-
     return this.apiJsonSerializerService.serialize(response);
   }
 
-  /** Helper method to extract and decode the token from the Authorization header. */
   private String extractTokenFromRequest(HttpServletRequest request) {
     String header = request.getHeader("Authorization");
     if (header != null && header.toLowerCase().startsWith("basic ")) {
       String base64Token = header.substring(6).trim();
       try {
-        // Decode the Base64 string to get the raw token
         return new String(Base64.getDecoder().decode(base64Token), StandardCharsets.UTF_8);
       } catch (IllegalArgumentException e) {
         return null;

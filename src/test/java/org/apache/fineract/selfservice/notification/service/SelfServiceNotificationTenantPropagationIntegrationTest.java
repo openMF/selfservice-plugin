@@ -31,6 +31,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.SelfServiceTemplateService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
@@ -55,7 +56,7 @@ class SelfServiceNotificationTenantPropagationIntegrationTest {
 
   private final SelfServiceNotificationService service =
       new SelfServiceNotificationService(
-          mock(org.thymeleaf.ITemplateEngine.class),
+          mock(SelfServiceTemplateService.class),
           mock(MessageSource.class),
           mock(org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService.class),
           mock(org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository.class),
