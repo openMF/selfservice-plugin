@@ -9,13 +9,13 @@
         <!-- LOGIN_SUCCESS Templates -->
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="1"/>   <!-- 2 = SMS -->
+            <column name="type" valueNumeric="1"/>   <!-- 1 = EMAIL -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL"/>
             <column name="text" value="Hello ${firstname} ${lastname}, you have successfully logged in to your account from IP ${clientIp}. If this was not you, please contact support immediately."/>
         </insert>
         <insert tableName="m_template">
-            <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="2"/>
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="2"/> <!-- 2 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
         </insert>
@@ -34,7 +34,7 @@
             <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
         </insert>
 
-        <!-- USER_ACTIVATED Templates (NEW) -->
+        <!-- USER_ACTIVATED Templates -->
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="1"/>
