@@ -10,18 +10,21 @@ http:
     - name: Fineract-Platform-TenantId
       value: default
     - name: Authorization
-      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+      value: Basic NDU0NGVjMmQtOGNmNy00MmQ1LTg4MzktMzc2NDRlZjFkYWZh
   body:
     type: json
-    data: |
+    data: |-
       {
-          "locale": "en",
-      	"name": "PABLO PICAPIEDRA MARTINEZ",
-      	"officeName": "Head Office",
-      	"accountNumber": "000000002",
-      	"accountType": 2,
-      	"transferLimit": 1000
-
+          "locale": "es",
+          "name": "TOMAS ASCENCIO HERNANDEZ",
+          "accountType": 3,
+          "accountNumber": "88888888",
+          "holder": "TOMAS ASCENCIO HERNANDEZ",
+          "holderId": "01-1524-0892",
+          "holderIdType": 0,
+          "currencyCode": "CRC",
+          "entityCode": "151",
+          "entityName": "CR - Banco Nacional de Costa Rica"
       }
   auth: inherit
 

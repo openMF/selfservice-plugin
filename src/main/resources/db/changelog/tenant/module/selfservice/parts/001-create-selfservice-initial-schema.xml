@@ -255,5 +255,39 @@
         <sql>
             UPDATE m_role SET is_disabled=false WHERE name = 'Self Service User';
         </sql>
-    </changeSet>           
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0001-12">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_beneficiaries_tpt"/>
+        </preConditions>
+
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="office_id" columnDataType="BIGINT"/>
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="client_id" columnDataType="BIGINT"/>
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="account_id" columnDataType="BIGINT"/>
+
+        <addColumn tableName="m_selfservice_beneficiaries_tpt">
+            <column name="custom_account_number" type="VARCHAR(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_name" type="VARCHAR(150)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_id" type="VARCHAR(30)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_id_type" type="INT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="entity_code" type="VARCHAR(10)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="entity_name" type="VARCHAR(150)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

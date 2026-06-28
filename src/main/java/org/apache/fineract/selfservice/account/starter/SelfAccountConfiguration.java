@@ -25,6 +25,7 @@ import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadP
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformServiceImpl;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,12 +50,12 @@ public class SelfAccountConfiguration {
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTWritePlatformService.class)
   public SelfBeneficiariesTPTWritePlatformService selfBeneficiariesTPTWritePlatformService(
-      PlatformSelfServiceSecurityContext context,
-      SelfBeneficiariesTPTRepository repository,
-      SelfBeneficiariesTPTDataValidator validator,
-      LoanRepositoryWrapper loanRepositoryWrapper,
-      SavingsAccountRepositoryWrapper savingRepositoryWrapper) {
+          PlatformSelfServiceSecurityContext context,
+          SelfBeneficiariesTPTRepository repository,
+          SelfBeneficiariesTPTDataValidator validator,
+          LoanRepositoryWrapper loanRepositoryWrapper,
+          SavingsAccountRepositoryWrapper savingRepositoryWrapper, AppUserRepository appUserRepository) {
     return new SelfBeneficiariesTPTWritePlatformServiceImpl(
-        context, repository, validator, loanRepositoryWrapper, savingRepositoryWrapper);
+        context, repository, validator, loanRepositoryWrapper, savingRepositoryWrapper,appUserRepository);
   }
 }

@@ -43,6 +43,27 @@ public class SelfBeneficiariesTPTData {
   @SuppressWarnings("unused")
   private final Collection<EnumOptionData> accountTypeOptions;
 
+  @SuppressWarnings("unused")
+  private final String customAccountNumber;
+
+  @SuppressWarnings("unused")
+  private final String holderName;
+
+  @SuppressWarnings("unused")
+  private final String holderId;
+
+  @SuppressWarnings("unused")
+  private final Integer holderIdType;
+
+  @SuppressWarnings("unused")
+  private final String currencyCode;
+
+  @SuppressWarnings("unused")
+  private final String entityCode;
+
+  @SuppressWarnings("unused")
+  private final String entityName;
+
   public SelfBeneficiariesTPTData(final Collection<EnumOptionData> accountTypeOptions) {
     this.accountTypeOptions = accountTypeOptions;
     this.id = null;
@@ -52,6 +73,14 @@ public class SelfBeneficiariesTPTData {
     this.accountType = null;
     this.accountNumber = null;
     this.transferLimit = null;
+
+    this.customAccountNumber = null;
+    this.holderName = null;
+    this.holderId = null;
+    this.holderIdType = null;
+    this.currencyCode = null;
+    this.entityCode = null;
+    this.entityName = null;
   }
 
   public SelfBeneficiariesTPTData(
@@ -70,5 +99,48 @@ public class SelfBeneficiariesTPTData {
     this.accountType = accountType;
     this.accountNumber = accountNumber;
     this.transferLimit = transferLimit;
+
+    this.customAccountNumber = null;
+    this.holderName = null;
+    this.holderId = null;
+    this.holderIdType = null;
+    this.currencyCode = null;
+    this.entityCode = null;
+    this.entityName = null;
+  }
+
+
+  public SelfBeneficiariesTPTData(
+          final Long id,
+          final String name,
+          final String officeName,
+          final String clientName,
+          final EnumOptionData accountType,
+          final String accountNumber,
+          final Long transferLimit,
+          final String customAccountNumber,
+          final String holderName,
+          final String holderId,
+          final Integer holderIdType,
+          final String currencyCode,
+          final String entityCode,
+          final String entityName) {
+    this.accountTypeOptions = null;
+    this.id = id;
+    this.name = name;
+    this.officeName = officeName;
+    this.clientName = clientName;
+    this.accountType = accountType;
+    this.accountNumber = accountNumber;
+    this.transferLimit = transferLimit;
+
+    // Asignación de los campos nuevos
+    this.customAccountNumber = customAccountNumber;
+    this.holderName = holderName;
+    this.holderId = holderId;
+    this.holderIdType = holderIdType;
+    this.currencyCode = currencyCode;
+    this.entityCode = entityCode;
+    this.entityName = entityName;
   }
 }

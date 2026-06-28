@@ -10,7 +10,7 @@ http:
     - name: Fineract-Platform-TenantId
       value: default
     - name: Authorization
-      value: Basic cGVkcm8ubWFybW9sOk1pZm9zSW5pdGlhdGl2ZTIwMjYj
+      value: Basic NDU0NGVjMmQtOGNmNy00MmQ1LTg4MzktMzc2NDRlZjFkYWZh
   auth: inherit
 
 settings:
