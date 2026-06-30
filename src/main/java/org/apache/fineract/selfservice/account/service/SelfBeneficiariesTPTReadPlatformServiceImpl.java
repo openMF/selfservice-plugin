@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 public class SelfBeneficiariesTPTReadPlatformServiceImpl
-        implements SelfBeneficiariesTPTReadPlatformService {
+    implements SelfBeneficiariesTPTReadPlatformService {
 
   private final PlatformSelfServiceSecurityContext context;
   private final JdbcTemplate jdbcTemplate;
@@ -36,7 +36,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
   private final AccountTemplateMapper accountTemplateMapper;
 
   public SelfBeneficiariesTPTReadPlatformServiceImpl(
-          final PlatformSelfServiceSecurityContext context, final JdbcTemplate jdbcTemplate) {
+      final PlatformSelfServiceSecurityContext context, final JdbcTemplate jdbcTemplate) {
     this.context = context;
     this.jdbcTemplate = jdbcTemplate;
     this.mapper = new BeneficiaryMapper();
@@ -48,16 +48,16 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     // Parámetro inyectado 3 veces para cubrir los 3 bloques del UNION ALL
     return this.jdbcTemplate.query(
-            this.mapper.schema(), this.mapper, new Object[] {user.getId(), user.getId(), user.getId()});
+        this.mapper.schema(), this.mapper, new Object[] {user.getId(), user.getId(), user.getId()});
   }
 
   @Override
   public Collection<SelfAccountTemplateData> retrieveTPTSelfAccountTemplateData(
-          AppSelfServiceUser user) {
+      AppSelfServiceUser user) {
     return this.jdbcTemplate.query(
-            this.accountTemplateMapper.schema(),
-            this.accountTemplateMapper,
-            new Object[] {user.getId(), user.getId()});
+        this.accountTemplateMapper.schema(),
+        this.accountTemplateMapper,
+        new Object[] {user.getId(), user.getId()});
   }
 
   private static final class BeneficiaryMapper implements RowMapper<SelfBeneficiariesTPTData> {
@@ -72,7 +72,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" s.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
-      sqlBuilder.append(" null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
+      sqlBuilder.append(
+          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -88,7 +89,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" l.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
-      sqlBuilder.append(" null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
+      sqlBuilder.append(
+          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -125,7 +127,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
     @Override
     public SelfBeneficiariesTPTData mapRow(
-            final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+        final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
 
       final Long id = rs.getLong("id");
       final String name = rs.getString("name");
@@ -142,23 +144,38 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String entityCode = rs.getString("entityCode");
       final String entityName = rs.getString("entityName");
 
-
       EnumOptionData accountType = null;
       if (customAccountNumber != null) {
         // Es un beneficiario externo de Costa Rica
         if (accountTypeId == 2) {
-          accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
+          accountType =
+              new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
         } else {
-          accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
+          accountType =
+              new EnumOptionData(
+                  (long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
         }
       } else {
         // Es un beneficiario interno nativo de Fineract
-        accountType = AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
+        accountType =
+            AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
       }
 
       return new SelfBeneficiariesTPTData(
-              id, name, officeName, clientName, accountType, accountNumber, transferLimit,
-              customAccountNumber, holderName, holderId, holderIdType, currencyCode, entityCode, entityName);
+          id,
+          name,
+          officeName,
+          clientName,
+          accountType,
+          accountNumber,
+          transferLimit,
+          customAccountNumber,
+          holderName,
+          holderId,
+          holderIdType,
+          currencyCode,
+          entityCode,
+          entityName);
     }
   }
 
@@ -206,7 +223,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
     @Override
     public SelfAccountTemplateData mapRow(
-            final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+        final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
 
       final String officeName = rs.getString("officeName");
       final Long officeId = rs.getLong("officeId");
@@ -217,7 +234,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final Long accountId = rs.getLong("accountId");
 
       return new SelfAccountTemplateData(
-              accountId, accountNumber, accountTypeId, clientId, clientName, officeId, officeName);
+          accountId, accountNumber, accountTypeId, clientId, clientName, officeId, officeName);
     }
   }
 
@@ -231,6 +248,6 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     sqlBuilder.append(" and b.is_active = true; ");
 
     return this.jdbcTemplate.queryForObject(
-            sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
+        sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
   }
 }

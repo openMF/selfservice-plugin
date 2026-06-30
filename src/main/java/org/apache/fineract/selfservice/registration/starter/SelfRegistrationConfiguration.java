@@ -66,9 +66,7 @@ public class SelfRegistrationConfiguration {
     return new SelfServiceAuthorizationTokenService(env);
   }
 
-  /**
-   * Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it.
-   */
+  /** Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it. */
   @Bean
   public MessageSource registrationMessageSource() {
     ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
@@ -78,9 +76,7 @@ public class SelfRegistrationConfiguration {
     return messageSource;
   }
 
-  /**
-   * Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it.
-   */
+  /** Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it. */
   @Bean
   public SpringTemplateEngine registrationTemplateEngine() {
     ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
@@ -115,7 +111,7 @@ public class SelfRegistrationConfiguration {
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
       ApplicationEventPublisher applicationEventPublisher) {
-    
+
     // Removed legacy notification dependencies (Email, SMS, Thymeleaf, ExternalClient)
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,

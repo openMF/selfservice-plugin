@@ -50,12 +50,18 @@ public class SelfAccountConfiguration {
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTWritePlatformService.class)
   public SelfBeneficiariesTPTWritePlatformService selfBeneficiariesTPTWritePlatformService(
-          PlatformSelfServiceSecurityContext context,
-          SelfBeneficiariesTPTRepository repository,
-          SelfBeneficiariesTPTDataValidator validator,
-          LoanRepositoryWrapper loanRepositoryWrapper,
-          SavingsAccountRepositoryWrapper savingRepositoryWrapper, AppUserRepository appUserRepository) {
+      PlatformSelfServiceSecurityContext context,
+      SelfBeneficiariesTPTRepository repository,
+      SelfBeneficiariesTPTDataValidator validator,
+      LoanRepositoryWrapper loanRepositoryWrapper,
+      SavingsAccountRepositoryWrapper savingRepositoryWrapper,
+      AppUserRepository appUserRepository) {
     return new SelfBeneficiariesTPTWritePlatformServiceImpl(
-        context, repository, validator, loanRepositoryWrapper, savingRepositoryWrapper,appUserRepository);
+        context,
+        repository,
+        validator,
+        loanRepositoryWrapper,
+        savingRepositoryWrapper,
+        appUserRepository);
   }
 }

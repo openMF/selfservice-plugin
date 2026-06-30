@@ -29,7 +29,6 @@ public interface SelfBeneficiariesTPTApiConstants {
   String CLIENT_NAME_PARAM_NAME = "clientName";
   String ACCOUNT_TYPE_OPTIONS_PARAM_NAME = "accountTypeOptions";
 
-
   String DESTINATION_IBAN_PARAM_NAME = "destinationIban";
   String PHONE_NUMBER_PARAM_NAME = "phoneNumber";
   String HOLDER_PARAM_NAME = "holder";

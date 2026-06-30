@@ -67,7 +67,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private ClientRepositoryWrapper clientRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private SelfServiceUserDomainService userDomainService;
-  
+
   // REMOVED OBSOLETE MOCKS:
   // - SelfServicePluginEmailService
   // - SmsMessageRepository

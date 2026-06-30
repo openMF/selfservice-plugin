@@ -59,23 +59,37 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
   @Column(name = "is_active", nullable = false)
   private boolean isActive = true;
 
-  //Campos pra informacion beneficiario de PIN y SIMPE
-  @Column(name = "custom_account_number", length = 50, nullable = true) // Almacena el IBAN o el número de Teléfono
+  // Campos pra informacion beneficiario de PIN y SIMPE
+  @Column(
+      name = "custom_account_number",
+      length = 50,
+      nullable = true) // Almacena el IBAN o el número de Teléfono
   private String customAccountNumber;
 
-  @Column(name = "holder_name", length = 150, nullable = true) // Dueño de la cuenta (holder / destinationCustomerName)
+  @Column(
+      name = "holder_name",
+      length = 150,
+      nullable = true) // Dueño de la cuenta (holder / destinationCustomerName)
   private String holderName;
 
-  @Column(name = "holder_id", length = 30, nullable = true) // Cédula del dueño (holderId / destinationCustomerId)
+  @Column(
+      name = "holder_id",
+      length = 30,
+      nullable = true) // Cédula del dueño (holderId / destinationCustomerId)
   private String holderId;
 
-  @Column(name = "holder_id_type", nullable = true) // Tipo de cédula (holderIdType / destinationIdType)
+  @Column(
+      name = "holder_id_type",
+      nullable = true) // Tipo de cédula (holderIdType / destinationIdType)
   private Integer holderIdType;
 
   @Column(name = "currency_code", length = 3, nullable = true) // "CRC" o "USD"
   private String currencyCode;
 
-  @Column(name = "entity_code", length = 10, nullable = true) // Código del banco (ej: "0151", "0373")
+  @Column(
+      name = "entity_code",
+      length = 10,
+      nullable = true) // Código del banco (ej: "0151", "0373")
   private String entityCode;
 
   @Column(name = "entity_name", length = 150, nullable = true) // Nombre del banco / financiera
@@ -146,22 +160,61 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
     return this.accountType;
   }
 
-  public void setCustomAccountNumber(String customAccountNumber) { this.customAccountNumber = customAccountNumber; }
-  public void setHolderName(String holderName) { this.holderName = holderName; }
-  public void setHolderId(String holderId) { this.holderId = holderId; }
-  public void setHolderIdType(Integer holderIdType) { this.holderIdType = holderIdType; }
-  public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
-  public void setEntityCode(String entityCode) { this.entityCode = entityCode; }
-  public void setEntityName(String entityName) { this.entityName = entityName; }
+  public void setCustomAccountNumber(String customAccountNumber) {
+    this.customAccountNumber = customAccountNumber;
+  }
 
-  public String getCustomAccountNumber() { return this.customAccountNumber; }
-  public String getHolderName() { return this.holderName; }
-  public String getHolderId() { return this.holderId; }
-  public Integer getHolderIdType() { return this.holderIdType; }
-  public String getCurrencyCode() { return this.currencyCode; }
-  public String getEntityCode() { return this.entityCode; }
-  public String getEntityName() { return this.entityName; }
+  public void setHolderName(String holderName) {
+    this.holderName = holderName;
+  }
 
+  public void setHolderId(String holderId) {
+    this.holderId = holderId;
+  }
+
+  public void setHolderIdType(Integer holderIdType) {
+    this.holderIdType = holderIdType;
+  }
+
+  public void setCurrencyCode(String currencyCode) {
+    this.currencyCode = currencyCode;
+  }
+
+  public void setEntityCode(String entityCode) {
+    this.entityCode = entityCode;
+  }
+
+  public void setEntityName(String entityName) {
+    this.entityName = entityName;
+  }
+
+  public String getCustomAccountNumber() {
+    return this.customAccountNumber;
+  }
+
+  public String getHolderName() {
+    return this.holderName;
+  }
+
+  public String getHolderId() {
+    return this.holderId;
+  }
+
+  public Integer getHolderIdType() {
+    return this.holderIdType;
+  }
+
+  public String getCurrencyCode() {
+    return this.currencyCode;
+  }
+
+  public String getEntityCode() {
+    return this.entityCode;
+  }
+
+  public String getEntityName() {
+    return this.entityName;
+  }
 
   public Map<String, Object> update(String newName, Long newTransferLimit) {
     Map<String, Object> changes = new HashMap<>();

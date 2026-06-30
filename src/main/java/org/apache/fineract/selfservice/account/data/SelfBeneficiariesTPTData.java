@@ -109,22 +109,21 @@ public class SelfBeneficiariesTPTData {
     this.entityName = null;
   }
 
-
   public SelfBeneficiariesTPTData(
-          final Long id,
-          final String name,
-          final String officeName,
-          final String clientName,
-          final EnumOptionData accountType,
-          final String accountNumber,
-          final Long transferLimit,
-          final String customAccountNumber,
-          final String holderName,
-          final String holderId,
-          final Integer holderIdType,
-          final String currencyCode,
-          final String entityCode,
-          final String entityName) {
+      final Long id,
+      final String name,
+      final String officeName,
+      final String clientName,
+      final EnumOptionData accountType,
+      final String accountNumber,
+      final Long transferLimit,
+      final String customAccountNumber,
+      final String holderName,
+      final String holderId,
+      final Integer holderIdType,
+      final String currencyCode,
+      final String entityCode,
+      final String entityName) {
     this.accountTypeOptions = null;
     this.id = id;
     this.name = name;
