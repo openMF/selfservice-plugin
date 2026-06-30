@@ -19,21 +19,16 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.util.HashMap;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
-import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
-import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
-import org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository;
-import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
-import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
@@ -56,10 +51,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.MessageSource;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.thymeleaf.ITemplateEngine;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
@@ -74,10 +67,16 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private ClientRepositoryWrapper clientRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private SelfServiceUserDomainService userDomainService;
-  @Mock private SelfServicePluginEmailService selfServicePluginEmailService;
-  @Mock private SmsMessageRepository smsMessageRepository;
-  @Mock private SmsMessageScheduledJobService smsMessageScheduledJobService;
-  @Mock private SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService;
+  
+  // REMOVED OBSOLETE MOCKS:
+  // - SelfServicePluginEmailService
+  // - SmsMessageRepository
+  // - SmsMessageScheduledJobService
+  // - SmsCampaignDropdownReadPlatformService
+  // - ITemplateEngine
+  // - MessageSource
+  // - ExternalNotificationSystemClient
+
   @Mock private AppSelfServiceUserReadPlatformService appUserReadPlatformService;
   @Mock private RoleRepository roleRepository;
   @Mock private AppSelfServiceUserClientMappingRepository appUserClientMappingRepository;
@@ -88,16 +87,13 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private PlatformPasswordEncoder platformPasswordEncoder;
   @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
   @Mock private SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
-  @Mock private ITemplateEngine registrationTemplateEngine;
-  @Mock private MessageSource registrationMessageSource;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
-  @Mock private ExternalNotificationSystemClient externalNotificationSystemClient;
 
   private SelfServiceRegistrationWritePlatformServiceImpl service;
 
   @BeforeEach
   void setUp() {
-
+    // Instantiate the service with the updated 17-argument constructor
     service =
         new SelfServiceRegistrationWritePlatformServiceImpl(
             selfServiceRegistrationRepository,
@@ -106,10 +102,6 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             clientRepository,
             passwordValidationPolicyRepository,
             userDomainService,
-            selfServicePluginEmailService,
-            smsMessageRepository,
-            smsMessageScheduledJobService,
-            smsCampaignDropdownReadPlatformService,
             appUserReadPlatformService,
             roleRepository,
             appUserClientMappingRepository,
@@ -120,10 +112,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             platformPasswordEncoder,
             appSelfServiceUserRepository,
             selfServiceAuthorizationTokenService,
-            registrationTemplateEngine,
-            registrationMessageSource,
-            applicationEventPublisher,
-            externalNotificationSystemClient);
+            applicationEventPublisher);
 
     LocalDate businessDate = LocalDate.of(2026, 1, 2);
     HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();

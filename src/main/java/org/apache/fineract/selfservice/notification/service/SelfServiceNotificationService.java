@@ -175,6 +175,11 @@ public class SelfServiceNotificationService {
     params.put("clientIp", event.getIpAddress());
     params.put("locale", event.getLocale() != null ? event.getLocale().toString() : "en");
     params.put("emailMode", event.isEmailMode());
+    
+    // Merge context data (e.g., requestId, authCode)
+    if (event.getContextData() != null) {
+      params.putAll(event.getContextData());
+    }
 
     // Legacy keys kept for backward compatibility with any existing custom logic
     params.put("firstName", event.getFirstName());

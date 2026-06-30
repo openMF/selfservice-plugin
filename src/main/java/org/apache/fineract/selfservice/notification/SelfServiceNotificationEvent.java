@@ -17,6 +17,7 @@ package org.apache.fineract.selfservice.notification;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import lombok.Getter;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
@@ -35,7 +36,8 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
   public enum Type {
     USER_ACTIVATED("user-activated"),
     LOGIN_SUCCESS("login-success"),
-    LOGIN_FAILURE("login-failure");
+    LOGIN_FAILURE("login-failure"),
+    ENROLLMENT_TOKEN("enrollment-token"); 
 
     private final String templatePrefix;
 
@@ -72,6 +74,8 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
    * available at creation time.
    */
   private final HashMap<BusinessDateType, LocalDate> businessDates;
+  
+   private final Map<String, Object> contextData; // NEW
 
   /**
    * Creates a new self-service notification event.
@@ -88,32 +92,24 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
    * @param ipAddress the originating IP address (may be {@code null})
    * @param locale the locale for notification content (may be {@code null})
    */
-  public SelfServiceNotificationEvent(
-      Object source,
-      Type type,
-      Long userId,
-      String firstName,
-      String lastName,
-      String username,
-      String email,
-      String mobileNumber,
-      boolean emailMode,
-      String ipAddress,
-      Locale locale) {
-    this(
-        source,
-        type,
-        userId,
-        firstName,
-        lastName,
-        username,
-        email,
-        mobileNumber,
-        emailMode,
-        ipAddress,
-        locale,
-        null,
-        null);
+  public SelfServiceNotificationEvent(Object source, Type type, Long userId, String firstName, String lastName,
+                                      String username, String email, String mobileNumber, boolean emailMode,
+                                      String ipAddress, Locale locale, FineractPlatformTenant tenant,
+                                      HashMap<BusinessDateType, LocalDate> businessDates, Map<String, Object> contextData) {
+    super(source);
+    this.type = type;
+    this.userId = userId;
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.username = username;
+    this.email = email;
+    this.mobileNumber = mobileNumber;
+    this.emailMode = emailMode;
+    this.ipAddress = ipAddress;
+    this.locale = locale;
+    this.tenant = tenant;
+    this.businessDates = businessDates;
+    this.contextData = contextData != null ? contextData : new HashMap<>();
   }
 
   /**
@@ -132,35 +128,22 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
    * @param locale the locale for notification content (may be {@code null})
    * @param tenant the Fineract tenant active at event creation time (may be {@code null})
    * @param businessDates the business dates active at event creation time (may be {@code null})
-   */
-  public SelfServiceNotificationEvent(
-      Object source,
-      Type type,
-      Long userId,
-      String firstName,
-      String lastName,
-      String username,
-      String email,
-      String mobileNumber,
-      boolean emailMode,
-      String ipAddress,
-      Locale locale,
-      FineractPlatformTenant tenant,
-      HashMap<BusinessDateType, LocalDate> businessDates) {
-    super(source);
-    this.type = Objects.requireNonNull(type, "type must not be null");
-    this.userId = Objects.requireNonNull(userId, "userId must not be null");
-    this.firstName = firstName;
-    this.lastName = lastName;
-    this.username = username;
-    this.email = email;
-    this.mobileNumber = mobileNumber;
-    this.emailMode = emailMode;
-    this.ipAddress = ipAddress;
-    this.locale = locale;
-    this.tenant = tenant;
-    this.businessDates = businessDates != null ? new HashMap<>(businessDates) : null;
+   * */
+  // 13-argument constructor (Without contextData)
+  public SelfServiceNotificationEvent(Object source, Type type, Long userId, String firstName, String lastName,
+                                      String username, String email, String mobileNumber, boolean emailMode,
+                                      String ipAddress, Locale locale, FineractPlatformTenant tenant,
+                                      HashMap<BusinessDateType, LocalDate> businessDates) {
+    this(source, type, userId, firstName, lastName, username, email, mobileNumber, emailMode, ipAddress, locale, tenant, businessDates, null);
   }
+  
+  // 11-argument constructor (Backward-compatible for tests and legacy code)
+  public SelfServiceNotificationEvent(Object source, Type type, Long userId, String firstName, String lastName,
+                                      String username, String email, String mobileNumber, boolean emailMode,
+                                      String ipAddress, Locale locale) {
+    this(source, type, userId, firstName, lastName, username, email, mobileNumber, emailMode, ipAddress, locale, null, null, null);
+  }
+
 
   /**
    * Factory method that creates an event and automatically captures the current thread's Fineract
@@ -176,43 +159,27 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
    * @see #SelfServiceNotificationEvent(Object, Type, Long, String, String, String, String, String,
    *     boolean, String, Locale, FineractPlatformTenant, HashMap)
    */
-  public static SelfServiceNotificationEvent withTenantContext(
-      Object source,
-      Type type,
-      Long userId,
-      String firstName,
-      String lastName,
-      String username,
-      String email,
-      String mobileNumber,
-      boolean emailMode,
-      String ipAddress,
-      Locale locale) {
-    FineractPlatformTenant currentTenant = null;
-    HashMap<BusinessDateType, LocalDate> currentDates = null;
+  public static SelfServiceNotificationEvent withTenantContext(Object source, Type type, Long userId, 
+      String firstName, String lastName, String username, String email, String mobileNumber, 
+      boolean emailMode, String ipAddress, Locale locale) {
+    
+    FineractPlatformTenant capturedTenant = null;
     try {
-      currentTenant = ThreadLocalContextUtil.getTenant();
-    } catch (IllegalStateException ignored) {
-    }
+      capturedTenant = ThreadLocalContextUtil.getTenant();
+    } catch (IllegalStateException ignored) {}
+    final FineractPlatformTenant tenantSnapshot = capturedTenant;
+
+    HashMap<BusinessDateType, LocalDate> businessDatesSnapshot = null;
     try {
-      currentDates = ThreadLocalContextUtil.getBusinessDates();
-    } catch (IllegalArgumentException ignored) {
-    }
-    return new SelfServiceNotificationEvent(
-        source,
-        type,
-        userId,
-        firstName,
-        lastName,
-        username,
-        email,
-        mobileNumber,
-        emailMode,
-        ipAddress,
-        locale,
-        currentTenant,
-        currentDates);
+      HashMap<BusinessDateType, LocalDate> dates = ThreadLocalContextUtil.getBusinessDates();
+      businessDatesSnapshot = dates != null ? new HashMap<>(dates) : null;
+    } catch (IllegalArgumentException ignored) {}
+
+    return new SelfServiceNotificationEvent(source, type, userId, firstName, lastName, username, 
+        email, mobileNumber, emailMode, ipAddress, locale, tenantSnapshot, businessDatesSnapshot, null);
   }
+  
+  public Map<String, Object> getContextData() { return contextData; } // NEW
 
   /**
    * Returns a safe, non-PII string representation suitable for logging. Sensitive fields (email,

@@ -14,7 +14,6 @@
  */
 package org.apache.fineract.selfservice.registration.starter;
 
-import jakarta.annotation.Nullable;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -23,7 +22,6 @@ import org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository;
 import org.apache.fineract.infrastructure.sms.scheduler.SmsMessageScheduledJobService;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
-import org.apache.fineract.selfservice.external.client.ExternalNotificationSystemClient;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.service.SelfServiceAuthorizationTokenService;
 import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPassworWritePlatformService;
@@ -68,6 +66,9 @@ public class SelfRegistrationConfiguration {
     return new SelfServiceAuthorizationTokenService(env);
   }
 
+  /**
+   * Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it.
+   */
   @Bean
   public MessageSource registrationMessageSource() {
     ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
@@ -78,9 +79,7 @@ public class SelfRegistrationConfiguration {
   }
 
   /**
-   * Provides the Thymeleaf engine for rendering registration email templates.
-   *
-   * @return configured template engine
+   * Kept because SelfServiceForgotPasswordWritePlatformServiceImpl still uses it.
    */
   @Bean
   public SpringTemplateEngine registrationTemplateEngine() {
@@ -105,10 +104,6 @@ public class SelfRegistrationConfiguration {
       ClientRepositoryWrapper clientRepository,
       PasswordValidationPolicyRepository passwordValidationPolicy,
       SelfServiceUserDomainService userDomainService,
-      SelfServicePluginEmailService selfServicePluginEmailService,
-      SmsMessageRepository smsMessageRepository,
-      SmsMessageScheduledJobService smsMessageScheduledJobService,
-      SmsCampaignDropdownReadPlatformService smsCampaignDropdownReadPlatformService,
       AppSelfServiceUserReadPlatformService appUserReadPlatformService,
       RoleRepository roleRepository,
       AppSelfServiceUserClientMappingRepository appUserClientMappingRepository,
@@ -119,8 +114,9 @@ public class SelfRegistrationConfiguration {
       PlatformPasswordEncoder platformPasswordEncoder,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
-      ApplicationEventPublisher applicationEventPublisher,
-      @Nullable ExternalNotificationSystemClient externalNotificationSystemClient) {
+      ApplicationEventPublisher applicationEventPublisher) {
+    
+    // Removed legacy notification dependencies (Email, SMS, Thymeleaf, ExternalClient)
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
         fromApiJsonHelper,
@@ -128,10 +124,6 @@ public class SelfRegistrationConfiguration {
         clientRepository,
         passwordValidationPolicy,
         userDomainService,
-        selfServicePluginEmailService,
-        smsMessageRepository,
-        smsMessageScheduledJobService,
-        smsCampaignDropdownReadPlatformService,
         appUserReadPlatformService,
         roleRepository,
         appUserClientMappingRepository,
@@ -142,10 +134,7 @@ public class SelfRegistrationConfiguration {
         platformPasswordEncoder,
         appSelfServiceUserRepository,
         selfServiceAuthorizationTokenService,
-        registrationTemplateEngine(),
-        registrationMessageSource(),
-        applicationEventPublisher,
-        externalNotificationSystemClient);
+        applicationEventPublisher);
   }
 
   @Bean

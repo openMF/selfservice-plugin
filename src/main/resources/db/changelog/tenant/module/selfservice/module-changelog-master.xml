@@ -33,4 +33,5 @@
   <include file="parts/021-grant-selfservice-office-read-permissions.xml" relativeToChangelogFile="true"/>  
   <include file="parts/022-create-self-service-auth-token.xml" relativeToChangelogFile="true"/>  
   <include file="parts/023-add-notification-messages.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/024-add-notification-messages-self-enrollment.xml" relativeToChangelogFile="true"/>    
 </databaseChangeLog>

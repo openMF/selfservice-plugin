@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0024-1">
+        <!-- Add initial templates for Self Service notifications-->        
+        <!-- SELF ENROLLMENT Templates -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
+            <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_EMAIL"/>
+            <column name="text" value="&lt;p&gt;Hello ${firstname},&lt;/p&gt;&lt;p&gt;To create a user, use the following details:&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Request ID:&lt;/strong&gt; ${requestId}&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Authorization Code:&lt;/strong&gt; ${authCode}&lt;/p&gt;&lt;p&gt;Regards,&lt;br/&gt;The Institution Team&lt;/p&gt;"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_SMS"/>
+            <column name="text" value="Hello ${firstname}, to create a user use Request ID: ${requestId} and Authorization Code: ${authCode}. Regards, The Institution Team"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_WHATSAPP"/>
+            <column name="text" value="Hello ${firstname}, to create a user use Request ID: ${requestId} and Authorization Code: ${authCode}. Regards, The Institution Team"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_IN_APP"/>
+            <column name="text" value="Hello ${firstname}, your Authorization Code is ${authCode} for Request ID ${requestId}."/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>
