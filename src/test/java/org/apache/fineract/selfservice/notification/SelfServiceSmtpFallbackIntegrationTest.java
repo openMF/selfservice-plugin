@@ -293,7 +293,6 @@ public class SelfServiceSmtpFallbackIntegrationTest {
             ExternalNotificationSystemClient externalNotificationSystemClient) {
       return new SelfServiceNotificationService(
           selfServiceTemplateService,
-          notificationMessageSource,
           emailService,
           smsMessageRepository(),
           smsScheduledJobService(),

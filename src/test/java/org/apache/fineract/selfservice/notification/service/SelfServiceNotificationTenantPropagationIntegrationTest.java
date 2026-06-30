@@ -34,7 +34,6 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.notification.SelfServiceTemplateService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.MessageSource;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -57,7 +56,6 @@ class SelfServiceNotificationTenantPropagationIntegrationTest {
   private final SelfServiceNotificationService service =
       new SelfServiceNotificationService(
           mock(SelfServiceTemplateService.class),
-          mock(MessageSource.class),
           mock(org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService.class),
           mock(org.apache.fineract.infrastructure.sms.domain.SmsMessageRepository.class),
           mock(

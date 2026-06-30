@@ -65,7 +65,7 @@ import org.springframework.core.env.Environment;
 class SelfServiceNotificationServiceTest {
 
   @Mock private SelfServiceTemplateService selfServiceTemplateService;
-  @Mock private MessageSource messageSource;
+  //@Mock private MessageSource messageSource;
   @Mock private SelfServicePluginEmailService emailService;
   @Mock private SmsMessageRepository smsMessageRepository;
   @Mock private SmsMessageScheduledJobService smsScheduledJobService;
@@ -90,7 +90,6 @@ class SelfServiceNotificationServiceTest {
     service =
         new SelfServiceNotificationService(
             selfServiceTemplateService,
-            messageSource,
             emailService,
             smsMessageRepository,
             smsScheduledJobService,
@@ -171,12 +170,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(selfServiceTemplateService.mergeTemplate(
-            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
-        .thenReturn("<html>body</html>");
-    when(messageSource.getMessage(
-            eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
-        .thenReturn("New Login");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL_SUBJECT"), any())).thenReturn("Security Notification: Login Successful");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any())).thenReturn("<html>body</html>");
+
 
     service.handleNotification(emailEvent());
 
@@ -306,12 +302,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(selfServiceTemplateService.mergeTemplate(
-            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
-        .thenReturn("<html>body</html>");
-    when(messageSource.getMessage(
-            eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
-        .thenReturn("Subject");
+        when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL_SUBJECT"), any())).thenReturn("Mock Subject");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any())).thenReturn("<html>body</html>");
+
 
     doThrow(
             new org.apache.fineract.infrastructure.core.service.PlatformEmailSendException(
@@ -330,12 +323,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(selfServiceTemplateService.mergeTemplate(
-            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
-        .thenReturn("<html>body</html>");
-    when(messageSource.getMessage(
-            eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
-        .thenReturn("Subject");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL_SUBJECT"), any())).thenReturn("Mock Subject");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any())).thenReturn("<html>body</html>");
+
 
     doThrow(
             new org.apache.fineract.infrastructure.core.service.PlatformEmailSendException(
@@ -369,12 +359,9 @@ class SelfServiceNotificationServiceTest {
     stubNotificationEnabled();
     stubExternalNotificationDisabled();
     when(cooldownCache.tryAcquire(any())).thenReturn(true);
-    when(selfServiceTemplateService.mergeTemplate(
-            eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any()))
-        .thenReturn("<html>body</html>");
-    when(messageSource.getMessage(
-            eq("subject.login-success"), eq(null), eq("subject.login-success"), any(Locale.class)))
-        .thenReturn("Subject");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL_SUBJECT"), any())).thenReturn("Mock Subject");
+    when(selfServiceTemplateService.mergeTemplate(eq(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS), eq("EMAIL"), any())).thenReturn("<html>body</html>");
+
 
     doThrow(new RuntimeException("Unexpected failure"))
         .when(emailService)

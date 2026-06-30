@@ -6,6 +6,32 @@
     <changeSet author="fineract" id="ss-0024-1">
         <!-- Add initial templates for Self Service notifications-->        
         <!-- SELF ENROLLMENT Templates -->
+        <!-- EMAIL SUBJECTS -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL_SUBJECT"/>
+            <column name="text" value="Security Notification: Login Successful"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL_SUBJECT"/>
+            <column name="text" value="Security Alert: Failed Login Attempt"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_EMAIL_SUBJECT"/>
+            <column name="text" value="Account Activated Successfully"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_EMAIL_SUBJECT"/>
+            <column name="text" value="Authorization Code"/>
+        </insert>
+        <!-- EMAIL BODY -->
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
