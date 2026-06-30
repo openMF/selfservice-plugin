@@ -1,49 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+ 
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-    <changeSet author="fineract" id="ss-0023-1">
-        <!-- Add initial templates for Self Service notifications-->        
-        <!-- LOGIN Templates -->
-        <!-- EMAIL SUBJECTS -->
+    <changeSet author="fineract" id="ss-0023-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_SUCCESS_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL_SUBJECT"/>
             <column name="text" value="Security Notification: Login Successful"/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0023-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_FAILURE_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL_SUBJECT"/>
             <column name="text" value="Security Alert: Failed Login Attempt"/>
         </insert>
-        <!-- EMAIL BODY -->
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0023-1-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_SUCCESS_EMAIL'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL"/>
             <column name="text" value="Hello ${firstname} ${lastname}, you have successfully logged in to your account from IP ${clientIp}. If this was not you, please contact support immediately."/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0023-1-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_SUCCESS_SMS'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
         </insert>
-        <!-- LOGIN_FAILURE Templates -->
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0023-1-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_FAILURE_EMAIL'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL"/>
             <column name="text" value="Hello ${firstname}, a failed login attempt was detected for your account from IP ${clientIp}. If this was not you, please reset your password immediately."/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0023-1-6">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_FAILURE_SMS'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_SMS"/>
             <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
-        </insert>       
+        </insert>
     </changeSet>
 </databaseChangeLog>

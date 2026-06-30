@@ -1,36 +1,78 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+ 
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-    <changeSet author="fineract" id="ss-0023-1">
-        <!-- Add initial templates for Self Service notifications-->
-        <!-- EMAIL SUBJECTS -->        
+    <changeSet author="fineract" id="ss-0025-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_USER_ACTIVATED_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
             <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_EMAIL_SUBJECT"/>
             <column name="text" value="Account Activated Successfully"/>
         </insert>
-        <!-- USER_ACTIVATED Templates -->
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0025-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_USER_ACTIVATED_EMAIL'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_EMAIL"/>
             <column name="text" value="Hello ${firstname} ${lastname}, your account has been successfully activated. You can now log in to your account."/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0025-1-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_USER_ACTIVATED_SMS'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_SMS"/>
             <column name="text" value="Hi ${firstname}, your account has been successfully activated. Welcome!"/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0025-1-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_USER_ACTIVATED_WHATSAPP'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, your account is now active. You can log in at your convenience."/>
         </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0025-1-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_USER_ACTIVATED_IN_APP'
+            </sqlCheck>
+        </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
