@@ -1,6 +1,0 @@
-Hello [[${firstName ?: 'there'}]],
-
-We detected a new login to your account[# th:if="${eventTimestamp != null}"] at [[${#temporals.format(eventTimestamp, 'yyyy-MM-dd HH:mm:ss z')}]][/][# th:if="${eventTimestamp == null}"] recently[/].
-[# th:if="${ipAddress != null}"]IP Address: [[${ipAddress}]][/]
-
-If this was you, you can safely ignore this message. If not, please contact support immediately.

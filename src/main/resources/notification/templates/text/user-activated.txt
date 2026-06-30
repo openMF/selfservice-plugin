@@ -1,4 +1,0 @@
-Welcome [[${firstName}]],
-
-Your self-service account has been activated.
-You can now login with your username: [[${username}]].

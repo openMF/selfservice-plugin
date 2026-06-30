@@ -88,17 +88,25 @@ public class SelfServiceNotificationService {
   public void handleNotification(SelfServiceNotificationEvent event) {
     restoreTenantContext(event);
     try {
-      boolean globalEnabled = env.getProperty("fineract.selfservice.notification.enabled", Boolean.class, true);
+      boolean globalEnabled =
+          env.getProperty("fineract.selfservice.notification.enabled", Boolean.class, true);
       if (!globalEnabled) return;
 
-      boolean eventEnabled = env.getProperty(
-          "fineract.selfservice.notification." + event.getType().getTemplatePrefix() + ".enabled",
-          Boolean.class, event.getType() != SelfServiceNotificationEvent.Type.LOGIN_FAILURE);
+      boolean eventEnabled =
+          env.getProperty(
+              "fineract.selfservice.notification."
+                  + event.getType().getTemplatePrefix()
+                  + ".enabled",
+              Boolean.class,
+              event.getType() != SelfServiceNotificationEvent.Type.LOGIN_FAILURE);
       if (!eventEnabled) return;
 
       String cacheKey = event.getType().name() + ":" + event.getUserId();
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
-        log.debug("Skipping notification for event type {} and user ID {} due to cooldown.", event.getType(), event.getUserId());
+        log.debug(
+            "Skipping notification for event type {} and user ID {} due to cooldown.",
+            event.getType(),
+            event.getUserId());
         return;
       }
 
@@ -107,7 +115,8 @@ public class SelfServiceNotificationService {
       NotificationCredentialsData notificationCredentials = null;
       if (externalNotificationSystemClient != null) {
         try {
-          notificationCredentials = externalNotificationSystemClient.resolveNotificationCredentials();
+          notificationCredentials =
+              externalNotificationSystemClient.resolveNotificationCredentials();
         } catch (Exception e) {
           log.error("Failed to resolve notification credentials", e);
         }
@@ -134,7 +143,9 @@ public class SelfServiceNotificationService {
       log.error("Failed to handle notification for event type {}", event.getType(), e);
     } finally {
       ThreadLocalContextUtil.reset();
-      log.debug("Reset tenant context on thread {} after notification processing", Thread.currentThread().getName());
+      log.debug(
+          "Reset tenant context on thread {} after notification processing",
+          Thread.currentThread().getName());
     }
   }
 
@@ -148,37 +159,42 @@ public class SelfServiceNotificationService {
     params.put("clientIp", event.getIpAddress());
     params.put("locale", event.getLocale() != null ? event.getLocale().toString() : "en");
     params.put("emailMode", event.isEmailMode());
-    
+
     if (event.getContextData() != null) {
       params.putAll(event.getContextData());
     }
-    
+
     params.put("firstName", event.getFirstName());
     params.put("lastName", event.getLastName());
     params.put("ipAddress", event.getIpAddress());
     params.put("eventTimestamp", java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC));
-    
+
     return params;
   }
 
-  private void sendExternalNotification(SelfServiceNotificationEvent event, NotificationCredentialsData credentials, Map<String, Object> params) {
+  private void sendExternalNotification(
+      SelfServiceNotificationEvent event,
+      NotificationCredentialsData credentials,
+      Map<String, Object> params) {
     NotificationMessage notificationMessage = new NotificationMessage();
     notificationMessage.setEmail(event.getEmail());
     notificationMessage.setMobile(event.getMobileNumber());
 
     String content;
     if (StringUtils.isNotBlank(event.getMobileNumber())) {
-        content = selfServiceTemplateService.mergeTemplate(event.getType(), credentials.isWhatsapp() ? "WHATSAPP" : "SMS", params);
+      content =
+          selfServiceTemplateService.mergeTemplate(
+              event.getType(), credentials.isWhatsapp() ? "WHATSAPP" : "SMS", params);
     } else {
-        content = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
+      content = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
     }
-    
+
     if (credentials.isWhatsapp() || credentials.isSms()) {
-        String noTags = content.replaceAll("<[^>]*>", "");
-        String unescaped = StringEscapeUtils.unescapeHtml4(noTags);
-        content = unescaped.trim().replaceAll("(?m)^[ \t]*\r?\n", "").replaceAll("\n{3,}", "\n\n");
+      String noTags = content.replaceAll("<[^>]*>", "");
+      String unescaped = StringEscapeUtils.unescapeHtml4(noTags);
+      content = unescaped.trim().replaceAll("(?m)^[ \t]*\r?\n", "").replaceAll("\n{3,}", "\n\n");
     }
-    
+
     notificationMessage.setText(content);
 
     try {
@@ -189,15 +205,19 @@ public class SelfServiceNotificationService {
     }
   }
 
-  private void sendEmailNotification(SelfServiceNotificationEvent event, Map<String, Object> params) {
+  private void sendEmailNotification(
+      SelfServiceNotificationEvent event, Map<String, Object> params) {
     if (StringUtils.isBlank(event.getEmail())) {
-      log.warn("Email notification skipped for event {} because no email address is available", event.getType());
+      log.warn(
+          "Email notification skipped for event {} because no email address is available",
+          event.getType());
       releaseCooldown(event);
       return;
     }
 
     // NEW: Fetch the subject from the Fineract Template system instead of MessageSource
-    String subject = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
+    String subject =
+        selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
 
     // Fetch the body from the Fineract Template system
     String htmlBody = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
@@ -209,31 +229,44 @@ public class SelfServiceNotificationService {
 
   private void sendSmsNotification(SelfServiceNotificationEvent event, Map<String, Object> params) {
     if (StringUtils.isBlank(event.getMobileNumber())) {
-      log.warn("SMS notification skipped for event {} because no mobile number is available", event.getType());
+      log.warn(
+          "SMS notification skipped for event {} because no mobile number is available",
+          event.getType());
       releaseCooldown(event);
       return;
     }
-    
+
     Collection<SmsProviderData> providers = smsProviderService.retrieveSmsProviders();
     if (providers == null || providers.isEmpty()) {
-      log.warn("No SMS provider configured, SMS notification skipped for event {}", event.getType());
+      log.warn(
+          "No SMS provider configured, SMS notification skipped for event {}", event.getType());
       releaseCooldown(event);
       return;
     }
-    
+
     Long providerId = resolveSmsProviderId(providers);
     if (providerId == null) {
-      log.warn("No valid SMS provider found, SMS notification skipped for event {}", event.getType());
+      log.warn(
+          "No valid SMS provider found, SMS notification skipped for event {}", event.getType());
       releaseCooldown(event);
       return;
     }
 
     String textBody = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
 
-    SmsMessage smsMessage = SmsMessage.instance(
-        null, null, null, null, SmsMessageStatusType.PENDING, textBody, event.getMobileNumber(), null, true);
+    SmsMessage smsMessage =
+        SmsMessage.instance(
+            null,
+            null,
+            null,
+            null,
+            SmsMessageStatusType.PENDING,
+            textBody,
+            event.getMobileNumber(),
+            null,
+            true);
     smsMessage = smsMessageRepository.save(smsMessage);
-    
+
     try {
       smsScheduledJobService.sendTriggeredMessage(new ArrayList<>(List.of(smsMessage)), providerId);
       smsMessage.setStatusType(SmsMessageStatusType.SENT.getValue());
@@ -250,7 +283,8 @@ public class SelfServiceNotificationService {
     if (providers.size() == 1) {
       return providers.iterator().next().getId();
     }
-    Long configuredProviderId = env.getProperty("fineract.selfservice.notification.sms.providerId", Long.class);
+    Long configuredProviderId =
+        env.getProperty("fineract.selfservice.notification.sms.providerId", Long.class);
     if (configuredProviderId != null) {
       for (SmsProviderData provider : providers) {
         if (configuredProviderId.equals(provider.getId())) {
@@ -261,12 +295,18 @@ public class SelfServiceNotificationService {
     return null;
   }
 
-  private void handleSmtpConfigError(SelfServiceNotificationEvent event, SmtpConfigurationUnavailableException configEx) {
+  private void handleSmtpConfigError(
+      SelfServiceNotificationEvent event, SmtpConfigurationUnavailableException configEx) {
     releaseCooldown(event);
     if (smtpConfigWarningLogged.compareAndSet(false, true)) {
-      log.warn("Email notification skipped for event type {} — SMTP configuration unavailable: {}. Further config errors will be logged at DEBUG.", event.getType(), configEx.getMessage());
+      log.warn(
+          "Email notification skipped for event type {} — SMTP configuration unavailable: {}. Further config errors will be logged at DEBUG.",
+          event.getType(),
+          configEx.getMessage());
     } else {
-      log.debug("Email notification skipped for event type {} — SMTP configuration unavailable.", event.getType());
+      log.debug(
+          "Email notification skipped for event type {} — SMTP configuration unavailable.",
+          event.getType());
     }
   }
 
@@ -289,14 +329,26 @@ public class SelfServiceNotificationService {
     FineractPlatformTenant eventTenant = event.getTenant();
     if (eventTenant != null) {
       ThreadLocalContextUtil.setTenant(eventTenant);
-      log.debug("Restored tenant '{}' from notification event on thread {}", eventTenant.getTenantIdentifier(), Thread.currentThread().getName());
+      log.debug(
+          "Restored tenant '{}' from notification event on thread {}",
+          eventTenant.getTenantIdentifier(),
+          Thread.currentThread().getName());
     } else {
       FineractPlatformTenant threadTenant = null;
-      try { threadTenant = ThreadLocalContextUtil.getTenant(); } catch (IllegalStateException ignored) {}
+      try {
+        threadTenant = ThreadLocalContextUtil.getTenant();
+      } catch (IllegalStateException ignored) {
+      }
       if (threadTenant != null) {
-        log.debug("Using TaskDecorator-propagated tenant '{}' on thread {}", threadTenant.getTenantIdentifier(), Thread.currentThread().getName());
+        log.debug(
+            "Using TaskDecorator-propagated tenant '{}' on thread {}",
+            threadTenant.getTenantIdentifier(),
+            Thread.currentThread().getName());
       } else {
-        log.warn("No tenant context available for notification event {} on thread {} — database operations may fail", event.getType(), Thread.currentThread().getName());
+        log.warn(
+            "No tenant context available for notification event {} on thread {} — database operations may fail",
+            event.getType(),
+            Thread.currentThread().getName());
       }
     }
     if (event.getBusinessDates() != null) {

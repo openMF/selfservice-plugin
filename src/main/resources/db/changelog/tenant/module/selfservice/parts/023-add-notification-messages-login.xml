@@ -5,7 +5,21 @@
 
     <changeSet author="fineract" id="ss-0023-1">
         <!-- Add initial templates for Self Service notifications-->        
-        <!-- LOGIN_SUCCESS Templates -->
+        <!-- LOGIN Templates -->
+        <!-- EMAIL SUBJECTS -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
+            <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
+            <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_EMAIL_SUBJECT"/>
+            <column name="text" value="Security Notification: Login Successful"/>
+        </insert>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_EMAIL_SUBJECT"/>
+            <column name="text" value="Security Alert: Failed Login Attempt"/>
+        </insert>
+        <!-- EMAIL BODY -->
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
             <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
@@ -18,7 +32,6 @@
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
         </insert>
-
         <!-- LOGIN_FAILURE Templates -->
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
@@ -31,32 +44,6 @@
             <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_SMS"/>
             <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
-        </insert>
-
-        <!-- USER_ACTIVATED Templates -->
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="1"/> <!-- 1 = EMAIL -->
-            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_EMAIL"/>
-            <column name="text" value="Hello ${firstname} ${lastname}, your account has been successfully activated. You can now log in to your account."/>
-        </insert>
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
-            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_SMS"/>
-            <column name="text" value="Hi ${firstname}, your account has been successfully activated. Welcome!"/>
-        </insert>
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
-            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_WHATSAPP"/>
-            <column name="text" value="Hello ${firstname}, your account is now active. You can log in at your convenience."/>
-        </insert>
-        <insert tableName="m_template">
-            <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
-            <column name="name" value="SELF_SERVICE_USER_ACTIVATED_IN_APP"/>
-            <column name="text" value="Account activated successfully for user ${username}."/>
-        </insert>
+        </insert>       
     </changeSet>
 </databaseChangeLog>
