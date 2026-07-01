@@ -373,6 +373,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       this.selfServiceRegistrationRepository.saveAndFlush(selfServiceRegistration);
       this.appSelfServiceUserRepository.saveAndFlush(appUser);
       this.appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
+      // Publish notification event after successful user creation
+      publishUserCreatedEvent(appUser, selfServiceRegistration);
       return appUser;
 
     } catch (final JpaSystemException | DataIntegrityViolationException dve) {
@@ -688,7 +690,63 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return appUser;
   }
 
-  // NEW METHOD: Publishes the enrollment token event after the transaction commits
+  // NEW METHOD: Publishes the user created event after the transaction commits
+  private void publishUserCreatedEvent(
+      AppSelfServiceUser appUser, SelfServiceRegistration registration) {
+    FineractPlatformTenant capturedTenant = null;
+    try {
+      capturedTenant = ThreadLocalContextUtil.getTenant();
+    } catch (IllegalStateException ignored) {
+    }
+    final FineractPlatformTenant tenantSnapshot = capturedTenant;
+
+    final HashMap<BusinessDateType, LocalDate> businessDatesSnapshot;
+    HashMap<BusinessDateType, LocalDate> tempDates = null;
+    try {
+      HashMap<BusinessDateType, LocalDate> dates = ThreadLocalContextUtil.getBusinessDates();
+      tempDates = dates != null ? new HashMap<>(dates) : null;
+    } catch (IllegalArgumentException e) {
+    }
+    businessDatesSnapshot = tempDates;
+
+    Runnable publishTask =
+        () -> {
+          try {
+            applicationEventPublisher.publishEvent(
+                new SelfServiceNotificationEvent(
+                    SelfServiceRegistrationWritePlatformServiceImpl.this,
+                    SelfServiceNotificationEvent.Type.USER_CREATED,
+                    appUser.getId(),
+                    appUser.getFirstname(),
+                    appUser.getLastname(),
+                    appUser.getUsername(),
+                    registration.getEmail(),
+                    registration.getMobileNumber(),
+                    isEmailMode(registration),
+                    null,
+                    LocaleContextHolder.getLocale(),
+                    tenantSnapshot,
+                    businessDatesSnapshot));
+          } catch (Exception e) {
+            log.warn(
+                "Failed to publish USER_CREATED notification for userId={}", appUser.getId(), e);
+          }
+        };
+
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              publishTask.run();
+            }
+          });
+    } else {
+      publishTask.run();
+    }
+  }
+
+  // Publishes the enrollment token event after the transaction commits
   private void publishEnrollmentTokenEvent(
       SelfServiceRegistration registration, boolean isEmailMode) {
     org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant capturedTenant = null;

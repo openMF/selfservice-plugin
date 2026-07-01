@@ -35,4 +35,6 @@
   <include file="parts/023-add-notification-messages-login.xml" relativeToChangelogFile="true"/>  
   <include file="parts/024-add-notification-messages-self-enrollment.xml" relativeToChangelogFile="true"/>    
   <include file="parts/025-add-notification-messages-activate.xml" relativeToChangelogFile="true"/>    
+  <include file="parts/026-add-notification-messages-transfer.xml" relativeToChangelogFile="true"/>
+  <include file="parts/027-add-notification-messages-user-created.xml" relativeToChangelogFile="true"/>    
 </databaseChangeLog>

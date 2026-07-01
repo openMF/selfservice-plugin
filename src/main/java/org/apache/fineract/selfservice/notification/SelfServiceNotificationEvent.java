@@ -36,7 +36,9 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     USER_ACTIVATED("user-activated"),
     LOGIN_SUCCESS("login-success"),
     LOGIN_FAILURE("login-failure"),
-    ENROLLMENT_TOKEN("enrollment-token");
+    ENROLLMENT_TOKEN("enrollment-token"),
+    TRANSFER_SUCCESS("transfer-success"),
+    USER_CREATED("user-created");
 
     private final String templatePrefix;
 
@@ -257,6 +259,52 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
         tenantSnapshot,
         businessDatesSnapshot,
         null);
+  }
+
+  // Accepts contextData for dynamic template variables
+  public static SelfServiceNotificationEvent withTenantContext(
+      Object source,
+      Type type,
+      Long userId,
+      String firstName,
+      String lastName,
+      String username,
+      String email,
+      String mobileNumber,
+      boolean emailMode,
+      String ipAddress,
+      Locale locale,
+      Map<String, Object> contextData) {
+
+    FineractPlatformTenant capturedTenant = null;
+    try {
+      capturedTenant = ThreadLocalContextUtil.getTenant();
+    } catch (IllegalStateException ignored) {
+    }
+    final FineractPlatformTenant tenantSnapshot = capturedTenant;
+
+    HashMap<BusinessDateType, LocalDate> businessDatesSnapshot = null;
+    try {
+      HashMap<BusinessDateType, LocalDate> dates = ThreadLocalContextUtil.getBusinessDates();
+      businessDatesSnapshot = dates != null ? new HashMap<>(dates) : null;
+    } catch (IllegalArgumentException ignored) {
+    }
+
+    return new SelfServiceNotificationEvent(
+        source,
+        type,
+        userId,
+        firstName,
+        lastName,
+        username,
+        email,
+        mobileNumber,
+        emailMode,
+        ipAddress,
+        locale,
+        tenantSnapshot,
+        businessDatesSnapshot,
+        contextData);
   }
 
   public Map<String, Object> getContextData() {

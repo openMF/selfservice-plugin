@@ -23,6 +23,13 @@ import org.apache.fineract.portfolio.account.service.AccountTransferEnumerations
 @SuppressWarnings("unused")
 public class SelfAccountTemplateData implements Comparable<SelfAccountTemplateData> {
 
+  /**
+   * @return the accountNo
+   */
+  public String getAccountNo() {
+    return accountNo;
+  }
+
   private final Long accountId;
   private final String accountNo;
   private final EnumOptionData accountType;

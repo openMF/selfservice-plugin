@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0026-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT"/>
+            <column name="text" value="Account Transfer Successful"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0026-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_EMAIL"/>
+            <column name="text" value="Hello ${firstname} ${lastname}, your transfer of ${transactionAmount} from account ${fromAccountNumber} to account ${toAccountNumber} on ${transactionDate} was successful. Description: ${transferDescription}. Transfer ID: ${transferId}."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0026-1-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_SMS'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="0"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_SMS"/>
+            <column name="text" value="Hi ${firstname}, your transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} was successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0026-1-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="0"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP"/>
+            <column name="text" value="Hello ${firstname}, your transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} was successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0026-1-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_IN_APP'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="0"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_IN_APP"/>
+            <column name="text" value="Transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>
