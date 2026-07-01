@@ -37,4 +37,7 @@
   <include file="parts/025-add-notification-messages-activate.xml" relativeToChangelogFile="true"/>    
   <include file="parts/026-add-notification-messages-transfer.xml" relativeToChangelogFile="true"/>
   <include file="parts/027-add-notification-messages-user-created.xml" relativeToChangelogFile="true"/>    
+  <include file="parts/028-add-notification-messages-beneficiaries.xml" relativeToChangelogFile="true"/>
+  <include file="parts/029-add-notification-messages-loan.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/030-add-notification-messages-savings.xml" relativeToChangelogFile="true"/>    
 </databaseChangeLog>

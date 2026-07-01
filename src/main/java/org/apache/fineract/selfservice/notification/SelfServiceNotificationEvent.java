@@ -38,7 +38,16 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     LOGIN_FAILURE("login-failure"),
     ENROLLMENT_TOKEN("enrollment-token"),
     TRANSFER_SUCCESS("transfer-success"),
-    USER_CREATED("user-created");
+    USER_CREATED("user-created"),
+    BENEFICIARY_ADDED("beneficiary-added"),
+    BENEFICIARY_UPDATED("beneficiary-updated"),
+    BENEFICIARY_DELETED("beneficiary-deleted"),
+    LOAN_REQUESTED("loan-requested"),
+    LOAN_UPDATED("loan-updated"),
+    LOAN_WITHDRAWN("loan-withdrawn"),
+    SAVINGS_REQUESTED("savings-requested"),
+    SAVINGS_UPDATED("savings-updated"),
+    SAVINGS_WITHDRAWN("savings-withdrawn");
 
     private final String templatePrefix;
 

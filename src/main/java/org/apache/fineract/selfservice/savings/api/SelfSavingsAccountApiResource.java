@@ -14,6 +14,8 @@
  */
 package org.apache.fineract.selfservice.savings.api;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -22,6 +24,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -40,9 +43,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
@@ -51,11 +58,16 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
+import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
 import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -63,6 +75,7 @@ import org.springframework.util.CollectionUtils;
 @Component
 @Tag(name = "Self Savings Account", description = "")
 @RequiredArgsConstructor
+@Slf4j
 public class SelfSavingsAccountApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
@@ -72,6 +85,10 @@ public class SelfSavingsAccountApiResource {
   private final AppuserSavingsMapperReadService appuserSavingsMapperReadService;
   private final SelfSavingsDataValidator dataValidator;
   private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+
+  // NEW DEPENDENCIES for notifications
+  private final ApplicationEventPublisher applicationEventPublisher;
+  private final Environment env;
 
   @GET
   @Path("{accountId}")
@@ -103,14 +120,10 @@ public class SelfSavingsAccountApiResource {
       @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
       @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
           final String chargeStatus,
-
-      // Date filters
       @QueryParam("month") @Parameter(description = "Filter transactions by month (1-12)")
           final Integer month,
       @QueryParam("year") @Parameter(description = "Filter transactions by year")
           final Integer year,
-
-      // New: Last N transactions filter
       @QueryParam("lastTransactions")
           @Parameter(description = "Return only the last N transactions (most recent)")
           final Integer lastTransactions,
@@ -120,8 +133,6 @@ public class SelfSavingsAccountApiResource {
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
 
     final boolean staffInSelectedOfficeOnly = false;
-
-    // Build date range for core Fineract API
     String dateRange = null;
     if (month != null && year != null) {
       if (month < 1 || month > 12) {
@@ -136,13 +147,11 @@ public class SelfSavingsAccountApiResource {
         this.savingsAccountsApiResource.retrieveOne(
             accountId, staffInSelectedOfficeOnly, chargeStatus, dateRange, uriInfo);
 
-    // ====================== APPLY FILTERS ======================
     Collection<SavingsAccountTransactionData> transactions = savingsAccountData.getTransactions();
 
     if (!CollectionUtils.isEmpty(transactions)) {
       List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
-      // 1. Filter by Month & Year (if provided)
       if (month != null && year != null) {
         filtered =
             filtered.stream()
@@ -160,32 +169,27 @@ public class SelfSavingsAccountApiResource {
                 .collect(Collectors.toList());
       }
 
-      // 2. Filter Last N Transactions (most recent first)
       if (lastTransactions != null && lastTransactions > 0) {
-        // Sort by transaction date descending (newest first)
         filtered.sort(
             (t1, t2) -> {
               LocalDate d1 =
                   t1.getTransactionDate() != null ? t1.getTransactionDate() : t1.getDate();
               LocalDate d2 =
                   t2.getTransactionDate() != null ? t2.getTransactionDate() : t2.getDate();
-              return d2.compareTo(d1); // descending
+              return d2.compareTo(d1);
             });
 
-        // Limit to last N transactions
         if (filtered.size() > lastTransactions) {
           filtered = filtered.subList(0, lastTransactions);
         }
       }
 
-      // Apply filtered list using reflection (since SavingsAccountData has no setter)
       try {
         Field transactionsField = SavingsAccountData.class.getDeclaredField("transactions");
         transactionsField.setAccessible(true);
         transactionsField.set(savingsAccountData, filtered);
       } catch (Exception e) {
-        // Log in production environment
-        System.err.println("Warning: Could not set filtered transactions - " + e.getMessage());
+        log.warn("Warning: Could not set filtered transactions - {}", e.getMessage());
       }
     }
 
@@ -330,13 +334,37 @@ public class SelfSavingsAccountApiResource {
   public String submitSavingsAccountApplication(
       @QueryParam("command") final String commandParam,
       @Context final UriInfo uriInfo,
-      final String apiRequestBodyAsJson) {
+      final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) { // ADDED httpRequest
+
     HashMap<String, Object> parameterMap =
         this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
     final Long clientId =
         (Long) parameterMap.get(SelfSavingsAccountConstants.clientIdParameterName);
     validateAppSelfServiceUserClientsMapping(clientId);
-    return this.savingsAccountsApiResource.submitApplication(apiRequestBodyAsJson);
+
+    String responseJson = this.savingsAccountsApiResource.submitApplication(apiRequestBodyAsJson);
+
+    Map<String, Object> contextData = new HashMap<>();
+    Long savingsId = null;
+    try {
+      JsonObject reqJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      if (reqJson.has("depositAmount"))
+        contextData.put("depositAmount", reqJson.get("depositAmount").getAsBigDecimal());
+      else if (reqJson.has("principal"))
+        contextData.put("depositAmount", reqJson.get("principal").getAsBigDecimal());
+
+      JsonObject resJson = JsonParser.parseString(responseJson).getAsJsonObject();
+      if (resJson.has("savingsId")) savingsId = resJson.get("savingsId").getAsLong();
+      else if (resJson.has("resourceId")) savingsId = resJson.get("resourceId").getAsLong();
+    } catch (Exception e) {
+      log.warn("Failed to parse savings application JSON for notification", e);
+    }
+
+    publishSavingsEvent(
+        SelfServiceNotificationEvent.Type.SAVINGS_REQUESTED, savingsId, contextData, httpRequest);
+
+    return responseJson;
   }
 
   @PUT
@@ -346,10 +374,35 @@ public class SelfSavingsAccountApiResource {
   public String modifySavingsAccountApplication(
       @PathParam("accountId") final Long accountId,
       @QueryParam("command") final String commandParam,
-      final String apiRequestBodyAsJson) {
+      final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) { // ADDED httpRequest
+
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
     this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
-    return this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
+
+    String responseJson =
+        this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
+
+    // In Fineract, "withdrawnByApplicant" is passed as a command to the update endpoint
+    SelfServiceNotificationEvent.Type eventType =
+        "withdrawnByApplicant".equalsIgnoreCase(commandParam)
+            ? SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN
+            : SelfServiceNotificationEvent.Type.SAVINGS_UPDATED;
+
+    Map<String, Object> contextData = new HashMap<>();
+    try {
+      JsonObject reqJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      if (reqJson.has("depositAmount"))
+        contextData.put("depositAmount", reqJson.get("depositAmount").getAsBigDecimal());
+      else if (reqJson.has("principal"))
+        contextData.put("depositAmount", reqJson.get("principal").getAsBigDecimal());
+    } catch (Exception e) {
+      log.warn("Failed to parse savings modification JSON for notification", e);
+    }
+
+    publishSavingsEvent(eventType, accountId, contextData, httpRequest);
+
+    return responseJson;
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
@@ -359,5 +412,69 @@ public class SelfSavingsAccountApiResource {
     if (!mappedClientId) {
       throw new ClientNotFoundException(clientId);
     }
+  }
+
+  // --- Helper Methods for Notifications ---
+
+  private void publishSavingsEvent(
+      SelfServiceNotificationEvent.Type type,
+      Long savingsId,
+      Map<String, Object> contextData,
+      HttpServletRequest httpRequest) {
+    try {
+      AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+      String mobileNumber = extractMobile(user);
+      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
+      contextData.put("savingsId", savingsId != null ? savingsId : "");
+
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              type,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              LocaleContextHolder.getLocale(),
+              contextData));
+    } catch (Exception e) {
+      log.warn("Failed to publish {} notification event", type, e);
+    }
+  }
+
+  private String extractMobile(AppSelfServiceUser user) {
+    if (user == null || user.getAppUserClientMappings() == null) return null;
+    return user.getAppUserClientMappings().stream()
+        .map(AppSelfServiceUserClientMapping::getClient)
+        .filter(Objects::nonNull)
+        .map(Client::getMobileNo)
+        .filter(StringUtils::isNotBlank)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private boolean determineMode(String email, String mobileNumber) {
+    boolean hasEmail = StringUtils.isNotBlank(email);
+    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
+    if (hasEmail && !hasMobile) return true;
+    if (hasMobile && !hasEmail) return false;
+    String pref =
+        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
+    return "email".equalsIgnoreCase(pref);
+  }
+
+  private String extractClientIp(HttpServletRequest httpRequest) {
+    if (httpRequest == null) return null;
+    String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
+    if (StringUtils.isNotBlank(xForwardedFor)) {
+      String firstToken = xForwardedFor.split(",")[0].trim();
+      if (StringUtils.isNotBlank(firstToken)) return firstToken;
+    }
+    return httpRequest.getRemoteAddr();
   }
 }

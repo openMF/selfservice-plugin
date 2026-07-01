@@ -17,6 +17,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.UriInfo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,6 +39,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.env.Environment;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
@@ -51,6 +54,11 @@ class SelfSavingsAccountApiResourceTest {
   @Mock private SelfSavingsDataValidator dataValidator;
   @Mock private AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
   @Mock private UriInfo uriInfo;
+
+  // NEW MOCKS for notification dependencies
+  @Mock private ApplicationEventPublisher applicationEventPublisher;
+  @Mock private Environment env;
+  @Mock private HttpServletRequest httpRequest;
 
   private SelfSavingsAccountApiResource resource;
 
@@ -92,7 +100,9 @@ class SelfSavingsAccountApiResourceTest {
             savingsAccountTransactionsApiResource,
             appuserSavingsMapperReadService,
             dataValidator,
-            appUserClientMapperReadService);
+            appUserClientMapperReadService,
+            applicationEventPublisher, // NEW
+            env); // NEW
   }
 
   private void mockAuthenticatedUser() {
@@ -140,9 +150,6 @@ class SelfSavingsAccountApiResourceTest {
 
     assertNotNull(result);
     verify(dataValidator).validateRetrieveSavings(uriInfo);
-    // TODO
-    /*verify(savingsAccountsApiResource)
-    .retrieveOne(eq(ACCOUNT_ID), eq(false), eq("all"), eq(""), eq(uriInfo));*/
   }
 
   @Test
@@ -255,12 +262,15 @@ class SelfSavingsAccountApiResourceTest {
     HashMap<String, Object> map = new HashMap<>();
     map.put(SelfSavingsAccountConstants.clientIdParameterName, CLIENT_ID);
     when(dataValidator.validateSavingsApplication(any())).thenReturn(map);
-    when(savingsAccountsApiResource.submitApplication("body")).thenReturn("{}");
 
-    String result = resource.submitSavingsAccountApplication("create", uriInfo, "body");
+    // FIXED: Changed "body" to "{}" to prevent JSON parsing warnings
+    when(savingsAccountsApiResource.submitApplication("{}")).thenReturn("{}");
+
+    // FIXED: Added httpRequest parameter and changed "body" to "{}"
+    String result = resource.submitSavingsAccountApplication("create", uriInfo, "{}", httpRequest);
 
     assertNotNull(result);
-    verify(savingsAccountsApiResource).submitApplication("body");
+    verify(savingsAccountsApiResource).submitApplication("{}");
   }
 
   @Test
@@ -270,9 +280,10 @@ class SelfSavingsAccountApiResourceTest {
     map.put(SelfSavingsAccountConstants.clientIdParameterName, CLIENT_ID);
     when(dataValidator.validateSavingsApplication(any())).thenReturn(map);
 
+    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     assertThrows(
         ClientNotFoundException.class,
-        () -> resource.submitSavingsAccountApplication("create", uriInfo, "body"));
+        () -> resource.submitSavingsAccountApplication("create", uriInfo, "{}", httpRequest));
     verify(savingsAccountsApiResource, never()).submitApplication(any());
   }
 
@@ -281,22 +292,27 @@ class SelfSavingsAccountApiResourceTest {
   @Test
   void modifySavingsAccountApplication_mappedAccount_returnsData() {
     mockSavingsMapped();
-    when(savingsAccountsApiResource.update(ACCOUNT_ID, "body", "update")).thenReturn("{}");
 
-    String result = resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "body");
+    // FIXED: Changed "body" to "{}" to match the actual call and prevent JSON parsing warnings
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", "update")).thenReturn("{}");
+
+    // FIXED: Added httpRequest parameter and changed "body" to "{}"
+    String result =
+        resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest);
 
     assertNotNull(result);
-    verify(dataValidator).validateSavingsApplication("body");
-    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "body", "update");
+    verify(dataValidator).validateSavingsApplication("{}");
+    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "{}", "update");
   }
 
   @Test
   void modifySavingsAccountApplication_unmappedAccount_throws() {
     mockSavingsNotMapped();
 
+    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     assertThrows(
         SavingsAccountNotFoundException.class,
-        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "body"));
+        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest));
     verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
   }
 }

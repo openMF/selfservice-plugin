@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+   <!-- BENEFICIARY ADDED -->
+   <changeSet author="fineract" id="ss-0028-1-1">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_ADDED_EMAIL_SUBJECT'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_EMAIL_SUBJECT" />
+         <column name="text" value="New Beneficiary Added" />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-1-2">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_ADDED_EMAIL'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_EMAIL" />
+         <column name="text" value="Hello ${firstname} ${lastname}, a new beneficiary '${beneficiaryName}' (Account: ${accountNumber}) has been successfully added to your profile." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-1-3">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_ADDED_SMS'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_SMS" />
+         <column name="text" value="Hi ${firstname}, beneficiary '${beneficiaryName}' (${accountNumber}) added successfully." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-1-4">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_ADDED_WHATSAPP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_WHATSAPP" />
+         <column name="text" value="Hello ${firstname}, a new beneficiary '${beneficiaryName}' (${accountNumber}) has been added to your profile." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-1-5">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_ADDED_IN_APP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_IN_APP" />
+         <column name="text" value="Beneficiary '${beneficiaryName}' added successfully." />
+      </insert>
+   </changeSet>
+   <!-- BENEFICIARY UPDATED -->
+   <changeSet author="fineract" id="ss-0028-2-1">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_UPDATED_EMAIL_SUBJECT'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_EMAIL_SUBJECT" />
+         <column name="text" value="Beneficiary Updated" />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-2-2">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_UPDATED_EMAIL'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_EMAIL" />
+         <column name="text" value="Hello ${firstname} ${lastname}, the details for beneficiary '${beneficiaryName}' (ID: ${beneficiaryId}) have been successfully updated." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-2-3">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_UPDATED_SMS'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_SMS" />
+         <column name="text" value="Hi ${firstname}, beneficiary '${beneficiaryName}' updated successfully." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-2-4">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_UPDATED_WHATSAPP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_WHATSAPP" />
+         <column name="text" value="Hello ${firstname}, the details for beneficiary '${beneficiaryName}' have been updated." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-2-5">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_UPDATED_IN_APP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_IN_APP" />
+         <column name="text" value="Beneficiary '${beneficiaryName}' updated successfully." />
+      </insert>
+   </changeSet>
+   <!-- BENEFICIARY DELETED -->
+   <changeSet author="fineract" id="ss-0028-3-1">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_DELETED_EMAIL_SUBJECT'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_EMAIL_SUBJECT" />
+         <column name="text" value="Beneficiary Deleted" />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-3-2">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_DELETED_EMAIL'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_EMAIL" />
+         <column name="text" value="Hello ${firstname} ${lastname}, the beneficiary with ID ${beneficiaryId} has been successfully deleted from your profile." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-3-3">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_DELETED_SMS'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_SMS" />
+         <column name="text" value="Hi ${firstname}, beneficiary ID ${beneficiaryId} deleted successfully." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-3-4">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_DELETED_WHATSAPP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_WHATSAPP" />
+         <column name="text" value="Hello ${firstname}, the beneficiary with ID ${beneficiaryId} has been deleted from your profile." />
+      </insert>
+   </changeSet>
+   <changeSet author="fineract" id="ss-0028-3-5">
+      <preConditions onFail="MARK_RAN">
+         <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_BENEFICIARY_DELETED_IN_APP'</sqlCheck>
+      </preConditions>
+      <insert tableName="m_template">
+         <column name="entity" valueNumeric="0" />
+         <column name="type" valueNumeric="0" />
+         <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_IN_APP" />
+         <column name="text" value="Beneficiary ID ${beneficiaryId} deleted successfully." />
+      </insert>
+   </changeSet>
+</databaseChangeLog>

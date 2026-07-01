@@ -17,6 +17,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.env.Environment;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
@@ -55,6 +58,11 @@ class SelfLoansApiResourceTest {
   @Mock private SelfLoansDataValidator dataValidator;
   @Mock private GuarantorsApiResource guarantorsApiResource;
   @Mock private UriInfo uriInfo;
+
+  // NEW MOCKS for notification dependencies
+  @Mock private ApplicationEventPublisher applicationEventPublisher;
+  @Mock private Environment env;
+  @Mock private HttpServletRequest httpRequest;
 
   private SelfLoansApiResource resource;
 
@@ -73,7 +81,9 @@ class SelfLoansApiResourceTest {
             appuserLoansMapperReadService,
             appUserClientMapperReadService,
             dataValidator,
-            guarantorsApiResource);
+            guarantorsApiResource,
+            applicationEventPublisher, // NEW
+            env); // NEW
   }
 
   private void mockAuthenticatedUser() {
@@ -255,8 +265,10 @@ class SelfLoansApiResourceTest {
     when(loansApiResource.calculateLoanScheduleOrSubmitLoanApplication("submit", uriInfo, "body"))
         .thenReturn("{}");
 
+    // UPDATED: Added httpRequest parameter
     String result =
-        resource.calculateLoanScheduleOrSubmitLoanApplication("submit", uriInfo, "body");
+        resource.calculateLoanScheduleOrSubmitLoanApplication(
+            "submit", uriInfo, "body", httpRequest);
 
     assertNotNull(result);
     verify(loansApiResource)
@@ -270,9 +282,12 @@ class SelfLoansApiResourceTest {
     map.put("clientId", CLIENT_ID);
     when(dataValidator.validateLoanApplication(any())).thenReturn(map);
 
+    // UPDATED: Added httpRequest parameter
     assertThrows(
         ClientNotFoundException.class,
-        () -> resource.calculateLoanScheduleOrSubmitLoanApplication("submit", uriInfo, "body"));
+        () ->
+            resource.calculateLoanScheduleOrSubmitLoanApplication(
+                "submit", uriInfo, "body", httpRequest));
     verify(loansApiResource, never())
         .calculateLoanScheduleOrSubmitLoanApplication(any(), any(), any());
   }
@@ -290,7 +305,8 @@ class SelfLoansApiResourceTest {
     when(loansApiResource.modifyLoanApplication(eq(LOAN_ID), eq((String) null), eq("body")))
         .thenReturn("{}");
 
-    String result = resource.modifyLoanApplication(LOAN_ID, "body");
+    // UPDATED: Added httpRequest parameter
+    String result = resource.modifyLoanApplication(LOAN_ID, "body", httpRequest);
 
     assertNotNull(result);
     verify(loansApiResource).modifyLoanApplication(eq(LOAN_ID), eq((String) null), eq("body"));
@@ -303,8 +319,10 @@ class SelfLoansApiResourceTest {
     when(dataValidator.validateModifyLoanApplication(any())).thenReturn(map);
     mockLoanNotMapped();
 
+    // UPDATED: Added httpRequest parameter
     assertThrows(
-        LoanNotFoundException.class, () -> resource.modifyLoanApplication(LOAN_ID, "body"));
+        LoanNotFoundException.class,
+        () -> resource.modifyLoanApplication(LOAN_ID, "body", httpRequest));
     verify(loansApiResource, never()).modifyLoanApplication(any(Long.class), any(), any());
   }
 
@@ -316,7 +334,8 @@ class SelfLoansApiResourceTest {
     when(loansApiResource.stateTransitions(eq(LOAN_ID), eq("withdrawnByApplicant"), eq("body")))
         .thenReturn("{}");
 
-    String result = resource.stateTransitions(LOAN_ID, "withdrawnByApplicant", "body");
+    // UPDATED: Added httpRequest parameter
+    String result = resource.stateTransitions(LOAN_ID, "withdrawnByApplicant", "body", httpRequest);
 
     assertNotNull(result);
     verify(loansApiResource).stateTransitions(eq(LOAN_ID), eq("withdrawnByApplicant"), eq("body"));
@@ -324,9 +343,10 @@ class SelfLoansApiResourceTest {
 
   @Test
   void stateTransitions_invalidCommand_throws() {
+    // UPDATED: Added httpRequest parameter
     assertThrows(
         UnrecognizedQueryParamException.class,
-        () -> resource.stateTransitions(LOAN_ID, "approve", "body"));
+        () -> resource.stateTransitions(LOAN_ID, "approve", "body", httpRequest));
     verify(loansApiResource, never()).stateTransitions(any(Long.class), any(), any());
   }
 

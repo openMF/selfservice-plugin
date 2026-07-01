@@ -14,6 +14,8 @@
  */
 package org.apache.fineract.selfservice.loanaccount.api;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -24,6 +26,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -37,9 +40,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
+import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
@@ -53,14 +60,20 @@ import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
+import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/loans")
 @Component
 @Tag(name = "Self Loans", description = "")
 @RequiredArgsConstructor
+@Slf4j
 public class SelfLoansApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
@@ -71,6 +84,10 @@ public class SelfLoansApiResource {
   private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
   private final SelfLoansDataValidator dataValidator;
   private final GuarantorsApiResource guarantorsApiResource;
+
+  // NEW DEPENDENCIES for notifications
+  private final ApplicationEventPublisher applicationEventPublisher;
+  private final Environment env;
 
   @GET
   @Path("{loanId}")
@@ -323,14 +340,41 @@ public class SelfLoansApiResource {
   public String calculateLoanScheduleOrSubmitLoanApplication(
       @QueryParam("command") @Parameter(description = "command") final String commandParam,
       @Context final UriInfo uriInfo,
-      @Parameter(hidden = true) final String apiRequestBodyAsJson) {
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
 
     HashMap<String, Object> attr = this.dataValidator.validateLoanApplication(apiRequestBodyAsJson);
     final Long clientId = (Long) attr.get("clientId");
     validateAppSelfServiceUserClientsMapping(clientId);
 
-    return this.loansApiResource.calculateLoanScheduleOrSubmitLoanApplication(
-        commandParam, uriInfo, apiRequestBodyAsJson);
+    String responseJson =
+        this.loansApiResource.calculateLoanScheduleOrSubmitLoanApplication(
+            commandParam, uriInfo, apiRequestBodyAsJson);
+
+    // Only publish notification if the user actually submitted the loan, not just calculating the
+    // schedule
+    if (!"calculateLoanSchedule".equalsIgnoreCase(commandParam)) {
+      Map<String, Object> contextData = new HashMap<>();
+      Long loanId = null;
+      try {
+        JsonObject reqJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+        if (reqJson.has("principal"))
+          contextData.put("principal", reqJson.get("principal").getAsBigDecimal());
+        if (reqJson.has("productId"))
+          contextData.put("productId", reqJson.get("productId").getAsLong());
+
+        JsonObject resJson = JsonParser.parseString(responseJson).getAsJsonObject();
+        if (resJson.has("loanId")) loanId = resJson.get("loanId").getAsLong();
+        else if (resJson.has("resourceId")) loanId = resJson.get("resourceId").getAsLong();
+      } catch (Exception e) {
+        log.warn("Failed to parse loan application JSON for notification", e);
+      }
+
+      publishLoanEvent(
+          SelfServiceNotificationEvent.Type.LOAN_REQUESTED, loanId, contextData, httpRequest);
+    }
+
+    return responseJson;
   }
 
   @PUT
@@ -362,7 +406,8 @@ public class SelfLoansApiResource {
   })
   public String modifyLoanApplication(
       @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
-      @Parameter(hidden = true) final String apiRequestBodyAsJson) {
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
 
     HashMap<String, Object> attr =
         this.dataValidator.validateModifyLoanApplication(apiRequestBodyAsJson);
@@ -372,7 +417,24 @@ public class SelfLoansApiResource {
       validateAppSelfServiceUserClientsMapping(clientId);
     }
     final String command = null;
-    return this.loansApiResource.modifyLoanApplication(loanId, command, apiRequestBodyAsJson);
+    String responseJson =
+        this.loansApiResource.modifyLoanApplication(loanId, command, apiRequestBodyAsJson);
+
+    Map<String, Object> contextData = new HashMap<>();
+    try {
+      JsonObject reqJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      if (reqJson.has("principal"))
+        contextData.put("principal", reqJson.get("principal").getAsBigDecimal());
+      if (reqJson.has("productId"))
+        contextData.put("productId", reqJson.get("productId").getAsLong());
+    } catch (Exception e) {
+      log.warn("Failed to parse loan modification JSON for notification", e);
+    }
+
+    publishLoanEvent(
+        SelfServiceNotificationEvent.Type.LOAN_UPDATED, loanId, contextData, httpRequest);
+
+    return responseJson;
   }
 
   @POST
@@ -405,12 +467,20 @@ public class SelfLoansApiResource {
   public String stateTransitions(
       @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
       @QueryParam("command") @Parameter(description = "command") final String commandParam,
-      @Parameter(hidden = true) final String apiRequestBodyAsJson) {
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
     if (!is(commandParam, "withdrawnByApplicant")) {
       throw new UnrecognizedQueryParamException("command", commandParam);
     }
     validateAppSelfServiceUserLoanMapping(loanId);
-    return this.loansApiResource.stateTransitions(loanId, commandParam, apiRequestBodyAsJson);
+    String responseJson =
+        this.loansApiResource.stateTransitions(loanId, commandParam, apiRequestBodyAsJson);
+
+    Map<String, Object> contextData = new HashMap<>();
+    publishLoanEvent(
+        SelfServiceNotificationEvent.Type.LOAN_WITHDRAWN, loanId, contextData, httpRequest);
+
+    return responseJson;
   }
 
   private void validateAppSelfServiceUserLoanMapping(final Long loanId) {
@@ -445,5 +515,69 @@ public class SelfLoansApiResource {
 
     validateAppSelfServiceUserLoanMapping(loanId);
     return this.guarantorsApiResource.retrieveGuarantorDetails(loanId);
+  }
+
+  // --- Helper Methods for Notifications ---
+
+  private void publishLoanEvent(
+      SelfServiceNotificationEvent.Type type,
+      Long loanId,
+      Map<String, Object> contextData,
+      HttpServletRequest httpRequest) {
+    try {
+      AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+      String mobileNumber = extractMobile(user);
+      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
+      contextData.put("loanId", loanId != null ? loanId : "");
+
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              type,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              LocaleContextHolder.getLocale(),
+              contextData));
+    } catch (Exception e) {
+      log.warn("Failed to publish {} notification event", type, e);
+    }
+  }
+
+  private String extractMobile(AppSelfServiceUser user) {
+    if (user == null || user.getAppUserClientMappings() == null) return null;
+    return user.getAppUserClientMappings().stream()
+        .map(AppSelfServiceUserClientMapping::getClient)
+        .filter(Objects::nonNull)
+        .map(Client::getMobileNo)
+        .filter(StringUtils::isNotBlank)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private boolean determineMode(String email, String mobileNumber) {
+    boolean hasEmail = StringUtils.isNotBlank(email);
+    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
+    if (hasEmail && !hasMobile) return true;
+    if (hasMobile && !hasEmail) return false;
+    String pref =
+        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
+    return "email".equalsIgnoreCase(pref);
+  }
+
+  private String extractClientIp(HttpServletRequest httpRequest) {
+    if (httpRequest == null) return null;
+    String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
+    if (StringUtils.isNotBlank(xForwardedFor)) {
+      String firstToken = xForwardedFor.split(",")[0].trim();
+      if (StringUtils.isNotBlank(firstToken)) return firstToken;
+    }
+    return httpRequest.getRemoteAddr();
   }
 }
