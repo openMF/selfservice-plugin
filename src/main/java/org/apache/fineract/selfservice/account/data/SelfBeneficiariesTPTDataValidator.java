@@ -16,21 +16,21 @@ package org.apache.fineract.selfservice.account.data;
 
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_NUMBER_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.RESOURCE_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_IBAN_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PHONE_NUMBER_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_ID_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_ID_TYPE_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_NAME_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_ID_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_ID_TYPE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_CODE_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_ID_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_IBAN_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_ID_TYPE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ENTITY_CODE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ENTITY_NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_ID_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_ID_TYPE_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PHONE_NUMBER_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.RESOURCE_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
 
 import com.google.gson.JsonElement;
 import com.google.gson.reflect.TypeToken;
@@ -59,28 +59,28 @@ public class SelfBeneficiariesTPTDataValidator {
   private final FromJsonHelper fromApiJsonHelper;
 
   private static final Set<String> CREATE_REQUEST_DATA_PARAMETERS =
-          new HashSet<>(
-                  Arrays.asList(
-                          SelfBeneficiariesTPTApiConstants.LOCALE,
-                          NAME_PARAM_NAME,
-                          OFFICE_NAME_PARAM_NAME,
-                          ACCOUNT_NUMBER_PARAM_NAME,
-                          ACCOUNT_TYPE_PARAM_NAME,
-                          TRANSFER_LIMIT_PARAM_NAME,
-                          DESTINATION_IBAN_PARAM_NAME,
-                          PHONE_NUMBER_PARAM_NAME,
-                          HOLDER_PARAM_NAME,
-                          HOLDER_ID_PARAM_NAME,
-                          HOLDER_ID_TYPE_PARAM_NAME,
-                          DESTINATION_CUSTOMER_NAME_PARAM_NAME,
-                          DESTINATION_CUSTOMER_ID_PARAM_NAME,
-                          DESTINATION_ID_TYPE_PARAM_NAME,
-                          CURRENCY_CODE_PARAM_NAME,
-                          ENTITY_CODE_PARAM_NAME,
-                          ENTITY_NAME_PARAM_NAME));
+      new HashSet<>(
+          Arrays.asList(
+              SelfBeneficiariesTPTApiConstants.LOCALE,
+              NAME_PARAM_NAME,
+              OFFICE_NAME_PARAM_NAME,
+              ACCOUNT_NUMBER_PARAM_NAME,
+              ACCOUNT_TYPE_PARAM_NAME,
+              TRANSFER_LIMIT_PARAM_NAME,
+              DESTINATION_IBAN_PARAM_NAME,
+              PHONE_NUMBER_PARAM_NAME,
+              HOLDER_PARAM_NAME,
+              HOLDER_ID_PARAM_NAME,
+              HOLDER_ID_TYPE_PARAM_NAME,
+              DESTINATION_CUSTOMER_NAME_PARAM_NAME,
+              DESTINATION_CUSTOMER_ID_PARAM_NAME,
+              DESTINATION_ID_TYPE_PARAM_NAME,
+              CURRENCY_CODE_PARAM_NAME,
+              ENTITY_CODE_PARAM_NAME,
+              ENTITY_NAME_PARAM_NAME));
 
   private static final Set<String> UPDATE_REQUEST_DATA_PARAMETERS =
-          new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
+      new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
 
   @Autowired
   public SelfBeneficiariesTPTDataValidator(final FromJsonHelper fromApiJsonHelper) {
@@ -94,98 +94,137 @@ public class SelfBeneficiariesTPTDataValidator {
 
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     this.fromApiJsonHelper.checkForUnsupportedParameters(
-            typeOfMap, json, CREATE_REQUEST_DATA_PARAMETERS);
+        typeOfMap, json, CREATE_REQUEST_DATA_PARAMETERS);
 
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
     final DataValidatorBuilder baseDataValidator =
-            new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
+        new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
     final JsonElement element = this.fromApiJsonHelper.parse(json);
 
     final String name = this.fromApiJsonHelper.extractStringNamed(NAME_PARAM_NAME, element);
     baseDataValidator
-            .reset()
-            .parameter(NAME_PARAM_NAME)
-            .value(name)
-            .notBlank()
-            .notExceedingLengthOf(50);
+        .reset()
+        .parameter(NAME_PARAM_NAME)
+        .value(name)
+        .notBlank()
+        .notExceedingLengthOf(50);
 
     final String officeName =
-            this.fromApiJsonHelper.extractStringNamed(OFFICE_NAME_PARAM_NAME, element);
+        this.fromApiJsonHelper.extractStringNamed(OFFICE_NAME_PARAM_NAME, element);
     baseDataValidator
-            .reset()
-            .parameter(OFFICE_NAME_PARAM_NAME)
-            .value(officeName)
-            .ignoreIfNull()
-            .notExceedingLengthOf(50);
+        .reset()
+        .parameter(OFFICE_NAME_PARAM_NAME)
+        .value(officeName)
+        .ignoreIfNull()
+        .notExceedingLengthOf(50);
 
     final String accountNo =
-            this.fromApiJsonHelper.extractStringNamed(ACCOUNT_NUMBER_PARAM_NAME, element);
+        this.fromApiJsonHelper.extractStringNamed(ACCOUNT_NUMBER_PARAM_NAME, element);
     baseDataValidator
-            .reset()
-            .parameter(ACCOUNT_NUMBER_PARAM_NAME)
-            .value(accountNo)
-            .ignoreIfNull()
-            .notExceedingLengthOf(50); // Aumentado para tolerar longitud de IBAN
+        .reset()
+        .parameter(ACCOUNT_NUMBER_PARAM_NAME)
+        .value(accountNo)
+        .ignoreIfNull()
+        .notExceedingLengthOf(50); // Aumentado para tolerar longitud de IBAN
 
     final Integer accountType =
-            this.fromApiJsonHelper.extractIntegerNamed(
-                    ACCOUNT_TYPE_PARAM_NAME,
-                    element,
-                    this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
+        this.fromApiJsonHelper.extractIntegerNamed(
+            ACCOUNT_TYPE_PARAM_NAME,
+            element,
+            this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
     baseDataValidator
-            .reset()
-            .parameter(ACCOUNT_TYPE_PARAM_NAME)
-            .value(accountType)
-            .notNull()
-            .isOneOfTheseValues(
-                    PortfolioAccountType.LOAN.getValue(),
-                    PortfolioAccountType.SAVINGS.getValue(),
-                    2,
-                    3,
-                    4
-            );
+        .reset()
+        .parameter(ACCOUNT_TYPE_PARAM_NAME)
+        .value(accountType)
+        .notNull()
+        .isOneOfTheseValues(
+            PortfolioAccountType.LOAN.getValue(), PortfolioAccountType.SAVINGS.getValue(), 2, 3, 4);
 
     final Long transferLimit =
-            this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
+        this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
     baseDataValidator
-            .reset()
-            .parameter(TRANSFER_LIMIT_PARAM_NAME)
-            .value(transferLimit)
-            .ignoreIfNull()
-            .longGreaterThanZero();
+        .reset()
+        .parameter(TRANSFER_LIMIT_PARAM_NAME)
+        .value(transferLimit)
+        .ignoreIfNull()
+        .longGreaterThanZero();
 
-    String customAccountNumber = this.fromApiJsonHelper.extractStringNamed(ACCOUNT_NUMBER_PARAM_NAME, element);
+    String customAccountNumber =
+        this.fromApiJsonHelper.extractStringNamed(ACCOUNT_NUMBER_PARAM_NAME, element);
     if (this.fromApiJsonHelper.parameterExists(DESTINATION_IBAN_PARAM_NAME, element)) {
-      customAccountNumber = this.fromApiJsonHelper.extractStringNamed(DESTINATION_IBAN_PARAM_NAME, element);
+      customAccountNumber =
+          this.fromApiJsonHelper.extractStringNamed(DESTINATION_IBAN_PARAM_NAME, element);
     } else if (this.fromApiJsonHelper.parameterExists(PHONE_NUMBER_PARAM_NAME, element)) {
-      customAccountNumber = this.fromApiJsonHelper.extractStringNamed(PHONE_NUMBER_PARAM_NAME, element);
+      customAccountNumber =
+          this.fromApiJsonHelper.extractStringNamed(PHONE_NUMBER_PARAM_NAME, element);
     }
 
     String holderName = this.fromApiJsonHelper.extractStringNamed(HOLDER_PARAM_NAME, element);
     if (this.fromApiJsonHelper.parameterExists(DESTINATION_CUSTOMER_NAME_PARAM_NAME, element)) {
-      holderName = this.fromApiJsonHelper.extractStringNamed(DESTINATION_CUSTOMER_NAME_PARAM_NAME, element);
+      holderName =
+          this.fromApiJsonHelper.extractStringNamed(DESTINATION_CUSTOMER_NAME_PARAM_NAME, element);
     }
 
     String holderId = this.fromApiJsonHelper.extractStringNamed(HOLDER_ID_PARAM_NAME, element);
     if (this.fromApiJsonHelper.parameterExists(DESTINATION_CUSTOMER_ID_PARAM_NAME, element)) {
-      holderId = this.fromApiJsonHelper.extractStringNamed(DESTINATION_CUSTOMER_ID_PARAM_NAME, element);
+      holderId =
+          this.fromApiJsonHelper.extractStringNamed(DESTINATION_CUSTOMER_ID_PARAM_NAME, element);
     }
 
-    Integer holderIdType = this.fromApiJsonHelper.extractIntegerNamed(HOLDER_ID_TYPE_PARAM_NAME, element, this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
+    Integer holderIdType =
+        this.fromApiJsonHelper.extractIntegerNamed(
+            HOLDER_ID_TYPE_PARAM_NAME,
+            element,
+            this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
     if (this.fromApiJsonHelper.parameterExists(DESTINATION_ID_TYPE_PARAM_NAME, element)) {
-      holderIdType = this.fromApiJsonHelper.extractIntegerNamed(DESTINATION_ID_TYPE_PARAM_NAME, element, this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
+      holderIdType =
+          this.fromApiJsonHelper.extractIntegerNamed(
+              DESTINATION_ID_TYPE_PARAM_NAME,
+              element,
+              this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
     }
 
-    String currencyCode = this.fromApiJsonHelper.extractStringNamed(CURRENCY_CODE_PARAM_NAME, element);
+    String currencyCode =
+        this.fromApiJsonHelper.extractStringNamed(CURRENCY_CODE_PARAM_NAME, element);
     String entityCode = this.fromApiJsonHelper.extractStringNamed(ENTITY_CODE_PARAM_NAME, element);
     String entityName = this.fromApiJsonHelper.extractStringNamed(ENTITY_NAME_PARAM_NAME, element);
 
-    baseDataValidator.reset().parameter("customAccountNumber").value(customAccountNumber).ignoreIfNull().notExceedingLengthOf(50);
-    baseDataValidator.reset().parameter("holderName").value(holderName).ignoreIfNull().notExceedingLengthOf(150);
-    baseDataValidator.reset().parameter("holderId").value(holderId).ignoreIfNull().notExceedingLengthOf(30);
-    baseDataValidator.reset().parameter("currencyCode").value(currencyCode).ignoreIfNull().notExceedingLengthOf(3);
-    baseDataValidator.reset().parameter("entityCode").value(entityCode).ignoreIfNull().notExceedingLengthOf(10);
-    baseDataValidator.reset().parameter("entityName").value(entityName).ignoreIfNull().notExceedingLengthOf(150);
+    baseDataValidator
+        .reset()
+        .parameter("customAccountNumber")
+        .value(customAccountNumber)
+        .ignoreIfNull()
+        .notExceedingLengthOf(50);
+    baseDataValidator
+        .reset()
+        .parameter("holderName")
+        .value(holderName)
+        .ignoreIfNull()
+        .notExceedingLengthOf(150);
+    baseDataValidator
+        .reset()
+        .parameter("holderId")
+        .value(holderId)
+        .ignoreIfNull()
+        .notExceedingLengthOf(30);
+    baseDataValidator
+        .reset()
+        .parameter("currencyCode")
+        .value(currencyCode)
+        .ignoreIfNull()
+        .notExceedingLengthOf(3);
+    baseDataValidator
+        .reset()
+        .parameter("entityCode")
+        .value(entityCode)
+        .ignoreIfNull()
+        .notExceedingLengthOf(10);
+    baseDataValidator
+        .reset()
+        .parameter("entityName")
+        .value(entityName)
+        .ignoreIfNull()
+        .notExceedingLengthOf(150);
 
     throwExceptionIfValidationWarningsExist(dataValidationErrors);
 
@@ -213,11 +252,11 @@ public class SelfBeneficiariesTPTDataValidator {
 
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     this.fromApiJsonHelper.checkForUnsupportedParameters(
-            typeOfMap, json, UPDATE_REQUEST_DATA_PARAMETERS);
+        typeOfMap, json, UPDATE_REQUEST_DATA_PARAMETERS);
 
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
     final DataValidatorBuilder baseDataValidator =
-            new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
+        new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
     final JsonElement element = this.fromApiJsonHelper.parse(json);
 
     HashMap<String, Object> ret = new HashMap<>();
@@ -225,23 +264,23 @@ public class SelfBeneficiariesTPTDataValidator {
     if (this.fromApiJsonHelper.parameterExists(NAME_PARAM_NAME, element)) {
       final String name = this.fromApiJsonHelper.extractStringNamed(NAME_PARAM_NAME, element);
       baseDataValidator
-              .reset()
-              .parameter(NAME_PARAM_NAME)
-              .value(name)
-              .notBlank()
-              .notExceedingLengthOf(50);
+          .reset()
+          .parameter(NAME_PARAM_NAME)
+          .value(name)
+          .notBlank()
+          .notExceedingLengthOf(50);
       ret.put(NAME_PARAM_NAME, name);
     }
 
     if (this.fromApiJsonHelper.parameterExists(TRANSFER_LIMIT_PARAM_NAME, element)) {
       final Long transferLimit =
-              this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
+          this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
       baseDataValidator
-              .reset()
-              .parameter(TRANSFER_LIMIT_PARAM_NAME)
-              .value(transferLimit)
-              .ignoreIfNull()
-              .longGreaterThanZero();
+          .reset()
+          .parameter(TRANSFER_LIMIT_PARAM_NAME)
+          .value(transferLimit)
+          .ignoreIfNull()
+          .longGreaterThanZero();
       ret.put(TRANSFER_LIMIT_PARAM_NAME, transferLimit);
     }
 
@@ -251,7 +290,7 @@ public class SelfBeneficiariesTPTDataValidator {
   }
 
   private void throwExceptionIfValidationWarningsExist(
-          final List<ApiParameterError> dataValidationErrors) {
+      final List<ApiParameterError> dataValidationErrors) {
     if (!dataValidationErrors.isEmpty()) {
       throw new PlatformApiDataValidationException(dataValidationErrors);
     }

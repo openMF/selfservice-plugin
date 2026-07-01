@@ -52,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class SelfBeneficiariesTPTWritePlatformServiceImpl
-        implements SelfBeneficiariesTPTWritePlatformService {
+    implements SelfBeneficiariesTPTWritePlatformService {
 
   private final PlatformSelfServiceSecurityContext context;
   private final SelfBeneficiariesTPTRepository repository;
@@ -99,8 +99,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
         if (accountType.equals(3) && cleanAccount.length() != 8) {
           log.error("Validacion fallida: SINPE Movil (Tipo 3) requiere exactamente 8 digitos.");
           validAccountDetails = false;
-        }
-        else if (accountType.equals(4) && cleanAccount.length() != 22) {
+        } else if (accountType.equals(4) && cleanAccount.length() != 22) {
           log.error("Validacion fallida: PIN/IBAN (Tipo 4) requiere exactamente 22 caracteres.");
           validAccountDetails = false;
         }
@@ -109,8 +108,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     } else if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
       Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
       if (loan != null
-              && loan.getClientId() != null
-              && loan.getOffice().getName().equals(officeName)) {
+          && loan.getClientId() != null
+          && loan.getOffice().getName().equals(officeName)) {
         accountId = loan.getId();
         officeId = loan.getOfficeId();
         clientId = loan.getClientId();
@@ -119,10 +118,10 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
       }
     } else {
       SavingsAccount savings =
-              this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
+          this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
       if (savings != null
-              && savings.getClient() != null
-              && savings.getClient().getOffice().getName().equals(officeName)) {
+          && savings.getClient() != null
+          && savings.getClient().getOffice().getName().equals(officeName)) {
         accountId = savings.getId();
         clientId = savings.getClient().getId();
         officeId = savings.getClient().getOffice().getId();
@@ -139,7 +138,11 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     // 3. Si no pasó la validación de tamaño o de Mifos, arrojamos la excepción
     if (!validAccountDetails) {
       throw new InvalidAccountInformationException(
-              officeName, accountNumber, isExternal ? "Longitud invalida para Tipo " + accountType : PortfolioAccountType.fromInt(accountType).getCode());
+          officeName,
+          accountNumber,
+          isExternal
+              ? "Longitud invalida para Tipo " + accountType
+              : PortfolioAccountType.fromInt(accountType).getCode());
     }
 
     try {
@@ -147,8 +150,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
       final Long appUserIdPlano = user.getId();
 
       SelfBeneficiariesTPT beneficiary =
-              new SelfBeneficiariesTPT(
-                      appUserIdPlano, name, officeId, clientId, accountId, accountType, transferLimit);
+          new SelfBeneficiariesTPT(
+              appUserIdPlano, name, officeId, clientId, accountId, accountType, transferLimit);
 
       if (isExternal) {
         beneficiary.setCustomAccountNumber(accountNumber);
@@ -169,7 +172,11 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     }
 
     throw new InvalidAccountInformationException(
-            officeName, accountNumber, isExternal ? String.valueOf(accountType) : PortfolioAccountType.fromInt(accountType).getCode());
+        officeName,
+        accountNumber,
+        isExternal
+            ? String.valueOf(accountType)
+            : PortfolioAccountType.fromInt(accountType).getCode());
   }
 
   /**
@@ -195,9 +202,9 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
           this.repository.saveAndFlush(beneficiary);
 
           return new CommandProcessingResultBuilder() //
-                  .withEntityId(beneficiary.getId()) //
-                  .with(changes)
-                  .build();
+              .withEntityId(beneficiary.getId()) //
+              .with(changes)
+              .build();
         } catch (DataAccessException dae) {
           handleDataIntegrityIssues(command, dae);
         }
@@ -224,8 +231,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
       this.repository.save(beneficiary);
 
       return new CommandProcessingResultBuilder() //
-              .withEntityId(beneficiary.getId()) //
-              .build();
+          .withEntityId(beneficiary.getId()) //
+          .build();
     }
     throw new InvalidBeneficiaryException(beneficiaryId);
   }
@@ -236,16 +243,16 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
       final String name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
       throw new PlatformDataIntegrityException(
-              "error.msg.beneficiary.duplicate.name",
-              "Beneficiary with name `" + name + "` already exists",
-              NAME_PARAM_NAME,
-              name);
+          "error.msg.beneficiary.duplicate.name",
+          "Beneficiary with name `" + name + "` already exists",
+          NAME_PARAM_NAME,
+          name);
     }
 
     log.error("Error occured.", dae);
     throw ErrorHandler.getMappable(
-            dae,
-            "error.msg.beneficiary.unknown.data.integrity.issue",
-            "Unknown data integrity issue with resource.");
+        dae,
+        "error.msg.beneficiary.unknown.data.integrity.issue",
+        "Unknown data integrity issue with resource.");
   }
 }
