@@ -10,21 +10,21 @@ http:
     - name: Fineract-Platform-TenantId
       value: default
     - name: Authorization
-      value: Basic NDU0NGVjMmQtOGNmNy00MmQ1LTg4MzktMzc2NDRlZjFkYWZh
+      value: Basic ZGM5NzI2YjYtNTllZC00ZjRlLWI1NjItMDdjMTRjZmNhMjIw
   body:
     type: json
     data: |-
       {
           "locale": "es",
-          "name": "TOMAS ASCENCIO HERNANDEZ",
+          "name": "MARIA SINPE VALIDO",
           "accountType": 3,
           "accountNumber": "88888888",
-          "holder": "TOMAS ASCENCIO HERNANDEZ",
-          "holderId": "01-1524-0892",
+          "holder": "MARIA ALVARADO SOLANO",
+          "holderId": "01-0987-0654",
           "holderIdType": 0,
           "currencyCode": "CRC",
-          "entityCode": "151",
-          "entityName": "CR - Banco Nacional de Costa Rica"
+          "entityCode": "0373",
+          "entityName": "CR - BAC Credomatic"
       }
   auth: inherit
 

@@ -104,13 +104,13 @@
                 <constraints nullable="false"/>
             </column>
             <column name="office_id" type="BIGINT">
-                <constraints nullable="false"/>
+                <constraints nullable="true"/>
             </column>
             <column name="client_id" type="BIGINT">
-                <constraints nullable="false"/>
+                <constraints nullable="true"/>
             </column>
             <column name="account_id" type="BIGINT">
-                <constraints nullable="false"/>
+                <constraints nullable="true"/>
             </column>
             <column name="account_type" type="SMALLINT">
                 <constraints nullable="false"/>

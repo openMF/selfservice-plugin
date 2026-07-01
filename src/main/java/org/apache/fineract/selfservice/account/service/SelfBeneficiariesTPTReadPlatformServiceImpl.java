@@ -115,7 +115,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.entity_name as entityName ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" where b.is_active = true ");
-      sqlBuilder.append(" and b.account_type in (2, 3) ");
+      sqlBuilder.append(" and b.account_type in (3,4) ");
       sqlBuilder.append(" and b.app_user_id = ?) ");
 
       this.schemaSql = sqlBuilder.toString();
