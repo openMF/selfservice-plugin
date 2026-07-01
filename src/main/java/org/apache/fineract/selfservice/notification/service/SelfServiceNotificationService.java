@@ -27,7 +27,6 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.apache.fineract.infrastructure.campaigns.sms.data.SmsProviderData;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
 import org.apache.fineract.infrastructure.configuration.data.NotificationCredentialsData;
-import org.apache.fineract.infrastructure.configuration.domain.NotificationMessage;
 import org.apache.fineract.infrastructure.core.domain.EmailDetail;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.SelfServicePluginEmailService;
@@ -51,7 +50,6 @@ import org.springframework.stereotype.Service;
 public class SelfServiceNotificationService {
 
   private final SelfServiceTemplateService selfServiceTemplateService;
-  // REMOVED: private final MessageSource notificationMessageSource;
   private final SelfServicePluginEmailService emailService;
   private final SmsMessageRepository smsMessageRepository;
   private final SmsMessageScheduledJobService smsScheduledJobService;
@@ -64,7 +62,6 @@ public class SelfServiceNotificationService {
 
   public SelfServiceNotificationService(
       SelfServiceTemplateService selfServiceTemplateService,
-      // REMOVED: MessageSource notificationMessageSource,
       SelfServicePluginEmailService emailService,
       SmsMessageRepository smsMessageRepository,
       SmsMessageScheduledJobService smsScheduledJobService,
@@ -73,7 +70,6 @@ public class SelfServiceNotificationService {
       Environment env,
       @Nullable ExternalNotificationSystemClient externalNotificationSystemClient) {
     this.selfServiceTemplateService = selfServiceTemplateService;
-    // REMOVED: this.notificationMessageSource = notificationMessageSource;
     this.emailService = emailService;
     this.smsMessageRepository = smsMessageRepository;
     this.smsScheduledJobService = smsScheduledJobService;
@@ -112,25 +108,61 @@ public class SelfServiceNotificationService {
 
       Map<String, Object> params = buildTemplateParams(event);
 
-      NotificationCredentialsData notificationCredentials = null;
+      // 1. Resolve External Notification Configuration from Database
+      NotificationCredentialsData credentials = null;
+      boolean isExternalEnabled = false;
+
       if (externalNotificationSystemClient != null) {
         try {
-          notificationCredentials =
-              externalNotificationSystemClient.resolveNotificationCredentials();
+          credentials = externalNotificationSystemClient.resolveNotificationCredentials();
+          isExternalEnabled = credentials != null && credentials.isEnabled();
         } catch (Exception e) {
-          log.error("Failed to resolve notification credentials", e);
+          log.error("Failed to resolve external notification credentials from database", e);
         }
       }
 
-      if (notificationCredentials != null && notificationCredentials.isEnabled()) {
-        sendExternalNotification(event, notificationCredentials, params);
-      } else {
-        if (event.isEmailMode()) {
-          sendEmailNotification(event, params);
-        } else {
-          sendSmsNotification(event, params);
+      // ==========================================
+      // 2. CHANNEL ROUTING & FALLBACK LOGIC
+      // ==========================================
+
+      // --- EMAIL ---
+      boolean emailSentExternally = false;
+      if (isExternalEnabled && credentials.isEmail() && StringUtils.isNotBlank(event.getEmail())) {
+        emailSentExternally = sendExternalEmail(event, credentials, params);
+      }
+      // Fallback to legacy Fineract Email if external is disabled, channel is off, or send failed
+      if (!emailSentExternally && StringUtils.isNotBlank(event.getEmail())) {
+        if (event.isEmailMode() || StringUtils.isBlank(event.getMobileNumber())) {
+          sendLegacyEmail(event, params);
         }
       }
+
+      // --- SMS ---
+      boolean smsSentExternally = false;
+      if (isExternalEnabled
+          && credentials.isSms()
+          && StringUtils.isNotBlank(event.getMobileNumber())) {
+        smsSentExternally = sendExternalSms(event, credentials, params);
+      }
+      // Fallback to legacy Fineract SMS if external is disabled, channel is off, or send failed
+      if (!smsSentExternally && StringUtils.isNotBlank(event.getMobileNumber())) {
+        if (!event.isEmailMode()) {
+          sendLegacySms(event, params);
+        }
+      }
+
+      // --- WHATSAPP ---
+      if (isExternalEnabled
+          && credentials.isWhatsapp()
+          && StringUtils.isNotBlank(event.getMobileNumber())) {
+        sendExternalWhatsapp(event, credentials, params);
+      }
+
+      // --- IN-APP ---
+      if (isExternalEnabled && StringUtils.isNotBlank(event.getMobileNumber())) {
+        sendExternalInApp(event, credentials, params);
+      }
+
     } catch (org.apache.fineract.infrastructure.core.service.PlatformEmailSendException emailEx) {
       if (emailEx.getCause() instanceof SmtpConfigurationUnavailableException) {
         handleSmtpConfigError(event, (SmtpConfigurationUnavailableException) emailEx.getCause());
@@ -148,6 +180,171 @@ public class SelfServiceNotificationService {
           Thread.currentThread().getName());
     }
   }
+
+  // ==========================================
+  // EXTERNAL NOTIFICATION SENDERS (Exact JSON Structures)
+  // ==========================================
+
+  private boolean sendExternalEmail(
+      SelfServiceNotificationEvent event,
+      NotificationCredentialsData credentials,
+      Map<String, Object> params) {
+    try {
+      String subject =
+          selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
+      String message = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
+
+      Map<String, String> payload = new HashMap<>();
+      payload.put("email", event.getEmail());
+      payload.put("subject", subject);
+      payload.put("message", message);
+
+      externalNotificationSystemClient.sendPostRequest(payload);
+      return true;
+    } catch (Exception e) {
+      log.error(
+          "Error sending external email for event {}: {}", event.getType(), e.getMessage(), e);
+      return false; // Returning false triggers the legacy fallback
+    }
+  }
+
+  private boolean sendExternalSms(
+      SelfServiceNotificationEvent event,
+      NotificationCredentialsData credentials,
+      Map<String, Object> params) {
+    try {
+      String message = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
+      message = stripHtml(message);
+
+      Map<String, String> payload = new HashMap<>();
+      payload.put("phone", event.getMobileNumber());
+      payload.put("message", message);
+
+      externalNotificationSystemClient.sendPostRequest(payload);
+      return true;
+    } catch (Exception e) {
+      log.error("Error sending external SMS for event {}: {}", event.getType(), e.getMessage(), e);
+      return false;
+    }
+  }
+
+  private boolean sendExternalWhatsapp(
+      SelfServiceNotificationEvent event,
+      NotificationCredentialsData credentials,
+      Map<String, Object> params) {
+    try {
+      String message =
+          selfServiceTemplateService.mergeTemplate(event.getType(), "WHATSAPP", params);
+      message = stripHtml(message);
+
+      Map<String, String> payload = new HashMap<>();
+      payload.put("phone", event.getMobileNumber());
+      payload.put("message", message);
+
+      externalNotificationSystemClient.sendPostRequest(payload);
+      return true;
+    } catch (Exception e) {
+      log.error(
+          "Error sending external WhatsApp for event {}: {}", event.getType(), e.getMessage(), e);
+      return false;
+    }
+  }
+
+  private boolean sendExternalInApp(
+      SelfServiceNotificationEvent event,
+      NotificationCredentialsData credentials,
+      Map<String, Object> params) {
+    try {
+      String message = selfServiceTemplateService.mergeTemplate(event.getType(), "IN_APP", params);
+      message = stripHtml(message);
+
+      Map<String, String> payload = new HashMap<>();
+      payload.put("phone", event.getMobileNumber());
+      payload.put("message", message);
+
+      externalNotificationSystemClient.sendPostRequest(payload);
+      return true;
+    } catch (Exception e) {
+      log.error(
+          "Error sending external In-App for event {}: {}", event.getType(), e.getMessage(), e);
+      return false;
+    }
+  }
+
+  private String stripHtml(String content) {
+    if (content == null) return "";
+    String noTags = content.replaceAll("<[^>]*>", "");
+    String unescaped = StringEscapeUtils.unescapeHtml4(noTags);
+    return unescaped.trim().replaceAll("(?m)^[ \t]*\r?\n", "").replaceAll("\n{3,}", "\n\n");
+  }
+
+  // ==========================================
+  // LEGACY FALLBACK SENDERS
+  // ==========================================
+
+  private void sendLegacyEmail(SelfServiceNotificationEvent event, Map<String, Object> params) {
+    try {
+      String subject =
+          selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
+      String htmlBody = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
+      String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
+      EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
+      emailService.sendFormattedEmail(emailDetail);
+    } catch (Exception e) {
+      log.error("Failed to send legacy email for event type {}", event.getType(), e);
+    }
+  }
+
+  private void sendLegacySms(SelfServiceNotificationEvent event, Map<String, Object> params) {
+    try {
+      Collection<SmsProviderData> providers = smsProviderService.retrieveSmsProviders();
+      if (providers == null || providers.isEmpty()) {
+        log.warn(
+            "No SMS provider configured, legacy SMS notification skipped for event {}",
+            event.getType());
+        return;
+      }
+
+      Long providerId = resolveSmsProviderId(providers);
+      if (providerId == null) {
+        log.warn(
+            "No valid SMS provider found, legacy SMS notification skipped for event {}",
+            event.getType());
+        return;
+      }
+
+      String textBody = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
+      SmsMessage smsMessage =
+          SmsMessage.instance(
+              null,
+              null,
+              null,
+              null,
+              SmsMessageStatusType.PENDING,
+              textBody,
+              event.getMobileNumber(),
+              null,
+              true);
+      smsMessage = smsMessageRepository.save(smsMessage);
+
+      try {
+        smsScheduledJobService.sendTriggeredMessage(
+            new ArrayList<>(List.of(smsMessage)), providerId);
+        smsMessage.setStatusType(SmsMessageStatusType.SENT.getValue());
+        smsMessageRepository.save(smsMessage);
+      } catch (Exception e) {
+        smsMessage.setStatusType(SmsMessageStatusType.FAILED.getValue());
+        smsMessageRepository.save(smsMessage);
+        throw e;
+      }
+    } catch (Exception e) {
+      log.error("Failed to send legacy SMS for event type {}", event.getType(), e);
+    }
+  }
+
+  // ==========================================
+  // HELPER METHODS
+  // ==========================================
 
   private Map<String, Object> buildTemplateParams(SelfServiceNotificationEvent event) {
     Map<String, Object> params = new HashMap<>();
@@ -172,113 +369,6 @@ public class SelfServiceNotificationService {
     return params;
   }
 
-  private void sendExternalNotification(
-      SelfServiceNotificationEvent event,
-      NotificationCredentialsData credentials,
-      Map<String, Object> params) {
-    NotificationMessage notificationMessage = new NotificationMessage();
-    notificationMessage.setEmail(event.getEmail());
-    notificationMessage.setMobile(event.getMobileNumber());
-
-    String content;
-    if (StringUtils.isNotBlank(event.getMobileNumber())) {
-      content =
-          selfServiceTemplateService.mergeTemplate(
-              event.getType(), credentials.isWhatsapp() ? "WHATSAPP" : "SMS", params);
-    } else {
-      content = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
-    }
-
-    if (credentials.isWhatsapp() || credentials.isSms()) {
-      String noTags = content.replaceAll("<[^>]*>", "");
-      String unescaped = StringEscapeUtils.unescapeHtml4(noTags);
-      content = unescaped.trim().replaceAll("(?m)^[ \t]*\r?\n", "").replaceAll("\n{3,}", "\n\n");
-    }
-
-    notificationMessage.setText(content);
-
-    try {
-      externalNotificationSystemClient.sendPostRequest(notificationMessage);
-    } catch (Exception e) {
-      log.error("Error when sending to external system: {}", e.getMessage(), e);
-      releaseCooldown(event);
-    }
-  }
-
-  private void sendEmailNotification(
-      SelfServiceNotificationEvent event, Map<String, Object> params) {
-    if (StringUtils.isBlank(event.getEmail())) {
-      log.warn(
-          "Email notification skipped for event {} because no email address is available",
-          event.getType());
-      releaseCooldown(event);
-      return;
-    }
-
-    // NEW: Fetch the subject from the Fineract Template system instead of MessageSource
-    String subject =
-        selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
-
-    // Fetch the body from the Fineract Template system
-    String htmlBody = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
-
-    String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
-    EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
-    emailService.sendFormattedEmail(emailDetail);
-  }
-
-  private void sendSmsNotification(SelfServiceNotificationEvent event, Map<String, Object> params) {
-    if (StringUtils.isBlank(event.getMobileNumber())) {
-      log.warn(
-          "SMS notification skipped for event {} because no mobile number is available",
-          event.getType());
-      releaseCooldown(event);
-      return;
-    }
-
-    Collection<SmsProviderData> providers = smsProviderService.retrieveSmsProviders();
-    if (providers == null || providers.isEmpty()) {
-      log.warn(
-          "No SMS provider configured, SMS notification skipped for event {}", event.getType());
-      releaseCooldown(event);
-      return;
-    }
-
-    Long providerId = resolveSmsProviderId(providers);
-    if (providerId == null) {
-      log.warn(
-          "No valid SMS provider found, SMS notification skipped for event {}", event.getType());
-      releaseCooldown(event);
-      return;
-    }
-
-    String textBody = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
-
-    SmsMessage smsMessage =
-        SmsMessage.instance(
-            null,
-            null,
-            null,
-            null,
-            SmsMessageStatusType.PENDING,
-            textBody,
-            event.getMobileNumber(),
-            null,
-            true);
-    smsMessage = smsMessageRepository.save(smsMessage);
-
-    try {
-      smsScheduledJobService.sendTriggeredMessage(new ArrayList<>(List.of(smsMessage)), providerId);
-      smsMessage.setStatusType(SmsMessageStatusType.SENT.getValue());
-      smsMessageRepository.save(smsMessage);
-    } catch (Exception e) {
-      smsMessage.setStatusType(SmsMessageStatusType.FAILED.getValue());
-      smsMessageRepository.save(smsMessage);
-      releaseCooldown(event);
-      throw e;
-    }
-  }
-
   private Long resolveSmsProviderId(Collection<SmsProviderData> providers) {
     if (providers.size() == 1) {
       return providers.iterator().next().getId();
@@ -300,12 +390,12 @@ public class SelfServiceNotificationService {
     releaseCooldown(event);
     if (smtpConfigWarningLogged.compareAndSet(false, true)) {
       log.warn(
-          "Email notification skipped for event type {} — SMTP configuration unavailable: {}. Further config errors will be logged at DEBUG.",
+          "Legacy email notification skipped for event type {} — SMTP configuration unavailable: {}. Further config errors will be logged at DEBUG.",
           event.getType(),
           configEx.getMessage());
     } else {
       log.debug(
-          "Email notification skipped for event type {} — SMTP configuration unavailable.",
+          "Legacy email notification skipped for event type {} — SMTP configuration unavailable.",
           event.getType());
     }
   }
