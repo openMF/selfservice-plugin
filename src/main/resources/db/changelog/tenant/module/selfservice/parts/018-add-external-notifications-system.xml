@@ -64,6 +64,12 @@
         </insert>
         
         <insert tableName="c_external_service_properties">
+            <column name="name" value="isInApp"/>
+            <column name="value" value="false"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'NotificationsService')"/>
+        </insert>
+        
+        <insert tableName="c_external_service_properties">
             <column name="name" value="isEnabled"/>
             <column name="value" value="false"/>
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'NotificationsService')"/>
