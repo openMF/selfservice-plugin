@@ -61,7 +61,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, successful login from ${clientIp}."/>
         </insert>
@@ -89,7 +89,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_LOGIN_FAILURE_SMS"/>
             <column name="text" value="Hi ${firstname}, failed login attempt detected from ${clientIp}."/>
         </insert>
@@ -103,7 +103,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS (Workaround for missing WHATSAPP enum) -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS (Workaround for missing WHATSAPP enum) -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, you have successfully logged in to your account from IP ${clientIp}. If this was not you, please contact support immediately."/>
         </insert>
@@ -118,7 +118,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS (Workaround for missing IN_APP enum) -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS (Workaround for missing IN_APP enum) -->
             <column name="name" value="SELF_SERVICE_LOGIN_SUCCESS_IN_APP"/>
             <column name="text" value="Login successful for user ${username} from IP ${clientIp}."/>
         </insert>

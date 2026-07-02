@@ -29,7 +29,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_REQUESTED_SMS" />
          <column name="text" value="Hi ${firstname}, your loan application (ID: ${loanId}) for ${principal} has been submitted." />
       </insert>
@@ -40,7 +40,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_REQUESTED_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, your loan application (ID: ${loanId}) for ${principal} has been successfully submitted." />
       </insert>
@@ -51,7 +51,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_REQUESTED_IN_APP" />
          <column name="text" value="Loan application (ID: ${loanId}) submitted successfully." />
       </insert>
@@ -85,7 +85,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_UPDATED_SMS" />
          <column name="text" value="Hi ${firstname}, your loan application (ID: ${loanId}) has been updated." />
       </insert>
@@ -96,7 +96,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_UPDATED_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, your loan application (ID: ${loanId}) has been successfully updated." />
       </insert>
@@ -107,7 +107,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_UPDATED_IN_APP" />
          <column name="text" value="Loan application (ID: ${loanId}) updated successfully." />
       </insert>
@@ -141,7 +141,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_WITHDRAWN_SMS" />
          <column name="text" value="Hi ${firstname}, your loan application (ID: ${loanId}) has been withdrawn." />
       </insert>
@@ -152,7 +152,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_WITHDRAWN_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, your loan application (ID: ${loanId}) has been successfully withdrawn." />
       </insert>
@@ -163,7 +163,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_LOAN_WITHDRAWN_IN_APP" />
          <column name="text" value="Loan application (ID: ${loanId}) withdrawn successfully." />
       </insert>

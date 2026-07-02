@@ -39,7 +39,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_SMS"/>
             <column name="text" value="Hi ${firstname}, your transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} was successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
         </insert>
@@ -53,7 +53,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, your transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} was successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
         </insert>
@@ -67,7 +67,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_TRANSFER_SUCCESS_IN_APP"/>
             <column name="text" value="Transfer of ${transactionAmount} from ${fromAccountNumber} to ${toAccountNumber} on ${transactionDate} successful. Ref: ${transferId}. Desc: ${transferDescription}."/>
         </insert>

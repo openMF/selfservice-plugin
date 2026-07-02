@@ -47,7 +47,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_SMS"/>
             <column name="text" value="Hi ${firstname}, your account has been successfully activated. Welcome!"/>
         </insert>
@@ -61,7 +61,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, your account is now active. You can log in at your convenience."/>
         </insert>
@@ -75,7 +75,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_USER_ACTIVATED_IN_APP"/>
             <column name="text" value="Account activated successfully for user ${username}."/>
         </insert>

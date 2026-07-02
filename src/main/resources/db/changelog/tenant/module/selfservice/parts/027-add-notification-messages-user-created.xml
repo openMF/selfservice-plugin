@@ -39,7 +39,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_USER_CREATED_SMS"/>
             <column name="text" value="Hi ${firstname}, your account has been successfully created. Welcome!"/>
         </insert>
@@ -53,7 +53,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_USER_CREATED_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, your account has been successfully created. Welcome!"/>
         </insert>
@@ -67,7 +67,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/>
-            <column name="type" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
             <column name="name" value="SELF_SERVICE_USER_CREATED_IN_APP"/>
             <column name="text" value="Account created successfully for user ${username}."/>
         </insert>

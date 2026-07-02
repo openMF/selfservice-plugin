@@ -26,7 +26,7 @@ public class SelfServiceTemplateService {
       SelfServiceNotificationEvent.Type type, String channel, Map<String, Object> params) {
     String templateName = "SELF_SERVICE_" + type.name() + "_" + channel;
 
-    // Fetch all templates for CLIENT entity (0) and SMS type (2).
+    // Fetch all templates for CLIENT entity (0) and SMS type (0).
     // We use this combination because EMAIL is commented out in Fineract's TemplateType enum.
     // We then filter by our unique template name in Java.
     List<Template> templates =

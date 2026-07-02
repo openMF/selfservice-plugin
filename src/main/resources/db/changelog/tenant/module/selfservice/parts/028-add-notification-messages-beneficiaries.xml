@@ -29,7 +29,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_SMS" />
          <column name="text" value="Hi ${firstname}, beneficiary '${beneficiaryName}' (${accountNumber}) added successfully." />
       </insert>
@@ -40,7 +40,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, a new beneficiary '${beneficiaryName}' (${accountNumber}) has been added to your profile." />
       </insert>
@@ -51,7 +51,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_ADDED_IN_APP" />
          <column name="text" value="Beneficiary '${beneficiaryName}' added successfully." />
       </insert>
@@ -85,7 +85,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_SMS" />
          <column name="text" value="Hi ${firstname}, beneficiary '${beneficiaryName}' updated successfully." />
       </insert>
@@ -96,7 +96,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, the details for beneficiary '${beneficiaryName}' have been updated." />
       </insert>
@@ -107,7 +107,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_UPDATED_IN_APP" />
          <column name="text" value="Beneficiary '${beneficiaryName}' updated successfully." />
       </insert>
@@ -141,7 +141,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_SMS" />
          <column name="text" value="Hi ${firstname}, beneficiary ID ${beneficiaryId} deleted successfully." />
       </insert>
@@ -152,7 +152,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_WHATSAPP" />
          <column name="text" value="Hello ${firstname}, the beneficiary with ID ${beneficiaryId} has been deleted from your profile." />
       </insert>
@@ -163,7 +163,7 @@
       </preConditions>
       <insert tableName="m_template">
          <column name="entity" valueNumeric="0" />
-         <column name="type" valueNumeric="0" />
+         <column name="type" valueNumeric="1" />
          <column name="name" value="SELF_SERVICE_BENEFICIARY_DELETED_IN_APP" />
          <column name="text" value="Beneficiary ID ${beneficiaryId} deleted successfully." />
       </insert>

@@ -47,7 +47,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_SMS"/>
             <column name="text" value="Hello ${firstname}, to create a user use Request ID: ${requestId} and Authorization Code: ${authCode}. Regards, The Institution Team"/>
         </insert>
@@ -61,7 +61,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_WHATSAPP"/>
             <column name="text" value="Hello ${firstname}, to create a user use Request ID: ${requestId} and Authorization Code: ${authCode}. Regards, The Institution Team"/>
         </insert>
@@ -75,7 +75,7 @@
         </preConditions>
         <insert tableName="m_template">
             <column name="entity" valueNumeric="0"/> <!-- 0 = CLIENT -->
-            <column name="type" valueNumeric="0"/> <!-- 0 = SMS -->
+            <column name="type" valueNumeric="1"/> <!-- 0 = SMS -->
             <column name="name" value="SELF_SERVICE_ENROLLMENT_TOKEN_IN_APP"/>
             <column name="text" value="Hello ${firstname}, your Authorization Code is ${authCode} for Request ID ${requestId}."/>
         </insert>
