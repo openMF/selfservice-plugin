@@ -64,9 +64,13 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/beneficiaries/tpt")
@@ -82,7 +86,10 @@ public class SelfBeneficiariesTPTApiResource {
   private final ApiRequestParameterHelper apiRequestParameterHelper;
   private final SelfBeneficiariesTPTReadPlatformService readPlatformService;
 
-  // NEW DEPENDENCIES
+  // NEW DEPENDENCY to fetch managed user
+  private final AppSelfServiceUserRepository appSelfServiceUserRepository;
+
+  // NEW DEPENDENCIES for notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
@@ -97,6 +104,27 @@ public class SelfBeneficiariesTPTApiResource {
               SelfBeneficiariesTPTApiConstants.ID_PARAM_NAME,
               SelfBeneficiariesTPTApiConstants.CLIENT_NAME_PARAM_NAME,
               SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_OPTIONS_PARAM_NAME));
+
+  /**
+   * FIX: Replaces the detached AppUser principal in the SecurityContext with a freshly fetched,
+   * managed AppSelfServiceUser instance. This prevents "new object found through a relationship"
+   * JPA errors when CommandSourceService tries to save the CommandSource entity.
+   */
+  private void ensureManagedUserInSecurityContext() {
+    AppSelfServiceUser detachedUser = this.context.authenticatedSelfServiceUser();
+    if (detachedUser != null && detachedUser.getId() != null) {
+      AppSelfServiceUser managedUser =
+          this.appSelfServiceUserRepository.findById(detachedUser.getId()).orElse(detachedUser);
+
+      Authentication currentAuth = SecurityContextHolder.getContext().getAuthentication();
+      if (currentAuth != null) {
+        Authentication newAuth =
+            new UsernamePasswordAuthenticationToken(
+                managedUser, currentAuth.getCredentials(), currentAuth.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(newAuth);
+      }
+    }
+  }
 
   @GET
   @Path("template")
@@ -158,6 +186,10 @@ public class SelfBeneficiariesTPTApiResource {
   public String add(
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
+
+    // FIX: Ensure the AppUser is managed before saving CommandSource
+    ensureManagedUserInSecurityContext();
+
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
             .addSelfServiceBeneficiaryTPT()
@@ -223,6 +255,9 @@ public class SelfBeneficiariesTPTApiResource {
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
 
+    // FIX: Ensure the AppUser is managed before saving CommandSource
+    ensureManagedUserInSecurityContext();
+
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
             .updateSelfServiceBeneficiaryTPT(beneficiaryId)
@@ -274,6 +309,9 @@ public class SelfBeneficiariesTPTApiResource {
       @PathParam("beneficiaryId") final Long beneficiaryId,
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
+
+    // FIX: Ensure the AppUser is managed before saving CommandSource
+    ensureManagedUserInSecurityContext();
 
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
