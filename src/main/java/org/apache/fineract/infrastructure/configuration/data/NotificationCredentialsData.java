@@ -29,6 +29,7 @@ public class NotificationCredentialsData {
   private String httpMethod;
   private boolean isEmail;
   private boolean isSms;
+  private boolean isInApp;
   private boolean isWhatsapp;
   private boolean isEnabled;
 }

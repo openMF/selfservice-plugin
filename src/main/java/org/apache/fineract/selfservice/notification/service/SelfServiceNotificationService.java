@@ -159,7 +159,10 @@ public class SelfServiceNotificationService {
       }
 
       // --- IN-APP ---
-      if (isExternalEnabled && StringUtils.isNotBlank(event.getMobileNumber())) {
+      boolean inAppSentExternally = false;
+      if (isExternalEnabled
+          && credentials.isInApp()
+          && StringUtils.isNotBlank(event.getMobileNumber())) {
         sendExternalInApp(event, credentials, params);
       }
 
