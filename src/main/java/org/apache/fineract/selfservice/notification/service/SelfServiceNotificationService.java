@@ -127,42 +127,58 @@ public class SelfServiceNotificationService {
 
       // --- EMAIL ---
       boolean emailSentExternally = false;
-      if (isExternalEnabled && credentials.isEmail() && StringUtils.isNotBlank(event.getEmail())) {
+      if (isExternalEnabled
+          && credentials != null
+          && credentials.isEmail()
+          && StringUtils.isNotBlank(event.getEmail())) {
         emailSentExternally = sendExternalEmail(event, credentials, params);
       }
-      // Fallback to legacy Fineract Email if external is disabled, channel is off, or send failed
-      if (!emailSentExternally && StringUtils.isNotBlank(event.getEmail())) {
+
+      if (!emailSentExternally) {
         if (event.isEmailMode() || StringUtils.isBlank(event.getMobileNumber())) {
-          sendLegacyEmail(event, params);
+          if (StringUtils.isBlank(event.getEmail())) {
+            log.warn(
+                "Email notification skipped for event {} because no email address is available",
+                event.getType());
+            releaseCooldown(event);
+          } else {
+            sendLegacyEmail(event, params);
+          }
         }
       }
 
       // --- SMS ---
       boolean smsSentExternally = false;
       if (isExternalEnabled
+          && credentials != null
           && credentials.isSms()
           && StringUtils.isNotBlank(event.getMobileNumber())) {
         smsSentExternally = sendExternalSms(event, credentials, params);
       }
-      // Fallback to legacy Fineract SMS if external is disabled, channel is off, or send failed
-      if (!smsSentExternally && StringUtils.isNotBlank(event.getMobileNumber())) {
-        if (!event.isEmailMode()) {
-          sendLegacySms(event, params);
+
+      if (!smsSentExternally) {
+        if (!event.isEmailMode() || StringUtils.isBlank(event.getEmail())) {
+          if (StringUtils.isBlank(event.getMobileNumber())) {
+            log.warn(
+                "SMS notification skipped for event {} because no mobile number is available",
+                event.getType());
+            releaseCooldown(event);
+          } else {
+            sendLegacySms(event, params);
+          }
         }
       }
 
       // --- WHATSAPP ---
       if (isExternalEnabled
+          && credentials != null
           && credentials.isWhatsapp()
           && StringUtils.isNotBlank(event.getMobileNumber())) {
         sendExternalWhatsapp(event, credentials, params);
       }
 
       // --- IN-APP ---
-      boolean inAppSentExternally = false;
-      if (isExternalEnabled
-          && credentials.isInApp()
-          && StringUtils.isNotBlank(event.getMobileNumber())) {
+      if (isExternalEnabled && StringUtils.isNotBlank(event.getMobileNumber())) {
         sendExternalInApp(event, credentials, params);
       }
 
@@ -286,62 +302,58 @@ public class SelfServiceNotificationService {
   // ==========================================
 
   private void sendLegacyEmail(SelfServiceNotificationEvent event, Map<String, Object> params) {
-    try {
-      String subject =
-          selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
-      String htmlBody = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
-      String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
-      EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
-      emailService.sendFormattedEmail(emailDetail);
-    } catch (Exception e) {
-      log.error("Failed to send legacy email for event type {}", event.getType(), e);
-    }
+    // Exceptions are intentionally NOT caught here so they propagate to handleNotification's
+    // catch blocks, which correctly handle cooldown release and specific SMTP config error logging.
+    String subject =
+        selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL_SUBJECT", params);
+    String htmlBody = selfServiceTemplateService.mergeTemplate(event.getType(), "EMAIL", params);
+    String recipientName = buildRecipientName(event.getFirstName(), event.getLastName());
+    EmailDetail emailDetail = new EmailDetail(subject, htmlBody, event.getEmail(), recipientName);
+    emailService.sendFormattedEmail(emailDetail);
   }
 
   private void sendLegacySms(SelfServiceNotificationEvent event, Map<String, Object> params) {
+    Collection<SmsProviderData> providers = smsProviderService.retrieveSmsProviders();
+    if (providers == null || providers.isEmpty()) {
+      log.warn(
+          "No SMS provider configured, legacy SMS notification skipped for event {}",
+          event.getType());
+      releaseCooldown(event);
+      return;
+    }
+
+    Long providerId = resolveSmsProviderId(providers);
+    if (providerId == null) {
+      log.warn(
+          "No valid SMS provider found, legacy SMS notification skipped for event {}",
+          event.getType());
+      releaseCooldown(event);
+      return;
+    }
+
+    String textBody = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
+    SmsMessage smsMessage =
+        SmsMessage.instance(
+            null,
+            null,
+            null,
+            null,
+            SmsMessageStatusType.PENDING,
+            textBody,
+            event.getMobileNumber(),
+            null,
+            true);
+    smsMessage = smsMessageRepository.save(smsMessage);
+
     try {
-      Collection<SmsProviderData> providers = smsProviderService.retrieveSmsProviders();
-      if (providers == null || providers.isEmpty()) {
-        log.warn(
-            "No SMS provider configured, legacy SMS notification skipped for event {}",
-            event.getType());
-        return;
-      }
-
-      Long providerId = resolveSmsProviderId(providers);
-      if (providerId == null) {
-        log.warn(
-            "No valid SMS provider found, legacy SMS notification skipped for event {}",
-            event.getType());
-        return;
-      }
-
-      String textBody = selfServiceTemplateService.mergeTemplate(event.getType(), "SMS", params);
-      SmsMessage smsMessage =
-          SmsMessage.instance(
-              null,
-              null,
-              null,
-              null,
-              SmsMessageStatusType.PENDING,
-              textBody,
-              event.getMobileNumber(),
-              null,
-              true);
-      smsMessage = smsMessageRepository.save(smsMessage);
-
-      try {
-        smsScheduledJobService.sendTriggeredMessage(
-            new ArrayList<>(List.of(smsMessage)), providerId);
-        smsMessage.setStatusType(SmsMessageStatusType.SENT.getValue());
-        smsMessageRepository.save(smsMessage);
-      } catch (Exception e) {
-        smsMessage.setStatusType(SmsMessageStatusType.FAILED.getValue());
-        smsMessageRepository.save(smsMessage);
-        throw e;
-      }
+      smsScheduledJobService.sendTriggeredMessage(new ArrayList<>(List.of(smsMessage)), providerId);
+      smsMessage.setStatusType(SmsMessageStatusType.SENT.getValue());
+      smsMessageRepository.save(smsMessage);
     } catch (Exception e) {
-      log.error("Failed to send legacy SMS for event type {}", event.getType(), e);
+      smsMessage.setStatusType(SmsMessageStatusType.FAILED.getValue());
+      smsMessageRepository.save(smsMessage);
+      releaseCooldown(event);
+      throw e; // Rethrow so handleNotification catches it
     }
   }
 

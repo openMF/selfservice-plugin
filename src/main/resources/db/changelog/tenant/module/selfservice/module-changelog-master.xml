@@ -40,4 +40,5 @@
   <include file="parts/028-add-notification-messages-beneficiaries.xml" relativeToChangelogFile="true"/>
   <include file="parts/029-add-notification-messages-loan.xml" relativeToChangelogFile="true"/>  
   <include file="parts/030-add-notification-messages-savings.xml" relativeToChangelogFile="true"/>    
+  <include file="parts/031-add-notification-messages-password-management.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>

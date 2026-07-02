@@ -47,7 +47,9 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     LOAN_WITHDRAWN("loan-withdrawn"),
     SAVINGS_REQUESTED("savings-requested"),
     SAVINGS_UPDATED("savings-updated"),
-    SAVINGS_WITHDRAWN("savings-withdrawn");
+    SAVINGS_WITHDRAWN("savings-withdrawn"),
+    PASSWORD_RESET_REQUESTED("password-reset-requested"),
+    PASSWORD_RENEWED("password-renewed");
 
     private final String templatePrefix;
 
