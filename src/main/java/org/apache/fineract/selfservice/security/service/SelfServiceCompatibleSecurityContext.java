@@ -15,6 +15,7 @@
 package org.apache.fineract.selfservice.security.service;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -45,50 +46,34 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     super(configurationDomainService);
   }
 
-  /**
-   * Retrieves the authenticated user, returning a managed JPA proxy for self-service users.
-   *
-   * @return the authenticated AppUser
-   */
   @Override
   public AppUser authenticatedUser() {
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return getManagedAppUserProxy(selfServiceUser.getId());
+      return getManagedAppUserProxy(selfServiceUser);
     }
 
     return super.authenticatedUser();
   }
 
-  /**
-   * Retrieves the authenticated user from the context for a specific command.
-   *
-   * @param commandWrapper the command wrapper contextualizing the request
-   * @return the authenticated AppUser
-   */
   @Override
   public AppUser authenticatedUser(final CommandWrapper commandWrapper) {
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return getManagedAppUserProxy(selfServiceUser.getId());
+      return getManagedAppUserProxy(selfServiceUser);
     }
 
     return super.authenticatedUser(commandWrapper);
   }
 
-  /**
-   * Retrieves the authenticated user if one is currently present in the security context.
-   *
-   * @return the authenticated AppUser, or null if none
-   */
   @Override
   public AppUser getAuthenticatedUserIfPresent() {
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return getManagedAppUserProxy(selfServiceUser.getId());
+      return getManagedAppUserProxy(selfServiceUser);
     }
 
     return super.getAuthenticatedUserIfPresent();
@@ -106,19 +91,38 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
   }
 
   /**
-   * CRITICAL FIX: Instead of creating a new, detached AppUser stub (which causes
-   * "new object found through a relationship" JPA errors when services try to save 
-   * entities with this user as a foreign key), we return a managed JPA proxy.
-   * 
-   * EntityManager.getReference() returns a lazy proxy that is ALWAYS considered 
-   * "managed" by the persistence context. This perfectly satisfies the foreign key 
-   * relationship without triggering a cascade PERSIST error and without hitting 
-   * the database to load the full entity graph.
+   * CRITICAL FIX: Returns a managed JPA proxy for the AppUser.
+   * If the AppSelfServiceUser object in the SecurityContext has a null ID 
+   * (which can happen if the UserDetails object was constructed without 
+   * copying the ID from the database entity), we fall back to looking up 
+   * the ID by username to ensure we always pass a valid ID to getReference().
    */
-  private AppUser getManagedAppUserProxy(Long userId) {
+  private AppUser getManagedAppUserProxy(AppSelfServiceUser selfServiceUser) {
     if (entityManager == null) {
       throw new IllegalStateException("EntityManager is not injected into SelfServiceCompatibleSecurityContext");
     }
+
+    Long userId = selfServiceUser.getId();
+
+    // Fallback: If the ID is null, look it up by username to get a valid ID for the JPA proxy.
+    if (userId == null && selfServiceUser.getUsername() != null) {
+      try {
+        userId = (Long) entityManager.createQuery(
+                "SELECT u.id FROM AppUser u WHERE u.username = :username")
+            .setParameter("username", selfServiceUser.getUsername())
+            .getSingleResult();
+      } catch (NoResultException e) {
+        throw new IllegalStateException("Could not find AppUser with username: " + selfServiceUser.getUsername(), e);
+      }
+    }
+
+    if (userId == null) {
+      throw new IllegalStateException("Cannot create managed AppUser proxy: User ID is null and username is not available.");
+    }
+
+    // getReference returns a lazy JPA proxy that is ALWAYS considered "managed" 
+    // by the persistence context. This perfectly satisfies the foreign key 
+    // relationship without triggering a cascade PERSIST error.
     return entityManager.getReference(AppUser.class, userId);
   }
 }
