@@ -54,7 +54,6 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
-import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransferEnumerations;
 import org.apache.fineract.portfolio.client.domain.Client;
@@ -105,25 +104,24 @@ public class SelfBeneficiariesTPTApiResource {
               SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_OPTIONS_PARAM_NAME));
 
   /**
-   * FIX: Replaces the detached AppSelfServiceUser in the SecurityContext and ThreadLocalContextUtil
-   * with a JPA proxy reference. This prevents "new object found through a relationship"
-   * JPA errors when CommandSourceService tries to save the CommandSource entity, because
-   * JPA proxies are treated as managed references and only require the ID to set the foreign key.
+   * FIX: Replaces the detached AppSelfServiceUser in the SecurityContext with a JPA proxy
+   * reference. This prevents "new object found through a relationship" JPA errors when
+   * CommandSourceService tries to save the CommandSource entity, because JPA proxies are treated as
+   * managed references and only require the ID to set the foreign key.
    */
   private void ensureManagedUserInContext() {
     AppSelfServiceUser detachedUser = this.context.authenticatedSelfServiceUser();
     if (detachedUser != null && detachedUser.getId() != null) {
       // getReferenceById returns a lazy JPA proxy that is always considered "managed"
-      AppSelfServiceUser managedUserProxy = this.appSelfServiceUserRepository.getReferenceById(detachedUser.getId());
-      
-      // Update Fineract's ThreadLocal context (used by CommandSourceService to get the maker)
-      ThreadLocalContextUtil.setAuthenticatedUser(managedUserProxy);
-      
-      // Update Spring Security context
+      AppSelfServiceUser managedUserProxy =
+          this.appSelfServiceUserRepository.getReferenceById(detachedUser.getId());
+
+      // Update Spring Security context so Fineract's CommandSourceService gets the managed proxy
       Authentication currentAuth = SecurityContextHolder.getContext().getAuthentication();
       if (currentAuth != null) {
-        Authentication newAuth = new UsernamePasswordAuthenticationToken(
-            managedUserProxy, currentAuth.getCredentials(), currentAuth.getAuthorities());
+        Authentication newAuth =
+            new UsernamePasswordAuthenticationToken(
+                managedUserProxy, currentAuth.getCredentials(), currentAuth.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(newAuth);
       }
     }
@@ -189,7 +187,7 @@ public class SelfBeneficiariesTPTApiResource {
   public String add(
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
-    
+
     // FIX: Ensure the AppUser is a managed JPA proxy before saving CommandSource
     ensureManagedUserInContext();
 
