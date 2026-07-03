@@ -89,7 +89,7 @@ public class SelfBeneficiariesTPTApiResource {
   // NEW DEPENDENCY to fetch managed user
   private final AppSelfServiceUserRepository appSelfServiceUserRepository;
 
-  // NEW DEPENDENCIES for notifications
+  // DEPENDENCIES for notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
