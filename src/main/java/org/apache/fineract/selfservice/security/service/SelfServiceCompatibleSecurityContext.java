@@ -14,7 +14,8 @@
  */
 package org.apache.fineract.selfservice.security.service;
 
-import java.lang.reflect.Field;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.security.service.SpringSecurityPlatformSecurityContext;
@@ -23,17 +24,21 @@ import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
 
 /**
  * Extends the core {@link SpringSecurityPlatformSecurityContext} to handle both {@link AppUser} and
  * {@link AppSelfServiceUser} principals.
  *
  * <p>Overrides {@code authenticatedUser()} and {@code getAuthenticatedUserIfPresent()} so that when
- * the principal is an {@link AppSelfServiceUser}, a minimal {@link AppUser} stub is returned,
- * allowing core read services to pass their guard checks.
+ * the principal is an {@link AppSelfServiceUser}, a managed JPA proxy is returned.
+ * This prevents "new object found through a relationship" JPA errors when core services
+ * (like CommandSourceService) try to save entities with the user as a foreign key reference.
  */
 public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatformSecurityContext {
+
+  // Inject the EntityManager to create managed JPA proxies
+  @PersistenceContext
+  private EntityManager entityManager;
 
   public SelfServiceCompatibleSecurityContext(
       ConfigurationDomainService configurationDomainService) {
@@ -41,7 +46,7 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
   }
 
   /**
-   * Retrieves the authenticated user, wrapping self-service users in a stub.
+   * Retrieves the authenticated user, returning a managed JPA proxy for self-service users.
    *
    * @return the authenticated AppUser
    */
@@ -50,7 +55,7 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return toAppUserStub(selfServiceUser);
+      return getManagedAppUserProxy(selfServiceUser.getId());
     }
 
     return super.authenticatedUser();
@@ -67,7 +72,7 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return toAppUserStub(selfServiceUser);
+      return getManagedAppUserProxy(selfServiceUser.getId());
     }
 
     return super.authenticatedUser(commandWrapper);
@@ -83,7 +88,7 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     final Object principal = extractPrincipal();
 
     if (principal instanceof AppSelfServiceUser selfServiceUser) {
-      return toAppUserStub(selfServiceUser);
+      return getManagedAppUserProxy(selfServiceUser.getId());
     }
 
     return super.getAuthenticatedUserIfPresent();
@@ -100,38 +105,20 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     return null;
   }
 
-  private AppUser toAppUserStub(AppSelfServiceUser selfServiceUser) {
-    final User springUser =
-        new User(
-            selfServiceUser.getUsername(),
-            selfServiceUser.getPassword(),
-            selfServiceUser.isEnabled(),
-            selfServiceUser.isAccountNonExpired(),
-            selfServiceUser.isCredentialsNonExpired(),
-            selfServiceUser.isAccountNonLocked(),
-            selfServiceUser.getAuthorities());
-    final AppUser stub =
-        new AppUser(
-            selfServiceUser.getOffice(),
-            springUser,
-            selfServiceUser.getRoles(),
-            selfServiceUser.getEmail(),
-            selfServiceUser.getFirstname(),
-            selfServiceUser.getLastname(),
-            null,
-            true,
-            false);
-    setId(stub, selfServiceUser.getId());
-    return stub;
-  }
-
-  private void setId(AppUser stub, Long id) {
-    try {
-      Field idField = AppUser.class.getSuperclass().getDeclaredField("id");
-      idField.setAccessible(true);
-      idField.set(stub, id);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new IllegalStateException("Failed to set id on AppUser stub", e);
+  /**
+   * CRITICAL FIX: Instead of creating a new, detached AppUser stub (which causes
+   * "new object found through a relationship" JPA errors when services try to save 
+   * entities with this user as a foreign key), we return a managed JPA proxy.
+   * 
+   * EntityManager.getReference() returns a lazy proxy that is ALWAYS considered 
+   * "managed" by the persistence context. This perfectly satisfies the foreign key 
+   * relationship without triggering a cascade PERSIST error and without hitting 
+   * the database to load the full entity graph.
+   */
+  private AppUser getManagedAppUserProxy(Long userId) {
+    if (entityManager == null) {
+      throw new IllegalStateException("EntityManager is not injected into SelfServiceCompatibleSecurityContext");
     }
+    return entityManager.getReference(AppUser.class, userId);
   }
 }
