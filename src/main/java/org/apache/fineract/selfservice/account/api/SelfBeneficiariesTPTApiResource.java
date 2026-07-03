@@ -220,7 +220,7 @@ public class SelfBeneficiariesTPTApiResource {
         .validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
     final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson); // With entityId
-    final CommandProcessingResult result = this.writePlatformService.update(command);
+    final CommandProcessingResult result = this.writePlatformService.update(beneficiaryId, command);
 
     Map<String, Object> contextData =
         extractBeneficiaryContextForUpdate(apiRequestBodyAsJson, beneficiaryId);
@@ -262,7 +262,7 @@ public class SelfBeneficiariesTPTApiResource {
         .validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
     final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
-    final CommandProcessingResult result = this.writePlatformService.delete(command);
+    final CommandProcessingResult result = this.writePlatformService.delete(beneficiaryId, command);
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("beneficiaryId", beneficiaryId);
