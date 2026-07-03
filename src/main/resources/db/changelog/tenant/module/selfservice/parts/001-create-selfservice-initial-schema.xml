@@ -10,24 +10,284 @@
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">    
-    <!-- Refactor column name from app_user_id to app_selfservice_user_id -->
-    <changeSet author="fineract" id="ss-0032-1">
+    <!-- Add App Self Service User Table -->
+    <changeSet author="fineract" id="ss-0001-1">
         <preConditions onFail="MARK_RAN">
-            <and>
-                <!-- Only run if the old column exists -->
-                <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_user_id"/>
-                <!-- AND the new column does not already exist -->
-                <not>
-                    <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_selfservice_user_id"/>
-                </not>
-            </and>
+            <not>
+                <tableExists tableName="m_appselfservice_user"/>
+            </not>
         </preConditions>
-        
-        <comment>Rename app_user_id to app_selfservice_user_id in m_selfservice_beneficiaries_tpt</comment>
-        
-        <renameColumn tableName="m_selfservice_beneficiaries_tpt"
-                      oldColumnName="app_user_id"
-                      newColumnName="app_selfservice_user_id"
-                      columnDataType="BIGINT"/>
+        <createTable tableName="m_appselfservice_user">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column defaultValueBoolean="false" name="is_deleted" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueComputed="NULL" name="office_id" type="BIGINT"/>
+            <column defaultValueComputed="NULL" name="staff_id" type="BIGINT"/>
+            <column name="username" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="firstname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lastname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="password" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="firsttime_login_remaining" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonexpired" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonlocked" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonexpired_credentials" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueDate="1970-01-01" name="last_time_password_updated" type="date">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="password_never_expires"
+                    remarks="define if the password, should be check for validity period or not" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueBoolean="false" name="password_reset_required"
+                    remarks="define if the password, should be reset or not" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueBoolean="true" name="is_self_service_user" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueBoolean="false" name="cannot_change_password" type="boolean"/>
+        </createTable>
+    </changeSet>
+    <!-- Modify Request Audit Table -->
+    <changeSet author="fineract" id="ss-0001-2">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="request_audit_table" columnName="middlename"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="request_audit_table">
+            <column name="middlename" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <!-- Add Self Service Beneficiaries Third Party Transfer Table -->
+    <changeSet author="fineract" id="ss-0001-3">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_beneficiaries_tpt"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_beneficiaries_tpt">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="app_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="office_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="account_type" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="transfer_limit" type="BIGINT"/>
+            <column defaultValueBoolean="false" name="is_active" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <!-- Add App Self Service User Client Mapping Table -->
+    <changeSet author="fineract" id="ss-0001-4">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_user_client_mapping"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_user_client_mapping">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <!-- Alter App Self Service User Client Mapping Table -->
+    <changeSet author="fineract" id="ss-0001-5">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="m_selfservice_user_client_mapping" indexName="appuser_id_client_id"/>
+            </not>
+            <not>
+                <indexExists tableName="m_selfservice_user_client_mapping" indexName="unique_self_client"/>
+            </not>
+        </preConditions>
+        <addUniqueConstraint columnNames="appuser_id, client_id" constraintName="appuser_id_client_id"
+                             tableName="m_selfservice_user_client_mapping"/>
+        <addUniqueConstraint columnNames="client_id" constraintName="unique_self_client"
+                             tableName="m_selfservice_user_client_mapping"/>
+    </changeSet>
+    <!-- Alter App Self Service Beneficiaries Table -->
+    <changeSet author="fineract" id="ss-0001-6">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="m_selfservice_beneficiaries_tpt" indexName="uk_m_selfservice_beneficiaries_tpt_name"/>
+            </not>            
+        </preConditions>
+        <addUniqueConstraint columnNames="name, app_user_id, is_active" constraintName="uk_m_selfservice_beneficiaries_tpt_name"
+                             tableName="m_selfservice_beneficiaries_tpt"/>
+    </changeSet>
+    <!-- Alter App Self Service User Client Mapping Table -->
+    <changeSet author="fineract" id="ss-0001-7">        
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="m_selfservice_appuser_id" 
+                                            foreignKeyTableName="m_selfservice_user_client_mapping"/>
+            </not>
+        </preConditions>
+        <addForeignKeyConstraint baseColumnNames="appuser_id" baseTableName="m_selfservice_user_client_mapping"
+                                 constraintName="m_selfservice_appuser_id" deferrable="false" initiallyDeferred="false"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT" referencedColumnNames="id"
+                                 referencedTableName="m_appselfservice_user" validate="true"/>
+    </changeSet>
+    <!-- Alter App Self Service User Client Mapping Table -->
+    <changeSet author="fineract" id="ss-0001-8">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="m_selfservice_client_id" 
+                                            foreignKeyTableName="m_selfservice_user_client_mapping"/>
+            </not>
+        </preConditions>
+        <addForeignKeyConstraint baseColumnNames="client_id" baseTableName="m_selfservice_user_client_mapping"
+                                 constraintName="m_selfservice_client_id" deferrable="false" initiallyDeferred="false"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT" referencedColumnNames="id"
+                                 referencedTableName="m_client" validate="true"/>
+    </changeSet>
+
+    <!-- Create dedicated self-service role mapping table to prevent ID collision with m_appuser_role -->
+    <changeSet author="fineract" id="ss-0001-9">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_appselfservice_user_role"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_appselfservice_user_role">
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="m_appselfservice_user_role"
+                       columnNames="appuser_id, role_id"/>
+        <addForeignKeyConstraint baseTableName="m_appselfservice_user_role"
+                                 baseColumnNames="appuser_id"
+                                 constraintName="fk_ss_user_role_appuser"
+                                 referencedTableName="m_appselfservice_user"
+                                 referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="m_appselfservice_user_role"
+                                 baseColumnNames="role_id"
+                                 constraintName="fk_ss_user_role_role"
+                                 referencedTableName="m_role"
+                                 referencedColumnNames="id"/>
+    </changeSet>
+    <!--
+        Migrate existing self-service role data.
+        SECURITY: Filter by role name to prevent privilege escalation.
+        m_appuser and m_appselfservice_user use independent auto-increment sequences,
+        so IDs collide. An unfiltered JOIN would copy back-office admin roles.
+    -->
+    <changeSet author="fineract" id="ss-0001-10">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_appselfservice_user_role"/>
+            <tableExists tableName="m_appuser_role"/>
+            <tableExists tableName="m_appselfservice_user"/>
+        </preConditions>
+        <sql>
+            INSERT INTO m_appselfservice_user_role (appuser_id, role_id)
+            SELECT ar.appuser_id, ar.role_id
+            FROM m_appuser_role ar
+            INNER JOIN m_appselfservice_user su ON su.id = ar.appuser_id
+            INNER JOIN m_role r ON r.id = ar.role_id
+            WHERE r.name = 'Self Service User'
+            AND NOT EXISTS (
+                SELECT 1 
+                FROM m_appselfservice_user_role existing
+                WHERE existing.appuser_id = ar.appuser_id 
+                AND existing.role_id = ar.role_id
+            );
+        </sql>
+    </changeSet>
+    <!-- Enable the Self Service User Role-->
+    <changeSet author="fineract" id="ss-0001-11">
+        <preConditions onFail="MARK_RAN">            
+            <tableExists tableName="m_appuser_role"/>            
+        </preConditions>
+        <sql>
+            UPDATE m_role SET is_disabled=false WHERE name = 'Self Service User';
+        </sql>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0001-12">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_beneficiaries_tpt"/>
+        </preConditions>
+
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="office_id" columnDataType="BIGINT"/>
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="client_id" columnDataType="BIGINT"/>
+        <dropNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="account_id" columnDataType="BIGINT"/>
+
+        <addColumn tableName="m_selfservice_beneficiaries_tpt">
+            <column name="custom_account_number" type="VARCHAR(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_name" type="VARCHAR(150)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_id" type="VARCHAR(30)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="holder_id_type" type="INT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="entity_code" type="VARCHAR(10)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="entity_name" type="VARCHAR(150)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
     </changeSet>
 </databaseChangeLog>

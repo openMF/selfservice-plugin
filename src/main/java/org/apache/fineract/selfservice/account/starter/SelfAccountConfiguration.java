@@ -26,7 +26,6 @@ import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWrite
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformServiceImpl;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
-import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

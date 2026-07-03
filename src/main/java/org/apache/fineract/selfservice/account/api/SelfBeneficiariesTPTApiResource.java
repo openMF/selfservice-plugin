@@ -80,61 +80,103 @@ public class SelfBeneficiariesTPTApiResource {
   private final SelfBeneficiariesTPTReadPlatformService readPlatformService;
   private final SelfBeneficiariesTPTWritePlatformService writePlatformService;
 
-  // DEPENDENCIES for notifications
+  // Dependencies for asynchronous notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
-  private static final Set<String> RESPONSE_DATA_PARAMETERS = Set.of(
-      SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.ACCOUNT_NUMBER_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.ID_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.CLIENT_NAME_PARAM_NAME,
-      SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_OPTIONS_PARAM_NAME);
+  private static final Set<String> RESPONSE_DATA_PARAMETERS =
+      Set.of(
+          SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.ACCOUNT_NUMBER_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.ID_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.CLIENT_NAME_PARAM_NAME,
+          SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_OPTIONS_PARAM_NAME);
 
-  private static final String RESOURCE_NAME_FOR_PERMISSIONS = SelfBeneficiariesTPTApiConstants.BENEFICIARY_ENTITY_NAME;
+  private static final String RESOURCE_NAME_FOR_PERMISSIONS =
+      SelfBeneficiariesTPTApiConstants.BENEFICIARY_ENTITY_NAME;
 
   @GET
   @Path("template")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Beneficiary Third Party Transfer Template", description = "Returns Account Type enumerations...")
+  @Operation(
+      summary = "Beneficiary Third Party Transfer Template",
+      description = "Returns Account Type enumerations...")
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK",
-        content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.GetSelfBeneficiariesTPTTemplateResponse.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                schema =
+                    @Schema(
+                        implementation =
+                            SelfBeneficiariesTPTApiResourceSwagger
+                                .GetSelfBeneficiariesTPTTemplateResponse.class)))
   })
   public String template(@Context final UriInfo uriInfo) {
     context.authenticatedSelfServiceUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
-    final EnumOptionData loanAccountType = AccountTransferEnumerations.accountType(PortfolioAccountType.LOAN);
-    final EnumOptionData savingsAccountType = AccountTransferEnumerations.accountType(PortfolioAccountType.SAVINGS);
-    final Collection<EnumOptionData> accountTypeOptions = Arrays.asList(savingsAccountType, loanAccountType);
+    final EnumOptionData loanAccountType =
+        AccountTransferEnumerations.accountType(PortfolioAccountType.LOAN);
+    final EnumOptionData savingsAccountType =
+        AccountTransferEnumerations.accountType(PortfolioAccountType.SAVINGS);
+    final Collection<EnumOptionData> accountTypeOptions =
+        Arrays.asList(savingsAccountType, loanAccountType);
 
     SelfBeneficiariesTPTData templateData = new SelfBeneficiariesTPTData(accountTypeOptions);
-    final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     return this.toApiJsonSerializer.serialize(settings, templateData, RESPONSE_DATA_PARAMETERS);
   }
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Add TPT Beneficiary", description = "Api to add third party beneficiary...")
-  @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.PostSelfBeneficiariesTPTRequest.class)))
+  @Operation(
+      summary = "Add TPT Beneficiary",
+      description = "Creates a new third-party transfer beneficiary.")
+  @RequestBody(
+      required = true,
+      content =
+          @Content(
+              schema =
+                  @Schema(
+                      implementation =
+                          SelfBeneficiariesTPTApiResourceSwagger.PostSelfBeneficiariesTPTRequest
+                              .class)))
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK",
-        content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.PostSelfBeneficiariesTPTResponse.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                schema =
+                    @Schema(
+                        implementation =
+                            SelfBeneficiariesTPTApiResourceSwagger.PostSelfBeneficiariesTPTResponse
+                                .class)))
   })
-  public String add(@Parameter(hidden = true) final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
-    context.authenticatedSelfServiceUser().validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+  public String add(
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
 
-    final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
+    context
+        .authenticatedSelfServiceUser()
+        .validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
+    final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson); // Simple & compatible
     final CommandProcessingResult result = this.writePlatformService.add(command);
 
-    // Notification context
     Map<String, Object> contextData = extractBeneficiaryContextForAdd(apiRequestBodyAsJson);
-    publishBeneficiaryEvent(SelfServiceNotificationEvent.Type.BENEFICIARY_ADDED, result.getResourceId(), contextData, httpRequest);
+    publishBeneficiaryEvent(
+        SelfServiceNotificationEvent.Type.BENEFICIARY_ADDED,
+        result.getResourceId(),
+        contextData,
+        httpRequest);
 
     return this.toApiJsonSerializer.serialize(result);
   }
@@ -143,24 +185,50 @@ public class SelfBeneficiariesTPTApiResource {
   @Path("{beneficiaryId}")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Update TPT Beneficiary", description = "Api to update third party beneficiary...")
-  @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.PutSelfBeneficiariesTPTBeneficiaryIdRequest.class)))
+  @Operation(
+      summary = "Update TPT Beneficiary",
+      description = "Updates an existing third-party transfer beneficiary.")
+  @RequestBody(
+      required = true,
+      content =
+          @Content(
+              schema =
+                  @Schema(
+                      implementation =
+                          SelfBeneficiariesTPTApiResourceSwagger
+                              .PutSelfBeneficiariesTPTBeneficiaryIdRequest.class)))
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK",
-        content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.PutSelfBeneficiariesTPTBeneficiaryIdResponse.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                schema =
+                    @Schema(
+                        implementation =
+                            SelfBeneficiariesTPTApiResourceSwagger
+                                .PutSelfBeneficiariesTPTBeneficiaryIdResponse.class)))
   })
   public String update(
-      @PathParam("beneficiaryId") @Parameter(description = "beneficiaryId") final Long beneficiaryId,
+      @PathParam("beneficiaryId") @Parameter(description = "beneficiaryId")
+          final Long beneficiaryId,
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
 
-    context.authenticatedSelfServiceUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    context
+        .authenticatedSelfServiceUser()
+        .validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
-    final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
+    final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson); // With entityId
     final CommandProcessingResult result = this.writePlatformService.update(command);
 
-    Map<String, Object> contextData = extractBeneficiaryContextForUpdate(apiRequestBodyAsJson, beneficiaryId);
-    publishBeneficiaryEvent(SelfServiceNotificationEvent.Type.BENEFICIARY_UPDATED, beneficiaryId, contextData, httpRequest);
+    Map<String, Object> contextData =
+        extractBeneficiaryContextForUpdate(apiRequestBodyAsJson, beneficiaryId);
+    publishBeneficiaryEvent(
+        SelfServiceNotificationEvent.Type.BENEFICIARY_UPDATED,
+        beneficiaryId,
+        contextData,
+        httpRequest);
 
     return this.toApiJsonSerializer.serialize(result);
   }
@@ -169,24 +237,41 @@ public class SelfBeneficiariesTPTApiResource {
   @Path("{beneficiaryId}")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Delete TPT Beneficiary", description = "Api to delete third party beneficiary...")
+  @Operation(
+      summary = "Delete TPT Beneficiary",
+      description = "Soft-deletes an existing third-party transfer beneficiary.")
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK",
-        content = @Content(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.DeleteSelfBeneficiariesTPTBeneficiaryIdResponse.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                schema =
+                    @Schema(
+                        implementation =
+                            SelfBeneficiariesTPTApiResourceSwagger
+                                .DeleteSelfBeneficiariesTPTBeneficiaryIdResponse.class)))
   })
   public String delete(
       @PathParam("beneficiaryId") final Long beneficiaryId,
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
 
-    context.authenticatedSelfServiceUser().validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    context
+        .authenticatedSelfServiceUser()
+        .validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
     final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
     final CommandProcessingResult result = this.writePlatformService.delete(command);
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("beneficiaryId", beneficiaryId);
-    publishBeneficiaryEvent(SelfServiceNotificationEvent.Type.BENEFICIARY_DELETED, beneficiaryId, contextData, httpRequest);
+
+    publishBeneficiaryEvent(
+        SelfServiceNotificationEvent.Type.BENEFICIARY_DELETED,
+        beneficiaryId,
+        contextData,
+        httpRequest);
 
     return this.toApiJsonSerializer.serialize(result);
   }
@@ -194,21 +279,74 @@ public class SelfBeneficiariesTPTApiResource {
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Get All TPT Beneficiary", description = "Api to get all third party beneficiary...")
+  @Operation(
+      summary = "Get All TPT Beneficiaries",
+      description = "Api to get all third party beneficiary...")
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfBeneficiariesTPTApiResourceSwagger.GetSelfBeneficiariesTPTResponse.class))))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfBeneficiariesTPTApiResourceSwagger
+                                        .GetSelfBeneficiariesTPTResponse.class))))
   })
   public String retrieveAll(@Context final UriInfo uriInfo) {
     context.authenticatedSelfServiceUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
-    final Collection<SelfBeneficiariesTPTData> beneficiaries = this.readPlatformService.retrieveAll();
-    final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    final Collection<SelfBeneficiariesTPTData> beneficiaries =
+        this.readPlatformService.retrieveAll();
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     return this.toApiJsonSerializer.serialize(settings, beneficiaries, RESPONSE_DATA_PARAMETERS);
   }
 
-  // --- Notification Helpers (unchanged) ---
-  private void publishBeneficiaryEvent(SelfServiceNotificationEvent.Type type, Long beneficiaryId, Map<String, Object> contextData, HttpServletRequest httpRequest) {
+  // === Notification Helpers (unchanged) ===
+
+  private Map<String, Object> extractBeneficiaryContextForAdd(String apiRequestBodyAsJson) {
+    Map<String, Object> contextData = new HashMap<>();
+    try {
+      JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      contextData.put("beneficiaryName", json.has("name") ? json.get("name").getAsString() : "");
+      contextData.put(
+          "accountNumber",
+          json.has("accountNumber") ? json.get("accountNumber").getAsString() : "");
+      contextData.put(
+          "officeName", json.has("officeName") ? json.get("officeName").getAsString() : "");
+      contextData.put(
+          "accountType", json.has("accountType") ? json.get("accountType").getAsInt() : "");
+    } catch (Exception e) {
+      log.warn("Failed to parse beneficiary JSON for notification", e);
+    }
+    return contextData;
+  }
+
+  private Map<String, Object> extractBeneficiaryContextForUpdate(
+      String apiRequestBodyAsJson, Long beneficiaryId) {
+    Map<String, Object> contextData = new HashMap<>();
+    try {
+      JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      contextData.put("beneficiaryName", json.has("name") ? json.get("name").getAsString() : "");
+      contextData.put(
+          "transferLimit",
+          json.has("transferLimit") ? json.get("transferLimit").getAsBigDecimal() : "");
+    } catch (Exception e) {
+      log.warn("Failed to parse beneficiary JSON for notification", e);
+    }
+    contextData.put("beneficiaryId", beneficiaryId);
+    return contextData;
+  }
+
+  private void publishBeneficiaryEvent(
+      SelfServiceNotificationEvent.Type type,
+      Long beneficiaryId,
+      Map<String, Object> contextData,
+      HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
@@ -216,39 +354,21 @@ public class SelfBeneficiariesTPTApiResource {
 
       applicationEventPublisher.publishEvent(
           SelfServiceNotificationEvent.withTenantContext(
-              this, type, user.getId(), user.getFirstname(), user.getLastname(), user.getUsername(),
-              user.getEmail(), mobileNumber, emailMode, extractClientIp(httpRequest),
-              LocaleContextHolder.getLocale(), contextData));
+              this,
+              type,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              LocaleContextHolder.getLocale(),
+              contextData));
     } catch (Exception e) {
       log.warn("Failed to publish {} notification event", type, e);
     }
-  }
-
-  private Map<String, Object> extractBeneficiaryContextForAdd(String jsonStr) {
-    Map<String, Object> contextData = new HashMap<>();
-    try {
-      JsonObject json = JsonParser.parseString(jsonStr).getAsJsonObject();
-      contextData.put("beneficiaryName", json.has("name") ? json.get("name").getAsString() : "");
-      contextData.put("accountNumber", json.has("accountNumber") ? json.get("accountNumber").getAsString() : "");
-      contextData.put("officeName", json.has("officeName") ? json.get("officeName").getAsString() : "");
-      contextData.put("accountType", json.has("accountType") ? json.get("accountType").getAsInt() : "");
-    } catch (Exception e) {
-      log.warn("Failed to parse beneficiary JSON for notification", e);
-    }
-    return contextData;
-  }
-
-  private Map<String, Object> extractBeneficiaryContextForUpdate(String jsonStr, Long beneficiaryId) {
-    Map<String, Object> contextData = new HashMap<>();
-    try {
-      JsonObject json = JsonParser.parseString(jsonStr).getAsJsonObject();
-      contextData.put("beneficiaryName", json.has("name") ? json.get("name").getAsString() : "");
-      contextData.put("transferLimit", json.has("transferLimit") ? json.get("transferLimit").getAsBigDecimal() : "");
-    } catch (Exception e) {
-      log.warn("Failed to parse beneficiary JSON for notification", e);
-    }
-    contextData.put("beneficiaryId", beneficiaryId);
-    return contextData;
   }
 
   private String extractMobile(AppSelfServiceUser user) {
@@ -267,7 +387,8 @@ public class SelfBeneficiariesTPTApiResource {
     boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
     if (hasEmail && !hasMobile) return true;
     if (hasMobile && !hasEmail) return false;
-    String pref = env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
+    String pref =
+        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
 

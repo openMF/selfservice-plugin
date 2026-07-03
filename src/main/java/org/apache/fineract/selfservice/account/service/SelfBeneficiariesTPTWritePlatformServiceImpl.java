@@ -60,7 +60,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
   private final SelfBeneficiariesTPTDataValidator validator;
   private final LoanRepositoryWrapper loanRepositoryWrapper;
   private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
-  private final AppSelfServiceUserRepository appUserRepository; // El repositorio correcto inyectado por Lombok
+  private final AppSelfServiceUserRepository
+      appUserRepository; // El repositorio correcto inyectado por Lombok
 
   /**
    * Adds a new self-service beneficiary.
@@ -148,23 +149,23 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
     try {
       AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-      
+
       Optional<AppSelfServiceUser> ssUser = this.appUserRepository.findById(user.getId());
-      
+
       Long ssID = ssUser.get().getId();
-      
-      log.error("ID USUARIO ssID "+ssID);
-      
+
+      log.error("ID USUARIO ssID " + ssID);
+
       final Long appUserIdPlano = user.getId();
 
-      log.error("ID USUARIO user.getId() "+user.getId());
-      
+      log.error("ID USUARIO user.getId() " + user.getId());
+
       SelfBeneficiariesTPT beneficiary =
           new SelfBeneficiariesTPT(
               appUserIdPlano, name, officeId, clientId, accountId, accountType, transferLimit);
 
       if (isExternal) {
-          log.error("IS EXTERNAL");
+        log.error("IS EXTERNAL");
         beneficiary.setCustomAccountNumber(accountNumber);
         beneficiary.setHolderName((String) params.get("holder"));
         beneficiary.setHolderId((String) params.get("holderId"));
@@ -253,20 +254,30 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
   private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
     final Throwable realCause = dae.getMostSpecificCause();
-    if (realCause.getMessage().contains("name")) {
+    if (realCause.getMessage().contains("name")
+        || realCause.getMessage().contains("uk_m_selfservice_beneficiaries_tpt_name")) {
 
-      final String name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
+      String name = "unknown";
+      try {
+        if (command != null && command.json() != null) {
+          // Safe extraction
+          name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
+        }
+      } catch (Exception e) {
+        log.debug("Could not extract name from JSON command", e);
+      }
+
       throw new PlatformDataIntegrityException(
           "error.msg.beneficiary.duplicate.name",
-          "Beneficiary with name `" + name + "` already exists",
+          "Beneficiary with name `" + name + "` already exists for this user.",
           NAME_PARAM_NAME,
           name);
     }
 
-    log.error("Error occured.", dae);
+    log.error("Unexpected data integrity issue with beneficiary", dae);
     throw ErrorHandler.getMappable(
         dae,
         "error.msg.beneficiary.unknown.data.integrity.issue",
-        "Unknown data integrity issue with resource.");
+        "Unknown data integrity issue with beneficiary resource.");
   }
 }
