@@ -30,13 +30,13 @@ import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
     name = "m_selfservice_beneficiaries_tpt",
     uniqueConstraints = {
       @UniqueConstraint(
-          columnNames = {"name", "app_user_id", "is_active"},
+          columnNames = {"name", "app_selfservice_user_id", "is_active"},
           name = "name")
     })
 public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
 
-  @Column(name = "app_user_id", nullable = false)
-  private Long appUserId;
+  @Column(name = "app_selfservice_user_id", nullable = false)
+  private Long appSelfServiceUserId;
 
   @Column(name = "name", length = 50, nullable = false)
   private String name;
@@ -100,14 +100,14 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
   }
 
   public SelfBeneficiariesTPT(
-      Long appUserId,
+      Long appSelfServiceUserId,
       String name,
       Long officeId,
       Long clientId,
       Long accountId,
       Integer accountType,
       Long transferLimit) {
-    this.appUserId = appUserId;
+    this.appSelfServiceUserId = appSelfServiceUserId;
     this.name = name;
     this.officeId = officeId;
     this.clientId = clientId;
@@ -140,8 +140,8 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
     this.isActive = isActive;
   }
 
-  public Long getAppUserId() {
-    return this.appUserId;
+  public Long getAppSelfServiceUserId() {
+    return this.appSelfServiceUserId;
   }
 
   public Long getOfficeId() {

@@ -42,7 +42,6 @@ import org.apache.fineract.selfservice.account.exception.InvalidBeneficiaryExcep
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
-import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -193,7 +192,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     Long beneficiaryId = command.entityId();
     SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
-    if (beneficiary != null && beneficiary.getAppUserId().equals(user.getId())) {
+    if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
       String name = (String) params.get(NAME_PARAM_NAME);
       Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
 
@@ -226,7 +225,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     Long beneficiaryId = command.entityId();
     SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
-    if (beneficiary != null && beneficiary.getAppUserId().equals(user.getId())) {
+    if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
 
       beneficiary.setActive(false);
       this.repository.save(beneficiary);

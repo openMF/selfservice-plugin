@@ -80,7 +80,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" inner join m_savings_account as s on b.account_id = s.id ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 2 ");
-      sqlBuilder.append(" and b.app_user_id = ?) ");
+      sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
       sqlBuilder.append(" union all ");
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
@@ -97,7 +97,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" inner join m_loan as l on b.account_id = l.id ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 1 ");
-      sqlBuilder.append(" and b.app_user_id = ?) ");
+      sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
       sqlBuilder.append(" union all ");
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
@@ -116,7 +116,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type in (3,4) ");
-      sqlBuilder.append(" and b.app_user_id = ?) ");
+      sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
 
       this.schemaSql = sqlBuilder.toString();
     }
@@ -197,7 +197,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" inner join m_savings_account as s on b.account_id = s.id ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 2 ");
-      sqlBuilder.append(" and b.app_user_id = ?) ");
+      sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
       sqlBuilder.append(" union all ");
       sqlBuilder.append(" (select o.name as officeName, ");
       sqlBuilder.append(" o.id as officeId, ");
@@ -212,7 +212,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" inner join m_loan as l on b.account_id = l.id ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 1 ");
-      sqlBuilder.append(" and b.app_user_id = ?) ");
+      sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
 
       this.schemaSql = sqlBuilder.toString();
     }
@@ -242,7 +242,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
   public Long getTransferLimit(Long appUserId, Long accountId, Integer accountType) {
     final StringBuilder sqlBuilder = new StringBuilder("select b.transfer_limit ");
     sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
-    sqlBuilder.append(" where b.app_user_id = ? ");
+    sqlBuilder.append(" where b.app_selfservice_user_id = ? ");
     sqlBuilder.append(" and b.account_id = ? ");
     sqlBuilder.append(" and b.account_type = ? ");
     sqlBuilder.append(" and b.is_active = true; ");
