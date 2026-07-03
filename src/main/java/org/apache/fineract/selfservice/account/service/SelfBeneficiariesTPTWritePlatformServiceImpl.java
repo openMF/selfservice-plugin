@@ -202,10 +202,9 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
    */
   @Transactional
   @Override
-  public CommandProcessingResult update(JsonCommand command) {
+  public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
     HashMap<String, Object> params = this.validator.validateForUpdate(command.json());
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    Long beneficiaryId = command.entityId();
     SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
     if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
       String name = (String) params.get(NAME_PARAM_NAME);
@@ -236,9 +235,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
    */
   @Transactional
   @Override
-  public CommandProcessingResult delete(JsonCommand command) {
+  public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    Long beneficiaryId = command.entityId();
     SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
     if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
 
