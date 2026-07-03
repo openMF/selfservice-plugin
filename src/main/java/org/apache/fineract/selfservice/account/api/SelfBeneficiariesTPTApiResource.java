@@ -54,6 +54,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransferEnumerations;
 import org.apache.fineract.portfolio.client.domain.Client;
@@ -86,12 +87,10 @@ public class SelfBeneficiariesTPTApiResource {
   private final ApiRequestParameterHelper apiRequestParameterHelper;
   private final SelfBeneficiariesTPTReadPlatformService readPlatformService;
 
-  // NEW DEPENDENCY to fetch managed user
-  private final AppSelfServiceUserRepository appSelfServiceUserRepository;
-
-  // DEPENDENCIES for notifications
+  // DEPENDENCIES for notifications and JPA proxy fix
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  private final AppSelfServiceUserRepository appSelfServiceUserRepository;
 
   private static final Set<String> RESPONSE_DATA_PARAMETERS =
       new HashSet<>(
@@ -106,21 +105,25 @@ public class SelfBeneficiariesTPTApiResource {
               SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_OPTIONS_PARAM_NAME));
 
   /**
-   * FIX: Replaces the detached AppUser principal in the SecurityContext with a freshly fetched,
-   * managed AppSelfServiceUser instance. This prevents "new object found through a relationship"
-   * JPA errors when CommandSourceService tries to save the CommandSource entity.
+   * FIX: Replaces the detached AppSelfServiceUser in the SecurityContext and ThreadLocalContextUtil
+   * with a JPA proxy reference. This prevents "new object found through a relationship"
+   * JPA errors when CommandSourceService tries to save the CommandSource entity, because
+   * JPA proxies are treated as managed references and only require the ID to set the foreign key.
    */
-  private void ensureManagedUserInSecurityContext() {
+  private void ensureManagedUserInContext() {
     AppSelfServiceUser detachedUser = this.context.authenticatedSelfServiceUser();
     if (detachedUser != null && detachedUser.getId() != null) {
-      AppSelfServiceUser managedUser =
-          this.appSelfServiceUserRepository.findById(detachedUser.getId()).orElse(detachedUser);
-
+      // getReferenceById returns a lazy JPA proxy that is always considered "managed"
+      AppSelfServiceUser managedUserProxy = this.appSelfServiceUserRepository.getReferenceById(detachedUser.getId());
+      
+      // Update Fineract's ThreadLocal context (used by CommandSourceService to get the maker)
+      ThreadLocalContextUtil.setAuthenticatedUser(managedUserProxy);
+      
+      // Update Spring Security context
       Authentication currentAuth = SecurityContextHolder.getContext().getAuthentication();
       if (currentAuth != null) {
-        Authentication newAuth =
-            new UsernamePasswordAuthenticationToken(
-                managedUser, currentAuth.getCredentials(), currentAuth.getAuthorities());
+        Authentication newAuth = new UsernamePasswordAuthenticationToken(
+            managedUserProxy, currentAuth.getCredentials(), currentAuth.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(newAuth);
       }
     }
@@ -186,9 +189,9 @@ public class SelfBeneficiariesTPTApiResource {
   public String add(
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
-
-    // FIX: Ensure the AppUser is managed before saving CommandSource
-    ensureManagedUserInSecurityContext();
+    
+    // FIX: Ensure the AppUser is a managed JPA proxy before saving CommandSource
+    ensureManagedUserInContext();
 
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
@@ -255,8 +258,8 @@ public class SelfBeneficiariesTPTApiResource {
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
 
-    // FIX: Ensure the AppUser is managed before saving CommandSource
-    ensureManagedUserInSecurityContext();
+    // FIX: Ensure the AppUser is a managed JPA proxy before saving CommandSource
+    ensureManagedUserInContext();
 
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
@@ -310,8 +313,8 @@ public class SelfBeneficiariesTPTApiResource {
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
 
-    // FIX: Ensure the AppUser is managed before saving CommandSource
-    ensureManagedUserInSecurityContext();
+    // FIX: Ensure the AppUser is a managed JPA proxy before saving CommandSource
+    ensureManagedUserInContext();
 
     final CommandWrapper commandRequest =
         new CommandWrapperBuilderSelfService()
