@@ -22,6 +22,7 @@ import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTAp
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -147,13 +148,23 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
     try {
       AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+      
+      Optional<AppSelfServiceUser> ssUser = this.appUserRepository.findById(user.getId());
+      
+      Long ssID = ssUser.get().getId();
+      
+      log.error("ID USUARIO ssID "+ssID);
+      
       final Long appUserIdPlano = user.getId();
 
+      log.error("ID USUARIO user.getId() "+user.getId());
+      
       SelfBeneficiariesTPT beneficiary =
           new SelfBeneficiariesTPT(
               appUserIdPlano, name, officeId, clientId, accountId, accountType, transferLimit);
 
       if (isExternal) {
+          log.error("IS EXTERNAL");
         beneficiary.setCustomAccountNumber(accountNumber);
         beneficiary.setHolderName((String) params.get("holder"));
         beneficiary.setHolderId((String) params.get("holderId"));
@@ -164,11 +175,14 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
       }
 
       beneficiary.setActive(true);
+      log.error("IS ACTIVE");
 
       this.repository.saveAndFlush(beneficiary);
+      log.error("SAVE AND FLUSH");
       return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
     } catch (DataAccessException dae) {
       handleDataIntegrityIssues(command, dae);
+      dae.printStackTrace();
     }
 
     throw new InvalidAccountInformationException(
