@@ -41,6 +41,7 @@ import org.apache.fineract.selfservice.account.exception.InvalidAccountInformati
 import org.apache.fineract.selfservice.account.exception.InvalidBeneficiaryException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +60,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
   private final SelfBeneficiariesTPTDataValidator validator;
   private final LoanRepositoryWrapper loanRepositoryWrapper;
   private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
-  private final AppUserRepository appUserRepository; // El repositorio correcto inyectado por Lombok
+  private final AppSelfServiceUserRepository appUserRepository; // El repositorio correcto inyectado por Lombok
 
   /**
    * Adds a new self-service beneficiary.
