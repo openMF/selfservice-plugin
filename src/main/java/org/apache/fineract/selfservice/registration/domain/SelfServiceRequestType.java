@@ -26,5 +26,13 @@ public enum SelfServiceRequestType {
    *
    * <p>Use this for tokens that authorize renewal of an existing self-service password.
    */
-  PASSWORD_RESET
+  PASSWORD_RESET,
+
+  /**
+   * Request created for SINPE Móvil phone number enrollment.
+   *
+   * <p>Use this for tokens (OTPs) that verify and authorize the linking of a mobile number 
+   * for SINPE Móvil transactions.
+   */
+  SINPE_ENROLLMENT
 }

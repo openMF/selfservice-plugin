@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+ 
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- 1. Create SINPE Enrollment Table -->
+    <changeSet author="fineract" id="ss-0032-1">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="m_selfservice_sinpe_enrollment"/></not>
+        </preConditions>
+        <createTable tableName="m_selfservice_sinpe_enrollment">
+            <column autoIncrement="true" name="id" type="BIGINT"><constraints nullable="false" primaryKey="true"/></column>
+            <column name="app_selfservice_user_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="client_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="mobile_number" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column defaultValueBoolean="false" name="is_verified" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="verified_on" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex indexName="uk_sinpe_enrollment_user_mobile" tableName="m_selfservice_sinpe_enrollment" unique="true">
+            <column name="app_selfservice_user_id"/>
+            <column name="mobile_number"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

@@ -49,7 +49,9 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     SAVINGS_UPDATED("savings-updated"),
     SAVINGS_WITHDRAWN("savings-withdrawn"),
     PASSWORD_RESET_REQUESTED("password-reset-requested"),
-    PASSWORD_RENEWED("password-renewed");
+    PASSWORD_RENEWED("password-renewed"),
+    SINPE_ENROLLMENT_OTP("sinpe-enrollment-otp"),
+    SINPE_ENROLLMENT_SUCCESS("sinpe-enrollment-success");
 
     private final String templatePrefix;
 
