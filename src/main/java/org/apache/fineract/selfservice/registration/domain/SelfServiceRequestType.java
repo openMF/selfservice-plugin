@@ -31,8 +31,8 @@ public enum SelfServiceRequestType {
   /**
    * Request created for SINPE Móvil phone number enrollment.
    *
-   * <p>Use this for tokens (OTPs) that verify and authorize the linking of a mobile number 
-   * for SINPE Móvil transactions.
+   * <p>Use this for tokens (OTPs) that verify and authorize the linking of a mobile number for
+   * SINPE Móvil transactions.
    */
   SINPE_ENROLLMENT
 }

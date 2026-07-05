@@ -91,21 +91,24 @@ public interface SelfServiceRegistrationRepository
   @Query(
       "DELETE FROM SelfServiceRegistration r WHERE r.expiresAt IS NOT NULL AND r.expiresAt < :cutoff")
   int deleteExpiredRequests(@Param("cutoff") LocalDateTime cutoff);
-  
+
   /**
-   * Finds the most recent self-service request for a specific client, request type, and authentication token.
+   * Finds the most recent self-service request for a specific client, request type, and
+   * authentication token.
    *
-   * <p>Uses a custom JPQL query to safely order by the primary key (id) descending, 
-   * avoiding potential PropertyReferenceExceptions for non-existent 'createdAt' fields.
+   * <p>Uses a custom JPQL query to safely order by the primary key (id) descending, avoiding
+   * potential PropertyReferenceExceptions for non-existent 'createdAt' fields.
    *
    * @param clientId the client identifier
    * @param requestType the expected request type
    * @param authenticationToken the authentication token (OTP)
    * @return the most recent matching request, or empty if none matches
    */
-  @Query("SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.authenticationToken = :authenticationToken ORDER BY r.id DESC")
-  Optional<SelfServiceRegistration> findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-      @Param("clientId") Long clientId,
-      @Param("requestType") SelfServiceRequestType requestType,
-      @Param("authenticationToken") String authenticationToken);
+  @Query(
+      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.authenticationToken = :authenticationToken ORDER BY r.id DESC")
+  Optional<SelfServiceRegistration>
+      findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+          @Param("clientId") Long clientId,
+          @Param("requestType") SelfServiceRequestType requestType,
+          @Param("authenticationToken") String authenticationToken);
 }

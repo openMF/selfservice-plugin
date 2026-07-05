@@ -10,36 +10,44 @@ import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 @Table(name = "m_selfservice_sinpe_enrollment")
 public class SelfServiceSinpeEnrollment extends AbstractPersistableCustom<Long> {
 
-    @Column(name = "app_selfservice_user_id", nullable = false)
-    private Long appSelfServiceUserId;
+  @Column(name = "app_selfservice_user_id", nullable = false)
+  private Long appSelfServiceUserId;
 
-    @Column(name = "client_id", nullable = false)
-    private Long clientId;
+  @Column(name = "client_id", nullable = false)
+  private Long clientId;
 
-    @Column(name = "mobile_number", length = 20, nullable = false)
-    private String mobileNumber;
+  @Column(name = "mobile_number", length = 20, nullable = false)
+  private String mobileNumber;
 
-    @Column(name = "is_verified", nullable = false)
-    private boolean isVerified = false;
+  @Column(name = "is_verified", nullable = false)
+  private boolean isVerified = false;
 
-    @Column(name = "verified_on")
-    private LocalDateTime verifiedOn;
+  @Column(name = "verified_on")
+  private LocalDateTime verifiedOn;
 
-    protected SelfServiceSinpeEnrollment() {}
+  protected SelfServiceSinpeEnrollment() {}
 
-    public SelfServiceSinpeEnrollment(Long appSelfServiceUserId, Long clientId, String mobileNumber) {
-        this.appSelfServiceUserId = appSelfServiceUserId;
-        this.clientId = clientId;
-        this.mobileNumber = mobileNumber;
-    }
+  public SelfServiceSinpeEnrollment(Long appSelfServiceUserId, Long clientId, String mobileNumber) {
+    this.appSelfServiceUserId = appSelfServiceUserId;
+    this.clientId = clientId;
+    this.mobileNumber = mobileNumber;
+  }
 
-    public void markAsVerified() {
-        this.isVerified = true;
-        this.verifiedOn = LocalDateTime.now();
-    }
+  public void markAsVerified() {
+    this.isVerified = true;
+    this.verifiedOn = LocalDateTime.now();
+  }
 
-    // Getters
-    public Long getAppSelfServiceUserId() { return appSelfServiceUserId; }
-    public String getMobileNumber() { return mobileNumber; }
-    public boolean isVerified() { return isVerified; }
+  // Getters
+  public Long getAppSelfServiceUserId() {
+    return appSelfServiceUserId;
+  }
+
+  public String getMobileNumber() {
+    return mobileNumber;
+  }
+
+  public boolean isVerified() {
+    return isVerified;
+  }
 }
