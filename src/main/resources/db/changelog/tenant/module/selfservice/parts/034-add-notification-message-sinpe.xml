@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-
  Copyright since 2026 Mifos Initiative
- 
  <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
  of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 -->
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -13,7 +10,6 @@
 
     <!-- 2. Notification Templates for OTP (Spanish for Costa Rica) -->
     <changeSet author="fineract" id="ss-0034-1">
-        <comment>SINPE Enrollment OTP Templates</comment>
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">
                 SELECT COUNT(*) 
@@ -28,9 +24,11 @@
             </sqlCheck>
         </preConditions>
         
+        <comment>SINPE Enrollment OTP Templates</comment>
+
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_EMAIL_SUBJECT"/><column name="text" value="Código de Verificación SINPE Móvil"/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_EMAIL"/><column name="text" value="&lt;p&gt;Hola ${firstname},&lt;/p&gt;&lt;p&gt;Su código de verificación para SINPE Móvil es: &lt;strong&gt;${authCode}&lt;/strong&gt;.&lt;/p&gt;&lt;p&gt;Este código expira en ${expirationMinutes} minutos.&lt;/p&gt;"/></insert>
-        
+       
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_SMS"/><column name="text" value="Su código de verificación SINPE Móvil es ${authCode}. Expira en ${expirationMinutes} min. No comparta este código."/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_WHATSAPP"/><column name="text" value="🔐 *Código de Verificación SINPE Móvil*\n\nHola ${firstname}, su código es: *${authCode}*.\nExpira en ${expirationMinutes} minutos.\n_Nunca comparta este código con nadie._"/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_IN_APP"/><column name="text" value="Se ha enviado un código de verificación SINPE Móvil a su número ${mobileNumber}."/></insert>
@@ -38,8 +36,6 @@
 
     <!-- 3. Notification Templates for Success -->
     <changeSet author="fineract" id="ss-0034-2">
-        <comment>SINPE Enrollment Success Templates</comment>
-        
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">
                 SELECT COUNT(*) 
@@ -54,9 +50,11 @@
             </sqlCheck>
         </preConditions>
         
+        <comment>SINPE Enrollment Success Templates</comment>
+
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_EMAIL_SUBJECT"/><column name="text" value="Número SINPE Móvil Verificado Exitosamente"/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_EMAIL"/><column name="text" value="&lt;p&gt;Hola ${firstname},&lt;/p&gt;&lt;p&gt;Su número &lt;strong&gt;${mobileNumber}&lt;/strong&gt; ha sido verificado y vinculado exitosamente para transacciones SINPE Móvil.&lt;/p&gt;"/></insert>
-        
+       
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_SMS"/><column name="text" value="Su número ${mobileNumber} ha sido verificado exitosamente para SINPE Móvil. Ya puede realizar transferencias."/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_WHATSAPP"/><column name="text" value="✅ *Verificación Exitosa*\n\nHola ${firstname}, su número *${mobileNumber}* ya está habilitado para realizar y recibir transferencias SINPE Móvil desde su aplicación."/></insert>
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="2"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_IN_APP"/><column name="text" value="Su número SINPE Móvil ${mobileNumber} ha sido verificado exitosamente."/></insert>
