@@ -12,7 +12,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
     <!-- 2. Notification Templates for OTP (Spanish for Costa Rica) -->
-    <changeSet author="fineract" id="ss-0032-2">
+    <changeSet author="fineract" id="ss-0034-1">
         <comment>SINPE Enrollment OTP Templates</comment>
         
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_OTP_EMAIL_SUBJECT"/><column name="text" value="Código de Verificación SINPE Móvil"/></insert>
@@ -24,7 +24,7 @@
     </changeSet>
 
     <!-- 3. Notification Templates for Success -->
-    <changeSet author="fineract" id="ss-0032-3">
+    <changeSet author="fineract" id="ss-0034-2">
         <comment>SINPE Enrollment Success Templates</comment>
         
         <insert tableName="m_template"><column name="entity" valueNumeric="0"/><column name="type" valueNumeric="1"/><column name="name" value="SELF_SERVICE_SINPE_ENROLLMENT_SUCCESS_EMAIL_SUBJECT"/><column name="text" value="Número SINPE Móvil Verificado Exitosamente"/></insert>

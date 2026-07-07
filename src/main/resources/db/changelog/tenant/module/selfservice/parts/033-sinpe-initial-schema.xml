@@ -12,7 +12,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
     <!-- 1. Create SINPE Enrollment Table -->
-    <changeSet author="fineract" id="ss-0032-1">
+    <changeSet author="fineract" id="ss-0033-1">
         <preConditions onFail="MARK_RAN">
             <not><tableExists tableName="m_selfservice_sinpe_enrollment"/></not>
         </preConditions>

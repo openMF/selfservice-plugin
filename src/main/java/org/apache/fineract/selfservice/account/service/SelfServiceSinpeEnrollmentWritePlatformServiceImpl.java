@@ -11,6 +11,8 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.selfservice.account.data.SinpeSubscriptionEditRequest;
+import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSinpeEnrollment;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSinpeEnrollmentRepository;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -36,32 +38,27 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
   private final SelfServiceSinpeEnrollmentRepository sinpeRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  private final SinpeExternalApiClient sinpeExternalApiClient;
 
   @Override
   @Transactional
   public CommandProcessingResult requestEnrollment(String mobileNumber) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
 
-    // 1. Validate SINPE Móvil format (Costa Rica: 8 digits)
     if (mobileNumber == null || !mobileNumber.matches("\\d{8}")) {
       throw new IllegalArgumentException("Invalid SINPE Móvil phone number. Must be 8 digits.");
     }
 
-    // 2. Check if already verified
     if (sinpeRepository
         .findByAppSelfServiceUserIdAndMobileNumber(user.getId(), mobileNumber)
         .filter(SelfServiceSinpeEnrollment::isVerified)
         .isPresent()) {
-      return new CommandProcessingResultBuilder()
-          .withEntityId(user.getId())
-          .build(); // Already enrolled
+      return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
     }
 
-    // 3. Generate 6-digit OTP
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
     LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
 
-    // 4. Save OTP in SelfServiceRegistration (Reusing existing audit/token table)
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     SelfServiceRegistration request =
         SelfServiceRegistration.instance(
@@ -80,7 +77,6 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             expiry);
     registrationRepository.saveAndFlush(request);
 
-    // 5. Publish Notification Event (Forces SMS/WhatsApp for OTP)
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
@@ -97,7 +93,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             mobileNumber,
-            emailMode, // Force SMS/WhatsApp mode for OTP
+            emailMode,
             null,
             LocaleContextHolder.getLocale(),
             contextData));
@@ -110,14 +106,13 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
   public CommandProcessingResult confirmEnrollment(String mobileNumber, String otp) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
 
-    // 1. Find pending OTP request
     SelfServiceRegistration request =
         registrationRepository
             .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
                 user.getAppUserClientMappings().iterator().next().getClient().getId(),
                 SelfServiceRequestType.SINPE_ENROLLMENT,
                 otp)
-            .orElse(null); // Added .orElse(null) to match your null-check logic below
+            .orElse(null);
 
     if (request == null
         || request.isConsumed()
@@ -129,11 +124,9 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       throw new IllegalArgumentException("Phone number mismatch.");
     }
 
-    // 2. Mark OTP as consumed
     request.markConsumed();
     registrationRepository.saveAndFlush(request);
 
-    // 3. Save/Update Verified SINPE Enrollment
     SelfServiceSinpeEnrollment enrollment =
         sinpeRepository
             .findByAppSelfServiceUserIdAndMobileNumber(user.getId(), mobileNumber)
@@ -144,7 +137,6 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     enrollment.markAsVerified();
     sinpeRepository.saveAndFlush(enrollment);
 
-    // 4. Publish Success Notification
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("mobileNumber", mobileNumber);
 
@@ -160,12 +152,136 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             mobileNumber,
-            emailMode, // Send success via SMS/WhatsApp
+            emailMode,
             null,
             LocaleContextHolder.getLocale(),
             contextData));
 
     return new CommandProcessingResultBuilder().withEntityId(enrollment.getId()).build();
+  }
+
+  @Override
+  @Transactional
+  public CommandProcessingResult createSubscription(SinpeSubscriptionRequest request, String otp) {
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+
+    // Validate OTP before calling external API
+    validateOtp(request.getPhoneNumber(), otp);
+
+    sinpeExternalApiClient.createSubscription(request);
+
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("phoneNumber", request.getPhoneNumber());
+    contextData.put("customerName", request.getCustomerName());
+    contextData.put("iban", request.getIban());
+
+    applicationEventPublisher.publishEvent(
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.SINPE_SUBSCRIPTION_CREATED,
+            user.getId(),
+            user.getFirstname(),
+            user.getLastname(),
+            user.getUsername(),
+            user.getEmail(),
+            request.getPhoneNumber(),
+            false,
+            null,
+            LocaleContextHolder.getLocale(),
+            contextData));
+
+    return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
+  }
+
+  @Override
+  @Transactional
+  public CommandProcessingResult editSubscription(
+      SinpeSubscriptionEditRequest request, String otp) {
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+
+    // Validate OTP before calling external API
+    validateOtp(request.getPhoneNumber(), otp);
+
+    sinpeExternalApiClient.editSubscription(request);
+
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("phoneNumber", request.getPhoneNumber());
+
+    applicationEventPublisher.publishEvent(
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.SINPE_SUBSCRIPTION_UPDATED,
+            user.getId(),
+            user.getFirstname(),
+            user.getLastname(),
+            user.getUsername(),
+            user.getEmail(),
+            request.getPhoneNumber(),
+            false,
+            null,
+            LocaleContextHolder.getLocale(),
+            contextData));
+
+    return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
+  }
+
+  @Override
+  @Transactional
+  public CommandProcessingResult deleteSubscription(String phoneNumber, String otp) {
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+
+    // Validate OTP before calling external API
+    validateOtp(phoneNumber, otp);
+
+    sinpeExternalApiClient.deleteSubscription(phoneNumber);
+
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("phoneNumber", phoneNumber);
+
+    applicationEventPublisher.publishEvent(
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.SINPE_SUBSCRIPTION_DELETED,
+            user.getId(),
+            user.getFirstname(),
+            user.getLastname(),
+            user.getUsername(),
+            user.getEmail(),
+            phoneNumber,
+            false,
+            null,
+            LocaleContextHolder.getLocale(),
+            contextData));
+
+    return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
+  }
+
+  /**
+   * Validates that the provided OTP is valid, not expired, and matches the target phone number.
+   * Note: We do not consume the OTP here to allow it to be reused for subsequent edit/delete
+   * operations within its validity period.
+   */
+  private void validateOtp(String mobileNumber, String otp) {
+    if (StringUtils.isBlank(otp)) {
+      throw new IllegalArgumentException("OTP is required for this operation.");
+    }
+
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    Long clientId = user.getAppUserClientMappings().iterator().next().getClient().getId();
+
+    SelfServiceRegistration request =
+        registrationRepository
+            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                clientId, SelfServiceRequestType.SINPE_ENROLLMENT, otp)
+            .orElse(null);
+
+    if (request == null || request.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+      throw new IllegalArgumentException("Invalid or expired OTP.");
+    }
+
+    if (!request.getMobileNumber().equals(mobileNumber)) {
+      throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
+    }
   }
 
   private boolean determineMode(String email, String mobileNumber) {

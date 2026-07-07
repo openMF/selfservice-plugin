@@ -51,7 +51,10 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     PASSWORD_RESET_REQUESTED("password-reset-requested"),
     PASSWORD_RENEWED("password-renewed"),
     SINPE_ENROLLMENT_OTP("sinpe-enrollment-otp"),
-    SINPE_ENROLLMENT_SUCCESS("sinpe-enrollment-success");
+    SINPE_ENROLLMENT_SUCCESS("sinpe-enrollment-success"),
+    SINPE_SUBSCRIPTION_CREATED("sinpe-subscription-created"),
+    SINPE_SUBSCRIPTION_UPDATED("sinpe-subscription-updated"),
+    SINPE_SUBSCRIPTION_DELETED("sinpe-subscription-deleted");
 
     private final String templatePrefix;
 

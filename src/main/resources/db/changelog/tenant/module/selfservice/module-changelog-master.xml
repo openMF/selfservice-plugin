@@ -43,5 +43,8 @@
   <include file="parts/031-add-notification-messages-password-management.xml" relativeToChangelogFile="true"/>  
   <include file="parts/032-alter-beneficiary.xml" relativeToChangelogFile="true"/>    
   <include file="parts/033-sinpe-initial-schema.xml" relativeToChangelogFile="true"/>    
-  <include file="parts/034-add-notification-message-sinpe.xml" relativeToChangelogFile="true"/>
+  <include file="parts/034-add-notification-message-sinpe.xml" relativeToChangelogFile="true"/>    
+  <include file="parts/035-add-notification-message-sinpe-management.xml" relativeToChangelogFile="true"/>
+  <include file="parts/036-add-external-sinpe-system.xml" relativeToChangelogFile="true"/>
+  
 </databaseChangeLog>
