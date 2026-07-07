@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -20,6 +21,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
   private final SelfServiceRegistrationRepository registrationRepository;
   private final SelfServiceSinpeEnrollmentRepository sinpeRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
+  private final Environment env;
 
   @Override
   @Transactional
@@ -82,6 +85,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
 
+    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -92,7 +97,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             mobileNumber,
-            false, // Force SMS/WhatsApp mode for OTP
+            emailMode, // Force SMS/WhatsApp mode for OTP
             null,
             LocaleContextHolder.getLocale(),
             contextData));
@@ -143,6 +148,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("mobileNumber", mobileNumber);
 
+    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -153,11 +160,21 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             mobileNumber,
-            false, // Send success via SMS/WhatsApp
+            emailMode, // Send success via SMS/WhatsApp
             null,
             LocaleContextHolder.getLocale(),
             contextData));
 
     return new CommandProcessingResultBuilder().withEntityId(enrollment.getId()).build();
+  }
+
+  private boolean determineMode(String email, String mobileNumber) {
+    boolean hasEmail = StringUtils.isNotBlank(email);
+    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
+    if (hasEmail && !hasMobile) return true;
+    if (hasMobile && !hasEmail) return false;
+    String pref =
+        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
+    return "email".equalsIgnoreCase(pref);
   }
 }
