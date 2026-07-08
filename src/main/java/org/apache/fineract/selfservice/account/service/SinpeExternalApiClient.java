@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionEditRequest;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
+import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -144,6 +145,28 @@ public class SinpeExternalApiClient {
     } catch (Exception e) {
       log.error("Failed to delete SINPE subscription for phone: {}", phoneNumber, e);
       throw new RuntimeException("Failed to delete SINPE subscription: " + e.getMessage(), e);
+    }
+  }
+
+  public void transferToPhone(SinpeTransferRequest request) {
+    Map<String, String> props = getServiceProperties();
+
+    if (!isEnabled(props)) {
+      log.warn(
+          "SinpeService is disabled in c_external_service. Skipping transferToPhone for phone: {}",
+          request.getDestinationPhone());
+      return;
+    }
+
+    String url = getHost(props) + "/transfer/account-to-phone";
+    HttpEntity<SinpeTransferRequest> entity = new HttpEntity<>(request, buildHeaders(props));
+
+    try {
+      restTemplate.postForObject(url, entity, String.class);
+      log.info("SINPE transfer to phone {} processed successfully", request.getDestinationPhone());
+    } catch (Exception e) {
+      log.error("Failed to process SINPE transfer to phone: {}", request.getDestinationPhone(), e);
+      throw new RuntimeException("Failed to process SINPE transfer: " + e.getMessage(), e);
     }
   }
 }

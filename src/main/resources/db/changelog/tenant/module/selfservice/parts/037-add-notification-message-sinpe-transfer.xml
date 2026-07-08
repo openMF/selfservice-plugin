@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Account Transfer OTP Templates -->
+    <changeSet author="fineract" id="ss-0037-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM m_template
+                WHERE name IN (
+                    'SELF_SERVICE_TRANSFER_OTP_EMAIL_SUBJECT',
+                    'SELF_SERVICE_TRANSFER_OTP_EMAIL',
+                    'SELF_SERVICE_TRANSFER_OTP_SMS',
+                    'SELF_SERVICE_TRANSFER_OTP_WHATSAPP'
+                );
+            </sqlCheck>
+        </preConditions>
+
+        <comment>Account Transfer OTP Templates</comment>
+
+        <!-- Email Subject -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_OTP_EMAIL_SUBJECT"/>
+            <column name="text" value="Código de Verificación para Transferencia"/>
+        </insert>
+
+        <!-- Email Body -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_OTP_EMAIL"/>
+            <column name="text" value="&lt;p&gt;Hola ${firstname},&lt;/p&gt;&lt;p&gt;Su código de verificación para la transferencia de ${transferAmount} es: &lt;strong&gt;${authCode}&lt;/strong&gt;.&lt;/p&gt;&lt;p&gt;Este código expira en ${expirationMinutes} minutos.&lt;/p&gt;"/>
+        </insert>
+
+        <!-- SMS -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_OTP_SMS"/>
+            <column name="text" value="Su código de verificación para la transferencia de ${transferAmount} es ${authCode}. Expira en ${expirationMinutes} min."/>
+        </insert>
+
+        <!-- WhatsApp -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_TRANSFER_OTP_WHATSAPP"/>
+            <column name="text" value="🔐 *Código de Verificación de Transferencia*\n\nHola ${firstname}, su código para transferir ${transferAmount} es: *${authCode}*.\nExpira en ${expirationMinutes} minutos."/>
+        </insert>
+
+    </changeSet>
+
+</databaseChangeLog>

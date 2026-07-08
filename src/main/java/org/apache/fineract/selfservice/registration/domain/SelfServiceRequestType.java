@@ -34,5 +34,7 @@ public enum SelfServiceRequestType {
    * <p>Use this for tokens (OTPs) that verify and authorize the linking of a mobile number for
    * SINPE Móvil transactions.
    */
-  SINPE_ENROLLMENT
+  SINPE_ENROLLMENT,
+
+  ACCOUNT_TRANSFER
 }
