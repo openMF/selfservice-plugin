@@ -7,27 +7,20 @@
  of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 -->
-<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">    
-    <!-- Refactor column name from app_user_id to app_selfservice_user_id -->
-    <changeSet author="fineract" id="ss-0032-1">
-        <preConditions onFail="MARK_RAN">
-            <and>
-                <!-- Only run if the old column exists -->
-                <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_user_id"/>
-                <!-- AND the new column does not already exist -->
-                <not>
-                    <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_selfservice_user_id"/>
-                </not>
-            </and>
-        </preConditions>
-        
-        <comment>Rename app_user_id to app_selfservice_user_id in m_selfservice_beneficiaries_tpt</comment>
-        
-        <renameColumn tableName="m_selfservice_beneficiaries_tpt"
-                      oldColumnName="app_user_id"
-                      newColumnName="app_selfservice_user_id"
-                      columnDataType="BIGINT"/>
-    </changeSet>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+   <!-- Refactor column name from app_user_id to app_selfservice_user_id -->
+   <changeSet author="fineract" id="ss-0032-1">
+      <preConditions onFail="MARK_RAN">
+         <and>
+            <!-- Only run if the old column exists -->
+            <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_user_id" />
+            <!-- AND the new column does not already exist -->
+            <not>
+               <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="app_selfservice_user_id" />
+            </not>
+         </and>
+      </preConditions>
+      <comment>Rename app_user_id to app_selfservice_user_id in m_selfservice_beneficiaries_tpt</comment>
+      <renameColumn tableName="m_selfservice_beneficiaries_tpt" oldColumnName="app_user_id" newColumnName="app_selfservice_user_id" columnDataType="BIGINT" />
+   </changeSet>
 </databaseChangeLog>
