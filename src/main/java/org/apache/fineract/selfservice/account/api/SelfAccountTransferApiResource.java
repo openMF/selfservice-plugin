@@ -13,6 +13,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,8 +24,11 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
+import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
@@ -195,16 +199,30 @@ public class SelfAccountTransferApiResource {
 
   private void validateOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-    SelfServiceRegistration registration =
-        registrationRepository
-            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
-            .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
+    
+    SelfServiceRegistration registration = registrationRepository
+        .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+            client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
+        .orElse(null); // Usamos orElse(null) para validar manualmente
 
-    if (registration.isConsumed() || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+    // Validamos si el OTP es nulo, ya fue consumido o ha expirado
+    if (registration == null 
+        || registration.isConsumed() 
+        || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+      
+      // Construcción del error de validación siguiendo el estándar de Fineract
+      final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+      final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("otp");
+      baseDataValidator.reset()
+          .parameter("otp")
+          .value(request.getOtp())
+          .failWithCode("invalid.or.expired", "Invalid or expired OTP.");
+      
+      // Lanzamos la excepción nativa de Fineract que mapea a HTTP 400
+      throw new PlatformApiDataValidationException(dataValidationErrors);
     }
 
+    // Si el OTP es válido, lo marcamos como consumido
     registration.markConsumed();
     registrationRepository.saveAndFlush(registration);
   }
