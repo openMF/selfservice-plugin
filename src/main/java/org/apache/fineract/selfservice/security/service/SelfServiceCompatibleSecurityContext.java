@@ -21,6 +21,8 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.security.service.SpringSecurityPlatformSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.useradministration.domain.AppUser;
+import org.apache.fineract.useradministration.domain.AppUserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -40,20 +42,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatformSecurityContext {
 
-  // Inject the EntityManager to create managed JPA proxies
   @PersistenceContext
   private EntityManager entityManager;
+
+  @Autowired
+  private AppUserRepository appUserRepository;
 
   public SelfServiceCompatibleSecurityContext(
       ConfigurationDomainService configurationDomainService) {
     super(configurationDomainService);
   }
 
-  /**
-   * Retrieves the authenticated user, returning a managed JPA proxy for self-service users.
-   *
-   * @return the authenticated AppUser (proxy for self-service users)
-   */
   @Override
   public AppUser authenticatedUser() {
     final Object principal = extractPrincipal();
@@ -65,12 +64,6 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     return super.authenticatedUser();
   }
 
-  /**
-   * Retrieves the authenticated user from the context for a specific command.
-   *
-   * @param commandWrapper the command wrapper contextualizing the request
-   * @return the authenticated AppUser (proxy for self-service users)
-   */
   @Override
   public AppUser authenticatedUser(final CommandWrapper commandWrapper) {
     final Object principal = extractPrincipal();
@@ -82,11 +75,6 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
     return super.authenticatedUser(commandWrapper);
   }
 
-  /**
-   * Retrieves the authenticated user if one is currently present in the security context.
-   *
-   * @return the authenticated AppUser (proxy for self-service users), or null if none
-   */
   @Override
   public AppUser getAuthenticatedUserIfPresent() {
     final Object principal = extractPrincipal();
@@ -117,10 +105,8 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
    * 2. It only contains the ID, which is used to populate the foreign key (maker_id)
    * 3. No actual user data is loaded or persisted
    * 
-   * Security is maintained because:
-   * 1. The SecurityContext has already validated that this user only has self-service permissions
-   * 2. The proxy is only used for audit logging (CommandSource.maker), not for permission checks
-   * 3. The actual authorization decisions were made before this method is called
+   * If the self-service user's ID is null (which can happen if the authentication filter
+   * doesn't properly set it), we fall back to looking up the user by username.
    *
    * @param selfServiceUser the self-service user from the security context
    * @return a managed JPA proxy of AppUser
@@ -130,13 +116,23 @@ public class SelfServiceCompatibleSecurityContext extends SpringSecurityPlatform
       throw new IllegalStateException("EntityManager is not injected into SelfServiceCompatibleSecurityContext");
     }
     
-    if (selfServiceUser.getId() == null) {
-      throw new IllegalStateException("Cannot create managed AppUser proxy: Self-service user ID is null");
+    Long userId = selfServiceUser.getId();
+    
+    // FIX: Si el ID es null, buscar el usuario por username
+    if (userId == null) {
+      String username = selfServiceUser.getUsername();
+      if (username == null || username.isBlank()) {
+        throw new IllegalStateException("Cannot create managed AppUser proxy: Both ID and username are null");
+      }
+      
+      AppUser user = appUserRepository.findAppUserByName(username);
+      if (user == null) {
+        throw new IllegalStateException("Cannot find AppUser with username: " + username);
+      }
+      
+      userId = user.getId();
     }
     
-    // Create a managed JPA proxy using AppUser.class
-    // This proxy is lightweight and only contains the ID
-    // It satisfies the foreign key relationship without triggering cascade PERSIST
-    return entityManager.getReference(AppUser.class, selfServiceUser.getId());
+    return entityManager.getReference(AppUser.class, userId);
   }
 }
