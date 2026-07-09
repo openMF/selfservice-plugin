@@ -73,7 +73,7 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
 
     AccountTransferPrepareRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+            new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
 
     // Basic validation
     if (request.getTransferAmount() == null
