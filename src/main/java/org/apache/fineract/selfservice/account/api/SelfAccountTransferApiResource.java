@@ -21,9 +21,6 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.fineract.commands.domain.CommandWrapper;
-import org.apache.fineract.commands.service.CommandWrapperBuilder;
-import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
@@ -36,6 +33,7 @@ import org.apache.fineract.selfservice.account.data.AccountTransferPrepareReques
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
 import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.apache.fineract.selfservice.account.service.AccountTransferQuoteService;
+import org.apache.fineract.selfservice.account.service.SelfAccountTransferWritePlatformService;
 import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
@@ -59,7 +57,7 @@ import org.springframework.stereotype.Component;
 public class SelfAccountTransferApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
-  private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
+  private final SelfAccountTransferWritePlatformService transferWritePlatformService;
   private final AccountTransferQuoteService quoteService;
   private final SinpeExternalApiClient sinpeExternalApiClient;
   private final SelfServiceRegistrationRepository registrationRepository;
@@ -134,7 +132,8 @@ public class SelfAccountTransferApiResource {
     if ("SINPE_MOVIL".equals(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
     } else {
-      result = executeInternalTransfer(request);
+      // FIX: Use the new service that bypasses PortfolioCommandSourceWritePlatformService
+      result = transferWritePlatformService.executeInternalTransfer(request);
     }
 
     // STEP 4: Publish Success Notification
@@ -203,14 +202,12 @@ public class SelfAccountTransferApiResource {
     SelfServiceRegistration registration = registrationRepository
         .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
             client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
-        .orElse(null); // Usamos orElse(null) para validar manualmente
+        .orElse(null);
 
-    // Validamos si el OTP es nulo, ya fue consumido o ha expirado
     if (registration == null 
         || registration.isConsumed() 
         || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
       
-      // Construcción del error de validación siguiendo el estándar de Fineract
       final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
       final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("otp");
       baseDataValidator.reset()
@@ -218,11 +215,9 @@ public class SelfAccountTransferApiResource {
           .value(request.getOtp())
           .failWithCode("invalid.or.expired", "Invalid or expired OTP.");
       
-      // Lanzamos la excepción nativa de Fineract que mapea a HTTP 400
       throw new PlatformApiDataValidationException(dataValidationErrors);
     }
 
-    // Si el OTP es válido, lo marcamos como consumido
     registration.markConsumed();
     registrationRepository.saveAndFlush(registration);
   }
@@ -239,7 +234,7 @@ public class SelfAccountTransferApiResource {
                     : client.getAccountNumber())
             .originCustomerName(client.getFullname())
             .originIban(
-                request.getFromAccountId()) // Assuming fromAccountId holds the IBAN for SINPE
+                request.getFromAccountId())
             .destinationPhone(request.getToPhoneNumber())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
@@ -251,16 +246,8 @@ public class SelfAccountTransferApiResource {
     sinpeExternalApiClient.transferToPhone(sinpeRequest);
 
     return new CommandProcessingResultBuilder()
-        .withEntityId(0L) // External transfers don't have an internal Fineract ID
+        .withEntityId(0L)
         .build();
-  }
-
-  private CommandProcessingResult executeInternalTransfer(AccountTransferConfirmRequest request) {
-    String json = new Gson().toJson(request);
-    final CommandWrapper commandRequest =
-        new CommandWrapperBuilder().createAccountTransfer().withJson(json).build();
-
-    return commandsSourceWritePlatformService.logCommandSource(commandRequest);
   }
 
   private void publishTransferEvent(
