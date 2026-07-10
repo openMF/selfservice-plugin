@@ -17,21 +17,27 @@ package org.apache.fineract.selfservice.registration.service;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 
-public interface SelfServiceForgotPassworWritePlatformService {
+/**
+ * Service responsible for handling self-service password reset workflows, including request
+ * creation (OTP/token generation) and password renewal.
+ */
+public interface SelfServiceForgotPasswordWritePlatformService {
 
+  /**
+   * Creates a password reset request for the user identified by the {@code username} in the
+   * provided JSON payload. A reset token is generated and delivered through the notification
+   * channels enabled in the system.
+   *
+   * @param apiRequestBodyAsJson JSON payload containing at least the {@code username} field
+   * @return the created registration request, or {@code null} if the request could not be created
+   */
   SelfServiceRegistration createForgotPasswordRequest(String apiRequestBodyAsJson);
 
   /**
-   * Renews a self-service password using either the legacy {@code requestId + authenticationToken}
-   * pair or the newer {@code externalAuthenticationToken}.
+   * Renews the user's password using a valid, non-expired reset token.
    *
-   * <p>The payload must include {@code password} and {@code repeatPassword}; the token must be
-   * valid, unexpired, and unused. The returned {@link CommandProcessingResult} identifies the
-   * updated self-service user. Validation errors, missing identifiers, expired tokens, and invalid
-   * tokens are reported as platform exceptions.
-   *
-   * @param apiRequestBodyAsJson request payload containing token fields and the new password
-   * @return command result for the updated self-service user
+   * @param apiRequestBodyAsJson JSON payload containing the reset token and the new password
+   * @return the command processing result with the renewed user's ID
    */
   CommandProcessingResult renewPassword(String apiRequestBodyAsJson);
 }

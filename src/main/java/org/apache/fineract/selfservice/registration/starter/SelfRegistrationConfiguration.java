@@ -20,7 +20,6 @@ import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.service.SelfServiceAuthorizationTokenService;
-import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPassworWritePlatformService;
 import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPasswordWritePlatformServiceImpl;
 import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrationReadPlatformService;
 import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrationReadPlatformServiceImpl;
@@ -39,6 +38,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPasswordWritePlatformService;
 
 @Configuration
 public class SelfRegistrationConfiguration {
@@ -99,41 +99,27 @@ public class SelfRegistrationConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean(SelfServiceForgotPassworWritePlatformService.class)
-  public SelfServiceForgotPassworWritePlatformService selfServiceForgotPassworWritePlatformService(
+  @ConditionalOnMissingBean(SelfServiceForgotPasswordWritePlatformService.class)
+  public SelfServiceForgotPasswordWritePlatformService selfServiceForgotPassworWritePlatformService(
       SelfServiceRegistrationRepository selfServiceRegistrationRepository,
       FromJsonHelper fromApiJsonHelper,
       SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService,
-      ClientRepositoryWrapper clientRepository,
-      PasswordValidationPolicyRepository passwordValidationPolicy,
-      SelfServiceUserDomainService userDomainService,
-      AppSelfServiceUserReadPlatformService appUserReadPlatformService,
-      RoleRepository roleRepository,
-      AppSelfServiceUserClientMappingRepository appUserClientMappingRepository,
-      JdbcTemplate jdbcTemplate,
-      AppUserRepository appUserRepository,
-      Environment env,
-      PlatformPasswordEncoder platformPasswordEncoder,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
+      PasswordValidationPolicyRepository passwordValidationPolicy,
+      PlatformPasswordEncoder platformPasswordEncoder,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
-      ApplicationEventPublisher applicationEventPublisher) {
+      ApplicationEventPublisher applicationEventPublisher,
+      Environment env) {
 
     return new SelfServiceForgotPasswordWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
         fromApiJsonHelper,
         selfServiceRegistrationReadPlatformService,
-        clientRepository,
-        passwordValidationPolicy,
-        userDomainService,
-        appUserReadPlatformService,
-        roleRepository,
-        appUserClientMappingRepository,
-        jdbcTemplate,
-        appUserRepository,
-        env,
-        platformPasswordEncoder,
         appSelfServiceUserRepository,
+        passwordValidationPolicy,
+        platformPasswordEncoder,
         selfServiceAuthorizationTokenService,
-        applicationEventPublisher);
+        applicationEventPublisher,
+        env);
   }
 }

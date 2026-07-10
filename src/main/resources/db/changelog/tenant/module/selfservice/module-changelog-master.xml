@@ -48,5 +48,7 @@
   <include file="parts/036-add-external-sinpe-system.xml" relativeToChangelogFile="true"/>
   <include file="parts/037-add-notification-message-sinpe-transfer.xml" relativeToChangelogFile="true"/>
   <include file="parts/038-add-sinpe-transfer-fees.xml" relativeToChangelogFile="true"/>
+  <include file="parts/039-add-notification-password-renew.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/040-add-notification-password-reset.xml" relativeToChangelogFile="true"/>
   
 </databaseChangeLog>
