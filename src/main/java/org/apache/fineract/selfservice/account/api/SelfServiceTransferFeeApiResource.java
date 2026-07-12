@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.account.api;
 
 import com.google.gson.Gson;
@@ -36,7 +42,8 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Get All Transfer Fees",
-      description = "Retrieves all configured transfer fees. Accessible to all authenticated self-service users.")
+      description =
+          "Retrieves all configured transfer fees. Accessible to all authenticated self-service users.")
   public String getAll() {
     // FIX: Only verify authentication, don't require specific permission
     // This allows self-service users to see fees before making transfers
@@ -64,7 +71,8 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Update Transfer Fee",
-      description = "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
+      description =
+          "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String update(@PathParam("id") Long id, final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("TRANSFER_FEE");
     SelfServiceTransferFee fee =
@@ -95,7 +103,9 @@ public class SelfServiceTransferFeeApiResource {
   @DELETE
   @Path("/{id}")
   @Produces(MediaType.APPLICATION_JSON)
-  @Operation(summary = "Delete Transfer Fee", description = "Deletes a transfer fee configuration. Requires TRANSFER_FEE permission.")
+  @Operation(
+      summary = "Delete Transfer Fee",
+      description = "Deletes a transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String delete(@PathParam("id") Long id) {
     context.authenticatedSelfServiceUser().validateHasDeletePermission("TRANSFER_FEE");
     if (!feeRepository.existsById(id)) {

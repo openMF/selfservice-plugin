@@ -101,7 +101,8 @@ public class SelfServiceAuthenticationTokenService {
   }
 
   /**
-   * Retrieves the user ID associated with the given access token, if the token is valid and not expired.
+   * Retrieves the user ID associated with the given access token, if the token is valid and not
+   * expired.
    *
    * @param token the access token to look up
    * @return the user ID, or {@code null} if the token is invalid or expired

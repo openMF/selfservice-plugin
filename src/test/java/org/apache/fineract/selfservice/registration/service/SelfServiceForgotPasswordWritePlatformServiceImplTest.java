@@ -59,7 +59,10 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   // Only the 9 dependencies declared in the refactored class
   @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
   @Mock private FromJsonHelper fromApiJsonHelper;
-  @Mock private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
+
+  @Mock
+  private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
+
   @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private PlatformPasswordEncoder platformPasswordEncoder;
@@ -210,7 +213,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
     when(policy.getRegex()).thenReturn(".*");
     when(policy.getDescription()).thenReturn("any");
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(policy);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.getUsername()).thenReturn("jdoe");
@@ -256,7 +260,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         .thenReturn("invalid-token");
 
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(policy);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
 
     when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
             "invalid-token", SelfServiceRequestType.PASSWORD_RESET))
@@ -301,7 +306,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         .thenReturn("external-token");
 
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(policy);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.isConsumed()).thenReturn(true);

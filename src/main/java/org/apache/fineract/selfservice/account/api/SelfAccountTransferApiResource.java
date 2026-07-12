@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.account.api;
 
 import com.google.gson.Gson;
@@ -75,7 +81,7 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
 
     AccountTransferPrepareRequest request =
-            new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
 
     // Basic validation
     if (request.getTransferAmount() == null
@@ -198,23 +204,26 @@ public class SelfAccountTransferApiResource {
 
   private void validateOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-    
-    SelfServiceRegistration registration = registrationRepository
-        .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-            client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
-        .orElse(null);
 
-    if (registration == null 
-        || registration.isConsumed() 
+    SelfServiceRegistration registration =
+        registrationRepository
+            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
+            .orElse(null);
+
+    if (registration == null
+        || registration.isConsumed()
         || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
-      
+
       final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-      final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("otp");
-      baseDataValidator.reset()
+      final DataValidatorBuilder baseDataValidator =
+          new DataValidatorBuilder(dataValidationErrors).resource("otp");
+      baseDataValidator
+          .reset()
           .parameter("otp")
           .value(request.getOtp())
           .failWithCode("invalid.or.expired", "Invalid or expired OTP.");
-      
+
       throw new PlatformApiDataValidationException(dataValidationErrors);
     }
 
@@ -233,8 +242,7 @@ public class SelfAccountTransferApiResource {
                     ? client.getExternalId().getValue()
                     : client.getAccountNumber())
             .originCustomerName(client.getFullname())
-            .originIban(
-                request.getFromAccountId())
+            .originIban(request.getFromAccountId())
             .destinationPhone(request.getToPhoneNumber())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
@@ -245,9 +253,7 @@ public class SelfAccountTransferApiResource {
 
     sinpeExternalApiClient.transferToPhone(sinpeRequest);
 
-    return new CommandProcessingResultBuilder()
-        .withEntityId(0L)
-        .build();
+    return new CommandProcessingResultBuilder().withEntityId(0L).build();
   }
 
   private void publishTransferEvent(

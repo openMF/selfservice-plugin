@@ -1,16 +1,8 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements. See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License. You may obtain a
- * copy of the License at
+ * Copyright since 2026 Mifos Initiative
  *
- * <p>http://www.apache.org/licenses/LICENSE-2.0
- *
- * <p>Unless required by applicable law or agreed to in writing, software distributed under the
- * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 package org.apache.fineract.selfservice.security.api;
 
@@ -27,8 +19,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
-import org.springframework.stereotype.Component;
 import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPasswordWritePlatformService;
+import org.springframework.stereotype.Component;
 
 @Component
 @Path("/v1/self/password")
@@ -72,7 +64,9 @@ public class SelfForgotPasswordApiResource {
               + "through the notification channels enabled in the system (Email, SMS, WhatsApp, In-App).")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK - Reset instructions sent"),
-    @ApiResponse(responseCode = "400", description = "Bad Request - Username is missing or invalid"),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Bad Request - Username is missing or invalid"),
     @ApiResponse(responseCode = "404", description = "Not Found - Username does not exist")
   })
   public String requestResetPassword(@Parameter(hidden = true) final String apiRequestBodyAsJson) {

@@ -1,16 +1,8 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements. See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License. You may obtain a
- * copy of the License at
+ * Copyright since 2026 Mifos Initiative
  *
- * <p>http://www.apache.org/licenses/LICENSE-2.0
- *
- * <p>Unless required by applicable law or agreed to in writing, software distributed under the
- * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 package org.apache.fineract.selfservice.security.api;
 
@@ -404,11 +396,11 @@ public class SelfAuthenticationApiResource {
   @ApiResponse(responseCode = "200", description = "OK - User logged out successfully")
   public String logout(@Context HttpServletRequest httpRequest) {
     String token = extractTokenFromRequest(httpRequest);
-    
+
     // Extract user information BEFORE invalidating the token
     AppSelfServiceUser user = null;
     String username = null;
-    
+
     if (token != null) {
       try {
         Long userId = tokenService.getUserIdFromToken(token);
@@ -421,7 +413,7 @@ public class SelfAuthenticationApiResource {
       } catch (Exception e) {
         log.warn("Failed to extract user information from token during logout", e);
       }
-      
+
       // Now invalidate the token
       tokenService.invalidateToken(token);
     }
@@ -440,17 +432,17 @@ public class SelfAuthenticationApiResource {
   }
 
   /**
-   * Publishes a logout notification event to the user through all enabled channels.
-   * The notification service will automatically route the message to Email, SMS, WhatsApp,
-   * and In-App based on the system configuration in c_external_service_properties.
+   * Publishes a logout notification event to the user through all enabled channels. The
+   * notification service will automatically route the message to Email, SMS, WhatsApp, and In-App
+   * based on the system configuration in c_external_service_properties.
    */
   private void publishLogoutNotificationEvent(
       AppSelfServiceUser user, String username, HttpServletRequest httpRequest) {
     String mobileNumber = extractMobile(user);
     boolean emailMode = determineMode(user.getEmail(), mobileNumber);
 
-    try (NotificationContext.Scope ignored = 
-             NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGOUT.name())) {
+    try (NotificationContext.Scope ignored =
+        NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGOUT.name())) {
       applicationEventPublisher.publishEvent(
           SelfServiceNotificationEvent.withTenantContext(
               this,
@@ -464,7 +456,7 @@ public class SelfAuthenticationApiResource {
               emailMode,
               extractClientIp(httpRequest),
               httpRequest != null ? httpRequest.getLocale() : null));
-      
+
       log.info("Logout notification published for user: {}", username);
     } catch (Exception e) {
       log.warn("Failed to publish LOGOUT notification event for user: {}", username, e);
