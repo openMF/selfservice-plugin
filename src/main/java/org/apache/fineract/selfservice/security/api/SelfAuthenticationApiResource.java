@@ -337,7 +337,7 @@ public class SelfAuthenticationApiResource {
   }
 
   private String extractMobile(AppSelfServiceUser user) {
-    if (user.getAppUserClientMappings() == null) return null;
+    if (user == null || user.getAppUserClientMappings() == null) return null;
     return user.getAppUserClientMappings().stream()
         .map(AppSelfServiceUserClientMapping::getClient)
         .filter(Objects::nonNull)
@@ -399,18 +399,76 @@ public class SelfAuthenticationApiResource {
   @Operation(
       summary = "Logout user",
       description =
-          "Invalidates the current authentication token, effectively logging the user out.")
-  @ApiResponse(responseCode = "200", description = "OK")
+          "Invalidates the current authentication token, effectively logging the user out. "
+              + "A notification is sent to the user through all enabled channels (Email, SMS, WhatsApp, In-App).")
+  @ApiResponse(responseCode = "200", description = "OK - User logged out successfully")
   public String logout(@Context HttpServletRequest httpRequest) {
     String token = extractTokenFromRequest(httpRequest);
+    
+    // Extract user information BEFORE invalidating the token
+    AppSelfServiceUser user = null;
+    String username = null;
+    
     if (token != null) {
+      try {
+        Long userId = tokenService.getUserIdFromToken(token);
+        if (userId != null) {
+          user = appUserRepository.findById(userId).orElse(null);
+          if (user != null) {
+            username = user.getUsername();
+          }
+        }
+      } catch (Exception e) {
+        log.warn("Failed to extract user information from token during logout", e);
+      }
+      
+      // Now invalidate the token
       tokenService.invalidateToken(token);
+    }
+
+    // Publish logout notification if we could identify the user
+    if (user != null) {
+      publishLogoutNotificationEvent(user, username, httpRequest);
+    } else {
+      log.debug("Logout notification skipped: could not identify user from token");
     }
 
     Map<String, String> response = new HashMap<>();
     response.put("status", "success");
     response.put("message", "Logged out successfully");
     return this.apiJsonSerializerService.serialize(response);
+  }
+
+  /**
+   * Publishes a logout notification event to the user through all enabled channels.
+   * The notification service will automatically route the message to Email, SMS, WhatsApp,
+   * and In-App based on the system configuration in c_external_service_properties.
+   */
+  private void publishLogoutNotificationEvent(
+      AppSelfServiceUser user, String username, HttpServletRequest httpRequest) {
+    String mobileNumber = extractMobile(user);
+    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+
+    try (NotificationContext.Scope ignored = 
+             NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGOUT.name())) {
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.LOGOUT,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              username,
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              httpRequest != null ? httpRequest.getLocale() : null));
+      
+      log.info("Logout notification published for user: {}", username);
+    } catch (Exception e) {
+      log.warn("Failed to publish LOGOUT notification event for user: {}", username, e);
+    }
   }
 
   private String extractTokenFromRequest(HttpServletRequest request) {

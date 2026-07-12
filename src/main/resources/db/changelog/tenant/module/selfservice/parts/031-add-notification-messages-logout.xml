@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Logout Notification Templates -->
+    <changeSet author="fineract" id="ss-0031-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM m_template
+                WHERE name IN (
+                    'SELF_SERVICE_LOGOUT_EMAIL_SUBJECT',
+                    'SELF_SERVICE_LOGOUT_EMAIL',
+                    'SELF_SERVICE_LOGOUT_SMS',
+                    'SELF_SERVICE_LOGOUT_WHATSAPP',
+                    'SELF_SERVICE_LOGOUT_IN_APP'
+                );
+            </sqlCheck>
+        </preConditions>
+
+        <comment>Notification templates for LOGOUT event (Email, SMS, WhatsApp, In-App)</comment>
+
+        <!-- ============================================================ -->
+        <!-- EMAIL Templates (type = 1)                                   -->
+        <!-- ============================================================ -->
+
+        <!-- Email Subject -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGOUT_EMAIL_SUBJECT"/>
+            <column name="text" value="Notificación de Cierre de Sesión"/>
+        </insert>
+
+        <!-- Email Body (HTML) -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGOUT_EMAIL"/>
+            <column name="text" value="&lt;p&gt;Hola ${firstname},&lt;/p&gt;&lt;p&gt;Te informamos que se ha cerrado la sesión de tu cuenta &lt;strong&gt;${username}&lt;/strong&gt; exitosamente.&lt;/p&gt;&lt;p&gt;Si realizaste este cierre de sesión, no es necesario realizar ninguna acción adicional.&lt;/p&gt;&lt;p&gt;&lt;strong&gt;⚠️ ¿No fuiste tú?&lt;/strong&gt;&lt;/p&gt;&lt;p&gt;Si no cerraste la sesión manualmente, por favor contacta inmediatamente a nuestro equipo de soporte, ya que alguien más podría haber accedido a tu cuenta.&lt;/p&gt;&lt;p&gt;Saludos,&lt;br/&gt;Equipo de Soporte&lt;/p&gt;"/>
+        </insert>
+
+        <!-- ============================================================ -->
+        <!-- SMS Template (type = 0)                                      -->
+        <!-- ============================================================ -->
+
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGOUT_SMS"/>
+            <column name="text" value="Hola ${firstname}, la sesión de tu cuenta ${username} ha sido cerrada exitosamente. Si no fuiste tú, contacta inmediatamente a soporte."/>
+        </insert>
+
+        <!-- ============================================================ -->
+        <!-- WhatsApp Template (type = 0)                                 -->
+        <!-- ============================================================ -->
+
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGOUT_WHATSAPP"/>
+            <column name="text" value="👋 *Cierre de Sesión Exitoso*\n\nHola *${firstname}*,\n\nTe informamos que la sesión de tu cuenta *${username}* ha sido cerrada exitosamente.\n\nSi realizaste este cierre de sesión, no es necesario realizar ninguna acción adicional.\n\n⚠️ *¿No fuiste tú?*\nSi no cerraste la sesión manualmente, por favor contacta inmediatamente a nuestro equipo de soporte, ya que alguien más podría haber accedido a tu cuenta.\n\nSaludos,\n_Equipo de Soporte_"/>
+        </insert>
+
+        <!-- ============================================================ -->
+        <!-- In-App Template (type = 0)                                   -->
+        <!-- ============================================================ -->
+
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_LOGOUT_IN_APP"/>
+            <column name="text" value="La sesión de tu cuenta ${username} ha sido cerrada exitosamente. Gracias por usar nuestros servicios."/>
+        </insert>
+
+        <rollback>
+            <delete tableName="m_template">
+                <where>
+                    name IN (
+                        'SELF_SERVICE_LOGOUT_EMAIL_SUBJECT',
+                        'SELF_SERVICE_LOGOUT_EMAIL',
+                        'SELF_SERVICE_LOGOUT_SMS',
+                        'SELF_SERVICE_LOGOUT_WHATSAPP',
+                        'SELF_SERVICE_LOGOUT_IN_APP'
+                    )
+                </where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

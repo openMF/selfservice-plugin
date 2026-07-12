@@ -36,6 +36,7 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     USER_ACTIVATED("user-activated"),
     LOGIN_SUCCESS("login-success"),
     LOGIN_FAILURE("login-failure"),
+    LOGOUT("logout"),
     ENROLLMENT_TOKEN("enrollment-token"),
     TRANSFER_SUCCESS("transfer-success"),
     TRANSFER_OTP("transfer-otp"),

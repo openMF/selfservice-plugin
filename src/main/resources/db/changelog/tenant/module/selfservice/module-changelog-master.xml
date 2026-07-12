@@ -40,7 +40,7 @@
   <include file="parts/028-add-notification-messages-beneficiaries.xml" relativeToChangelogFile="true"/>
   <include file="parts/029-add-notification-messages-loan.xml" relativeToChangelogFile="true"/>  
   <include file="parts/030-add-notification-messages-savings.xml" relativeToChangelogFile="true"/>    
-  <include file="parts/031-add-notification-messages-password-management.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/031-add-notification-messages-logout.xml" relativeToChangelogFile="true"/>  
   <include file="parts/032-alter-beneficiary.xml" relativeToChangelogFile="true"/>    
   <include file="parts/033-sinpe-initial-schema.xml" relativeToChangelogFile="true"/>    
   <include file="parts/034-add-notification-message-sinpe.xml" relativeToChangelogFile="true"/>    
