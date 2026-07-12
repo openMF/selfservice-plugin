@@ -36,9 +36,11 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Get All Transfer Fees",
-      description = "Retrieves all configured transfer fees.")
+      description = "Retrieves all configured transfer fees. Accessible to all authenticated self-service users.")
   public String getAll() {
-    context.authenticatedSelfServiceUser().validateHasReadPermission("TRANSFER_FEE");
+    // FIX: Only verify authentication, don't require specific permission
+    // This allows self-service users to see fees before making transfers
+    context.authenticatedSelfServiceUser();
     return toApiJsonSerializer.serialize(feeRepository.findAll());
   }
 
@@ -47,7 +49,7 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Create Transfer Fee",
-      description = "Creates a new transfer fee configuration.")
+      description = "Creates a new transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String create(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("TRANSFER_FEE");
     SelfServiceTransferFee fee = gson.fromJson(apiRequestBodyAsJson, SelfServiceTransferFee.class);
@@ -62,7 +64,7 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Update Transfer Fee",
-      description = "Updates an existing transfer fee configuration.")
+      description = "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String update(@PathParam("id") Long id, final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("TRANSFER_FEE");
     SelfServiceTransferFee fee =
@@ -93,7 +95,7 @@ public class SelfServiceTransferFeeApiResource {
   @DELETE
   @Path("/{id}")
   @Produces(MediaType.APPLICATION_JSON)
-  @Operation(summary = "Delete Transfer Fee", description = "Deletes a transfer fee configuration.")
+  @Operation(summary = "Delete Transfer Fee", description = "Deletes a transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String delete(@PathParam("id") Long id) {
     context.authenticatedSelfServiceUser().validateHasDeletePermission("TRANSFER_FEE");
     if (!feeRepository.existsById(id)) {
