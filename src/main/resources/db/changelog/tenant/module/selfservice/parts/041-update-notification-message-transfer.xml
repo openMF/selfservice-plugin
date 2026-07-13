@@ -17,7 +17,7 @@
         </preConditions>
         <update tableName="m_template">
             <column name="text" value="Transferencia Exitosa - Ref: ${transferId}"/>
-            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'</where each="row"/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'</where>
         </update>
     </changeSet>
 
