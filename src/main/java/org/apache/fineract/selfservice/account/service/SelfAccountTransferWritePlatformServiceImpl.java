@@ -213,7 +213,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     commandData.put("transferDate", request.getTransferDate());
     commandData.put("transferDescription", request.getTransferDescription());
     commandData.put("locale", "en");
-    commandData.put("dateFormat", "yyyy-MM-dd");
+    commandData.put("dateFormat", "yyyy-MM-dd");    
     // Agregar otros campos necesarios (por ejemplo, si aplica)
     String apiRequestBodyAsJson = gson.toJson(commandData);
 
@@ -222,7 +222,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             .createAccountTransfer()
             .withJson(apiRequestBodyAsJson)
             .build();
-    return commandsSourceWritePlatformService.logCommandSource(commandRequest);
+    //return commandsSourceWritePlatformService.logCommandSource(commandRequest);
+    // Reuse createTransfer logic (validation + limits + command execution)
+    CommandProcessingResult result = createTransfer("tpt", apiRequestBodyAsJson, null);
+
+    log.info("Internal transfer completed successfully with transaction ID: {}", 
+             result.getResourceId());
+
+    return result;
 }
 
   private void publishFastPaymentTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
