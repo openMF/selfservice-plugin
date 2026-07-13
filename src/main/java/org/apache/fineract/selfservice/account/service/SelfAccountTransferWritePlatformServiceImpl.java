@@ -222,14 +222,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             .createAccountTransfer()
             .withJson(apiRequestBodyAsJson)
             .build();
-    //return commandsSourceWritePlatformService.logCommandSource(commandRequest);
-    // Reuse createTransfer logic (validation + limits + command execution)
-    CommandProcessingResult result = createTransfer("tpt", apiRequestBodyAsJson, null);
-
-    log.info("Internal transfer completed successfully with transaction ID: {}", 
-             result.getResourceId());
-
-    return result;
+    return commandsSourceWritePlatformService.logCommandSource(commandRequest);
 }
 
   private void publishFastPaymentTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
