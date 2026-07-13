@@ -52,8 +52,12 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.organisation.office.data.OfficeData;
+import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
+import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
@@ -78,7 +82,6 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/accounttransfers")
@@ -98,7 +101,6 @@ public class SelfAccountTransferApiResource {
   private final SelfServiceRegistrationRepository registrationRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
-  private final JdbcTemplate jdbcTemplate; // Injected for DB lookups
 
   // Legacy dependencies restored for backward compatibility
   private final DefaultToApiJsonSerializer<SelfAccountTransferData> toApiJsonSerializer;
@@ -109,6 +111,9 @@ public class SelfAccountTransferApiResource {
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
   private final ConfigurationDomainService configurationDomainService;
   private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
+  
+  private final ClientReadPlatformService clientReadPlatformService;
+  private final OfficeReadPlatformService officeReadPlatformService;
 
   // ==========================================
   // NEW 3-STEP ENDPOINTS
@@ -118,13 +123,22 @@ public class SelfAccountTransferApiResource {
   @Path("/prepare")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Prepare Transfer", description = "Validates and prepares the transfer details.")
+  @Operation(
+      summary = "Prepare Transfer",
+      description = "Validates and prepares the transfer details.")
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request.getTransferAmount() == null || request.getTransferAmount().compareTo(BigDecimal.ZERO) <= 0) {
+
+    AccountTransferPrepareRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+
+    // Basic validation
+    if (request.getTransferAmount() == null
+        || request.getTransferAmount().compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException("Transfer amount must be greater than zero.");
     }
+
+    // Return the prepared data (in a real scenario, you might fetch account details here)
     return new Gson().toJson(request);
   }
 
@@ -132,11 +146,16 @@ public class SelfAccountTransferApiResource {
   @Path("/quote")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Quote Transfer", description = "Calculates the transfer fee based on business rules.")
+  @Operation(
+      summary = "Quote Transfer",
+      description = "Calculates the transfer fee based on business rules.")
   public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+
+    AccountTransferPrepareRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
     AccountTransferQuoteResponse quote = quoteService.calculateFee(request);
+
     return new Gson().toJson(quote);
   }
 
@@ -144,49 +163,87 @@ public class SelfAccountTransferApiResource {
   @Path("/confirm")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Confirm Transfer", description = "Sends OTP or executes the transfer if OTP is valid.")
-  public String confirm(final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
+  @Operation(
+      summary = "Confirm Transfer",
+      description = "Sends OTP or executes the transfer if OTP is valid.")
+  public String confirm(
+      final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     user.validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferConfirmRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
 
+    AccountTransferConfirmRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+
+    // STEP 1: If OTP is missing, generate and send it
     if (StringUtils.isBlank(request.getOtp())) {
       return generateAndSendOtp(request, user, httpRequest);
     }
 
+    // STEP 2: Validate OTP
     validateOtp(request, user);
 
+    // STEP 3: Execute Transfer
     CommandProcessingResult result;
     if ("SINPE_MOVIL".equals(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
     } else {
+      // FIX: Use the new service that bypasses PortfolioCommandSourceWritePlatformService
       result = transferWritePlatformService.executeInternalTransfer(request);
     }
 
-    publishTransferEvent(result, request, httpRequest);
+    // STEP 4: Publish Success Notification
+    publishFastPaymentTransferEvent(result, request, httpRequest);
+
     return new Gson().toJson(result);
   }
 
-  private String generateAndSendOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
+  private String generateAndSendOtp(
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      HttpServletRequest httpRequest) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
     LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
+
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-    
-    SelfServiceRegistration registration = SelfServiceRegistration.instance(
-        client, client.getAccountNumber(), client.getFirstname(), client.getMiddlename(), client.getLastname(),
-        request.getToPhoneNumber() != null ? request.getToPhoneNumber() : request.getToAccountId(),
-        user.getEmail(), otp, otp, user.getUsername(), "TRANSFER_OTP", SelfServiceRequestType.ACCOUNT_TRANSFER, expiry);
+    SelfServiceRegistration registration =
+        SelfServiceRegistration.instance(
+            client,
+            client.getAccountNumber(),
+            client.getFirstname(),
+            client.getMiddlename(),
+            client.getLastname(),
+            request.getToPhoneNumber() != null
+                ? request.getToPhoneNumber()
+                : request.getToAccountId(),
+            user.getEmail(),
+            otp,
+            otp,
+            user.getUsername(),
+            "TRANSFER_OTP",
+            SelfServiceRequestType.ACCOUNT_TRANSFER,
+            expiry);
     registrationRepository.saveAndFlush(registration);
 
+    // Send OTP Notification
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
-    contextData.put("transferAmount", request.getTransferAmount() != null ? request.getTransferAmount() : "");
+    contextData.put("transferAmount", request.getTransferAmount());
 
-    applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-        this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
-        user.getUsername(), user.getEmail(), extractMobile(user), determineMode(user.getEmail(), extractMobile(user)),
-        extractClientIp(httpRequest), LocaleContextHolder.getLocale(), contextData));
+    applicationEventPublisher.publishEvent(
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.TRANSFER_OTP,
+            user.getId(),
+            user.getFirstname(),
+            user.getLastname(),
+            user.getUsername(),
+            user.getEmail(),
+            extractMobile(user),
+            determineMode(user.getEmail(), extractMobile(user)),
+            extractClientIp(httpRequest),
+            LocaleContextHolder.getLocale(),
+            contextData));
 
     Map<String, Object> response = new HashMap<>();
     response.put("status", "AWAITING_OTP");
@@ -196,58 +253,96 @@ public class SelfAccountTransferApiResource {
 
   private void validateOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-    SelfServiceRegistration registration = registrationRepository
-        .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-            client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
-        .orElse(null);
 
-    if (registration == null || registration.isConsumed() || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+    SelfServiceRegistration registration =
+        registrationRepository
+            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
+            .orElse(null);
+
+    if (registration == null
+        || registration.isConsumed()
+        || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+
       final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-      final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("otp");
-      baseDataValidator.reset().parameter("otp").value(request.getOtp()).failWithCode("invalid.or.expired", "Invalid or expired OTP.");
+      final DataValidatorBuilder baseDataValidator =
+          new DataValidatorBuilder(dataValidationErrors).resource("otp");
+      baseDataValidator
+          .reset()
+          .parameter("otp")
+          .value(request.getOtp())
+          .failWithCode("invalid.or.expired", "Invalid or expired OTP.");
+
       throw new PlatformApiDataValidationException(dataValidationErrors);
     }
+
     registration.markConsumed();
     registrationRepository.saveAndFlush(registration);
   }
 
-  private CommandProcessingResult executeSinpeTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
+  private CommandProcessingResult executeSinpeTransfer(
+      AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-    SinpeTransferRequest sinpeRequest = SinpeTransferRequest.builder()
-        .originCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : client.getAccountNumber())
-        .originCustomerName(client.getFullname()).originIban(request.getFromAccountId())
-        .destinationPhone(request.getToPhoneNumber()).amount(request.getTransferAmount())
-        .currencyCode("CRC").description(request.getTransferDescription()).debitIBAN(true)
-        .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp"))).build();
+
+    SinpeTransferRequest sinpeRequest =
+        SinpeTransferRequest.builder()
+            .originCustomerId(
+                client.getExternalId() != null
+                    ? client.getExternalId().getValue()
+                    : client.getAccountNumber())
+            .originCustomerName(client.getFullname())
+            .originIban(request.getFromAccountId())
+            .destinationPhone(request.getToPhoneNumber())
+            .amount(request.getTransferAmount())
+            .currencyCode("CRC")
+            .description(request.getTransferDescription())
+            .debitIBAN(true)
+            .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp")))
+            .build();
+
     sinpeExternalApiClient.transferToPhone(sinpeRequest);
+
     return new CommandProcessingResultBuilder().withEntityId(0L).build();
   }
 
-  private void publishTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
+  private void publishFastPaymentTransferEvent(
+      CommandProcessingResult result,
+      AccountTransferConfirmRequest request,
+      HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
 
       Map<String, Object> contextData = new HashMap<>();
-      contextData.put("transactionAmount", request.getTransferAmount() != null ? request.getTransferAmount() : "");
-      contextData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "");
-      contextData.put("transactionDate", request.getTransferDate() != null ? request.getTransferDate() : "");
-      
-      String json = new Gson().toJson(request);
-      Map<String, Object> requestMap = new Gson().fromJson(json, Map.class);
-      populateTransferDetails(contextData, requestMap);
+      contextData.put("transactionAmount", request.getTransferAmount());
+      contextData.put("transferDescription", request.getTransferDescription());
+      contextData.put("fromAccountNumber", request.getFromAccountId());
+      contextData.put(
+          "toAccountNumber",
+          request.getToAccountId() != null ? request.getToAccountId() : request.getToPhoneNumber());
+      contextData.put(
+          "transferId",
+          result.getResourceId() != null
+              ? result.getResourceId()
+              : "EXT-" + System.currentTimeMillis());
 
-      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "EXT-" + System.currentTimeMillis());
-      
-      String ip = extractClientIp(httpRequest);
-      contextData.put("ipAddress", ip != null ? ip : "N/A");
-
-      applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-          this, SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS, user.getId(), user.getFirstname(), user.getLastname(),
-          user.getUsername(), user.getEmail(), mobileNumber, emailMode, ip, LocaleContextHolder.getLocale(), contextData));
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              extractClientIp(httpRequest),
+              LocaleContextHolder.getLocale(),
+              contextData));
     } catch (Exception e) {
-      log.warn("Failed to publish 3-step transfer notification event", e);
+      log.warn("Failed to publish transfer notification event", e);
     }
   }
 
@@ -259,64 +354,171 @@ public class SelfAccountTransferApiResource {
   @Path("template")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Retrieve Account Transfer Template", description = "Returns list of loan/savings accounts that can be used for account transfer")
+  @Operation(
+      summary = "Retrieve Account Transfer Template",
+      description =
+          "Returns list of loan/savings accounts that can be used for account transfer\n\n"
+              + "Example Requests:\n\n"
+              + "self/accounttransfers/template\n")
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfAccountTransferApiResourceSwagger.GetAccountTransferTemplateResponse.class))))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfAccountTransferApiResourceSwagger
+                                        .GetAccountTransferTemplateResponse.class))))
   })
-  public String template(@DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type, @Context final UriInfo uriInfo) {
+  public String template(
+      @DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type,
+      @Context final UriInfo uriInfo) {
+
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    Collection<SelfAccountTemplateData> selfTemplateData = this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    Collection<SelfAccountTemplateData> selfTemplateData =
+        this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
 
     if (type.equals("tpt")) {
-      Collection<SelfAccountTemplateData> tptTemplateData = this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
-      return this.toApiJsonSerializer.serialize(settings, new SelfAccountTransferData(selfTemplateData, tptTemplateData));
+      Collection<SelfAccountTemplateData> tptTemplateData =
+          this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
+      return this.toApiJsonSerializer.serialize(
+          settings, new SelfAccountTransferData(selfTemplateData, tptTemplateData));
     }
-    return this.toApiJsonSerializer.serialize(settings, new SelfAccountTransferData(selfTemplateData, selfTemplateData));
+
+    return this.toApiJsonSerializer.serialize(
+        settings, new SelfAccountTransferData(selfTemplateData, selfTemplateData));
   }
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Create new Transfer", description = "Ability to create new transfer of monetary funds from one account to another.")
+  @Operation(
+      summary = "Create new Transfer",
+      description =
+          "Ability to create new transfer of monetary funds from one account to another.\n\n"
+              + "Example Requests:\n\n"
+              + "self/accounttransfers/\n")
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfAccountTransferApiResourceSwagger.PostNewTransferResponse.class))))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfAccountTransferApiResourceSwagger.PostNewTransferResponse
+                                        .class))))
   })
-  public CommandProcessingResult create(@DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type, final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
+  public CommandProcessingResult create(
+      @DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type,
+      final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
+
     Map<String, Object> params = this.dataValidator.validateCreate(type, apiRequestBodyAsJson);
     if (type.equals("tpt")) {
       checkForLimits(params);
     }
-    final CommandWrapper commandRequest = new CommandWrapperBuilder().createAccountTransfer().withJson(apiRequestBodyAsJson).build();
-    CommandProcessingResult result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
+    final CommandWrapper commandRequest =
+        new CommandWrapperBuilder().createAccountTransfer().withJson(apiRequestBodyAsJson).build();
+
+    CommandProcessingResult result =
+        commandsSourceWritePlatformService.logCommandSource(commandRequest);
+
+    // PUBLISH NOTIFICATION EVENT AFTER SUCCESSFUL TRANSFER
     publishTransferEvent(result, params, httpRequest);
+
     return result;
   }
 
-  private void publishTransferEvent(CommandProcessingResult result, Map<String, Object> params, HttpServletRequest httpRequest) {
+  /**
+   * Publica el evento de notificación con todos los detalles enriquecidos de la transferencia TPT.
+   */
+  private void publishTransferEvent(
+      CommandProcessingResult result, Map<String, Object> params, HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
 
-      // Null-safe basic details
-      contextData.put("transactionAmount", params.get("transferAmount") != null ? params.get("transferAmount") : "");
-      contextData.put("transactionDate", params.get("transferDate") != null ? params.get("transferDate") : "");
-      contextData.put("transferDescription", params.get("transferDescription") != null ? params.get("transferDescription") : "");
-      
-      // Populate detailed transfer info using JdbcTemplate
-      populateTransferDetails(contextData, params);
+      // 1. Datos básicos de la transferencia
+      contextData.put("transactionAmount", params.getOrDefault("transferAmount", "N/A"));
+      contextData.put("transferDescription", params.getOrDefault("transferDescription", "N/A"));
+      contextData.put("transactionDate", params.getOrDefault("transferDate", "N/A"));
+      contextData.put("fromAccountNumber", params.getOrDefault("fromAccountNo", "N/A"));
+      contextData.put("toAccountNumber", params.getOrDefault("toAccountNo", "N/A"));
+      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "N/A");
+      contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "");
-      
-      String ip = extractClientIp(httpRequest);
-      contextData.put("ipAddress", ip != null ? ip : "N/A");
+      // 2. Enriquecer con Nombres de Cliente y Oficina (Origen y Destino)
+      try {
+        Object fromClientIdObj = params.get("fromClientId");
+        if (fromClientIdObj != null) {
+          Long fromClientId = Long.valueOf(fromClientIdObj.toString());
+          ClientData fromClient = clientReadPlatformService.retrieveOne(fromClientId);
+          contextData.put("fromClientName", fromClient.getDisplayName());
+          
+          if (fromClient.getOfficeId() != null) {
+            OfficeData fromOffice = officeReadPlatformService.retrieveOffice(fromClient.getOfficeId());
+            contextData.put("fromOfficeName", fromOffice.getName());
+          } else {
+            contextData.put("fromOfficeName", "N/A");
+          }
+        } else {
+          contextData.put("fromClientName", "N/A");
+          contextData.put("fromOfficeName", "N/A");
+        }
 
-      applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-          this, SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS, user.getId(), user.getFirstname(), user.getLastname(),
-          user.getUsername(), user.getEmail(), mobileNumber, emailMode, ip, LocaleContextHolder.getLocale(), contextData));
+        Object toClientIdObj = params.get("toClientId");
+        if (toClientIdObj != null) {
+          Long toClientId = Long.valueOf(toClientIdObj.toString());
+          ClientData toClient = clientReadPlatformService.retrieveOne(toClientId);
+          contextData.put("toClientName", toClient.getDisplayName());
+          
+          if (toClient.getOfficeId() != null) {
+            OfficeData toOffice = officeReadPlatformService.retrieveOffice(toClient.getOfficeId());
+            contextData.put("toOfficeName", toOffice.getName());
+          } else {
+            contextData.put("toOfficeName", "N/A");
+          }
+        } else {
+          contextData.put("toClientName", "N/A");
+          contextData.put("toOfficeName", "N/A");
+        }
+      } catch (Exception e) {
+        log.warn("No se pudieron resolver los nombres de cliente/oficina para la notificación: {}", e.getMessage());
+        // Fallback a valores por defecto si falla la consulta
+        contextData.putIfAbsent("fromClientName", "N/A");
+        contextData.putIfAbsent("fromOfficeName", "N/A");
+        contextData.putIfAbsent("toClientName", "N/A");
+        contextData.putIfAbsent("toOfficeName", "N/A");
+      }
+
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              ipAddress,
+              LocaleContextHolder.getLocale(),
+              contextData));
     } catch (Exception e) {
       log.warn("Failed to publish legacy transfer notification event", e);
     }
@@ -329,33 +531,46 @@ public class SelfAccountTransferApiResource {
     BigDecimal transactionAmount = (BigDecimal) params.get("transactionAmount");
 
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    Long transferLimit = this.tptBeneficiaryReadPlatformService.getTransferLimit(user.getId(), toAccount.getAccountId(), toAccount.getAccountType());
-    if (transferLimit != null && transferLimit > 0 && transactionAmount.compareTo(new BigDecimal(transferLimit)) > 0) {
-      throw new BeneficiaryTransferLimitExceededException();
+    Long transferLimit =
+        this.tptBeneficiaryReadPlatformService.getTransferLimit(
+            user.getId(), toAccount.getAccountId(), toAccount.getAccountType());
+    if (transferLimit != null && transferLimit > 0) {
+      if (transactionAmount.compareTo(new BigDecimal(transferLimit)) > 0) {
+        throw new BeneficiaryTransferLimitExceededException();
+      }
     }
 
     if (this.configurationDomainService.isDailyTPTLimitEnabled()) {
       Long dailyTPTLimit = this.configurationDomainService.getDailyTPTLimit();
       if (dailyTPTLimit != null && dailyTPTLimit > 0) {
         BigDecimal dailyTPTLimitBD = new BigDecimal(dailyTPTLimit);
-        BigDecimal totTransactionAmount = this.accountTransfersReadPlatformService.getTotalTransactionAmount(fromAccount.getAccountId(), fromAccount.getAccountType(), transactionDate);
-        BigDecimal totalSoFar = totTransactionAmount == null ? BigDecimal.ZERO : totTransactionAmount;
-        if (dailyTPTLimitBD.compareTo(totalSoFar) <= 0 || dailyTPTLimitBD.compareTo(totalSoFar.add(transactionAmount)) < 0) {
-          throw new DailyTPTTransactionAmountLimitExceededException(fromAccount.getAccountId(), fromAccount.getAccountType());
+        BigDecimal totTransactionAmount =
+            this.accountTransfersReadPlatformService.getTotalTransactionAmount(
+                fromAccount.getAccountId(), fromAccount.getAccountType(), transactionDate);
+        BigDecimal totalSoFar =
+            totTransactionAmount == null ? BigDecimal.ZERO : totTransactionAmount;
+        if (dailyTPTLimitBD.compareTo(totalSoFar) <= 0
+            || dailyTPTLimitBD.compareTo(totalSoFar.add(transactionAmount)) < 0) {
+          throw new DailyTPTTransactionAmountLimitExceededException(
+              fromAccount.getAccountId(), fromAccount.getAccountType());
         }
       }
     }
   }
 
   // ==========================================
-  // SHARED UTILITY & DB METHODS
+  // SHARED UTILITY METHODS
   // ==========================================
 
   private String extractMobile(AppSelfServiceUser user) {
     if (user == null || user.getAppUserClientMappings() == null) return null;
     return user.getAppUserClientMappings().stream()
-        .map(AppSelfServiceUserClientMapping::getClient).filter(Objects::nonNull)
-        .map(Client::getMobileNo).filter(StringUtils::isNotBlank).findFirst().orElse(null);
+        .map(AppSelfServiceUserClientMapping::getClient)
+        .filter(Objects::nonNull)
+        .map(Client::getMobileNo)
+        .filter(StringUtils::isNotBlank)
+        .findFirst()
+        .orElse(null);
   }
 
   private boolean determineMode(String email, String mobileNumber) {
@@ -363,7 +578,8 @@ public class SelfAccountTransferApiResource {
     boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
     if (hasEmail && !hasMobile) return true;
     if (hasMobile && !hasEmail) return false;
-    String pref = env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
+    String pref =
+        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
 
@@ -375,74 +591,5 @@ public class SelfAccountTransferApiResource {
       if (StringUtils.isNotBlank(firstToken)) return firstToken;
     }
     return httpRequest.getRemoteAddr();
-  }
-
-  /**
-   * Safely populates the context map with transfer details.
-   * GUARANTEE: No null values are ever put into the map to prevent Freemarker InvalidReferenceException.
-   */
-  private void populateTransferDetails(Map<String, Object> contextData, Map<String, Object> params) {
-    try {
-      Long fromOfficeId = getLong(params, "fromOfficeId");
-      Long fromClientId = getLong(params, "fromClientId");
-      Long fromAccountId = getLong(params, "fromAccountId");
-      Integer fromAccountType = getInteger(params, "fromAccountType");
-
-      Long toOfficeId = getLong(params, "toOfficeId");
-      Long toClientId = getLong(params, "toClientId");
-      Long toAccountId = getLong(params, "toAccountId");
-      Integer toAccountType = getInteger(params, "toAccountType");
-
-      contextData.put("sourceOfficeName", fetchString("SELECT name FROM m_office WHERE id = ?", fromOfficeId));
-      contextData.put("targetOfficeName", fetchString("SELECT name FROM m_office WHERE id = ?", toOfficeId));
-      
-      // Using display_name directly to avoid database-specific CONCAT() syntax issues
-      contextData.put("sourceClientName", fetchString("SELECT display_name FROM m_client WHERE id = ?", fromClientId));
-      contextData.put("targetClientName", fetchString("SELECT display_name FROM m_client WHERE id = ?", toClientId));
-
-      if (fromAccountId != null && fromAccountType != null) {
-        String table = fromAccountType == 1 ? "m_loan" : "m_savings_account";
-        contextData.put("fromAccountNumber", fetchString("SELECT account_no FROM " + table + " WHERE id = ?", fromAccountId));
-      } else {
-        contextData.put("fromAccountNumber", "N/A");
-      }
-
-      if (toAccountId != null && toAccountType != null) {
-        String table = toAccountType == 1 ? "m_loan" : "m_savings_account";
-        contextData.put("toAccountNumber", fetchString("SELECT account_no FROM " + table + " WHERE id = ?", toAccountId));
-      } else {
-        contextData.put("toAccountNumber", "N/A");
-      }
-
-    } catch (Exception e) {
-      log.warn("Failed to populate transfer details for notification", e);
-    }
-  }
-
-  /**
-   * Helper to execute a query and guarantee a non-null String return value.
-   */
-  private String fetchString(String sql, Long id) {
-    if (id == null) return "N/A";
-    try {
-      String result = jdbcTemplate.queryForObject(sql, String.class, id);
-      return result != null ? result : "N/A";
-    } catch (Exception e) {
-      return "N/A";
-    }
-  }
-
-  private Long getLong(Map<String, Object> map, String key) {
-    Object val = map.get(key);
-    if (val == null) return null;
-    if (val instanceof Number) return ((Number) val).longValue();
-    try { return Long.valueOf(val.toString()); } catch (Exception e) { return null; }
-  }
-
-  private Integer getInteger(Map<String, Object> map, String key) {
-    Object val = map.get(key);
-    if (val == null) return null;
-    if (val instanceof Number) return ((Number) val).intValue();
-    try { return Integer.valueOf(val.toString()); } catch (Exception e) { return null; }
   }
 }

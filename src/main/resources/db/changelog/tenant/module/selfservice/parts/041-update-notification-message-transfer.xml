@@ -4,12 +4,11 @@
  <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
  of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 -->
-<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-    <!-- Update Email Subject -->
+    <!-- Actualizar plantilla de Asunto de Email -->
     <changeSet author="fineract" id="ss-0041-1">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
@@ -17,12 +16,12 @@
             </sqlCheck>
         </preConditions>
         <update tableName="m_template">
-            <column name="text" value="Account Transfer Successful - Ref: ${transferId}"/>
-            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'</where>
+            <column name="text" value="Transferencia Exitosa - Ref: ${transferId}"/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'</where each="row"/>
         </update>
     </changeSet>
 
-    <!-- Update Email Body (HTML formatted) -->
+    <!-- Actualizar plantilla de Cuerpo de Email (Formato HTML mejorado) -->
     <changeSet author="fineract" id="ss-0041-2">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
@@ -30,12 +29,30 @@
             </sqlCheck>
         </preConditions>
         <update tableName="m_template">
-            <column name="text" value="Hello ${firstname} ${lastname},&lt;br/&gt;&lt;br/&gt;Your transfer has been successfully processed.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Transfer Details:&lt;/b&gt;&lt;br/&gt;- Amount: ${transactionAmount}&lt;br/&gt;- Description: ${transferDescription}&lt;br/&gt;- Date: ${transactionDate}&lt;br/&gt;- Source Account: ${fromAccountNumber}&lt;br/&gt;- Source Client Name: ${sourceClientName}&lt;br/&gt;- Source Office Name: ${sourceOfficeName}&lt;br/&gt;- Target Account: ${toAccountNumber}&lt;br/&gt;- Target Office Name: ${targetOfficeName}&lt;br/&gt;- Target Client Name: ${targetClientName}&lt;br/&gt;- IP Address: ${ipAddress}&lt;br/&gt;- Transfer ID: ${transferId}&lt;br/&gt;&lt;br/&gt;Thank you for banking with us."/>
+            <column name="text" value="&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;Transferencia Exitosa&lt;/h2&gt;
+&lt;p&gt;Estimado/a ${firstname} ${lastname},&lt;/p&gt;
+&lt;p&gt;Su transferencia se ha procesado exitosamente.&lt;/p&gt;
+&lt;table style='border-collapse: collapse; width: 100%;' border='1'&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Monto:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transactionAmount}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Descripción:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transferDescription}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Fecha:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transactionDate}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Cuenta Origen:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${fromAccountNumber}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Cliente Origen:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${fromClientName}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Oficina Origen:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${fromOfficeName}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Cuenta Destino:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${toAccountNumber}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Cliente Destino:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${toClientName}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Oficina Destino:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${toOfficeName}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;IP de Origen:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${ipAddress}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;ID de Transferencia:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transferId}&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;p&gt;Gracias por usar nuestros servicios.&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;"/>
             <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL'</where>
         </update>
     </changeSet>
 
-    <!-- Update SMS (Concise but complete) -->
+    <!-- Actualizar plantilla SMS -->
     <changeSet author="fineract" id="ss-0041-3">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
@@ -43,12 +60,12 @@
             </sqlCheck>
         </preConditions>
         <update tableName="m_template">
-            <column name="text" value="Transfer of ${transactionAmount} on ${transactionDate} successful. From: ${sourceClientName} (${sourceOfficeName}) Acc: ${fromAccountNumber} to ${targetClientName} (${targetOfficeName}) Acc: ${toAccountNumber}. Desc: ${transferDescription}. IP: ${ipAddress}. Ref: ${transferId}."/>
+            <column name="text" value="Transferencia exitosa. Monto: ${transactionAmount}. De: ${fromClientName} (${fromAccountNumber}) a ${toClientName} (${toAccountNumber}). Fecha: ${transactionDate}. Ref: ${transferId}. IP: ${ipAddress}."/>
             <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_SMS'</where>
         </update>
     </changeSet>
 
-    <!-- Update WhatsApp (Markdown formatted) -->
+    <!-- Actualizar plantilla WhatsApp -->
     <changeSet author="fineract" id="ss-0041-4">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
@@ -56,12 +73,12 @@
             </sqlCheck>
         </preConditions>
         <update tableName="m_template">
-            <column name="text" value="Hello ${firstname}, your transfer of *${transactionAmount}* on *${transactionDate}* was successful.&#10;*From:* ${sourceClientName} (${sourceOfficeName}) - Acc: ${fromAccountNumber}&#10;*To:* ${targetClientName} (${targetOfficeName}) - Acc: ${toAccountNumber}&#10;*Description:* ${transferDescription}&#10;*IP Address:* ${ipAddress}&#10;*Ref:* ${transferId}"/>
+            <column name="text" value="✅ *Transferencia Exitosa*\n\nEstimado/a ${firstname},\n\n💰 *Monto:* ${transactionAmount}\n📝 *Descripción:* ${transferDescription}\n📅 *Fecha:* ${transactionDate}\n🏦 *Origen:* ${fromAccountNumber} (${fromClientName} - ${fromOfficeName})\n🎯 *Destino:* ${toAccountNumber} (${toClientName} - ${toOfficeName})\n🌐 *IP:* ${ipAddress}\n🔖 *Ref:* ${transferId}\n\nGracias por usar nuestros servicios."/>
             <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP'</where>
         </update>
     </changeSet>
 
-    <!-- Update In-App Notification -->
+    <!-- Actualizar plantilla In-App -->
     <changeSet author="fineract" id="ss-0041-5">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
@@ -69,7 +86,7 @@
             </sqlCheck>
         </preConditions>
         <update tableName="m_template">
-            <column name="text" value="Transfer of ${transactionAmount} on ${transactionDate} successful. From: ${sourceClientName} (${sourceOfficeName}) Acc: ${fromAccountNumber} to ${targetClientName} (${targetOfficeName}) Acc: ${toAccountNumber}. Desc: ${transferDescription}. IP: ${ipAddress}. Ref: ${transferId}."/>
+            <column name="text" value="Transferencia exitosa de ${transactionAmount} de ${fromAccountNumber} (${fromClientName}) a ${toAccountNumber} (${toClientName}) el ${transactionDate}. Ref: ${transferId}. IP: ${ipAddress}."/>
             <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_IN_APP'</where>
         </update>
     </changeSet>
