@@ -52,18 +52,17 @@ public class SelfServiceTransferFeeApiResource {
   @Operation(
       summary = "Get All Transfer Fees",
       description =
-          "Retrieves all configured transfer fees. Includes the latest BCCR exchange rate for fees "
-          + "that require currency conversion, as required by regulation.")
+          "Retrieves all configured transfer fees. Includes the latest BCCR exchange rate only "
+          + "for fees explicitly flagged as requiring exchange rate data.")
   public String getAll() {
     context.authenticatedSelfServiceUser();
-    
+
     List<SelfServiceTransferFee> fees = feeRepository.findAll();
-    
-    // Obtener la tasa de venta más reciente del BCCR (la que usa el banco para vender divisas)
+
+    // Fetch the latest BCCR sell rate once for all fees
     Optional<BccrExchangeRate> latestRateOpt = bccrExchangeRateService.getLatestRate();
     BigDecimal currentBccrRate = latestRateOpt.map(BccrExchangeRate::getSellRate).orElse(null);
 
-    // Construir la respuesta enriquecida
     List<Map<String, Object>> responseList = fees.stream().map(fee -> {
         Map<String, Object> feeMap = new HashMap<>();
         feeMap.put("id", fee.getId());
@@ -77,13 +76,13 @@ public class SelfServiceTransferFeeApiResource {
         feeMap.put("thresholdFeeValue", fee.getThresholdFeeValue());
         feeMap.put("description", fee.getDescription());
         feeMap.put("isActive", fee.isActive());
-        
-        // Requisito regulatorio: devolver la tasa BCCR actual solo para comisiones que la usan 
-        // para cálculos (ej. cuando feeCurrency es diferente de currencyCode)
-        if (fee.getFeeCurrency() != null && !fee.getFeeCurrency().equals(fee.getCurrencyCode())) {
+        feeMap.put("exchangeRateRequired", fee.isExchangeRateRequired());
+
+        // Only include BCCR rate when explicitly required by configuration
+        if (fee.isExchangeRateRequired()) {
             feeMap.put("currentBccrRate", currentBccrRate);
         }
-        
+
         return feeMap;
     }).collect(Collectors.toList());
 
@@ -99,7 +98,7 @@ public class SelfServiceTransferFeeApiResource {
   public String create(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("TRANSFER_FEE");
     SelfServiceTransferFee fee = gson.fromJson(apiRequestBodyAsJson, SelfServiceTransferFee.class);
-    fee.setId(null); // Ensure it's treated as a new entity
+    fee.setId(null);
     feeRepository.save(fee);
     return toApiJsonSerializer.serialize(fee);
   }
@@ -121,7 +120,7 @@ public class SelfServiceTransferFeeApiResource {
     SelfServiceTransferFee updates =
         gson.fromJson(apiRequestBodyAsJson, SelfServiceTransferFee.class);
 
-    // Update fields
+    // Update all fields
     fee.setTransferType(updates.getTransferType());
     fee.setCurrencyCode(updates.getCurrencyCode());
     fee.setTransferMode(updates.getTransferMode());
@@ -132,6 +131,7 @@ public class SelfServiceTransferFeeApiResource {
     fee.setThresholdFeeValue(updates.getThresholdFeeValue());
     fee.setDescription(updates.getDescription());
     fee.setActive(updates.isActive());
+    fee.setExchangeRateRequired(updates.isExchangeRateRequired());
 
     feeRepository.save(fee);
     return toApiJsonSerializer.serialize(fee);

@@ -15,4 +15,34 @@
         <comment>Drop exchange_rate column from m_selfservice_transfer_fees as it is now fetched dynamically from BCCR exchange rates</comment>
         <dropColumn tableName="m_selfservice_transfer_fees" columnName="exchange_rate"/>
     </changeSet>
+    <changeSet author="fineract" id="ss-0042-2">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="exchange_rate_required"/>
+            </not>
+        </preConditions>
+        <comment>Add exchange_rate_required flag to m_selfservice_transfer_fees</comment>
+        <addColumn tableName="m_selfservice_transfer_fees">
+            <column name="exchange_rate_required" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    
+    <changeSet author="fineract" id="ss-0042-3">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="exchange_rate_required"/>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="fee_currency"/>
+            </and>
+        </preConditions>
+        <comment>
+            Set exchange_rate_required = true for existing fee configurations where fee_currency is USD.
+            These fees require dynamic BCCR exchange rate lookup for CRC conversion.
+        </comment>
+        <update tableName="m_selfservice_transfer_fees">
+            <column name="exchange_rate_required" valueBoolean="true"/>
+            <where>fee_currency = 'USD'</where>
+        </update>
+    </changeSet>
 </databaseChangeLog>
