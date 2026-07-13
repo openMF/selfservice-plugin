@@ -34,9 +34,6 @@ public class SelfServiceTransferFee extends AbstractPersistableCustom<Long> {
   @Column(name = "fee_currency")
   private String feeCurrency;
 
-  @Column(name = "exchange_rate")
-  private BigDecimal exchangeRate;
-
   @Column(name = "threshold_amount")
   private BigDecimal thresholdAmount;
 

@@ -56,7 +56,6 @@
             <column name="fee_type" value="FIXED"/>
             <column name="fee_value" valueNumeric="3.00"/>
             <column name="fee_currency" value="USD"/>
-            <column name="exchange_rate" valueNumeric="515.00"/>
             <column name="description" value="Comisión acreditación inmediata (convertida a CRC)"/>
             <column name="is_active" valueBoolean="true"/>
         </insert>

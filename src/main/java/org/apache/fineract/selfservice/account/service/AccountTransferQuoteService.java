@@ -26,16 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>This service integrates with the BCCR exchange rate system to dynamically convert fees defined
  * in USD to CRC using the official sell rate published daily by the Central Bank.
- *
- * <p>Fee calculation logic:
- *
- * <ol>
- *   <li>Fetch fee configuration from database based on transfer type, currency, and mode
- *   <li>Calculate base fee (percentage or fixed amount)
- *   <li>Apply currency conversion using BCCR exchange rate if needed
- *   <li>Apply threshold rules (e.g., SINPE Móvil daily limits)
- *   <li>Return fee amount, total amount, and description
- * </ol>
  */
 @Service
 @RequiredArgsConstructor
@@ -113,19 +103,14 @@ public class AccountTransferQuoteService {
               exchangeRateUsed,
               fee);
         } else {
-          // Fallback to configured exchange rate if BCCR is unavailable
-          if (config.getExchangeRate() != null) {
-            exchangeRateUsed = config.getExchangeRate();
-            fee = fee.multiply(exchangeRateUsed).setScale(2, RoundingMode.HALF_UP);
-            log.warn(
-                "BCCR exchange rate not available. Using configured rate: {} USD × {} = {} CRC",
-                config.getFeeValue(),
-                exchangeRateUsed,
-                fee);
-          } else {
-            log.error(
-                "No exchange rate available for USD to CRC conversion. Neither BCCR nor configured rate found.");
-          }
+          // Fallback to a standard default rate if BCCR is temporarily unavailable
+          exchangeRateUsed = new BigDecimal("515.00");
+          fee = fee.multiply(exchangeRateUsed).setScale(2, RoundingMode.HALF_UP);
+          log.warn(
+              "BCCR exchange rate not available. Using fallback rate: {} USD × {} = {} CRC",
+              config.getFeeValue(),
+              exchangeRateUsed,
+              fee);
         }
       }
     }
@@ -153,7 +138,7 @@ public class AccountTransferQuoteService {
     if (exchangeRateUsed != null) {
       feeDescription =
           String.format(
-              "%s (Tasa BCCR: %.4f CRC/USD)",
+              "%s (Tasa: %.4f CRC/USD)",
               config.getDescription() != null ? config.getDescription() : "Comisión",
               exchangeRateUsed.doubleValue());
     }
