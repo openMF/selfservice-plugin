@@ -133,7 +133,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     final CommandWrapper commandRequest = new CommandWrapperBuilder().createAccountTransfer().withJson(apiRequestBodyAsJson).build();
     CommandProcessingResult result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
 
-    publishTransferEvent(result, params, httpRequest);
+    publishTransferEvent(result, params,params, httpRequest);
     return result;
   }
 
@@ -247,7 +247,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
   }
 
-  private void publishTransferEvent(CommandProcessingResult result, Map<String, Object> params, HttpServletRequest httpRequest) {
+  private void publishTransferEvent(CommandProcessingResult result, Map<String, Object> params, 
+      Map<String, Object> originalParams, HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
@@ -255,50 +256,148 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
-      contextData.put("transactionAmount", params.getOrDefault("transferAmount", "N/A"));
-      contextData.put("transferDescription", params.getOrDefault("transferDescription", "N/A"));
-      contextData.put("transactionDate", params.getOrDefault("transactionDate", "N/A"));
-      contextData.put("fromAccountNumber", params.getOrDefault("fromAccountId", "N/A"));
-      contextData.put("toAccountNumber", params.getOrDefault("toAccountId", "N/A"));
+      
+      // Populate all mandatory fields using both params and originalParams as fallback
+      contextData.put("transactionAmount", getFieldValue(params, originalParams, 
+          "transactionAmount", "transferAmount", "amount"));
+      contextData.put("transferDescription", getFieldValue(params, originalParams, 
+          "transferDescription", "description"));
+      contextData.put("transactionDate", getFieldValue(params, originalParams, 
+          "transactionDate", "transferDate"));
+      contextData.put("fromAccountNumber", getFieldValue(params, originalParams, 
+          "fromAccountNumber", "fromAccountId"));
+      contextData.put("toAccountNumber", getFieldValue(params, originalParams, 
+          "toAccountNumber", "toAccountId"));
       contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      try {
-        Object fromClientIdObj = params.get("fromClientId");
-        if (fromClientIdObj != null) {
-          Long fromClientId = Long.valueOf(fromClientIdObj.toString());
-          ClientData fromClient = clientReadPlatformService.retrieveOne(fromClientId);
-          contextData.put("fromClientName", fromClient.getDisplayName());
-          contextData.put("fromOfficeName", fromClient.getOfficeId() != null ? officeReadPlatformService.retrieveOffice(fromClient.getOfficeId()).getName() : "N/A");
-        } else {
-          contextData.put("fromClientName", "N/A");
-          contextData.put("fromOfficeName", "N/A");
-        }
+      // Resolve client and office names - use originalParams as primary source since it has fromClientId/toClientId
+      resolveClientAndOfficeNames(contextData, params, originalParams);
 
-        Object toClientIdObj = params.get("toClientId");
-        if (toClientIdObj != null) {
-          Long toClientId = Long.valueOf(toClientIdObj.toString());
-          ClientData toClient = clientReadPlatformService.retrieveOne(toClientId);
-          contextData.put("toClientName", toClient.getDisplayName());
-          contextData.put("toOfficeName", toClient.getOfficeId() != null ? officeReadPlatformService.retrieveOffice(toClient.getOfficeId()).getName() : "N/A");
-        } else {
-          contextData.put("toClientName", "N/A");
-          contextData.put("toOfficeName", "N/A");
-        }
-      } catch (Exception e) {
-        log.warn("No se pudieron resolver los nombres de cliente/oficina para la notificación: {}", e.getMessage());
-        contextData.putIfAbsent("fromClientName", "N/A");
-        contextData.putIfAbsent("fromOfficeName", "N/A");
-        contextData.putIfAbsent("toClientName", "N/A");
-        contextData.putIfAbsent("toOfficeName", "N/A");
-      }
+      log.debug("Publishing transfer notification with contextData: {}", contextData);
 
       applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
           this, SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS, user.getId(), user.getFirstname(), user.getLastname(),
           user.getUsername(), user.getEmail(), mobileNumber, emailMode, ipAddress, LocaleContextHolder.getLocale(), contextData));
     } catch (Exception e) {
-      log.warn("Failed to publish legacy transfer notification event", e);
+      log.error("Failed to publish transfer notification event", e);
     }
+  }
+
+  private void resolveClientAndOfficeNames(Map<String, Object> contextData, 
+      Map<String, Object> params, Map<String, Object> originalParams) {
+    
+    // Resolve FROM client and office
+    try {
+      Long fromClientId = getLongValue(params, originalParams, "fromClientId");
+      if (fromClientId != null) {
+        ClientData fromClient = clientReadPlatformService.retrieveOne(fromClientId);
+        contextData.put("fromClientName", fromClient.getDisplayName());
+        
+        if (fromClient.getOfficeId() != null) {
+          String fromOfficeName = officeReadPlatformService.retrieveOffice(fromClient.getOfficeId()).getName();
+          contextData.put("fromOfficeName", fromOfficeName);
+        } else {
+          // Try to get office name from fromOfficeId if available
+          Long fromOfficeId = getLongValue(params, originalParams, "fromOfficeId");
+          if (fromOfficeId != null) {
+            contextData.put("fromOfficeName", officeReadPlatformService.retrieveOffice(fromOfficeId).getName());
+          } else {
+            contextData.put("fromOfficeName", "N/A");
+          }
+        }
+      } else {
+        contextData.put("fromClientName", "N/A");
+        contextData.put("fromOfficeName", "N/A");
+      }
+    } catch (Exception e) {
+      log.warn("Failed to resolve FROM client/office names: {}", e.getMessage());
+      contextData.putIfAbsent("fromClientName", "N/A");
+      contextData.putIfAbsent("fromOfficeName", "N/A");
+    }
+
+    // Resolve TO client and office
+    try {
+      Long toClientId = getLongValue(params, originalParams, "toClientId");
+      if (toClientId != null) {
+        ClientData toClient = clientReadPlatformService.retrieveOne(toClientId);
+        contextData.put("toClientName", toClient.getDisplayName());
+        
+        if (toClient.getOfficeId() != null) {
+          String toOfficeName = officeReadPlatformService.retrieveOffice(toClient.getOfficeId()).getName();
+          contextData.put("toOfficeName", toOfficeName);
+        } else {
+          // Try to get office name from toOfficeId if available
+          Long toOfficeId = getLongValue(params, originalParams, "toOfficeId");
+          if (toOfficeId != null) {
+            contextData.put("toOfficeName", officeReadPlatformService.retrieveOffice(toOfficeId).getName());
+          } else {
+            contextData.put("toOfficeName", "N/A");
+          }
+        }
+      } else {
+        contextData.put("toClientName", "N/A");
+        contextData.put("toOfficeName", "N/A");
+      }
+    } catch (Exception e) {
+      log.warn("Failed to resolve TO client/office names: {}", e.getMessage());
+      contextData.putIfAbsent("toClientName", "N/A");
+      contextData.putIfAbsent("toOfficeName", "N/A");
+    }
+  }
+
+  /**
+   * Gets a field value from either params or originalParams, trying multiple possible key names.
+   * Returns the first non-null, non-empty value found, or "N/A" if none found.
+   */
+  private Object getFieldValue(Map<String, Object> params, Map<String, Object> originalParams, String... possibleKeys) {
+    for (String key : possibleKeys) {
+      // First try params
+      Object value = params.get(key);
+      if (isNotEmpty(value)) {
+        return value;
+      }
+      // Then try originalParams
+      value = originalParams.get(key);
+      if (isNotEmpty(value)) {
+        return value;
+      }
+    }
+    return "N/A";
+  }
+  
+  /**
+   * Gets a Long value from either params or originalParams.
+   */
+  private Long getLongValue(Map<String, Object> params, Map<String, Object> originalParams, String key) {
+    Object value = params.get(key);
+    if (value == null) {
+      value = originalParams.get(key);
+    }
+    if (value != null) {
+      if (value instanceof Number) {
+        return ((Number) value).longValue();
+      }
+      try {
+        return Long.valueOf(value.toString());
+      } catch (NumberFormatException e) {
+        log.debug("Could not convert value '{}' for key '{}' to Long", value, key);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Checks if a value is not null and not empty string.
+   */
+  private boolean isNotEmpty(Object value) {
+    if (value == null) {
+      return false;
+    }
+    if (value instanceof String) {
+      return !((String) value).isEmpty();
+    }
+    return true;
   }
 
   private void checkForLimits(Map<String, Object> params) {
