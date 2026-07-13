@@ -50,5 +50,5 @@
   <include file="parts/038-add-sinpe-transfer-fees.xml" relativeToChangelogFile="true"/>
   <include file="parts/039-add-notification-password-renew.xml" relativeToChangelogFile="true"/>  
   <include file="parts/040-add-notification-password-reset.xml" relativeToChangelogFile="true"/>
-  
+  <include file="parts/041-update-notification-message-transfer.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>

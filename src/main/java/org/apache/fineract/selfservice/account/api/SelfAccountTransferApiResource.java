@@ -78,6 +78,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/accounttransfers")
@@ -97,6 +98,7 @@ public class SelfAccountTransferApiResource {
   private final SelfServiceRegistrationRepository registrationRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  private final JdbcTemplate jdbcTemplate; // ADDED: For fetching transfer details
 
   // Legacy dependencies restored for backward compatibility
   private final DefaultToApiJsonSerializer<SelfAccountTransferData> toApiJsonSerializer;
@@ -125,13 +127,11 @@ public class SelfAccountTransferApiResource {
     AccountTransferPrepareRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
 
-    // Basic validation
     if (request.getTransferAmount() == null
         || request.getTransferAmount().compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException("Transfer amount must be greater than zero.");
     }
 
-    // Return the prepared data (in a real scenario, you might fetch account details here)
     return new Gson().toJson(request);
   }
 
@@ -167,24 +167,19 @@ public class SelfAccountTransferApiResource {
     AccountTransferConfirmRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
 
-    // STEP 1: If OTP is missing, generate and send it
     if (StringUtils.isBlank(request.getOtp())) {
       return generateAndSendOtp(request, user, httpRequest);
     }
 
-    // STEP 2: Validate OTP
     validateOtp(request, user);
 
-    // STEP 3: Execute Transfer
     CommandProcessingResult result;
     if ("SINPE_MOVIL".equals(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
     } else {
-      // FIX: Use the new service that bypasses PortfolioCommandSourceWritePlatformService
       result = transferWritePlatformService.executeInternalTransfer(request);
     }
 
-    // STEP 4: Publish Success Notification
     publishTransferEvent(result, request, httpRequest);
 
     return new Gson().toJson(result);
@@ -217,7 +212,6 @@ public class SelfAccountTransferApiResource {
             expiry);
     registrationRepository.saveAndFlush(registration);
 
-    // Send OTP Notification
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
@@ -310,15 +304,20 @@ public class SelfAccountTransferApiResource {
       Map<String, Object> contextData = new HashMap<>();
       contextData.put("transactionAmount", request.getTransferAmount());
       contextData.put("transferDescription", request.getTransferDescription());
-      contextData.put("fromAccountNumber", request.getFromAccountId());
-      contextData.put(
-          "toAccountNumber",
-          request.getToAccountId() != null ? request.getToAccountId() : request.getToPhoneNumber());
+      contextData.put("transactionDate", request.getTransferDate());
+      
+      // Convert request to Map to reuse populateTransferDetails
+      String json = new Gson().toJson(request);
+      Map<String, Object> requestMap = new Gson().fromJson(json, Map.class);
+      populateTransferDetails(contextData, requestMap);
+
       contextData.put(
           "transferId",
           result.getResourceId() != null
               ? result.getResourceId()
               : "EXT-" + System.currentTimeMillis());
+      
+      contextData.put("ipAddress", extractClientIp(httpRequest));
 
       applicationEventPublisher.publishEvent(
           SelfServiceNotificationEvent.withTenantContext(
@@ -441,29 +440,16 @@ public class SelfAccountTransferApiResource {
 
       Map<String, Object> contextData = new HashMap<>();
 
-      // Extract details directly from the validated params map.
-      // The dataValidator returns the raw values extracted from the JSON payload using their
-      // original key names.
-      Object fromAccountIdObj = params.get("fromAccountId");
-      Object toAccountIdObj = params.get("toAccountId");
-      Object transferAmountObj = params.get("transferAmount");
-      Object transferDateObj = params.get("transferDate");
-      Object transferDescObj = params.get("transferDescription");
+      // Extract basic details
+      contextData.put("transactionAmount", params.get("transferAmount") != null ? params.get("transferAmount") : "");
+      contextData.put("transactionDate", params.get("transferDate") != null ? params.get("transferDate") : "");
+      contextData.put("transferDescription", params.get("transferDescription") != null ? params.get("transferDescription") : "");
+      
+      // Populate detailed transfer info using JdbcTemplate
+      populateTransferDetails(contextData, params);
 
-      // Resolve Account Numbers
-      // JSON payload, fromAccountId and toAccountId contain the actual account numbers
-      // ("000000001", "000000003").
-      // We convert them to String to ensure they are safely passed to the template engine.
-      String fromAccountNo = fromAccountIdObj != null ? String.valueOf(fromAccountIdObj) : "";
-      String toAccountNo = toAccountIdObj != null ? String.valueOf(toAccountIdObj) : "";
-
-      // Populate context data with all available transfer details
-      contextData.put("transactionAmount", transferAmountObj != null ? transferAmountObj : "");
-      contextData.put("transactionDate", transferDateObj != null ? transferDateObj : "");
-      contextData.put("transferDescription", transferDescObj != null ? transferDescObj : "");
-      contextData.put("fromAccountNumber", fromAccountNo);
-      contextData.put("toAccountNumber", toAccountNo);
       contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "");
+      contextData.put("ipAddress", extractClientIp(httpRequest));
 
       applicationEventPublisher.publishEvent(
           SelfServiceNotificationEvent.withTenantContext(
@@ -480,7 +466,6 @@ public class SelfAccountTransferApiResource {
               LocaleContextHolder.getLocale(),
               contextData));
     } catch (Exception e) {
-      // Log warning but do not fail the transfer if notification publishing fails
       log.warn("Failed to publish legacy transfer notification event", e);
     }
   }
@@ -552,5 +537,74 @@ public class SelfAccountTransferApiResource {
       if (StringUtils.isNotBlank(firstToken)) return firstToken;
     }
     return httpRequest.getRemoteAddr();
+  }
+
+  // ==========================================
+  // TRANSFER DETAILS POPULATION
+  // ==========================================
+
+  private void populateTransferDetails(Map<String, Object> contextData, Map<String, Object> params) {
+    try {
+      Long fromOfficeId = getLong(params, "fromOfficeId");
+      Long fromClientId = getLong(params, "fromClientId");
+      Long fromAccountId = getLong(params, "fromAccountId");
+      Integer fromAccountType = getInteger(params, "fromAccountType");
+
+      Long toOfficeId = getLong(params, "toOfficeId");
+      Long toClientId = getLong(params, "toClientId");
+      Long toAccountId = getLong(params, "toAccountId");
+      Integer toAccountType = getInteger(params, "toAccountType");
+
+      if (fromOfficeId != null) {
+        try { contextData.put("sourceOfficeName", jdbcTemplate.queryForObject("SELECT name FROM m_office WHERE id = ?", String.class, fromOfficeId)); } 
+        catch (Exception e) { contextData.put("sourceOfficeName", "N/A"); }
+      } else { contextData.put("sourceOfficeName", "N/A"); }
+
+      if (toOfficeId != null) {
+        try { contextData.put("targetOfficeName", jdbcTemplate.queryForObject("SELECT name FROM m_office WHERE id = ?", String.class, toOfficeId)); } 
+        catch (Exception e) { contextData.put("targetOfficeName", "N/A"); }
+      } else { contextData.put("targetOfficeName", "N/A"); }
+
+      if (fromClientId != null) {
+        try { contextData.put("sourceClientName", jdbcTemplate.queryForObject("SELECT COALESCE(display_name, CONCAT(firstname, ' ', lastname)) FROM m_client WHERE id = ?", String.class, fromClientId)); } 
+        catch (Exception e) { contextData.put("sourceClientName", "N/A"); }
+      } else { contextData.put("sourceClientName", "N/A"); }
+
+      if (toClientId != null) {
+        try { contextData.put("targetClientName", jdbcTemplate.queryForObject("SELECT COALESCE(display_name, CONCAT(firstname, ' ', lastname)) FROM m_client WHERE id = ?", String.class, toClientId)); } 
+        catch (Exception e) { contextData.put("targetClientName", "N/A"); }
+      } else { contextData.put("targetClientName", "N/A"); }
+
+      if (fromAccountId != null && fromAccountType != null) {
+        try {
+          String table = fromAccountType == 1 ? "m_loan" : "m_savings_account";
+          contextData.put("fromAccountNumber", jdbcTemplate.queryForObject("SELECT account_no FROM " + table + " WHERE id = ?", String.class, fromAccountId));
+        } catch (Exception e) { contextData.put("fromAccountNumber", "N/A"); }
+      } else { contextData.put("fromAccountNumber", "N/A"); }
+
+      if (toAccountId != null && toAccountType != null) {
+        try {
+          String table = toAccountType == 1 ? "m_loan" : "m_savings_account";
+          contextData.put("toAccountNumber", jdbcTemplate.queryForObject("SELECT account_no FROM " + table + " WHERE id = ?", String.class, toAccountId));
+        } catch (Exception e) { contextData.put("toAccountNumber", "N/A"); }
+      } else { contextData.put("toAccountNumber", "N/A"); }
+
+    } catch (Exception e) {
+      log.warn("Failed to populate transfer details for notification", e);
+    }
+  }
+
+  private Long getLong(Map<String, Object> map, String key) {
+    Object val = map.get(key);
+    if (val == null) return null;
+    if (val instanceof Number) return ((Number) val).longValue();
+    try { return Long.valueOf(val.toString()); } catch (Exception e) { return null; }
+  }
+
+  private Integer getInteger(Map<String, Object> map, String key) {
+    Object val = map.get(key);
+    if (val == null) return null;
+    if (val instanceof Number) return ((Number) val).intValue();
+    try { return Integer.valueOf(val.toString()); } catch (Exception e) { return null; }
   }
 }

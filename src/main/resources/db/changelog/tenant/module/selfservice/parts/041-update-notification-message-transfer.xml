@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Update Email Subject -->
+    <changeSet author="fineract" id="ss-0041-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Account Transfer Successful - Ref: ${transferId}"/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL_SUBJECT'</where>
+        </update>
+    </changeSet>
+
+    <!-- Update Email Body (HTML formatted) -->
+    <changeSet author="fineract" id="ss-0041-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Hello ${firstname} ${lastname},&lt;br/&gt;&lt;br/&gt;Your transfer has been successfully processed.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Transfer Details:&lt;/b&gt;&lt;br/&gt;- Amount: ${transactionAmount}&lt;br/&gt;- Description: ${transferDescription}&lt;br/&gt;- Date: ${transactionDate}&lt;br/&gt;- Source Account: ${fromAccountNumber}&lt;br/&gt;- Source Client Name: ${sourceClientName}&lt;br/&gt;- Source Office Name: ${sourceOfficeName}&lt;br/&gt;- Target Account: ${toAccountNumber}&lt;br/&gt;- Target Office Name: ${targetOfficeName}&lt;br/&gt;- Target Client Name: ${targetClientName}&lt;br/&gt;- IP Address: ${ipAddress}&lt;br/&gt;- Transfer ID: ${transferId}&lt;br/&gt;&lt;br/&gt;Thank you for banking with us."/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_EMAIL'</where>
+        </update>
+    </changeSet>
+
+    <!-- Update SMS (Concise but complete) -->
+    <changeSet author="fineract" id="ss-0041-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_SMS'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Transfer of ${transactionAmount} on ${transactionDate} successful. From: ${sourceClientName} (${sourceOfficeName}) Acc: ${fromAccountNumber} to ${targetClientName} (${targetOfficeName}) Acc: ${toAccountNumber}. Desc: ${transferDescription}. IP: ${ipAddress}. Ref: ${transferId}."/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_SMS'</where>
+        </update>
+    </changeSet>
+
+    <!-- Update WhatsApp (Markdown formatted) -->
+    <changeSet author="fineract" id="ss-0041-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Hello ${firstname}, your transfer of *${transactionAmount}* on *${transactionDate}* was successful.&#10;*From:* ${sourceClientName} (${sourceOfficeName}) - Acc: ${fromAccountNumber}&#10;*To:* ${targetClientName} (${targetOfficeName}) - Acc: ${toAccountNumber}&#10;*Description:* ${transferDescription}&#10;*IP Address:* ${ipAddress}&#10;*Ref:* ${transferId}"/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_WHATSAPP'</where>
+        </update>
+    </changeSet>
+
+    <!-- Update In-App Notification -->
+    <changeSet author="fineract" id="ss-0041-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_TRANSFER_SUCCESS_IN_APP'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Transfer of ${transactionAmount} on ${transactionDate} successful. From: ${sourceClientName} (${sourceOfficeName}) Acc: ${fromAccountNumber} to ${targetClientName} (${targetOfficeName}) Acc: ${toAccountNumber}. Desc: ${transferDescription}. IP: ${ipAddress}. Ref: ${transferId}."/>
+            <where>name = 'SELF_SERVICE_TRANSFER_SUCCESS_IN_APP'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>
