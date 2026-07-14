@@ -104,6 +104,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   @Transactional
   public Object confirmTransfer(AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    user.validateHasCreatePermission("ACCOUNTTRANSFER");
 
     if (StringUtils.isBlank(request.getOtp())) {
       return generateAndSendOtp(request, user, httpRequest);

@@ -16,4 +16,5 @@ public class AccountTransferPrepareRequest {
   private String transferType; // PIN, SINPE_MOVIL, LINK_PAGO
   private String transferMode; // INMEDIATA, T_PLUS_1
   private String currencyCode; // CRC, USD - ADDED THIS FIELD
+  private String institutionAccountId;
 }
