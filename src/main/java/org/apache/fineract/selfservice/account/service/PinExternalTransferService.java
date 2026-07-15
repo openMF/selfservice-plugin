@@ -19,7 +19,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SelfServiceExternalTransferService {
+public class PinExternalTransferService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
