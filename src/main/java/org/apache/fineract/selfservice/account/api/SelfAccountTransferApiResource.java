@@ -1,9 +1,3 @@
-/**
- * Copyright since 2026 Mifos Initiative
- *
- * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
- * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
- */
 package org.apache.fineract.selfservice.account.api;
 
 import com.google.gson.Gson;
@@ -16,71 +10,89 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
-import org.apache.fineract.selfservice.account.data.*;
+import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
+import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
+import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
+import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
+import org.apache.fineract.selfservice.account.data.SelfAccountTransferData;
+import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
+import org.apache.fineract.selfservice.account.service.AccountTransferQuoteService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferReadService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferWritePlatformService;
-import org.apache.fineract.selfservice.account.service.SelfServiceExternalTransferService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
+import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
+import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/accounttransfers")
 @Component
 @Tag(
     name = "Self Account transfer",
-    description = "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) supporting SINPE, PIN, and TPT payloads")
+    description = "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) and legacy account transfers")
 @RequiredArgsConstructor
 @Slf4j
 public class SelfAccountTransferApiResource {
 
+  // ==========================================
+  // New dependencies for 3-step flow & notifications
+  // ==========================================
   private final PlatformSelfServiceSecurityContext context;
-  private final SelfAccountTransferWritePlatformService transferWritePlatformService;  
-  private final SelfServiceExternalTransferService externalTransferService;
-  private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
-  private final ApiRequestParameterHelper apiRequestParameterHelper;
+  private final SelfAccountTransferWritePlatformService transferWritePlatformService;
+  private final AccountTransferQuoteService quoteService;
+  private final SinpeExternalApiClient sinpeExternalApiClient;
+  private final SelfServiceRegistrationRepository registrationRepository;
+  private final ApplicationEventPublisher applicationEventPublisher;
+  private final Environment env;
+
+  // ==========================================
+  // Legacy dependencies restored for backward compatibility
+  // ==========================================
   private final DefaultToApiJsonSerializer<SelfAccountTransferData> toApiJsonSerializer;
-  private final DefaultToApiJsonSerializer<CommandProcessingResult> toApiJsonResultSerializer;
-  private final Gson gson = new Gson();  
+  private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final SelfAccountTransferReadService selfAccountTransferReadService;
-  
+  private final ApiRequestParameterHelper apiRequestParameterHelper;
+  private final SelfAccountTransferDataValidator dataValidator;
+  private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
+  private final ConfigurationDomainService configurationDomainService;
+  private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
+
+  // ==========================================
+  // NEW 3-STEP ENDPOINTS
+  // ==========================================
 
   @POST
   @Path("/prepare")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Prepare Transfer", description = "Validates and prepares the transfer details for SINPE, PIN, or TPT.")
-  public String prepare(
-      @QueryParam("type") @Parameter(description = "Transfer type: sinpe, pin, tpt") String type,
-      final String apiRequestBodyAsJson) {
-    
+  @Operation(summary = "Prepare Transfer", description = "Validates and prepares the transfer details.")
+  public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    
-    if ("sinpe".equalsIgnoreCase(type)) {
-        SinpeTransferRequest request = gson.fromJson(apiRequestBodyAsJson, SinpeTransferRequest.class);
-        // Add specific validation logic here if needed
-        return gson.toJson(Map.of("status", "prepared", "type", "sinpe", "data", request));
-    } else if ("pin".equalsIgnoreCase(type)) {
-        PinTransferRequest request = gson.fromJson(apiRequestBodyAsJson, PinTransferRequest.class);
-        return gson.toJson(Map.of("status", "prepared", "type", "pin", "data", request));
-    } else if ("tpt".equalsIgnoreCase(type)) {
-        TptTransferRequest request = gson.fromJson(apiRequestBodyAsJson, TptTransferRequest.class);
-        return gson.toJson(Map.of("status", "prepared", "type", "tpt", "data", request));
-    }
-    
-    throw new BadRequestException("Unsupported transfer type: " + type);
+    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    Object result = transferWritePlatformService.prepareTransfer(request);
+    return result instanceof String ? (String) result : new Gson().toJson(result);
   }
 
   @POST
@@ -88,44 +100,29 @@ public class SelfAccountTransferApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(summary = "Quote Transfer", description = "Calculates the transfer fee based on business rules.")
-  public String quote(
-      @QueryParam("type") @Parameter(description = "Transfer type: sinpe, pin, tpt") String type,
-      final String apiRequestBodyAsJson) {
-    
+  public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    
-    // Integrate with your existing quoteService here based on the type
-    // For demonstration, returning a mock quote structure
-    return gson.toJson(Map.of("status", "quoted", "type", type, "fee", 0.00, "currency", "CRC"));
+    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    Object result = transferWritePlatformService.quoteTransfer(request);
+    return result instanceof String ? (String) result : new Gson().toJson(result);
   }
 
   @POST
   @Path("/confirm")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Confirm Transfer", description = "Executes the transfer for SINPE, PIN, or TPT.")
-  public String confirm(
-      @QueryParam("type") @Parameter(description = "Transfer type: sinpe, pin, tpt") String type,
-      final String apiRequestBodyAsJson, 
-      @Context HttpServletRequest httpRequest) {
-    
+  @Operation(summary = "Confirm Transfer", description = "Sends OTP or executes the transfer if OTP is valid.")
+  public String confirm(final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    
-    if ("sinpe".equalsIgnoreCase(type)) {
-        SinpeTransferRequest request = gson.fromJson(apiRequestBodyAsJson, SinpeTransferRequest.class);
-        return externalTransferService.executeSinpeTransfer(request);
-    } else if ("pin".equalsIgnoreCase(type)) {
-        PinTransferRequest request = gson.fromJson(apiRequestBodyAsJson, PinTransferRequest.class);
-        return externalTransferService.executePinTransfer(request);
-    } else if ("tpt".equalsIgnoreCase(type)) {
-        TptTransferRequest request = gson.fromJson(apiRequestBodyAsJson, TptTransferRequest.class);
-        // For TPT, you can route to internal Fineract service or proxy as needed
-        return externalTransferService.executeTptTransfer(request);
-    }
-    
-    throw new BadRequestException("Unsupported transfer type: " + type);
+    AccountTransferConfirmRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    Object result = transferWritePlatformService.confirmTransfer(request, httpRequest);
+    return result instanceof String ? (String) result : new Gson().toJson(result);
   }
- 
+
+  // ==========================================
+  // LEGACY ENDPOINTS (Backward Compatibility)
+  // ==========================================
+
   @GET
   @Path("template")
   @Consumes({MediaType.APPLICATION_JSON})
@@ -145,9 +142,11 @@ public class SelfAccountTransferApiResource {
 
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+    
+    // This line was causing the error. The variable is now correctly declared above.
     Collection<SelfAccountTemplateData> selfTemplateData = this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
 
-    if (type.equals("tpt")) {
+    if ("tpt".equals(type)) {
       Collection<SelfAccountTemplateData> tptTemplateData = this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
       return this.toApiJsonSerializer.serialize(settings, new SelfAccountTransferData(selfTemplateData, tptTemplateData));
     }
@@ -174,6 +173,6 @@ public class SelfAccountTransferApiResource {
     
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     CommandProcessingResult result = transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
-    return toApiJsonResultSerializer.serialize(result);
+    return toApiJsonSerializer.serialize(result);
   }
 }
