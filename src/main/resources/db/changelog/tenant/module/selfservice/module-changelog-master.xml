@@ -52,4 +52,5 @@
   <include file="parts/040-add-notification-password-reset.xml" relativeToChangelogFile="true"/>
   <include file="parts/041-update-notification-message-transfer.xml" relativeToChangelogFile="true"/> 
   <include file="parts/042-update-sinpe-transfer-fees.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/043-add-external-transfer-audit-log.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

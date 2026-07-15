@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    
+    <changeSet author="fineract" id="ss-0042-1">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="m_selfservice_transfer_fees" columnName="exchange_rate"/>
+        </preConditions>
+        <comment>Drop exchange_rate column from m_selfservice_transfer_fees as it is now fetched dynamically from BCCR exchange rates</comment>
+        <dropColumn tableName="m_selfservice_transfer_fees" columnName="exchange_rate"/>
+    </changeSet>
+    <changeSet author="fineract" id="ss-0042-2">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="exchange_rate_required"/>
+            </not>
+        </preConditions>
+        <comment>Add exchange_rate_required flag to m_selfservice_transfer_fees</comment>
+        <addColumn tableName="m_selfservice_transfer_fees">
+            <column name="exchange_rate_required" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    
+    <changeSet author="fineract" id="ss-0042-3">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="exchange_rate_required"/>
+                <columnExists tableName="m_selfservice_transfer_fees" columnName="fee_currency"/>
+            </and>
+        </preConditions>
+        <comment>
+            Set exchange_rate_required = true for existing fee configurations where fee_currency is USD.
+            These fees require dynamic BCCR exchange rate lookup for CRC conversion.
+        </comment>
+        <update tableName="m_selfservice_transfer_fees">
+            <column name="exchange_rate_required" valueBoolean="true"/>
+            <where>fee_currency = 'USD'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>
