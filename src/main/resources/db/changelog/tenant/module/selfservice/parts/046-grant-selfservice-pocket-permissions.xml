@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Grant pocket link/delink permissions to the 'Self Service User' role. -->
+    <changeSet id="ss-0046-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_role_permission"/>
+            <tableExists tableName="m_permission"/>
+            <tableExists tableName="m_role"/>
+        </preConditions>
+        <sql>
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'POCKET', 'LINK_ACCOUNT_TO_POCKET', 'POCKET', 'LINK_ACCOUNT_TO', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'LINK_ACCOUNT_TO_POCKET');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'POCKET', 'DELINK_ACCOUNT_FROM_POCKET', 'POCKET', 'DELINK_ACCOUNT_FROM', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'DELINK_ACCOUNT_FROM_POCKET');
+
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM m_role r
+            CROSS JOIN m_permission p
+            WHERE r.name = 'Self Service User'
+              AND p.code IN ('LINK_ACCOUNT_TO_POCKET', 'DELINK_ACCOUNT_FROM_POCKET')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM m_role_permission rp
+                  WHERE rp.role_id = r.id
+                    AND rp.permission_id = p.id
+              );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

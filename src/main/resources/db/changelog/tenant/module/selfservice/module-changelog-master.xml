@@ -54,4 +54,6 @@
   <include file="parts/042-update-sinpe-transfer-fees.xml" relativeToChangelogFile="true"/>  
   <include file="parts/043-add-external-transfer-audit-log.xml" relativeToChangelogFile="true"/>
   <include file="parts/044-add-external-pin-system.xml" relativeToChangelogFile="true"/>
+  <include file="parts/045-create-selfservice-pocket-tables.xml" relativeToChangelogFile="true"/>
+  <include file="parts/046-grant-selfservice-pocket-permissions.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
