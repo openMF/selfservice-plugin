@@ -621,34 +621,68 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           BigDecimal feeAmount,
           String toCommissionAccountId) {
 
-    log.info("CONFIRM CONTABLE: Preparando Request virtual de comisión usando la lógica interna.");
+    log.info("CONFIRM CONTABLE: Iniciando cobro de comisión vía API REST Directa (mifos via Env).");
 
-    AccountTransferConfirmRequest commissionRequest = new AccountTransferConfirmRequest();
+    try {
+      // 1. Leer configuraciones desde las variables de entorno usando el objeto env inyectado
+      String coreUrl = this.env.getProperty("FINERACT_CORE_URL", "https://core.apolocapital.io/fineract-provider/api/v1/accounttransfers");
+      String authHeader = this.env.getProperty("FINERACT_CORE_AUTH", "Basic bWlmb3M6cGFzc3dvcmQ=");
+      String tenantId = this.env.getProperty("FINERACT_CORE_TENANT", "default");
 
-    commissionRequest.setFromAccount(request.getFromAccount());
-    commissionRequest.setFromAccountType(request.getFromAccountType());
+      // 2. Obtenemos los datos dinámicos del cliente logueado
+      AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+      Client client = user.getAppUserClientMappings().iterator().next().getClient();
+      Long fromClientId = client.getId();
+      Long fromOfficeId = client.getOffice().getId();
 
-    commissionRequest.setToAccount(toCommissionAccountId);
-    commissionRequest.setToAccountType(2); // Cuenta de ahorros/colectora interna
-    commissionRequest.setTransferAmount(feeAmount); // Cobramos solo la comisión, no el total
+      // 3. Construimos el mapa JSON con la estructura requerida
+      Map<String, Object> apiPayload = new HashMap<>();
+      apiPayload.put("fromOfficeId", fromOfficeId);
+      apiPayload.put("fromClientId", fromClientId);
+      apiPayload.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType().toString() : "2");
+      apiPayload.put("fromAccountId", request.getFromAccount());
 
-    commissionRequest.setTransferDescription("Cobro Comisión Canal " + request.getTransferType());
-    commissionRequest.setTransferDate(request.getTransferDate());
-    commissionRequest.setDateFormat(request.getDateFormat());
-    commissionRequest.setLocale(request.getLocale());
+      apiPayload.put("toOfficeId", 1);
+      apiPayload.put("toClientId", 199);
+      apiPayload.put("toAccountType", 2);
+      apiPayload.put("toAccountId", toCommissionAccountId);
 
-    // 1. Obtener el usuario del contexto (desconectado)
-    AppSelfServiceUser userDesconectado = context.authenticatedSelfServiceUser();
+      apiPayload.put("transferAmount", feeAmount);
+      apiPayload.put("transferDate", request.getTransferDate());
+      apiPayload.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
+      apiPayload.put("locale", request.getLocale() != null ? request.getLocale() : "es");
+      apiPayload.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
 
-    // 2. Buscar el usuario fresco en la BD para que JPA lo reconozca y maneje en este hilo
-    AppSelfServiceUser userManejado = this.appUserRepository.findById(userDesconectado.getId())
-            .orElseThrow(() -> new RuntimeException("Usuario Self-Service no encontrado: " + userDesconectado.getId()));
+      String jsonRequestBody = this.gson.toJson(apiPayload);
 
-    this.appUserRepository.flush(); // Aseguramos el estado actual
+      // 4. Configuramos la llamada HTTP nativa utilizando las variables del entorno
+      java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
 
-    this.executeInternalTransfer(commissionRequest, userManejado);
+      java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
+              .uri(java.net.URI.create(coreUrl))
+              .header("Authorization", authHeader)
+              .header("Content-Type", "application/json")
+              .header("Fineract-Platform-TenantId", tenantId)
+              .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonRequestBody))
+              .build();
 
-    log.info("CONFIRM CONTABLE: Comisión enviada exitosamente a través de executeInternalTransfer.");
+      log.info("CONFIRM CONTABLE: Enviando POST HTTP al endpoint configurado en entorno...");
+
+      // 5. Enviamos la petición de forma sincrónica
+      java.net.http.HttpResponse<String> httpResponse = httpClient.send(
+              httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+      // 6. Validamos la respuesta del Core de Fineract
+      if (httpResponse.statusCode() >= 200 && httpResponse.statusCode() < 300) {
+        log.info("CONFIRM CONTABLE: Comisión cobrada exitosamente vía API. Respuesta: {}", httpResponse.body());
+      } else {
+        log.error("CONFIRM CONTABLE: Error en el cobro de comisión. HTTP Status: {}. Respuesta: {}",
+                httpResponse.statusCode(), httpResponse.body());
+      }
+
+    } catch (Exception e) {
+      log.error("CONFIRM CONTABLE: Falló la petición HTTP crítica de cobro de comisión: ", e);
+    }
   }
 
 }
