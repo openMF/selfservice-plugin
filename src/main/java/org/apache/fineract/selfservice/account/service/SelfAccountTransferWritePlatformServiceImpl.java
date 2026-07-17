@@ -52,6 +52,8 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
+import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
@@ -80,6 +82,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final PinExternalTransferService pinExternalTransferService;
   private final Gson gson = new Gson();
+  private final AppSelfServiceUserRepository appUserRepository;
 
   private static final String APOLO_BANK_CODE = "373";
 
@@ -618,12 +621,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     log.info("CONFIRM CONTABLE: Preparando Request virtual de comisión usando la lógica interna.");
 
-
     AccountTransferConfirmRequest commissionRequest = new AccountTransferConfirmRequest();
 
     commissionRequest.setFromAccount(request.getFromAccount());
     commissionRequest.setFromAccountType(request.getFromAccountType());
-
 
     commissionRequest.setToAccount(toCommissionAccountId);
     commissionRequest.setToAccountType(2); // Cuenta de ahorros/colectora interna
@@ -634,8 +635,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     commissionRequest.setDateFormat(request.getDateFormat());
     commissionRequest.setLocale(request.getLocale());
 
-    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    this.executeInternalTransfer(commissionRequest, user);
+    // 1. Obtener el usuario del contexto (desconectado)
+    AppSelfServiceUser userDesconectado = context.authenticatedSelfServiceUser();
+
+    // 2. EL CAMBIO: Buscar el usuario fresco en la BD para que JPA lo reconozca y maneje en este hilo
+    AppSelfServiceUser userManejado = this.appUserRepository.findById(userDesconectado.getId())
+            .orElseThrow(() -> new RuntimeException("Usuario Self-Service no encontrado: " + userDesconectado.getId()));
+
+    // 3. Pasar el usuario manejado a tu método de transferencia interna
+    this.executeInternalTransfer(commissionRequest, userManejado);
 
     log.info("CONFIRM CONTABLE: Comisión enviada exitosamente a través de executeInternalTransfer.");
   }
