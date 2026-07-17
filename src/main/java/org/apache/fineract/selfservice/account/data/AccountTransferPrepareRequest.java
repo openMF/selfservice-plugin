@@ -5,9 +5,9 @@ import lombok.Data;
 
 @Data
 public class AccountTransferPrepareRequest {
-  private String fromAccountId;
+  private String fromAccount;
   private Integer fromAccountType;
-  private String toAccountId;
+  private String toAccount;
   private Integer toAccountType;
   private String toPhoneNumber; // Used for SINPE Móvil
   private BigDecimal transferAmount;
@@ -17,4 +17,8 @@ public class AccountTransferPrepareRequest {
   private String transferMode; // INMEDIATA, T_PLUS_1
   private String currencyCode; // CRC, USD - ADDED THIS FIELD
   private String institutionAccountId;
+  private String reference;           // ⇐ AGREGADO (Ej: "Factura-001")
+  private String locale;              // ⇐ AGREGADO (Ej: "es")
+  private String dateFormat;
+
 }

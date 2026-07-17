@@ -26,4 +26,7 @@ public interface SelfBeneficiariesTPTReadPlatformService {
   Collection<SelfAccountTemplateData> retrieveTPTSelfAccountTemplateData(AppSelfServiceUser user);
 
   Long getTransferLimit(Long id, Long accountId, Integer accountType);
+
+  // Añadido para la validación en la fase de Prepare
+  boolean isBeneficiaryRegistered(Long appUserId, String accountNumber);
 }

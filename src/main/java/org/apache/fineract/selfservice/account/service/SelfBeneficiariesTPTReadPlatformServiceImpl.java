@@ -250,4 +250,32 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     return this.jdbcTemplate.queryForObject(
         sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
   }
+
+  @Override
+  public boolean isBeneficiaryRegistered(Long appUserId, String accountNumber) {
+    if (accountNumber == null) {
+      return false;
+    }
+
+    // Limpiamos la cuenta para la consulta
+    final String cleanAccount = accountNumber.replaceAll("\\s+", "");
+
+    final StringBuilder sqlBuilder = new StringBuilder();
+    sqlBuilder.append("SELECT COUNT(*) FROM m_selfservice_beneficiaries_tpt b ");
+    sqlBuilder.append("LEFT JOIN m_savings_account s ON b.account_id = s.id AND b.account_type = 2 ");
+    sqlBuilder.append("LEFT JOIN m_loan l ON b.account_id = l.id AND b.account_type = 1 ");
+    sqlBuilder.append("WHERE b.app_selfservice_user_id = ? AND b.is_active = true ");
+    sqlBuilder.append("AND (s.account_no = ? OR l.account_no = ? OR b.custom_account_number = ?)");
+
+    Integer count = this.jdbcTemplate.queryForObject(
+            sqlBuilder.toString(),
+            Integer.class,
+            appUserId,
+            cleanAccount,
+            cleanAccount,
+            cleanAccount
+    );
+
+    return count != null && count > 0;
+  }
 }
