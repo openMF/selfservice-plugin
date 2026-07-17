@@ -614,21 +614,25 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
-    Long fromClientId = client.getId();
-    Long fromOfficeId = client.getOffice().getId();
+    // Extraemos los IDs como primitivos antes de limpiar o crear mapas
+    final Long fromClientId = client.getId();
+    final Long fromOfficeId = client.getOffice().getId();
 
     Map<String, Object> commissionCommandData = new HashMap<>();
 
+    // ORIGEN
     commissionCommandData.put("fromOfficeId", fromOfficeId);
     commissionCommandData.put("fromClientId", fromClientId);
     commissionCommandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
     commissionCommandData.put("fromAccountId", request.getFromAccount());
 
+    // DESTINO: Colector Institucional de Apolo
     commissionCommandData.put("toOfficeId", 1);
     commissionCommandData.put("toClientId", 199);
     commissionCommandData.put("toAccountType", 2);
     commissionCommandData.put("toAccountId", toCommissionAccountId);
 
+    // DATOS FINANCIEROS
     commissionCommandData.put("transferAmount", feeAmount);
     commissionCommandData.put("transferDate", request.getTransferDate());
     commissionCommandData.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
@@ -642,6 +646,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             .withJson(apiRequestBodyAsJson)
             .build();
 
+    // Desvincular cualquier estado residual para evitar conflictos de sincronización con EclipseLink
     this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
   }
 
