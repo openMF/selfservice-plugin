@@ -53,6 +53,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
+import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -83,6 +84,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PinExternalTransferService pinExternalTransferService;
   private final Gson gson = new Gson();
   private final AppSelfServiceUserRepository appUserRepository;
+  private final AppUserRepository coreUserRepository; // El repositorio nativo de AppUser de Fineract
 
   private static final String APOLO_BANK_CODE = "373";
 
@@ -638,11 +640,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     // 1. Obtener el usuario del contexto (desconectado)
     AppSelfServiceUser userDesconectado = context.authenticatedSelfServiceUser();
 
-    // 2. EL CAMBIO: Buscar el usuario fresco en la BD para que JPA lo reconozca y maneje en este hilo
+    // 2. Buscar el usuario fresco en la BD para que JPA lo reconozca y maneje en este hilo
     AppSelfServiceUser userManejado = this.appUserRepository.findById(userDesconectado.getId())
             .orElseThrow(() -> new RuntimeException("Usuario Self-Service no encontrado: " + userDesconectado.getId()));
 
-    // 3. Pasar el usuario manejado a tu método de transferencia interna
+    this.appUserRepository.flush(); // Aseguramos el estado actual
+
     this.executeInternalTransfer(commissionRequest, userManejado);
 
     log.info("CONFIRM CONTABLE: Comisión enviada exitosamente a través de executeInternalTransfer.");
