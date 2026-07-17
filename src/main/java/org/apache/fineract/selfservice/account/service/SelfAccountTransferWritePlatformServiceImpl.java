@@ -160,7 +160,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     CommandProcessingResult result;
 
-    if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+    String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
+
+    if (isInternalApoloIban(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
+      log.info("CONFIRM -> Cuenta interna de Apolo detectada (373). Ejecutando transferencia local.");
+      result = executeInternalTransfer(request, user);
+    } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
     } else if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       result = executePinTransfer(request, user);
@@ -611,43 +616,28 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           BigDecimal feeAmount,
           String toCommissionAccountId) {
 
+    log.info("CONFIRM CONTABLE: Preparando Request virtual de comisión usando la lógica interna.");
+
+
+    AccountTransferConfirmRequest commissionRequest = new AccountTransferConfirmRequest();
+
+    commissionRequest.setFromAccount(request.getFromAccount());
+    commissionRequest.setFromAccountType(request.getFromAccountType());
+
+
+    commissionRequest.setToAccount(toCommissionAccountId);
+    commissionRequest.setToAccountType(2); // Cuenta de ahorros/colectora interna
+    commissionRequest.setTransferAmount(feeAmount); // Cobramos solo la comisión, no el total
+
+    commissionRequest.setTransferDescription("Cobro Comisión Canal " + request.getTransferType());
+    commissionRequest.setTransferDate(request.getTransferDate());
+    commissionRequest.setDateFormat(request.getDateFormat());
+    commissionRequest.setLocale(request.getLocale());
+
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    this.executeInternalTransfer(commissionRequest, user);
 
-    // Extraemos los IDs como primitivos antes de limpiar o crear mapas
-    final Long fromClientId = client.getId();
-    final Long fromOfficeId = client.getOffice().getId();
-
-    Map<String, Object> commissionCommandData = new HashMap<>();
-
-    // ORIGEN
-    commissionCommandData.put("fromOfficeId", fromOfficeId);
-    commissionCommandData.put("fromClientId", fromClientId);
-    commissionCommandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
-    commissionCommandData.put("fromAccountId", request.getFromAccount());
-
-    // DESTINO: Colector Institucional de Apolo
-    commissionCommandData.put("toOfficeId", 1);
-    commissionCommandData.put("toClientId", 199);
-    commissionCommandData.put("toAccountType", 2);
-    commissionCommandData.put("toAccountId", toCommissionAccountId);
-
-    // DATOS FINANCIEROS
-    commissionCommandData.put("transferAmount", feeAmount);
-    commissionCommandData.put("transferDate", request.getTransferDate());
-    commissionCommandData.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
-    commissionCommandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
-    commissionCommandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
-
-    String apiRequestBodyAsJson = this.gson.toJson(commissionCommandData);
-
-    final CommandWrapper commandRequest = new CommandWrapperBuilder()
-            .createAccountTransfer()
-            .withJson(apiRequestBodyAsJson)
-            .build();
-
-    // Desvincular cualquier estado residual para evitar conflictos de sincronización con EclipseLink
-    this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+    log.info("CONFIRM CONTABLE: Comisión enviada exitosamente a través de executeInternalTransfer.");
   }
 
 }
