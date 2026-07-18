@@ -10,7 +10,7 @@
 
     <!-- ================= SAVINGS DEPOSIT TEMPLATES ================= -->
 
-    <changeSet author="fineract" id="ss-0044-1-1">
+    <changeSet author="fineract" id="ss-0047-1-1">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL_SUBJECT'</sqlCheck>
         </preConditions>
@@ -22,7 +22,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-1-2">
+    <changeSet author="fineract" id="ss-0047-1-2">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL'</sqlCheck>
         </preConditions>
@@ -34,7 +34,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-1-3">
+    <changeSet author="fineract" id="ss-0047-1-3">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_SMS'</sqlCheck>
         </preConditions>
@@ -46,7 +46,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-1-4">
+    <changeSet author="fineract" id="ss-0047-1-4">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_WHATSAPP'</sqlCheck>
         </preConditions>
@@ -58,7 +58,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-1-5">
+    <changeSet author="fineract" id="ss-0047-1-5">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_IN_APP'</sqlCheck>
         </preConditions>
@@ -72,7 +72,7 @@
 
     <!-- ================= SAVINGS WITHDRAWAL TEMPLATES ================= -->
 
-    <changeSet author="fineract" id="ss-0044-2-1">
+    <changeSet author="fineract" id="ss-0047-2-1">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL_SUBJECT'</sqlCheck>
         </preConditions>
@@ -84,7 +84,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-2-2">
+    <changeSet author="fineract" id="ss-0047-2-2">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL'</sqlCheck>
         </preConditions>
@@ -96,7 +96,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-2-3">
+    <changeSet author="fineract" id="ss-0047-2-3">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_SMS'</sqlCheck>
         </preConditions>
@@ -108,7 +108,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-2-4">
+    <changeSet author="fineract" id="ss-0047-2-4">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_WHATSAPP'</sqlCheck>
         </preConditions>
@@ -120,7 +120,7 @@
         </insert>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-0044-2-5">
+    <changeSet author="fineract" id="ss-0047-2-5">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_IN_APP'</sqlCheck>
         </preConditions>

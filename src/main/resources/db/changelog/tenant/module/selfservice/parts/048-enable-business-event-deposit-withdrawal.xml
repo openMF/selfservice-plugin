@@ -16,7 +16,7 @@
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_external_event_configuration 
-                WHERE type = 'SavingsDepositBusinessEvent' AND enabled=false
+                WHERE type = 'SavingsDepositBusinessEvent' AND enabled=true
             </sqlCheck>
         </preConditions>
         <update tableName="m_external_event_configuration">
@@ -31,7 +31,7 @@
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_external_event_configuration 
-                WHERE type = 'SavingsWithdrawalBusinessEvent' AND enabled=false
+                WHERE type = 'SavingsWithdrawalBusinessEvent' AND enabled=true
             </sqlCheck>
         </preConditions>
         <update tableName="m_external_event_configuration">
