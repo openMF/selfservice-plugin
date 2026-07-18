@@ -102,7 +102,16 @@ public abstract class SelfServiceIntegrationTestBase {
                 MountableFile.forHostPath("target/selfservice-plugin-1.15.0-SNAPSHOT.jar"),
                 "/app/plugins/selfservice-plugin.jar")
 
-            // Prepend the plugin JAR to the JIB container's classpath.
+            // Mount the savings-plugin dependency alongside it. The stock apache/fineract
+            // image does not ship the exchange-rate/KYC classes (BccrExchangeRateService,
+            // KycFeatureStatus) that this plugin's transfer and authentication beans depend
+            // on; savings-plugin supplies them, so without it on the classpath the context
+            // fails to boot. Copied here by maven-dependency-plugin (pre-integration-test).
+            .withCopyFileToContainer(
+                MountableFile.forHostPath("target/it-plugins/savings-plugin.jar"),
+                "/app/plugins/savings-plugin.jar")
+
+            // Prepend both plugin JARs to the JIB container's classpath.
             .withCreateContainerCmdModifier(
                 cmd -> {
                   cmd.withEntrypoint(
@@ -111,7 +120,7 @@ public abstract class SelfServiceIntegrationTestBase {
                       "CLASSPATH=$(cat /app/jib-classpath-file) && "
                           + "exec java $JAVA_TOOL_OPTIONS "
                           + "-Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Djava.security.egd=file:/dev/./urandom "
-                          + "-cp /app/plugins/selfservice-plugin.jar:$CLASSPATH "
+                          + "-cp /app/plugins/selfservice-plugin.jar:/app/plugins/savings-plugin.jar:$CLASSPATH "
                           + "org.apache.fineract.ServerApplication");
                   cmd.withCmd();
                 })

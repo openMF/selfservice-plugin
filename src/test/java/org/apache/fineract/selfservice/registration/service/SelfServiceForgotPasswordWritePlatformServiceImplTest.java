@@ -212,7 +212,6 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
     when(policy.getRegex()).thenReturn(".*");
-    when(policy.getDescription()).thenReturn("any");
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
 

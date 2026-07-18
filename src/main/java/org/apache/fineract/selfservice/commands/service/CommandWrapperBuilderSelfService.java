@@ -115,6 +115,22 @@ public class CommandWrapperBuilderSelfService {
     return this;
   }
 
+  public CommandWrapperBuilderSelfService linkAccountsToPocket() {
+    this.actionName = "LINK_ACCOUNT_TO";
+    this.entityName = "POCKET";
+    this.entityId = null;
+    this.href = "/self/pockets";
+    return this;
+  }
+
+  public CommandWrapperBuilderSelfService delinkAccountsFromPocket() {
+    this.actionName = "DELINK_ACCOUNT_FROM";
+    this.entityName = "POCKET";
+    this.entityId = null;
+    this.href = "/self/pockets";
+    return this;
+  }
+
   public CommandWrapperBuilderSelfService withLoanId(final Long withLoanId) {
     this.loanId = withLoanId;
     return this;
