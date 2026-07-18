@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ================= SAVINGS DEPOSIT TEMPLATES ================= -->
+
+    <changeSet author="fineract" id="ss-0044-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL_SUBJECT'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL_SUBJECT"/>
+            <column name="text" value="Savings Deposit Successful - Ref: ${accountNumber}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_DEPOSIT_EMAIL"/>
+            <column name="text" value="&lt;html&gt;&lt;body&gt;&#10;&lt;h2&gt;Savings Deposit Successful&lt;/h2&gt;&#10;&lt;p&gt;Dear ${firstname} ${lastname},&lt;/p&gt;&#10;&lt;p&gt;A deposit has been successfully made to your savings account.&lt;/p&gt;&#10;&lt;table style='border-collapse: collapse; width: 100%;' border='1'&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Amount:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${currency} ${amount}&lt;/td&gt;&lt;/tr&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Account Number:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${accountNumber}&lt;/td&gt;&lt;/tr&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Date:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transactionDate}&lt;/td&gt;&lt;/tr&gt;&#10;&lt;/table&gt;&#10;&lt;p&gt;Thank you for banking with us.&lt;/p&gt;&#10;&lt;/body&gt;&lt;/html&gt;"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-1-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_SMS'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_DEPOSIT_SMS"/>
+            <column name="text" value="Deposit successful. Amount: ${currency} ${amount} to account ${accountNumber} on ${transactionDate}. Thank you."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-1-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_WHATSAPP'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_DEPOSIT_WHATSAPP"/>
+            <column name="text" value="✅ *Savings Deposit Successful*\n\nDear ${firstname},\n\n💰 *Amount:* ${currency} ${amount}\n🏦 *Account:* ${accountNumber}\n📅 *Date:* ${transactionDate}\n\nThank you for banking with us."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-1-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_DEPOSIT_IN_APP'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_DEPOSIT_IN_APP"/>
+            <column name="text" value="Deposit of ${currency} ${amount} successful to account ${accountNumber} on ${transactionDate}."/>
+        </insert>
+    </changeSet>
+
+    <!-- ================= SAVINGS WITHDRAWAL TEMPLATES ================= -->
+
+    <changeSet author="fineract" id="ss-0044-2-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL_SUBJECT'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL_SUBJECT"/>
+            <column name="text" value="Savings Withdrawal Successful - Ref: ${accountNumber}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-2-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_WITHDRAWAL_EMAIL"/>
+            <column name="text" value="&lt;html&gt;&lt;body&gt;&#10;&lt;h2&gt;Savings Withdrawal Successful&lt;/h2&gt;&#10;&lt;p&gt;Dear ${firstname} ${lastname},&lt;/p&gt;&#10;&lt;p&gt;A withdrawal has been successfully made from your savings account.&lt;/p&gt;&#10;&lt;table style='border-collapse: collapse; width: 100%;' border='1'&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Amount:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${currency} ${amount}&lt;/td&gt;&lt;/tr&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Account Number:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${accountNumber}&lt;/td&gt;&lt;/tr&gt;&#10;    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Date:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${transactionDate}&lt;/td&gt;&lt;/tr&gt;&#10;&lt;/table&gt;&#10;&lt;p&gt;Thank you for banking with us.&lt;/p&gt;&#10;&lt;/body&gt;&lt;/html&gt;"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-2-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_SMS'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_WITHDRAWAL_SMS"/>
+            <column name="text" value="Withdrawal successful. Amount: ${currency} ${amount} from account ${accountNumber} on ${transactionDate}. Thank you."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-2-4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_WHATSAPP'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_WITHDRAWAL_WHATSAPP"/>
+            <column name="text" value="✅ *Savings Withdrawal Successful*\n\nDear ${firstname},\n\n💰 *Amount:* ${currency} ${amount}\n🏦 *Account:* ${accountNumber}\n📅 *Date:* ${transactionDate}\n\nThank you for banking with us."/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0044-2-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_SAVINGS_WITHDRAWAL_IN_APP'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_SAVINGS_WITHDRAWAL_IN_APP"/>
+            <column name="text" value="Withdrawal of ${currency} ${amount} successful from account ${accountNumber} on ${transactionDate}."/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

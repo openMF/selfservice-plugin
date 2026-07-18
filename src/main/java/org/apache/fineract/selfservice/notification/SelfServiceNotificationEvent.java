@@ -56,7 +56,9 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     SINPE_ENROLLMENT_SUCCESS("sinpe-enrollment-success"),
     SINPE_SUBSCRIPTION_CREATED("sinpe-subscription-created"),
     SINPE_SUBSCRIPTION_UPDATED("sinpe-subscription-updated"),
-    SINPE_SUBSCRIPTION_DELETED("sinpe-subscription-deleted");
+    SINPE_SUBSCRIPTION_DELETED("sinpe-subscription-deleted"),
+    SAVINGS_DEPOSIT("savings-deposit"),
+    SAVINGS_WITHDRAWAL("savings-withdrawal");
 
     private final String templatePrefix;
 

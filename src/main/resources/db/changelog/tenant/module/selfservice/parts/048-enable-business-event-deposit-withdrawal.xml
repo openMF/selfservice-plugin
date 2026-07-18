@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ================= EXTERNAL EVENT CONFIGURATIONS ================= -->
+
+    <!-- Savings Deposit Business Event -->
+    <changeSet author="fineract" id="ss-0045-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_external_event_configuration 
+                WHERE type = 'SavingsDepositBusinessEvent' AND enabled=false
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_external_event_configuration">
+            <column name="enabled" valueBoolean="true"/>
+            <where>type = 'SavingsDepositBusinessEvent'</where>
+        </update>
+        <comment>Enable SavingsDepositBusinessEvent for external event publishing</comment>
+    </changeSet>
+
+    <!-- Savings Withdrawal Business Event -->
+    <changeSet author="fineract" id="ss-0045-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_external_event_configuration 
+                WHERE type = 'SavingsWithdrawalBusinessEvent' AND enabled=false
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_external_event_configuration">
+            <column name="enabled" valueBoolean="true"/>
+            <where>type = 'SavingsWithdrawalBusinessEvent'</where>
+        </update>
+        <comment>Enable SavingsWithdrawalBusinessEvent for external event publishing</comment>
+    </changeSet>
+
+</databaseChangeLog>

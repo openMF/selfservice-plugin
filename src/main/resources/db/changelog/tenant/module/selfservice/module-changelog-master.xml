@@ -56,4 +56,6 @@
   <include file="parts/044-add-external-pin-system.xml" relativeToChangelogFile="true"/>
   <include file="parts/045-create-selfservice-pocket-tables.xml" relativeToChangelogFile="true"/>
   <include file="parts/046-grant-selfservice-pocket-permissions.xml" relativeToChangelogFile="true"/>
+  <include file="parts/047-add-notification-messages-deposit-withdrawal.xml" relativeToChangelogFile="true"/>
+  <include file="parts/048-enable-business-event-deposit-withdrawal.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

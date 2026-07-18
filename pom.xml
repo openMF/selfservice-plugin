@@ -87,6 +87,11 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
       <scope>compile</scope>
+    </dependency>    
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-activemq</artifactId>  <!-- or jms -->
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -177,6 +182,13 @@
         <artifactId>savings-plugin</artifactId>
         <version>${fineract.version}</version>
         <scope>compile</scope>
+    </dependency>
+    <!-- ADD THIS EXPLICIT AVRO DEPENDENCY -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>1.11.3</version>
+      <scope>compile</scope>
     </dependency>
     <!-- Apache Fineract Libraries -->
     <dependency>
