@@ -277,14 +277,16 @@ public class SelfPocketApiIntegrationTest extends SelfServiceIntegrationTestBase
             + ". Body: "
             + delinkResponse.body().asString());
 
-    // 4. Confirm the account is no longer linked.
+    // 4. Confirm the account is no longer linked. The only linked account was just delinked,
+    // so the pocket is empty and the retrieve endpoint returns 204 No Content (an empty body
+    // therefore cannot contain the account).
     String afterDelinkBody =
         given(
                 SelfServiceTestUtils.requestSpecWithAuth(
                     getFineractPort(), seed.username(), "password"))
             .get(POCKETS_PATH)
             .then()
-            .statusCode(200)
+            .statusCode(204)
             .extract()
             .body()
             .asString();
