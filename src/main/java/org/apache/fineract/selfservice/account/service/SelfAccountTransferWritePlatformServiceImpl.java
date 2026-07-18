@@ -271,20 +271,20 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   private CommandProcessingResult executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
-    log.info("CONFIRM PIN: Iniciando flujo PIN con validación preventiva de catálogo y moneda dinámica.");
+    log.info("CONFIRM PIN: Iniciando flujo PIN con validación estricta de metadatos de destino y origen.");
 
     try {
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
       boolean yaEsBeneficiario = this.isAlreadyRegisteredAsBeneficiary(user.getId(), request.getToAccount());
       if (yaEsBeneficiario) {
-        log.warn("CONFIRM PIN: La cuenta destino {} ya se encuentra guardada en sus beneficiarios.", request.getToAccount());
+        log.warn("CONFIRM PIN: La cuenta destino {} ya se encuentra registrada en beneficiarios.", request.getToAccount());
       }
 
-      String destinationName = "Beneficiario Externo";
-      String destinationId = "0";
-      String destinationIdType = "0";
-      String dynamicCurrencyCode = "CRC"; // Fallback en colones
+      String destinationName = null;
+      String destinationId = null;
+      String destinationIdType = null;
+      String dynamicCurrencyCode = null;
 
       try {
         log.info("CONFIRM PIN: Invocando getAccountInfo para resolver metadata del IBAN destino.");
@@ -296,20 +296,44 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           if (infoMap != null) {
             if (infoMap.get("holder") != null) destinationName = infoMap.get("holder").toString();
             if (infoMap.get("holderId") != null) destinationId = infoMap.get("holderId").toString();
+            if (infoMap.get("currencyCode") != null) dynamicCurrencyCode = infoMap.get("currencyCode").toString();
+
             if (infoMap.get("holderIdType") != null) {
               Double idTypeDouble = Double.parseDouble(infoMap.get("holderIdType").toString());
               destinationIdType = String.valueOf(idTypeDouble.intValue());
             }
-            if (infoMap.get("currencyCode") != null) {
-              dynamicCurrencyCode = infoMap.get("currencyCode").toString();
-            }
-            log.info("CONFIRM PIN: Datos destino resueltos -> Holder: {}, Moneda: {}", destinationName, dynamicCurrencyCode);
           }
-        } else {
-          log.warn("CONFIRM PIN: getAccountInfo devolvió una respuesta inválida. Aplicando fallbacks operacionales.");
         }
       } catch (Exception e) {
-        log.error("CONFIRM PIN: Error al procesar o parsear la respuesta del account info destino: ", e);
+        log.error("CONFIRM PIN: Error al consultar account info en la pasarela externa: ", e);
+        throw new IllegalArgumentException("No se pudieron verificar los datos de la cuenta destino. Intente más tarde.");
+      }
+
+      if (StringUtils.isBlank(destinationName) || StringUtils.isBlank(dynamicCurrencyCode)) {
+        log.error("CONFIRM PIN: Abortando transferencia. Datos de destino incompletos. Holder: {}, Moneda: {}", destinationName, dynamicCurrencyCode);
+        throw new IllegalArgumentException("La cuenta destino no devolvió información válida de titular o divisa. Transferencia cancelada.");
+      }
+
+      String originName = null;
+
+      if (client != null) {
+        if (StringUtils.isNotBlank(client.getDisplayName())) {
+          originName = client.getDisplayName();
+        } else if (StringUtils.isNotBlank(client.getFullname())) {
+          originName = client.getFullname();
+        } else {
+
+          StringBuilder sb = new StringBuilder();
+          if (StringUtils.isNotBlank(client.getFirstname())) sb.append(client.getFirstname().trim());
+          if (StringUtils.isNotBlank(client.getMiddlename())) sb.append(" ").append(client.getMiddlename().trim());
+          if (StringUtils.isNotBlank(client.getLastname())) sb.append(" ").append(client.getLastname().trim());
+          originName = sb.toString().trim();
+        }
+      }
+
+      if (StringUtils.isBlank(originName)) {
+        log.error("CONFIRM PIN: Abortando transferencia. No se pudo determinar el nombre del cliente origen en Fineract.");
+        throw new IllegalArgumentException("No se pudo verificar la identidad del cliente origen. Transferencia cancelada para evitar rechazos externos.");
       }
 
       org.apache.fineract.selfservice.account.data.PinTransferRequest pinRequest =
@@ -317,40 +341,45 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
-      pinRequest.setDescription(request.getTransferDescription() != null ? request.getTransferDescription() : "Transferencia PIN");
-      pinRequest.setOriginCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : "0");
+      pinRequest.setDescription(StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "Transferencia PIN");
+
+
+      pinRequest.setOriginCustomerName(originName);
+      pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
+      pinRequest.setOriginCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : client.getAccountNumber());
       pinRequest.setOriginIdType("0");
-      pinRequest.setDestinationEmail("");
-      pinRequest.setOriginCustomerName(client.getFullname());
-      pinRequest.setOriginIban(request.getFromAccount());
-
-
-      pinRequest.setDestinationCustomerId(destinationId);
-      pinRequest.setDestinationIdType(destinationIdType);
-      pinRequest.setDestinationCustomerName(destinationName);
-      pinRequest.setDestinationIban(request.getToAccount());
-
       pinRequest.setOriginEmail(user.getEmail() != null ? user.getEmail() : "");
+
+      pinRequest.setDestinationIban(request.getToAccount().replaceAll("\\s+", ""));
+      pinRequest.setDestinationCustomerName(destinationName);
+      pinRequest.setDestinationCustomerId(destinationId != null ? destinationId : "0");
+      pinRequest.setDestinationIdType(destinationIdType != null ? destinationIdType : "0");
+      pinRequest.setDestinationEmail("");
+
+      // Metadata del Sistema
       pinRequest.setBranchName("Apolo");
-      pinRequest.setReference(request.getReference() != null ? request.getReference() : "Ref-PIN");
+      pinRequest.setReference(StringUtils.isNotBlank(request.getReference()) ? request.getReference() : "Ref-PIN");
       pinRequest.setDebitIban(true);
 
-      log.info("CONFIRM PIN: Despachando fondos vía PinExternalTransferService...");
+      log.info("CONFIRM PIN: Datos validados con éxito. Despachando fondos hacia la pasarela externa...");
       String pinServiceResponse = this.pinExternalTransferService.executePinTransfer(pinRequest);
 
       if (pinServiceResponse != null && (pinServiceResponse.contains("\"disabled\"") || pinServiceResponse.contains("\"error\""))) {
         throw new IllegalArgumentException("La pasarela externa PIN rechazó la transacción.");
       }
 
-      log.info("CONFIRM PIN: Procesado correctamente por el servicio externo.");
+      log.info("CONFIRM PIN: Procesado y debitado correctamente por el servicio externo.");
 
       return new org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder()
               .withEntityId(client.getId())
               .withCommandId(request.getOtp() != null ? Long.valueOf(request.getOtp().replaceAll("\\D+", "")) : 1L)
               .build();
 
+    } catch (IllegalArgumentException e) {
+      // Relanzamos las excepciones controladas para que viajen limpias al frontend de la App
+      throw e;
     } catch (Exception e) {
-      log.error("CONFIRM PIN: Error crítico ejecutando la transferencia PIN: ", e);
+      log.error("CONFIRM PIN: Error crítico inesperado ejecutando la transferencia PIN: ", e);
       throw new RuntimeException("Error al procesar transferencia externa por PIN.", e);
     }
   }
