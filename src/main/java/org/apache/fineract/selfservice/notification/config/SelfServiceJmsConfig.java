@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.notification.config;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -27,7 +33,7 @@ public class SelfServiceJmsConfig {
     @Value("${fineract.external.events.jms.concurrency:3-10}")
     private String concurrency;
 
-    @Value("${fineract.external.events.jms.prefetch:10}")
+    @Value("${fineract.external.events.jms.prefetch:1}")
     private int prefetch;
 
     @Value("${fineract.external.events.jms.recovery-interval:5000}")
