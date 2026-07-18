@@ -83,8 +83,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final PinExternalTransferService pinExternalTransferService;
   private final Gson gson = new Gson();
-  private final AppSelfServiceUserRepository appUserRepository;
-  private final AppUserRepository coreUserRepository; // El repositorio nativo de AppUser de Fineract
 
   private static final String APOLO_BANK_CODE = "373";
 
@@ -202,7 +200,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     final CommandWrapper commandRequest = new CommandWrapperBuilder().createAccountTransfer().withJson(apiRequestBodyAsJson).build();
     CommandProcessingResult result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
 
-    publishTransferEvent(result, params,params, httpRequest);
+    publishTransferEvent(result, params, params, httpRequest);
     return result;
   }
 
@@ -212,7 +210,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
-    // ⚡ CORRECCIÓN: Registramos el OTP amarrado a la cuenta origen (fromAccount) del usuario logueado
     SelfServiceRegistration registration = SelfServiceRegistration.instance(
             client, client.getAccountNumber(), client.getFirstname(), client.getMiddlename(), client.getLastname(),
             request.getFromAccount(),
@@ -274,9 +271,88 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   private CommandProcessingResult executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
-    String pinRequestBody = this.gson.toJson(request);
-    this.pinExternalTransferService.getAccountInfo(request.getToAccount());
-    return new CommandProcessingResultBuilder().withEntityId(0L).build();
+    log.info("CONFIRM PIN: Iniciando flujo PIN con validación preventiva de catálogo y moneda dinámica.");
+
+    try {
+      Client client = user.getAppUserClientMappings().iterator().next().getClient();
+
+      boolean yaEsBeneficiario = this.isAlreadyRegisteredAsBeneficiary(user.getId(), request.getToAccount());
+      if (yaEsBeneficiario) {
+        log.warn("CONFIRM PIN: La cuenta destino {} ya se encuentra guardada en sus beneficiarios.", request.getToAccount());
+      }
+
+      String destinationName = "Beneficiario Externo";
+      String destinationId = "0";
+      String destinationIdType = "0";
+      String dynamicCurrencyCode = "CRC"; // Fallback en colones
+
+      try {
+        log.info("CONFIRM PIN: Invocando getAccountInfo para resolver metadata del IBAN destino.");
+        String infoJsonResponse = this.pinExternalTransferService.getAccountInfo(request.getToAccount());
+
+        if (infoJsonResponse != null && !infoJsonResponse.contains("\"disabled\"") && !infoJsonResponse.contains("\"error\"")) {
+          Map<String, Object> infoMap = this.gson.fromJson(infoJsonResponse, Map.class);
+
+          if (infoMap != null) {
+            if (infoMap.get("holder") != null) destinationName = infoMap.get("holder").toString();
+            if (infoMap.get("holderId") != null) destinationId = infoMap.get("holderId").toString();
+            if (infoMap.get("holderIdType") != null) {
+              Double idTypeDouble = Double.parseDouble(infoMap.get("holderIdType").toString());
+              destinationIdType = String.valueOf(idTypeDouble.intValue());
+            }
+            if (infoMap.get("currencyCode") != null) {
+              dynamicCurrencyCode = infoMap.get("currencyCode").toString();
+            }
+            log.info("CONFIRM PIN: Datos destino resueltos -> Holder: {}, Moneda: {}", destinationName, dynamicCurrencyCode);
+          }
+        } else {
+          log.warn("CONFIRM PIN: getAccountInfo devolvió una respuesta inválida. Aplicando fallbacks operacionales.");
+        }
+      } catch (Exception e) {
+        log.error("CONFIRM PIN: Error al procesar o parsear la respuesta del account info destino: ", e);
+      }
+
+      org.apache.fineract.selfservice.account.data.PinTransferRequest pinRequest =
+              new org.apache.fineract.selfservice.account.data.PinTransferRequest();
+
+      pinRequest.setAmount(request.getTransferAmount());
+      pinRequest.setCurrency(dynamicCurrencyCode);
+      pinRequest.setDescription(request.getTransferDescription() != null ? request.getTransferDescription() : "Transferencia PIN");
+      pinRequest.setOriginCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : "0");
+      pinRequest.setOriginIdType("0");
+      pinRequest.setDestinationEmail("");
+      pinRequest.setOriginCustomerName(client.getFullname());
+      pinRequest.setOriginIban(request.getFromAccount());
+
+
+      pinRequest.setDestinationCustomerId(destinationId);
+      pinRequest.setDestinationIdType(destinationIdType);
+      pinRequest.setDestinationCustomerName(destinationName);
+      pinRequest.setDestinationIban(request.getToAccount());
+
+      pinRequest.setOriginEmail(user.getEmail() != null ? user.getEmail() : "");
+      pinRequest.setBranchName("Apolo");
+      pinRequest.setReference(request.getReference() != null ? request.getReference() : "Ref-PIN");
+      pinRequest.setDebitIban(true);
+
+      log.info("CONFIRM PIN: Despachando fondos vía PinExternalTransferService...");
+      String pinServiceResponse = this.pinExternalTransferService.executePinTransfer(pinRequest);
+
+      if (pinServiceResponse != null && (pinServiceResponse.contains("\"disabled\"") || pinServiceResponse.contains("\"error\""))) {
+        throw new IllegalArgumentException("La pasarela externa PIN rechazó la transacción.");
+      }
+
+      log.info("CONFIRM PIN: Procesado correctamente por el servicio externo.");
+
+      return new org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder()
+              .withEntityId(client.getId())
+              .withCommandId(request.getOtp() != null ? Long.valueOf(request.getOtp().replaceAll("\\D+", "")) : 1L)
+              .build();
+
+    } catch (Exception e) {
+      log.error("CONFIRM PIN: Error crítico ejecutando la transferencia PIN: ", e);
+      throw new RuntimeException("Error al procesar transferencia externa por PIN.", e);
+    }
   }
 
   private CommandProcessingResult executeInternalTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
@@ -520,7 +596,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   private void validateDestinationAccount(Long appUserId, String destinationAccount, String transferType) {
-    boolean isBeneficiaryActive = tptBeneficiaryReadPlatformService.isBeneficiaryRegistered(appUserId, destinationAccount);
+    // 🎯 DESACOPLADO: Ahora consume el método unificado privado
+    boolean isBeneficiaryActive = isAlreadyRegisteredAsBeneficiary(appUserId, destinationAccount);
 
     if (isBeneficiaryActive) {
       log.info("PREPARE: La cuenta destino {} ya está dada de alta y activa como beneficiario.", destinationAccount);
@@ -582,9 +659,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     String cleanAccount = accountIdentifier.replaceAll("\\s+", "").toUpperCase();
 
     if (cleanAccount.length() >= 8 && cleanAccount.startsWith("CR")) {
-
       String bankSegment = cleanAccount.substring(4, 8);
-
       return bankSegment.contains(APOLO_BANK_CODE);
     }
     return false;
@@ -624,28 +699,23 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("CONFIRM CONTABLE: Iniciando cobro de comisión vía API REST Directa (mifos via Env).");
 
     try {
-      // 1. Leer configuraciones desde las variables de entorno usando el objeto env inyectado
       String coreUrl = this.env.getProperty("FINERACT_CORE_URL", "https://core.apolocapital.io/fineract-provider/api/v1/accounttransfers");
       String authHeader = this.env.getProperty("FINERACT_CORE_AUTH", "Basic bWlmb3M6cGFzc3dvcmQ=");
       String tenantId = this.env.getProperty("FINERACT_CORE_TENANT", "default");
 
-      // 2. Obtenemos los datos dinámicos del cliente logueado
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
       Long fromClientId = client.getId();
       Long fromOfficeId = client.getOffice().getId();
 
-      // (Extracción de los últimos 7 dígitos sin ceros a la izquierda)
       Long internalSavingsAccountId = null;
       try {
         String cleanAccount = request.getFromAccount().replaceAll("\\s+", "");
 
         if (cleanAccount.length() >= 7) {
-          // Tomamos exactamente los últimos 7 dígitos (ej: de "CR92037300110010000087" a "0000087")
           String last7Digits = cleanAccount.substring(cleanAccount.length() - 7);
           log.info("CONFIRM CONTABLE: Mapeando últimos 7 dígitos del IBAN: {}", last7Digits);
 
-          // Removemos todos los ceros iniciales antes de que aparezca el primer número significativo
           String cleanDigits = last7Digits.replaceFirst("^0+", "");
 
           if (cleanDigits.isEmpty()) {
@@ -655,7 +725,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           internalSavingsAccountId = Long.valueOf(cleanDigits);
           log.info("CONFIRM CONTABLE: ID de cuenta resuelto con éxito: {}", internalSavingsAccountId);
         } else {
-          // Si la cuenta entrante es más corta que 7 dígitos, validamos si es numérica pura
           if (cleanAccount.matches("\\d+")) {
             internalSavingsAccountId = Long.valueOf(cleanAccount);
           }
@@ -664,31 +733,26 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         log.error("CONFIRM CONTABLE: Error procesando la extracción de los últimos 7 dígitos para la cuenta: {}", request.getFromAccount(), e);
       }
 
-      // Fallback de seguridad por si el formato del IBAN falla por completo
       if (internalSavingsAccountId == null) {
         log.warn("CONFIRM CONTABLE: Activando ID de cuenta de contingencia por defecto.");
         internalSavingsAccountId = 87L;
       }
 
-      // 4. Construimos el mapa JSON con la estructura numérica limpia que requiere el Core
       Map<String, Object> apiPayload = new HashMap<>();
       apiPayload.put("fromOfficeId", fromOfficeId);
       apiPayload.put("fromClientId", fromClientId);
       apiPayload.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType().toString() : "2");
-
-      // ⚡ ID Numérico puro inyectado aquí (ej: 87) para evitar el NumberFormatException
       apiPayload.put("fromAccountId", internalSavingsAccountId);
 
       apiPayload.put("toOfficeId", 1);
       apiPayload.put("toClientId", 199);
       apiPayload.put("toAccountType", 2);
-      apiPayload.put("toAccountId", Integer.parseInt(toCommissionAccountId)); // Convierte "139" o "140" a entero limpio
+      apiPayload.put("toAccountId", Integer.parseInt(toCommissionAccountId));
 
       apiPayload.put("transferAmount", feeAmount);
       apiPayload.put("transferDate", request.getTransferDate());
       apiPayload.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
 
-      // Parámetros obligatorios para evitar que el motor de plantillas/notificaciones falle
       apiPayload.put("fromClientName", client.getDisplayName() != null ? client.getDisplayName() : client.getFirstname());
       apiPayload.put("toClientName", "Colectora Apolo");
 
@@ -697,9 +761,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       String jsonRequestBody = this.gson.toJson(apiPayload);
 
-      // 5. Configuramos y ejecutamos la llamada HTTP nativa (Bypass total del contexto JPA de EclipseLink)
       java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
-
       java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
               .uri(java.net.URI.create(coreUrl))
               .header("Authorization", authHeader)
@@ -709,20 +771,35 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
               .build();
 
       log.info("CONFIRM CONTABLE: Enviando POST HTTP al endpoint configurado en entorno...");
+      java.net.http.HttpResponse<String> httpResponse = httpClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
 
-      java.net.http.HttpResponse<String> httpResponse = httpClient.send(
-              httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-      // 6. Validamos el estatus de la respuesta del API de Fineract
       if (httpResponse.statusCode() >= 200 && httpResponse.statusCode() < 300) {
         log.info("CONFIRM CONTABLE: Comisión cobrada exitosamente vía API. Respuesta: {}", httpResponse.body());
       } else {
-        log.error("CONFIRM CONTABLE: Error en el cobro de comisión. HTTP Status: {}. Respuesta: {}",
-                httpResponse.statusCode(), httpResponse.body());
+        log.error("CONFIRM CONTABLE: Error en el cobro de comisión. HTTP Status: {}. Respuesta: {}", httpResponse.statusCode(), httpResponse.body());
       }
 
     } catch (Exception e) {
       log.error("CONFIRM CONTABLE: Falló la petición HTTP crítica de cobro de comisión: ", e);
+    }
+  }
+
+  /**
+   * Comprueba de manera unificada si una cuenta destino ya se encuentra
+   * registrada en los beneficiarios TPT activos del cliente.
+   */
+  private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
+    if (destinationAccount == null || destinationAccount.isBlank()) {
+      return false;
+    }
+    try {
+      String cleanAccount = destinationAccount.replaceAll("\\s+", "");
+      boolean isRegistered = this.tptBeneficiaryReadPlatformService.isBeneficiaryRegistered(appUserId, cleanAccount);
+      log.info("VALIDACIÓN BENEFICIARIO: ¿La cuenta {} pertenece a los beneficiarios del usuario {}?: {}", cleanAccount, appUserId, isRegistered);
+      return isRegistered;
+    } catch (Exception e) {
+      log.error("VALIDACIÓN BENEFICIARIO: Error al ejecutar la consulta sobre m_selfservice_beneficiaries_tpt para la cuenta: {}", destinationAccount, e);
+      return false;
     }
   }
 
