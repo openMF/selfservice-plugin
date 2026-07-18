@@ -542,6 +542,41 @@
           </execution>
         </executions>
       </plugin>
+      <!-- Copy the savings-plugin dependency next to the built plugin JAR so the
+           integration-test Fineract container can mount both on its classpath. The
+           self-service plugin is compiled against community.mifos:savings-plugin, which
+           supplies the exchange-rate and KYC classes (e.g. BccrExchangeRateService,
+           KycFeatureStatus) that the stock apache/fineract image does not ship. Without it
+           on the runtime classpath the plugin's Spring context fails to boot, so every
+           *IntegrationTest fails to start the container. Runs before Failsafe; consumed by
+           SelfServiceIntegrationTestBase. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>copy-it-runtime-plugins</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>community.mifos</groupId>
+                  <artifactId>savings-plugin</artifactId>
+                  <version>${fineract.version}</version>
+                  <type>jar</type>
+                  <overWrite>true</overWrite>
+                  <outputDirectory>${project.build.directory}/it-plugins</outputDirectory>
+                  <destFileName>savings-plugin.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <!-- JaCoCo: coverage for unit tests (jacoco.exec) and integration tests (jacoco-it.exec) -->
       <plugin>
         <groupId>org.jacoco</groupId>

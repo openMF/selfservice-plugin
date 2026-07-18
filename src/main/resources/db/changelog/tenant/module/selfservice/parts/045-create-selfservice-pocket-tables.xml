@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="ss-0045-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_pocket"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_pocket">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="app_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint columnNames="app_user_id" constraintName="unique_app_user"
+                             tableName="m_pocket"/>
+    </changeSet>
+
+    <changeSet id="ss-0045-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_pocket_accounts_mapping"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_pocket_accounts_mapping">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="pocket_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_type" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_number" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint columnNames="pocket_id, account_id, account_type"
+                             constraintName="m_pocket_account_unique_mapping"
+                             tableName="m_pocket_accounts_mapping"/>
+
+        <addForeignKeyConstraint constraintName="fk_m_pocket_accounts_mapping_m_pocket"
+                                 baseTableName="m_pocket_accounts_mapping" baseColumnNames="pocket_id"
+                                 referencedTableName="m_pocket" referencedColumnNames="id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+
+        <createIndex indexName="idx_m_pocket_accounts_mapping_pocket_id"
+                     tableName="m_pocket_accounts_mapping">
+            <column name="pocket_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
