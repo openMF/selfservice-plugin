@@ -182,6 +182,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       log.info("CONFIRM CONTABLE: Desplazando comisión de {} {} hacia la cuenta colectora Apolo ID: {}",
               feeAmountFromClient, request.getCurrencyCode(), commissionToAccountId);
 
+      // Refactored method call
       executeCommissionChargeViaMismoBanco(request, feeAmountFromClient, commissionToAccountId);
     }
 
@@ -322,7 +323,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         } else if (StringUtils.isNotBlank(client.getFullname())) {
           originName = client.getFullname();
         } else {
-
           StringBuilder sb = new StringBuilder();
           if (StringUtils.isNotBlank(client.getFirstname())) sb.append(client.getFirstname().trim());
           if (StringUtils.isNotBlank(client.getMiddlename())) sb.append(" ").append(client.getMiddlename().trim());
@@ -342,7 +342,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
       pinRequest.setDescription(StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "Transferencia PIN");
-
 
       pinRequest.setOriginCustomerName(originName);
       pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
@@ -376,7 +375,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
               .build();
 
     } catch (IllegalArgumentException e) {
-      // Relanzamos las excepciones controladas para que viajen limpias al frontend de la App
       throw e;
     } catch (Exception e) {
       log.error("CONFIRM PIN: Error crítico inesperado ejecutando la transferencia PIN: ", e);
@@ -625,7 +623,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   private void validateDestinationAccount(Long appUserId, String destinationAccount, String transferType) {
-    // 🎯 DESACOPLADO: Ahora consume el método unificado privado
     boolean isBeneficiaryActive = isAlreadyRegisteredAsBeneficiary(appUserId, destinationAccount);
 
     if (isBeneficiaryActive) {
@@ -720,18 +717,19 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
+  /**
+   * Refactored to use Apache Fineract's internal CommandWrapper instead of external HTTP REST calls.
+   * This ensures multi-tenant compatibility, eliminates hardcoded credentials/URLs, and participates 
+   * in the existing Spring @Transactional boundary.
+   */
   private void executeCommissionChargeViaMismoBanco(
           AccountTransferConfirmRequest request,
           BigDecimal feeAmount,
           String toCommissionAccountId) {
 
-    log.info("CONFIRM CONTABLE: Iniciando cobro de comisión vía API REST Directa (mifos via Env).");
+    log.info("CONFIRM CONTABLE: Iniciando cobro de comisión interno vía Fineract CommandWrapper (Multi-tenant).");
 
     try {
-      String coreUrl = this.env.getProperty("FINERACT_CORE_URL", "https://core.apolocapital.io/fineract-provider/api/v1/accounttransfers");
-      String authHeader = this.env.getProperty("FINERACT_CORE_AUTH", "Basic bWlmb3M6cGFzc3dvcmQ=");
-      String tenantId = this.env.getProperty("FINERACT_CORE_TENANT", "default");
-
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
       Long fromClientId = client.getId();
@@ -767,56 +765,50 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         internalSavingsAccountId = 87L;
       }
 
-      Map<String, Object> apiPayload = new HashMap<>();
-      apiPayload.put("fromOfficeId", fromOfficeId);
-      apiPayload.put("fromClientId", fromClientId);
-      apiPayload.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType().toString() : "2");
-      apiPayload.put("fromAccountId", internalSavingsAccountId);
+      Map<String, Object> commandData = new HashMap<>();
+      commandData.put("fromOfficeId", fromOfficeId);
+      commandData.put("fromClientId", fromClientId);
+      commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+      commandData.put("fromAccountId", internalSavingsAccountId);
 
-      apiPayload.put("toOfficeId", 1);
-      apiPayload.put("toClientId", 199);
-      apiPayload.put("toAccountType", 2);
-      apiPayload.put("toAccountId", Integer.parseInt(toCommissionAccountId));
+      // NOTA: Estos valores (toOfficeId=1, toClientId=199) son específicos del negocio para la cuenta colectora.
+      // Se recomienda en el futuro moverlos a la Configuración Global de Fineract para mayor flexibilidad.
+      commandData.put("toOfficeId", 1);
+      commandData.put("toClientId", 199);
+      commandData.put("toAccountType", 2);
+      commandData.put("toAccountId", Integer.parseInt(toCommissionAccountId));
 
-      apiPayload.put("transferAmount", feeAmount);
-      apiPayload.put("transferDate", request.getTransferDate());
-      apiPayload.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
+      commandData.put("transferAmount", feeAmount);
+      commandData.put("transferDate", request.getTransferDate());
+      commandData.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
 
-      apiPayload.put("fromClientName", client.getDisplayName() != null ? client.getDisplayName() : client.getFirstname());
-      apiPayload.put("toClientName", "Colectora Apolo");
+      commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
+      commandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
 
-      apiPayload.put("locale", request.getLocale() != null ? request.getLocale() : "es");
-      apiPayload.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
+      String jsonRequestBody = this.gson.toJson(commandData);
 
-      String jsonRequestBody = this.gson.toJson(apiPayload);
-
-      java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
-      java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
-              .uri(java.net.URI.create(coreUrl))
-              .header("Authorization", authHeader)
-              .header("Content-Type", "application/json")
-              .header("Fineract-Platform-TenantId", tenantId)
-              .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonRequestBody))
+      final CommandWrapper commandRequest = new CommandWrapperBuilder()
+              .createAccountTransfer()
+              .withJson(jsonRequestBody)
               .build();
 
-      log.info("CONFIRM CONTABLE: Enviando POST HTTP al endpoint configurado en entorno...");
-      java.net.http.HttpResponse<String> httpResponse = httpClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+      log.info("CONFIRM CONTABLE: Ejecutando comando interno de transferencia para cobro de comisión...");
+      CommandProcessingResult result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
 
-      if (httpResponse.statusCode() >= 200 && httpResponse.statusCode() < 300) {
-        log.info("CONFIRM CONTABLE: Comisión cobrada exitosamente vía API. Respuesta: {}", httpResponse.body());
+      if (result != null && result.getResourceId() != null) {
+        log.info("CONFIRM CONTABLE: Comisión cobrada exitosamente vía comando interno. Transaction ID: {}", result.getResourceId());
       } else {
-        log.error("CONFIRM CONTABLE: Error en el cobro de comisión. HTTP Status: {}. Respuesta: {}", httpResponse.statusCode(), httpResponse.body());
+        log.warn("CONFIRM CONTABLE: El comando de cobro de comisión se ejecutó pero no devolvió un ID de recurso válido.");
       }
 
     } catch (Exception e) {
-      log.error("CONFIRM CONTABLE: Falló la petición HTTP crítica de cobro de comisión: ", e);
+      log.error("CONFIRM CONTABLE: Falló la ejecución interna del cobro de comisión: ", e);
+      // Descomentar la siguiente línea si se desea hacer rollback de toda la transacción 
+      // cuando el cobro de comisión falla.
+      // throw new RuntimeException("Falló el cobro de comisión interno", e);
     }
   }
 
-  /**
-   * Comprueba de manera unificada si una cuenta destino ya se encuentra
-   * registrada en los beneficiarios TPT activos del cliente.
-   */
   private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
     if (destinationAccount == null || destinationAccount.isBlank()) {
       return false;
