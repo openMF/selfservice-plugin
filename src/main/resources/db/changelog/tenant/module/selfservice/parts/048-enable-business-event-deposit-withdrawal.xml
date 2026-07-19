@@ -12,7 +12,7 @@
     <!-- ================= EXTERNAL EVENT CONFIGURATIONS ================= -->
 
     <!-- Savings Deposit Business Event -->
-    <changeSet author="fineract" id="ss-0045-1-1">
+    <changeSet author="fineract" id="ss-0048-1-1">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_external_event_configuration 
@@ -27,7 +27,7 @@
     </changeSet>
 
     <!-- Savings Withdrawal Business Event -->
-    <changeSet author="fineract" id="ss-0045-1-2">
+    <changeSet author="fineract" id="ss-0048-1-2">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_external_event_configuration 

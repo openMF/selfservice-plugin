@@ -58,4 +58,6 @@
   <include file="parts/046-grant-selfservice-pocket-permissions.xml" relativeToChangelogFile="true"/>
   <include file="parts/047-add-notification-messages-deposit-withdrawal.xml" relativeToChangelogFile="true"/>
   <include file="parts/048-enable-business-event-deposit-withdrawal.xml" relativeToChangelogFile="true"/>
+  <include file="parts/049-add-account-for-fees.xml" relativeToChangelogFile="true"/>
+  
 </databaseChangeLog>

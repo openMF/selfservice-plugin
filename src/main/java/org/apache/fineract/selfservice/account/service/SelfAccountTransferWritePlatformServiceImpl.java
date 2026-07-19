@@ -45,6 +45,7 @@ import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValid
 import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
+import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
@@ -82,6 +83,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final OfficeReadPlatformService officeReadPlatformService;
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final PinExternalTransferService pinExternalTransferService;
+  private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final Gson gson = new Gson();
 
   private static final String APOLO_BANK_CODE = "373";
@@ -165,8 +167,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
-    if (isInternalApoloIban(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
-      log.info("CONFIRM -> Cuenta interna de Apolo detectada (373). Ejecutando transferencia local.");
+    if (isSameBankIbanAccount(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
+      log.info("CONFIRM -> Cuenta interna detectada (373). Ejecutando transferencia local.");
       result = executeInternalTransfer(request, user);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
@@ -177,13 +179,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
-      String commissionToAccountId = "USD".equalsIgnoreCase(request.getCurrencyCode()) ? "140" : "139";
-
-      log.info("CONFIRM CONTABLE: Desplazando comisión de {} {} hacia la cuenta colectora Apolo ID: {}",
-              feeAmountFromClient, request.getCurrencyCode(), commissionToAccountId);
+      log.info("CONFIRM CONTABLE: Desplazando comisión de {} {} hacia la cuenta colectora configurada en c_external_service.",
+              feeAmountFromClient, request.getCurrencyCode());
 
       // Refactored method call
-      executeCommissionChargeViaSameBank(request, feeAmountFromClient, commissionToAccountId);
+      executeCommissionChargeViaSameBank(request, feeAmountFromClient);
     }
 
     publishFastPaymentTransferEvent(result, request, httpRequest);
@@ -634,7 +634,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanAccount = destinationAccount.replaceAll("\\s+", "");
 
-    if ("PIN".equalsIgnoreCase(transferType) || "MISMO_BANCO".equalsIgnoreCase(transferType) || isInternalApoloIban(cleanAccount)) {
+    if ("PIN".equalsIgnoreCase(transferType) || "MISMO_BANCO".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
       log.info("PREPARE [PIN / Mismo Banco]: Validando cuenta mediante PinExternalTransferService.getAccountInfo");
 
       try {
@@ -677,7 +677,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
   }
 
-  private boolean isInternalApoloIban(String accountIdentifier) {
+  private boolean isSameBankIbanAccount(String accountIdentifier) {
     if (accountIdentifier == null) {
       return false;
     }
@@ -718,18 +718,36 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   /**
-   * Refactored to use Apache Fineract's internal CommandWrapper instead of external HTTP REST calls.
-   * This ensures multi-tenant compatibility, eliminates hardcoded credentials/URLs, and participates 
-   * in the existing Spring @Transactional boundary.
+   * Refactored to use Apache Fineract's c_external_service and c_external_service_properties tables.
+   * This ensures dynamic multi-tenant configuration, eliminates hardcoded values, and respects
+   * a boolean toggle to enable/disable the transfer fee collection.
    */
   private void executeCommissionChargeViaSameBank(
           AccountTransferConfirmRequest request,
-          BigDecimal feeAmount,
-          String toCommissionAccountId) {
+          BigDecimal feeAmount) {
 
     log.info("CONFIRM CONTABLE: Iniciando cobro de comisión interno vía Fineract CommandWrapper (Multi-tenant).");
 
     try {
+      // 1. Fetch dynamic configuration from c_external_service tables
+      Map<String, String> config = externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
+      
+      boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
+      if (!isTransferFeeEnabled) {
+          log.info("CONFIRM CONTABLE: El cobro de comisión está deshabilitado en la configuración externa (c_external_service).");
+          return;
+      }
+
+      Long toOfficeId = Long.parseLong(config.getOrDefault("to_office_id", "1"));
+      Long toClientId = Long.parseLong(config.getOrDefault("to_client_id", "199"));
+      Integer toAccountType = Integer.parseInt(config.getOrDefault("to_account_type", "2"));
+      
+      // Determine target account based on currency
+      String toAccountIdStr = "USD".equalsIgnoreCase(request.getCurrencyCode()) 
+              ? config.getOrDefault("to_account_id_usd", "140") 
+              : config.getOrDefault("to_account_id_crc", "139");
+      Long toAccountId = Long.parseLong(toAccountIdStr);
+
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
       Long fromClientId = client.getId();
@@ -761,8 +779,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       }
 
       if (internalSavingsAccountId == null) {
-        log.warn("CONFIRM CONTABLE: Activando ID de cuenta de contingencia por defecto.");
-        internalSavingsAccountId = 87L;
+        log.warn("CONFIRM CONTABLE: Activando ID de cuenta de contingencia por defecto.");        
       }
 
       Map<String, Object> commandData = new HashMap<>();
@@ -771,12 +788,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
       commandData.put("fromAccountId", internalSavingsAccountId);
 
-      // NOTA: Estos valores (toOfficeId=1, toClientId=199) son específicos del negocio para la cuenta colectora.
-      // Se recomienda en el futuro moverlos a la Configuración Global de Fineract para mayor flexibilidad.
-      commandData.put("toOfficeId", 1);
-      commandData.put("toClientId", 199);
-      commandData.put("toAccountType", 2);
-      commandData.put("toAccountId", Integer.parseInt(toCommissionAccountId));
+      // Inject dynamic values retrieved from database
+      commandData.put("toOfficeId", toOfficeId);
+      commandData.put("toClientId", toClientId);
+      commandData.put("toAccountType", toAccountType);
+      commandData.put("toAccountId", toAccountId);
 
       commandData.put("transferAmount", feeAmount);
       commandData.put("transferDate", request.getTransferDate());
