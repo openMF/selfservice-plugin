@@ -56,9 +56,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SelfAccountTransferApiResource {
 
-  // ==========================================
-  // New dependencies for 3-step flow & notifications
-  // ==========================================
   private final PlatformSelfServiceSecurityContext context;
   private final SelfAccountTransferWritePlatformService transferWritePlatformService;
   private final AccountTransferQuoteService quoteService;
@@ -67,9 +64,6 @@ public class SelfAccountTransferApiResource {
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
-  // ==========================================
-  // Legacy dependencies restored for backward compatibility
-  // ==========================================
   private final DefaultToApiJsonSerializer<SelfAccountTransferData> toApiJsonSerializer;
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final SelfAccountTransferReadService selfAccountTransferReadService;
@@ -78,10 +72,6 @@ public class SelfAccountTransferApiResource {
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
   private final ConfigurationDomainService configurationDomainService;
   private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
-
-  // ==========================================
-  // NEW 3-STEP ENDPOINTS
-  // ==========================================
 
   @POST
   @Path("/prepare")
@@ -119,10 +109,6 @@ public class SelfAccountTransferApiResource {
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
 
-  // ==========================================
-  // LEGACY ENDPOINTS (Backward Compatibility)
-  // ==========================================
-
   @GET
   @Path("template")
   @Consumes({MediaType.APPLICATION_JSON})
@@ -143,7 +129,6 @@ public class SelfAccountTransferApiResource {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     
-    // This line was causing the error. The variable is now correctly declared above.
     Collection<SelfAccountTemplateData> selfTemplateData = this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
 
     if ("tpt".equals(type)) {
