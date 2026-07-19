@@ -91,7 +91,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   @Override
   @Transactional
   public Object prepareTransfer(final AccountTransferPrepareRequest request) {
-    log.info("PREPARE: Procesando nueva petición de transferencia entrante desde el DTO.");
+    log.info("PREPARE: Processing new incoming transfer request from DTO.");
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
 
@@ -104,18 +104,18 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     final String reference = request.getReference();
 
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new IllegalArgumentException("El monto de la transferencia (transferAmount) debe ser mayor a cero.");
+      throw new IllegalArgumentException("The transfer amount (transferAmount) must be greater than zero.");
     }
     if (toAccount == null || toAccount.isBlank()) {
-      throw new IllegalArgumentException("La cuenta o número destino (toAccount) es requerido.");
+      throw new IllegalArgumentException("The destination account or number (toAccount) is required.");
     }
     if (fromAccount == null || fromAccount.isBlank()) {
-      throw new IllegalArgumentException("La cuenta origen (fromAccount) es requerida.");
+      throw new IllegalArgumentException("The source account (fromAccount) is required.");
     }
 
     validateDestinationAccount(currentUser.getId(), toAccount, transferType);
 
-    log.info("PREPARE: Validando estado y fondos de la cuenta origen local: {}", fromAccount);
+    log.info("PREPARE: Validating status and funds of the local source account: {}", fromAccount);
 
     Map<String, Object> prepareResponse = new HashMap<>();
     prepareResponse.put("status", "PREPARED");
@@ -124,22 +124,22 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     prepareResponse.put("transferAmount", transferAmount);
     prepareResponse.put("transferType", transferType);
     prepareResponse.put("currencyCode", currencyCode);
-    prepareResponse.put("message", "La cuenta destino fue verificada y el estado es apto para proceder a cotización.");
+    prepareResponse.put("message", "The destination account was verified and the status is suitable to proceed with the quote.");
 
-    log.info("PREPARE: Transferencia validada y preparada con éxito hacia el destino: {}", toAccount);
+    log.info("PREPARE: Transfer successfully validated and prepared for destination: {}", toAccount);
     return prepareResponse;
   }
 
   @Override
   @Transactional
   public Object quoteTransfer(final AccountTransferPrepareRequest request) {
-    log.info("QUOTE: Iniciando cotización para canal: {}", request.getTransferType());
+    log.info("QUOTE: Starting quote for channel: {}", request.getTransferType());
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
 
     final AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
 
-    log.info("QUOTE: Cotización calculada. Disparando nuevo envío de OTP de seguridad.");
+    log.info("QUOTE: Quote calculated. Triggering new security OTP dispatch.");
 
     String destinationTarget = "SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())
             ? request.getToPhoneNumber()
@@ -160,7 +160,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     BigDecimal feeAmountFromClient = request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
 
-    log.info("CONFIRM: Iniciando procesamiento de doble paso para canal: {} | Comisión: {}",
+    log.info("CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
             request.getTransferType(), feeAmountFromClient);
 
     CommandProcessingResult result;
@@ -168,7 +168,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
     if (isSameBankIbanAccount(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
-      log.info("CONFIRM -> Cuenta interna detectada. Ejecutando transferencia local.");
+      log.info("CONFIRM -> Internal account detected. Executing local transfer.");
       result = executeInternalTransfer(request, user);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
@@ -179,7 +179,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
-      log.info("CONFIRM CONTABLE: Desplazando comisión de {} {} hacia la cuenta colectora configurada en c_external_service.",
+      log.info("ACCOUNTING CONFIRM: Shifting fee of {} {} to the collector account configured in c_external_service.",
               feeAmountFromClient, request.getCurrencyCode());
 
       executeCommissionChargeViaSameBank(request, feeAmountFromClient);
@@ -271,14 +271,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   }
 
   private CommandProcessingResult executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
-    log.info("CONFIRM PIN: Iniciando flujo PIN con validación estricta de metadatos de destino y origen.");
+    log.info("CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
 
     try {
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
       boolean yaEsBeneficiario = this.isAlreadyRegisteredAsBeneficiary(user.getId(), request.getToAccount());
       if (yaEsBeneficiario) {
-        log.warn("CONFIRM PIN: La cuenta destino {} ya se encuentra registrada en beneficiarios.", request.getToAccount());
+        log.warn("CONFIRM PIN: The destination account {} is already registered in beneficiaries.", request.getToAccount());
       }
 
       String destinationName = null;
@@ -287,7 +287,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       String dynamicCurrencyCode = null;
 
       try {
-        log.info("CONFIRM PIN: Invocando getAccountInfo para resolver metadata del IBAN destino.");
+        log.info("CONFIRM PIN: Invoking getAccountInfo to resolve destination IBAN metadata.");
         String infoJsonResponse = this.pinExternalTransferService.getAccountInfo(request.getToAccount());
 
         if (infoJsonResponse != null && !infoJsonResponse.contains("\"disabled\"") && !infoJsonResponse.contains("\"error\"")) {
@@ -305,13 +305,13 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           }
         }
       } catch (Exception e) {
-        log.error("CONFIRM PIN: Error al consultar account info en la pasarela externa: ", e);
-        throw new IllegalArgumentException("No se pudieron verificar los datos de la cuenta destino. Intente más tarde.");
+        log.error("CONFIRM PIN: Error querying account info on the external gateway: ", e);
+        throw new IllegalArgumentException("Destination account data could not be verified. Please try again later.");
       }
 
       if (StringUtils.isBlank(destinationName) || StringUtils.isBlank(dynamicCurrencyCode)) {
-        log.error("CONFIRM PIN: Abortando transferencia. Datos de destino incompletos. Holder: {}, Moneda: {}", destinationName, dynamicCurrencyCode);
-        throw new IllegalArgumentException("La cuenta destino no devolvió información válida de titular o divisa. Transferencia cancelada.");
+        log.error("CONFIRM PIN: Aborting transfer. Incomplete destination data. Holder: {}, Currency: {}", destinationName, dynamicCurrencyCode);
+        throw new IllegalArgumentException("The destination account did not return valid holder or currency information. Transfer canceled.");
       }
 
       String originName = null;
@@ -331,8 +331,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       }
 
       if (StringUtils.isBlank(originName)) {
-        log.error("CONFIRM PIN: Abortando transferencia. No se pudo determinar el nombre del cliente origen en Fineract.");
-        throw new IllegalArgumentException("No se pudo verificar la identidad del cliente origen. Transferencia cancelada para evitar rechazos externos.");
+        log.error("CONFIRM PIN: Aborting transfer. Could not determine the origin client name in Fineract.");
+        throw new IllegalArgumentException("Origin client identity could not be verified. Transfer canceled to avoid external rejections.");
       }
 
       org.apache.fineract.selfservice.account.data.PinTransferRequest pinRequest =
@@ -340,7 +340,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
-      pinRequest.setDescription(StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "Transferencia PIN");
+      pinRequest.setDescription(StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "PIN Transfer");
 
       pinRequest.setOriginCustomerName(originName);
       pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
@@ -358,19 +358,19 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       Map<String, String> sinpeProps = getSinpeProperties();
       String branchName = sinpeProps.getOrDefault("branchName", "Default"); // Fallback to "Default" if not found
 
-      // Metadata del Sistema
+      // System Metadata
       pinRequest.setBranchName(branchName);
       pinRequest.setReference(StringUtils.isNotBlank(request.getReference()) ? request.getReference() : "Ref-PIN");
       pinRequest.setDebitIban(true);
 
-      log.info("CONFIRM PIN: Datos validados con éxito. Despachando fondos hacia la pasarela externa...");
+      log.info("CONFIRM PIN: Data successfully validated. Dispatching funds to the external gateway...");
       String pinServiceResponse = this.pinExternalTransferService.executePinTransfer(pinRequest);
 
       if (pinServiceResponse != null && (pinServiceResponse.contains("\"disabled\"") || pinServiceResponse.contains("\"error\""))) {
-        throw new IllegalArgumentException("La pasarela externa PIN rechazó la transacción.");
+        throw new IllegalArgumentException("The external PIN gateway rejected the transaction.");
       }
 
-      log.info("CONFIRM PIN: Procesado y debitado correctamente por el servicio externo.");
+      log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
 
       return new org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder()
               .withEntityId(client.getId())
@@ -380,8 +380,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     } catch (IllegalArgumentException e) {
       throw e;
     } catch (Exception e) {
-      log.error("CONFIRM PIN: Error crítico inesperado ejecutando la transferencia PIN: ", e);
-      throw new RuntimeException("Error al procesar transferencia externa por PIN.", e);
+      log.error("CONFIRM PIN: Unexpected critical error executing PIN transfer: ", e);
+      throw new RuntimeException("Error processing external PIN transfer.", e);
     }
   }
 
@@ -399,7 +399,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     commandData.put("toAccountId", request.getToAccount());
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", request.getTransferDate());
-    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Transferencia Interna");
+    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
     commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
     commandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
 
@@ -629,53 +629,53 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     boolean isBeneficiaryActive = isAlreadyRegisteredAsBeneficiary(appUserId, destinationAccount);
 
     if (isBeneficiaryActive) {
-      log.info("PREPARE: La cuenta destino {} ya está dada de alta y activa como beneficiario.", destinationAccount);
+      log.info("PREPARE: The destination account {} is already registered and active as a beneficiary.", destinationAccount);
       return;
     }
 
-    log.info("PREPARE: Cuenta destino no registrada previamente. Evaluando canal para: {}", transferType);
+    log.info("PREPARE: Destination account not previously registered. Evaluating channel for: {}", transferType);
 
     String cleanAccount = destinationAccount.replaceAll("\\s+", "");
 
     if ("PIN".equalsIgnoreCase(transferType) || "MISMO_BANCO".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
-      log.info("PREPARE [PIN / Mismo Banco]: Validando cuenta mediante PinExternalTransferService.getAccountInfo");
+      log.info("PREPARE [PIN / Same Bank]: Validating account via PinExternalTransferService.getAccountInfo");
 
       try {
         String accountInfoResponse = pinExternalTransferService.getAccountInfo(cleanAccount);
 
         if (accountInfoResponse == null || accountInfoResponse.contains("\"disabled\"")) {
-          throw new IllegalArgumentException("El servicio de validación de cuentas (PIN/Mismo Banco) no está disponible.");
+          throw new IllegalArgumentException("The account validation service (PIN/Same Bank) is not available.");
         }
 
         Map<String, Object> accountData = gson.fromJson(accountInfoResponse, Map.class);
 
         if (accountData.containsKey("error") || accountData.containsKey("message") && accountInfoResponse.contains("not found")) {
-          throw new IllegalArgumentException("La cuenta destino no existe en el sistema financiero.");
+          throw new IllegalArgumentException("The destination account does not exist in the financial system.");
         }
 
         String state = String.valueOf(accountData.get("state"));
         String stateDescription = String.valueOf(accountData.get("stateDescription"));
 
         if (!"1".equals(state) && !"Active".equalsIgnoreCase(stateDescription)) {
-          throw new IllegalArgumentException("La cuenta destino existe pero no está activa (Estado: " + stateDescription + ").");
+          throw new IllegalArgumentException("The destination account exists but is not active (Status: " + stateDescription + ").");
         }
 
         String holderName = String.valueOf(accountData.get("holder"));
-        log.info("PREPARE [PIN / Mismo Banco]: Cuenta verificada exitosamente. Titular: {}, Banco: {}",
+        log.info("PREPARE [PIN / Same Bank]: Account successfully verified. Holder: {}, Bank: {}",
                 holderName, accountData.get("entityName"));
 
       } catch (IllegalArgumentException e) {
         throw e;
       } catch (Exception e) {
-        log.error("Error al validar la cuenta vía PIN/Mismo Banco: {}", e.getMessage());
-        throw new IllegalArgumentException("No se pudo verificar la existencia o el estado de la cuenta.");
+        log.error("Error validating account via PIN/Same Bank: {}", e.getMessage());
+        throw new IllegalArgumentException("Could not verify the existence or status of the account.");
       }
 
     } else if ("SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
-      log.info("PREPARE [SINPE]: Ejecutando flujo de validación específico para SINPE.");
+      log.info("PREPARE [SINPE]: Executing specific validation flow for SINPE.");
 
     } else {
-      log.warn("PREPARE: No se pudo determinar el canal de validación para la cuenta: {} con tipo: {}",
+      log.warn("PREPARE: Could not determine the validation channel for account: {} with type: {}",
               destinationAccount, transferType);
     }
   }
@@ -728,14 +728,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           AccountTransferConfirmRequest request,
           BigDecimal feeAmount) {
 
-    log.info("CONFIRM CONTABLE: Iniciando cobro de comisión interno vía Fineract CommandWrapper (Multi-tenant).");
+    log.info("ACCOUNTING CONFIRM: Starting internal fee collection via Fineract CommandWrapper (Multi-tenant).");
 
     try {
       Map<String, String> config = externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
       
       boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
       if (!isTransferFeeEnabled) {
-          log.info("CONFIRM CONTABLE: El cobro de comisión está deshabilitado en la configuración externa (c_external_service).");
+          log.info("ACCOUNTING CONFIRM: Fee collection is disabled in the external configuration (c_external_service).");
           return;
       }
 
@@ -759,7 +759,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         if (cleanAccount.length() >= 7) {
           String last7Digits = cleanAccount.substring(cleanAccount.length() - 7);
-          log.info("CONFIRM CONTABLE: Mapeando últimos 7 dígitos del IBAN: {}", last7Digits);
+          log.info("ACCOUNTING CONFIRM: Mapping last 7 digits of IBAN: {}", last7Digits);
 
           String cleanDigits = last7Digits.replaceFirst("^0+", "");
 
@@ -768,18 +768,18 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
           }
 
           internalSavingsAccountId = Long.valueOf(cleanDigits);
-          log.info("CONFIRM CONTABLE: ID de cuenta resuelto con éxito: {}", internalSavingsAccountId);
+          log.info("ACCOUNTING CONFIRM: Account ID successfully resolved: {}", internalSavingsAccountId);
         } else {
           if (cleanAccount.matches("\\d+")) {
             internalSavingsAccountId = Long.valueOf(cleanAccount);
           }
         }
       } catch (Exception e) {
-        log.error("CONFIRM CONTABLE: Error procesando la extracción de los últimos 7 dígitos para la cuenta: {}", request.getFromAccount(), e);
+        log.error("ACCOUNTING CONFIRM: Error processing the extraction of the last 7 digits for account: {}", request.getFromAccount(), e);
       }
 
       if (internalSavingsAccountId == null) {
-        log.warn("CONFIRM CONTABLE: Activando ID de cuenta de contingencia por defecto.");        
+        log.warn("ACCOUNTING CONFIRM: Activating default contingency account ID.");        
       }
 
       Map<String, Object> commandData = new HashMap<>();
@@ -795,7 +795,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       commandData.put("transferAmount", feeAmount);
       commandData.put("transferDate", request.getTransferDate());
-      commandData.put("transferDescription", "Cobro Comisión Canal " + request.getTransferType());
+      commandData.put("transferDescription", "Fee Collection Channel " + request.getTransferType());
 
       commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
       commandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
@@ -807,17 +807,17 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
               .withJson(jsonRequestBody)
               .build();
 
-      log.info("CONFIRM CONTABLE: Ejecutando comando interno de transferencia para cobro de comisión...");
+      log.info("ACCOUNTING CONFIRM: Executing internal transfer command for fee collection...");
       CommandProcessingResult result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
 
       if (result != null && result.getResourceId() != null) {
-        log.info("CONFIRM CONTABLE: Comisión cobrada exitosamente vía comando interno. Transaction ID: {}", result.getResourceId());
+        log.info("ACCOUNTING CONFIRM: Fee successfully collected via internal command. Transaction ID: {}", result.getResourceId());
       } else {
-        log.warn("CONFIRM CONTABLE: El comando de cobro de comisión se ejecutó pero no devolvió un ID de recurso válido.");
+        log.warn("ACCOUNTING CONFIRM: Fee collection command executed but did not return a valid resource ID.");
       }
 
     } catch (Exception e) {
-      log.error("CONFIRM CONTABLE: Falló la ejecución interna del cobro de comisión: ", e);
+      log.error("ACCOUNTING CONFIRM: Internal fee collection execution failed: ", e);
     }
   }
 
@@ -828,10 +828,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     try {
       String cleanAccount = destinationAccount.replaceAll("\\s+", "");
       boolean isRegistered = this.tptBeneficiaryReadPlatformService.isBeneficiaryRegistered(appUserId, cleanAccount);
-      log.info("VALIDACIÓN BENEFICIARIO: ¿La cuenta {} pertenece a los beneficiarios del usuario {}?: {}", cleanAccount, appUserId, isRegistered);
+      log.info("BENEFICIARY VALIDATION: Does account {} belong to the beneficiaries of user {}?: {}", cleanAccount, appUserId, isRegistered);
       return isRegistered;
     } catch (Exception e) {
-      log.error("VALIDACIÓN BENEFICIARIO: Error al ejecutar la consulta sobre m_selfservice_beneficiaries_tpt para la cuenta: {}", destinationAccount, e);
+      log.error("BENEFICIARY VALIDATION: Error executing query on m_selfservice_beneficiaries_tpt for account: {}", destinationAccount, e);
       return false;
     }
   }
