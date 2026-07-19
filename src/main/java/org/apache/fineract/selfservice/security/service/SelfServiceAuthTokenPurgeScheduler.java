@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.security.service;
 
 import java.time.LocalDateTime;
@@ -10,9 +16,9 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsService;
 import org.apache.fineract.selfservice.security.domain.SelfServiceAuthenticationTokenRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 @Slf4j
@@ -25,8 +31,8 @@ public class SelfServiceAuthTokenPurgeScheduler {
 
   private final SelfServiceAuthenticationTokenRepository repository;
   private final TenantDetailsService tenantDetailsService;
-  private final Environment env;
   private final FineractProperties fineractProperties;
+  private final TransactionTemplate transactionTemplate; // Injected by Spring Boot
 
   @Scheduled(cron = "${mifos.self.service.token.purge.cron:0 0 * * * *}")
   public void purgeExpiredTokens() {
@@ -41,22 +47,26 @@ public class SelfServiceAuthTokenPurgeScheduler {
 
     for (FineractPlatformTenant tenant : tenants) {
       try {
-        // CRITICAL: Set the tenant context BEFORE the repository call.
-        // This ensures the routing datasource connects to the correct tenant schema.
+        // CRITICAL: Set the tenant context
         ThreadLocalContextUtil.setTenant(tenant);
 
-        // The repository method is transactional by default in Spring Data JPA.
-        // By calling it here, the transaction starts within the correct tenant context.
-        repository.deleteByExpiresAtBefore(LocalDateTime.now());
+        // Execute delete inside a transaction for the current tenant
+        transactionTemplate.execute(status -> {
+          repository.deleteByExpiresAtBefore(LocalDateTime.now());
+          return null;
+        });
+
+        log.debug("Successfully purged expired tokens for tenant: {}", tenant.getTenantIdentifier());
       } catch (Exception e) {
-        log.error(
-            "Expired auth token purge failed for tenant: {}", tenant.getTenantIdentifier(), e);
-        // Continue to next tenant — one failure must not block others
+        log.error("Expired auth token purge failed for tenant: {}", 
+            tenant.getTenantIdentifier(), e);
+        // Continue with next tenant
       } finally {
-        // CRITICAL: Always clear the context to prevent leaking to other tasks on the same thread
+        // CRITICAL: Always clear tenant context to prevent leakage
         ThreadLocalContextUtil.clearTenant();
       }
     }
+
     log.info("Expired auth token purge cycle completed for {} tenant(s)", tenants.size());
   }
 
