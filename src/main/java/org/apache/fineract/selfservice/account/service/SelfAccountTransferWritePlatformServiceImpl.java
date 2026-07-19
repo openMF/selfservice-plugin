@@ -183,7 +183,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
               feeAmountFromClient, request.getCurrencyCode(), commissionToAccountId);
 
       // Refactored method call
-      executeCommissionChargeViaMismoBanco(request, feeAmountFromClient, commissionToAccountId);
+      executeCommissionChargeViaSameBank(request, feeAmountFromClient, commissionToAccountId);
     }
 
     publishFastPaymentTransferEvent(result, request, httpRequest);
@@ -722,7 +722,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
    * This ensures multi-tenant compatibility, eliminates hardcoded credentials/URLs, and participates 
    * in the existing Spring @Transactional boundary.
    */
-  private void executeCommissionChargeViaMismoBanco(
+  private void executeCommissionChargeViaSameBank(
           AccountTransferConfirmRequest request,
           BigDecimal feeAmount,
           String toCommissionAccountId) {
