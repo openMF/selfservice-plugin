@@ -13,7 +13,7 @@
     <changeSet id="ss-0049-1-1" author="fineract">
         <preConditions onFail="MARK_RAN">
             <not>
-                <sqlCheck expectedResult="0">
+                <sqlCheck expectedResult="1">
                     SELECT COUNT(*) FROM c_external_service WHERE name = 'INSTITUTION_ACCOUNT_FOR_FEES'
                 </sqlCheck>
             </not>
