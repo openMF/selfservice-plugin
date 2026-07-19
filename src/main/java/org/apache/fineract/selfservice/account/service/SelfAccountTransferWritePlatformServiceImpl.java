@@ -47,7 +47,6 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
-import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
@@ -155,17 +154,19 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
             request.getTransferType(), feeAmountFromClient);
 
-    CommandProcessingResult result;
-
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
+    // Handle PIN transfer separately to return the custom response structure
+    if ("PIN".equalsIgnoreCase(request.getTransferType())) {
+      return executePinTransfer(request, user);
+    }
+
+    CommandProcessingResult result;
     if (isSameBankIbanAccount(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
       result = executeInternalTransfer(request, user);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
-    } else if ("PIN".equalsIgnoreCase(request.getTransferType())) {
-      result = executePinTransfer(request, user);
     } else {
       result = executeInternalTransfer(request, user);
     }
@@ -262,7 +263,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     return new CommandProcessingResultBuilder().withEntityId(0L).build();
   }
 
-  private CommandProcessingResult executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
+  private Object executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     log.info("CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
 
     try {
@@ -362,10 +363,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
 
-      return new org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder()
-              .withEntityId(client.getId())
-              .withCommandId(request.getOtp() != null ? Long.valueOf(request.getOtp().replaceAll("\\D+", "")) : 1L)
-              .build();
+      // Parse the external response and wrap it in the desired structure
+      Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
+      
+      Map<String, Object> response = new HashMap<>();
+      response.put("transferType", "PIN");
+      response.put("data", externalData);
+
+      return response;
 
     } catch (IllegalArgumentException e) {
       throw e;
@@ -411,8 +416,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       Map<String, Object> contextData = new HashMap<>();
       
-      // CRITICAL FIX: Ensure ALL fields expected by the template are present with safe defaults
-      // to prevent Freemarker parsing errors when variables are missing.
       contextData.put("transactionAmount", request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "N/A");
       contextData.put("fromAccountNumber", StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -421,7 +424,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       contextData.put("transactionDate", StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      // Fetch client info for fromClientName safely
       try {
         Client client = user.getAppUserClientMappings().iterator().next().getClient();
         contextData.put("fromClientName", StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
@@ -429,7 +431,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         contextData.put("fromClientName", "N/A");
       }
       
-      // toClientName, fromOfficeName, toOfficeName might not be available in 3-step flow without extra lookup, default to N/A safely
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
@@ -474,7 +475,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
   private void resolveClientAndOfficeNames(Map<String, Object> contextData,
                                            Map<String, Object> params, Map<String, Object> originalParams) {
-    // Initialize with safe defaults to guarantee Freemarker never sees a missing key
     contextData.putIfAbsent("fromClientName", "N/A");
     contextData.putIfAbsent("fromOfficeName", "N/A");
     contextData.putIfAbsent("toClientName", "N/A");
