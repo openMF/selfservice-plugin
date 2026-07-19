@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-
  Copyright since 2026 Mifos Initiative
  
  <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
  of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 -->
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -62,6 +60,19 @@
         <insert tableName="c_external_service_properties">
             <column name="name" value="isEnabled"/>
             <column name="value" value="false"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'SinpeService')"/>
+        </insert>
+
+        <!-- Dynamic Bank Code and Branch Name for SINPE -->
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="bankCode"/>
+            <column name="value" value="0"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'SinpeService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="branchName"/>
+            <column name="value" value="Default"/>
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'SinpeService')"/>
         </insert>
         

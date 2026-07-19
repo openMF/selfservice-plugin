@@ -59,6 +59,7 @@ import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,9 +85,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final PinExternalTransferService pinExternalTransferService;
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
+  private final JdbcTemplate jdbcTemplate; // Injected for dynamic SINPE properties lookup
   private final Gson gson = new Gson();
-
-  private static final String APOLO_BANK_CODE = "373";
 
   @Override
   @Transactional
@@ -168,7 +168,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
     if (isSameBankIbanAccount(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
-      log.info("CONFIRM -> Cuenta interna detectada (373). Ejecutando transferencia local.");
+      log.info("CONFIRM -> Cuenta interna detectada. Ejecutando transferencia local.");
       result = executeInternalTransfer(request, user);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
@@ -182,7 +182,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       log.info("CONFIRM CONTABLE: Desplazando comisión de {} {} hacia la cuenta colectora configurada en c_external_service.",
               feeAmountFromClient, request.getCurrencyCode());
 
-      // Refactored method call
       executeCommissionChargeViaSameBank(request, feeAmountFromClient);
     }
 
@@ -355,8 +354,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       pinRequest.setDestinationIdType(destinationIdType != null ? destinationIdType : "0");
       pinRequest.setDestinationEmail("");
 
+      // Fetch dynamic SINPE properties from database
+      Map<String, String> sinpeProps = getSinpeProperties();
+      String branchName = sinpeProps.getOrDefault("branchName", "Default"); // Fallback to "Default" if not found
+
       // Metadata del Sistema
-      pinRequest.setBranchName("Apolo");
+      pinRequest.setBranchName(branchName);
       pinRequest.setReference(StringUtils.isNotBlank(request.getReference()) ? request.getReference() : "Ref-PIN");
       pinRequest.setDebitIban(true);
 
@@ -682,11 +685,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       return false;
     }
 
+    // Fetch dynamic bank code from database
+    Map<String, String> sinpeProps = getSinpeProperties();
+    String bankCode = sinpeProps.getOrDefault("bankCode", "0"); // Fallback to "0" if not found
+
     String cleanAccount = accountIdentifier.replaceAll("\\s+", "").toUpperCase();
 
     if (cleanAccount.length() >= 8 && cleanAccount.startsWith("CR")) {
       String bankSegment = cleanAccount.substring(4, 8);
-      return bankSegment.contains(APOLO_BANK_CODE);
+      return bankSegment.contains(bankCode);
     }
     return false;
   }
@@ -717,11 +724,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
-  /**
-   * Refactored to use Apache Fineract's c_external_service and c_external_service_properties tables.
-   * This ensures dynamic multi-tenant configuration, eliminates hardcoded values, and respects
-   * a boolean toggle to enable/disable the transfer fee collection.
-   */
   private void executeCommissionChargeViaSameBank(
           AccountTransferConfirmRequest request,
           BigDecimal feeAmount) {
@@ -729,7 +731,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("CONFIRM CONTABLE: Iniciando cobro de comisión interno vía Fineract CommandWrapper (Multi-tenant).");
 
     try {
-      // 1. Fetch dynamic configuration from c_external_service tables
       Map<String, String> config = externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
       
       boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
@@ -742,7 +743,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       Long toClientId = Long.parseLong(config.getOrDefault("to_client_id", "199"));
       Integer toAccountType = Integer.parseInt(config.getOrDefault("to_account_type", "2"));
       
-      // Determine target account based on currency
       String toAccountIdStr = "USD".equalsIgnoreCase(request.getCurrencyCode()) 
               ? config.getOrDefault("to_account_id_usd", "140") 
               : config.getOrDefault("to_account_id_crc", "139");
@@ -788,7 +788,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
       commandData.put("fromAccountId", internalSavingsAccountId);
 
-      // Inject dynamic values retrieved from database
       commandData.put("toOfficeId", toOfficeId);
       commandData.put("toClientId", toClientId);
       commandData.put("toAccountType", toAccountType);
@@ -819,9 +818,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     } catch (Exception e) {
       log.error("CONFIRM CONTABLE: Falló la ejecución interna del cobro de comisión: ", e);
-      // Descomentar la siguiente línea si se desea hacer rollback de toda la transacción 
-      // cuando el cobro de comisión falla.
-      // throw new RuntimeException("Falló el cobro de comisión interno", e);
     }
   }
 
@@ -840,4 +836,20 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
   }
 
+  /**
+   * Fetches SINPE service properties from c_external_service and c_external_service_properties tables.
+   * This ensures multi-tenant compatibility and dynamic configuration.
+   */
+  private Map<String, String> getSinpeProperties() {
+    String sql = "SELECT esp.name, esp.value " +
+                 "FROM c_external_service_properties esp " +
+                 "JOIN c_external_service es ON esp.external_service_id = es.id " +
+                 "WHERE es.name = 'SinpeService'";
+    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+    Map<String, String> properties = new HashMap<>();
+    for (Map<String, Object> row : rows) {
+      properties.put((String) row.get("name"), (String) row.get("value"));
+    }
+    return properties;
+  }
 }
