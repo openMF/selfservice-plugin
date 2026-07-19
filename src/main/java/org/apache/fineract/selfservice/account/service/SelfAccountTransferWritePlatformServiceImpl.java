@@ -1,9 +1,3 @@
-/**
- * Copyright since 2026 Mifos Initiative
- *
- * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
- * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
- */
 package org.apache.fineract.selfservice.account.service;
 
 import com.google.gson.Gson;
@@ -53,9 +47,7 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
@@ -85,7 +77,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
   private final PinExternalTransferService pinExternalTransferService;
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
-  private final JdbcTemplate jdbcTemplate; // Injected for dynamic SINPE properties lookup
+  private final JdbcTemplate jdbcTemplate;
   private final Gson gson = new Gson();
 
   @Override
@@ -219,7 +211,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
-    contextData.put("transferAmount", request.getTransferAmount());
+    contextData.put("transferAmount", request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
 
     applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
             this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
@@ -354,11 +346,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       pinRequest.setDestinationIdType(destinationIdType != null ? destinationIdType : "0");
       pinRequest.setDestinationEmail("");
 
-      // Fetch dynamic SINPE properties from database
       Map<String, String> sinpeProps = getSinpeProperties();
-      String branchName = sinpeProps.getOrDefault("branchName", "Default"); // Fallback to "Default" if not found
+      String branchName = sinpeProps.getOrDefault("branchName", "Default");
 
-      // System Metadata
       pinRequest.setBranchName(branchName);
       pinRequest.setReference(StringUtils.isNotBlank(request.getReference()) ? request.getReference() : "Ref-PIN");
       pinRequest.setDebitIban(true);
@@ -417,18 +407,36 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
-      contextData.put("transactionAmount", request.getTransferAmount());
-      contextData.put("transferDescription", request.getTransferDescription());
-      contextData.put("fromAccountNumber", request.getFromAccount());
-      contextData.put("toAccountNumber", request.getToAccount() != null ? request.getToAccount() : request.getToPhoneNumber());
-      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "EXT-" + System.currentTimeMillis());
+      
+      // CRITICAL FIX: Ensure ALL fields expected by the template are present with safe defaults
+      // to prevent Freemarker parsing errors when variables are missing.
+      contextData.put("transactionAmount", request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+      contextData.put("transferDescription", StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "N/A");
+      contextData.put("fromAccountNumber", StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+      contextData.put("toAccountNumber", StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : (StringUtils.isNotBlank(request.getToPhoneNumber()) ? request.getToPhoneNumber() : "N/A"));
+      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId().toString() : "N/A");
+      contextData.put("transactionDate", StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
+      contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+
+      // Fetch client info for fromClientName safely
+      try {
+        Client client = user.getAppUserClientMappings().iterator().next().getClient();
+        contextData.put("fromClientName", StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
+      } catch (Exception e) {
+        contextData.put("fromClientName", "N/A");
+      }
+      
+      // toClientName, fromOfficeName, toOfficeName might not be available in 3-step flow without extra lookup, default to N/A safely
+      contextData.put("toClientName", "N/A");
+      contextData.put("fromOfficeName", "N/A");
+      contextData.put("toOfficeName", "N/A");
 
       applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
               this, SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS, user.getId(), user.getFirstname(), user.getLastname(),
-              user.getUsername(), user.getEmail(), mobileNumber, emailMode, extractClientIp(httpRequest),
-              LocaleContextHolder.getLocale(), contextData));
+              user.getUsername(), user.getEmail(), mobileNumber, emailMode, ipAddress, LocaleContextHolder.getLocale(), contextData));
     } catch (Exception e) {
       log.warn("Failed to publish transfer notification event", e);
     }
@@ -444,17 +452,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       Map<String, Object> contextData = new HashMap<>();
 
-      contextData.put("transactionAmount", getFieldValue(params, originalParams,
-              "transactionAmount", "transferAmount", "amount"));
-      contextData.put("transferDescription", getFieldValue(params, originalParams,
-              "transferDescription", "description"));
-      contextData.put("transactionDate", getFieldValue(params, originalParams,
-              "transactionDate", "transferDate"));
-      contextData.put("fromAccountNumber", getFieldValue(params, originalParams,
-              "fromAccountNumber", "fromAccountId"));
-      contextData.put("toAccountNumber", getFieldValue(params, originalParams,
-              "toAccountNumber", "toAccountId"));
-      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId() : "N/A");
+      contextData.put("transactionAmount", getFieldValue(params, originalParams, "transactionAmount", "transferAmount", "amount"));
+      contextData.put("transferDescription", getFieldValue(params, originalParams, "transferDescription", "description"));
+      contextData.put("transactionDate", getFieldValue(params, originalParams, "transactionDate", "transferDate"));
+      contextData.put("fromAccountNumber", getFieldValue(params, originalParams, "fromAccountNumber", "fromAccountId"));
+      contextData.put("toAccountNumber", getFieldValue(params, originalParams, "toAccountNumber", "toAccountId"));
+      contextData.put("transferId", result.getResourceId() != null ? result.getResourceId().toString() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       resolveClientAndOfficeNames(contextData, params, originalParams);
@@ -471,59 +474,66 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
   private void resolveClientAndOfficeNames(Map<String, Object> contextData,
                                            Map<String, Object> params, Map<String, Object> originalParams) {
+    // Initialize with safe defaults to guarantee Freemarker never sees a missing key
+    contextData.putIfAbsent("fromClientName", "N/A");
+    contextData.putIfAbsent("fromOfficeName", "N/A");
+    contextData.putIfAbsent("toClientName", "N/A");
+    contextData.putIfAbsent("toOfficeName", "N/A");
 
     try {
       Long fromClientId = getLongValue(params, originalParams, "fromClientId");
       if (fromClientId != null) {
-        ClientData fromClient = clientReadPlatformService.retrieveOne(fromClientId);
-        contextData.put("fromClientName", fromClient.getDisplayName());
-
-        if (fromClient.getOfficeId() != null) {
-          String fromOfficeName = officeReadPlatformService.retrieveOffice(fromClient.getOfficeId()).getName();
-          contextData.put("fromOfficeName", fromOfficeName);
-        } else {
-          Long fromOfficeId = getLongValue(params, originalParams, "fromOfficeId");
-          if (fromOfficeId != null) {
-            contextData.put("fromOfficeName", officeReadPlatformService.retrieveOffice(fromOfficeId).getName());
-          } else {
-            contextData.put("fromOfficeName", "N/A");
+        try {
+          ClientData fromClient = clientReadPlatformService.retrieveOne(fromClientId);
+          if (fromClient != null) {
+            if (StringUtils.isNotBlank(fromClient.getDisplayName())) {
+              contextData.put("fromClientName", fromClient.getDisplayName());
+            }
+            if (fromClient.getOfficeId() != null) {
+              try {
+                String fromOfficeName = officeReadPlatformService.retrieveOffice(fromClient.getOfficeId()).getName();
+                if (StringUtils.isNotBlank(fromOfficeName)) {
+                  contextData.put("fromOfficeName", fromOfficeName);
+                }
+              } catch (Exception e) {
+                log.debug("Could not fetch fromOfficeName for officeId: {}", fromClient.getOfficeId());
+              }
+            }
           }
+        } catch (Exception e) {
+          log.warn("Failed to resolve FROM client details for clientId: {}", fromClientId, e);
         }
-      } else {
-        contextData.put("fromClientName", "N/A");
-        contextData.put("fromOfficeName", "N/A");
       }
     } catch (Exception e) {
       log.warn("Failed to resolve FROM client/office names: {}", e.getMessage());
-      contextData.putIfAbsent("fromClientName", "N/A");
-      contextData.putIfAbsent("fromOfficeName", "N/A");
     }
 
     try {
       Long toClientId = getLongValue(params, originalParams, "toClientId");
       if (toClientId != null) {
-        ClientData toClient = clientReadPlatformService.retrieveOne(toClientId);
-        contextData.put("toClientName", toClient.getDisplayName());
-
-        if (toClient.getOfficeId() != null) {
-          String toOfficeName = officeReadPlatformService.retrieveOffice(toClient.getOfficeId()).getName();
-          contextData.put("toOfficeName", toOfficeName);
-        } else {
-          Long toOfficeId = getLongValue(params, originalParams, "toOfficeId");
-          if (toOfficeId != null) {
-            contextData.put("toOfficeName", officeReadPlatformService.retrieveOffice(toOfficeId).getName());
-          } else {
-            contextData.put("toOfficeName", "N/A");
+        try {
+          ClientData toClient = clientReadPlatformService.retrieveOne(toClientId);
+          if (toClient != null) {
+            if (StringUtils.isNotBlank(toClient.getDisplayName())) {
+              contextData.put("toClientName", toClient.getDisplayName());
+            }
+            if (toClient.getOfficeId() != null) {
+              try {
+                String toOfficeName = officeReadPlatformService.retrieveOffice(toClient.getOfficeId()).getName();
+                if (StringUtils.isNotBlank(toOfficeName)) {
+                  contextData.put("toOfficeName", toOfficeName);
+                }
+              } catch (Exception e) {
+                log.debug("Could not fetch toOfficeName for officeId: {}", toClient.getOfficeId());
+              }
+            }
           }
+        } catch (Exception e) {
+          log.warn("Failed to resolve TO client details for clientId: {}", toClientId, e);
         }
-      } else {
-        contextData.put("toClientName", "N/A");
-        contextData.put("toOfficeName", "N/A");
       }
     } catch (Exception e) {
       log.warn("Failed to resolve TO client/office names: {}", e.getMessage());
-      contextData.putIfAbsent("toClientName", "N/A");
-      contextData.putIfAbsent("toOfficeName", "N/A");
     }
   }
 
@@ -685,9 +695,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       return false;
     }
 
-    // Fetch dynamic bank code from database
     Map<String, String> sinpeProps = getSinpeProperties();
-    String bankCode = sinpeProps.getOrDefault("bankCode", "0"); // Fallback to "0" if not found
+    String bankCode = sinpeProps.getOrDefault("bankCode", "0");
 
     String cleanAccount = accountIdentifier.replaceAll("\\s+", "").toUpperCase();
 
@@ -714,7 +723,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
-    contextData.put("transferAmount", transferAmount);
+    contextData.put("transferAmount", transferAmount != null ? transferAmount.toString() : "N/A");
 
     this.applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
             this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
@@ -836,10 +845,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
   }
 
-  /**
-   * Fetches SINPE service properties from c_external_service and c_external_service_properties tables.
-   * This ensures multi-tenant compatibility and dynamic configuration.
-   */
   private Map<String, String> getSinpeProperties() {
     String sql = "SELECT esp.name, esp.value " +
                  "FROM c_external_service_properties esp " +
