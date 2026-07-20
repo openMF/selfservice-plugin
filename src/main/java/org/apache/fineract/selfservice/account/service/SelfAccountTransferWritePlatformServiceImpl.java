@@ -45,6 +45,7 @@ import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
+import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
@@ -71,6 +72,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
   private final FromJsonHelper fromApiJsonHelper;
+  private final NotificationCooldownCache notificationCooldownCache;
   
   private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
   private final ExternalIdFactory externalIdFactory;
@@ -147,8 +149,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             ? request.getToPhoneNumber()
             : request.getToAccount();
     
-    // CLEANUP OLD OTPs BEFORE ISSUING NEW ONE 
+    // 1. Clean up stale unconsumed OTP records to prevent unique constraint conflicts
     cleanupOldOtpRegistrations(currentUser);
+    
+     // 2. Release the cooldown cache so the new OTP is not blocked from being sent
+    releaseOtpCooldown(currentUser);
 
     generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
 
@@ -170,6 +175,16 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         log.warn("Failed to cleanup old OTPs (non-fatal)", e);
     }
 }
+  
+  private void releaseOtpCooldown(AppSelfServiceUser user) {
+    try {
+      String cacheKey = SelfServiceNotificationEvent.Type.TRANSFER_OTP.name() + ":" + user.getId();
+      notificationCooldownCache.release(cacheKey);
+      log.info("QUOTE: Released OTP cooldown for user {}", user.getId());
+    } catch (Exception e) {
+      log.warn("Failed to release OTP cooldown (non-fatal)", e);
+    }
+  }
 
   @Override
   @Transactional
