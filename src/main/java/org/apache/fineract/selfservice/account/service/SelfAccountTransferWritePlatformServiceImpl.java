@@ -156,9 +156,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
-    // Handle PIN transfer separately to return the custom response structure
+    // Handle PIN transfer separately to return the custom response structure and trigger notifications
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
-      return executePinTransfer(request, user);
+      return executePinTransfer(request, user, httpRequest);
     }
 
     CommandProcessingResult result;
@@ -263,7 +263,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     return new CommandProcessingResultBuilder().withEntityId(0L).build();
   }
 
-  private Object executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
+  private Object executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
     log.info("CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
 
     try {
@@ -370,6 +370,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       response.put("transferType", "PIN");
       response.put("data", externalData);
 
+      // Trigger multi-channel notification for successful PIN transfer
+      publishPinTransferEvent(request, user, httpRequest, externalData);
+
       return response;
 
     } catch (IllegalArgumentException e) {
@@ -440,6 +443,59 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
               user.getUsername(), user.getEmail(), mobileNumber, emailMode, ipAddress, LocaleContextHolder.getLocale(), contextData));
     } catch (Exception e) {
       log.warn("Failed to publish transfer notification event", e);
+    }
+  }
+
+  /**
+   * Publishes a notification event specifically for successful PIN transfers.
+   * Extracts the reference ID from the external gateway response to populate the transferId.
+   */
+  private void publishPinTransferEvent(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest, Map<String, Object> externalData) {
+    try {
+      String mobileNumber = extractMobile(user);
+      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      String ipAddress = extractClientIp(httpRequest);
+
+      Map<String, Object> contextData = new HashMap<>();
+      
+      contextData.put("transactionAmount", request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+      contextData.put("transferDescription", StringUtils.isNotBlank(request.getTransferDescription()) ? request.getTransferDescription() : "N/A");
+      contextData.put("fromAccountNumber", StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+      contextData.put("toAccountNumber", StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+      
+      // Extract the most relevant reference ID from the external gateway response
+      String transferId = "N/A";
+      if (externalData != null) {
+          if (externalData.get("channelRefNumber") != null) {
+              transferId = externalData.get("channelRefNumber").toString();
+          } else if (externalData.get("sinpeRefNumber") != null) {
+              transferId = externalData.get("sinpeRefNumber").toString();
+          } else if (externalData.get("operationId") != null) {
+              transferId = externalData.get("operationId").toString();
+          }
+      }
+      contextData.put("transferId", transferId);
+      contextData.put("transactionDate", StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
+      contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+
+      try {
+        Client client = user.getAppUserClientMappings().iterator().next().getClient();
+        contextData.put("fromClientName", StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
+      } catch (Exception e) {
+        contextData.put("fromClientName", "N/A");
+      }
+      
+      contextData.put("toClientName", "N/A");
+      contextData.put("fromOfficeName", "N/A");
+      contextData.put("toOfficeName", "N/A");
+
+      applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
+              this, SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS, user.getId(), user.getFirstname(), user.getLastname(),
+              user.getUsername(), user.getEmail(), mobileNumber, emailMode, ipAddress, LocaleContextHolder.getLocale(), contextData));
+              
+      log.info("CONFIRM PIN: Notification event published successfully for user {}", user.getId());
+    } catch (Exception e) {
+      log.warn("Failed to publish PIN transfer notification event", e);
     }
   }
 
