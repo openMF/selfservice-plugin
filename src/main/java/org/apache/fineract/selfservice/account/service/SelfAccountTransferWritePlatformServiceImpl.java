@@ -307,7 +307,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             .originCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : client.getAccountNumber())
             .originCustomerName(client.getFullname())
             .originIban(request.getFromAccount())
-            .destinationPhone(request.getToPhoneNumber())
+            .destinationPhone(request.getToAccount())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
             .description(request.getTransferDescription())
