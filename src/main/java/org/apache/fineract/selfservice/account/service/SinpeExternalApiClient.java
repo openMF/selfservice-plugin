@@ -159,9 +159,7 @@ public class SinpeExternalApiClient {
     }
 
     String url = getHost(props) + "/transfer/account-to-phone";
-    HttpEntity<SinpeTransferRequest> entity = new HttpEntity<>(request, buildHeaders(props));
-    
-    log.info("request"+request);
+    HttpEntity<SinpeTransferRequest> entity = new HttpEntity<>(request, buildHeaders(props));    
 
     try {
       restTemplate.postForObject(url, entity, String.class);
