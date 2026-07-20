@@ -1,6 +1,7 @@
 package org.apache.fineract.selfservice.account.service;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -21,6 +22,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
@@ -68,6 +70,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final SelfServiceRegistrationRepository registrationRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  private final FromJsonHelper fromApiJsonHelper;
   
   private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
   private final ExternalIdFactory externalIdFactory;
@@ -199,11 +202,20 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       checkForLimits(params);
     }
 
-    JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
+    JsonCommand command = createJsonCommand(apiRequestBodyAsJson);
     CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
     publishTransferEvent(result, params, params, httpRequest);
     return result;
+  }
+  
+  /** Helper to create a fully-parsed JsonCommand */
+  private JsonCommand createJsonCommand(String json) {
+    if (StringUtils.isBlank(json)) {
+      throw new IllegalArgumentException("JSON request body cannot be blank");
+    }
+    JsonElement parsed = fromApiJsonHelper.parse(json);
+    return JsonCommand.from(json, parsed, fromApiJsonHelper, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
   }
 
   private String generateAndSendOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
@@ -404,6 +416,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     SavingsAccount toSavingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
     Long toClientId = toSavingsAccount.getClient().getId();
     Long toOfficeId = toSavingsAccount.getClient().getOffice().getId();
+    
+    if (toClientId == null) {
+      throw new IllegalArgumentException("Could not determine destination client for internal transfer.");
+    }
 
     Map<String, Object> commandData = new HashMap<>();
     commandData.put("fromOfficeId", fromOfficeId);
@@ -431,8 +447,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     log.info("JSON Request Body for Internal Transfer: {}", jsonRequestBody);
-    
-    JsonCommand command = JsonCommand.from(jsonRequestBody);
+        
+    JsonCommand command = createJsonCommand(jsonRequestBody);
     return accountTransfersWritePlatformService.create(command);
   }
 
@@ -865,8 +881,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         log.error("Failed to serialize command data to JSON. commandData: {}", commandData);
         throw new IllegalArgumentException("Internal error: Failed to serialize transfer command data.");
       }
-
-      JsonCommand command = JsonCommand.from(jsonRequestBody);
+      
+      JsonCommand command = createJsonCommand(jsonRequestBody);
       log.info("ACCOUNTING CONFIRM: Executing internal transfer command for fee collection...");
       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
