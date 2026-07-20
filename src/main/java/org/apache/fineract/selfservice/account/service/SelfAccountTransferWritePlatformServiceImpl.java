@@ -158,16 +158,18 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private void cleanupOldOtpRegistrations(AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     try {
-      // Mark all non-consumed previous TRANSFER_OTP records as consumed (safe cleanup)
-      int updated = registrationRepository.markOldOtpsAsConsumed(
-          client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
-      if (updated > 0) {
-        log.info("QUOTE: Cleaned up {} old pending OTP records for client {}", updated, client.getId());
-      }
+        // Solo limpia OTPs que llevan más de su ventana de expiración (10 min) sin consumirse,
+        // NUNCA el que se está a punto de crear en este mismo request.
+        LocalDateTime cutoff = DateUtils.getLocalDateTimeOfSystem().minusMinutes(10);
+        int updated = registrationRepository.markOldOtpsAsConsumed(
+                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, cutoff);
+        if (updated > 0) {
+            log.info("QUOTE: Cleaned up {} stale OTP records for client {}", updated, client.getId());
+        }
     } catch (Exception e) {
-      log.warn("Failed to cleanup old OTPs (non-fatal)", e);
+        log.warn("Failed to cleanup old OTPs (non-fatal)", e);
     }
-  }
+}
 
   @Override
   @Transactional
@@ -208,8 +210,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     publishFastPaymentTransferEvent(result, request, httpRequest);
-    final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
-    cleanupOldOtpRegistrations(currentUser);
+    final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();    
     return result;
   }
 

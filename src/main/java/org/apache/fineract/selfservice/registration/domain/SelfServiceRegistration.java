@@ -31,6 +31,34 @@ import org.apache.fineract.portfolio.client.domain.Client;
 @Table(name = "request_audit_table")
 public class SelfServiceRegistration extends AbstractPersistableCustom<Long> {
 
+    /**
+     * @return the notificationDispatchError
+     */
+    public String getNotificationDispatchError() {
+        return notificationDispatchError;
+    }
+
+    /**
+     * @param notificationDispatchError the notificationDispatchError to set
+     */
+    public void setNotificationDispatchError(String notificationDispatchError) {
+        this.notificationDispatchError = notificationDispatchError;
+    }
+
+    /**
+     * @return the notificationDispatchedAt
+     */
+    public LocalDateTime getNotificationDispatchedAt() {
+        return notificationDispatchedAt;
+    }
+
+    /**
+     * @param notificationDispatchedAt the notificationDispatchedAt to set
+     */
+    public void setNotificationDispatchedAt(LocalDateTime notificationDispatchedAt) {
+        this.notificationDispatchedAt = notificationDispatchedAt;
+    }
+
   public static final String PASSWORD_RESET_SENTINEL = "<PASSWORD_RESET>";
 
   @ManyToOne
@@ -83,6 +111,20 @@ public class SelfServiceRegistration extends AbstractPersistableCustom<Long> {
   @Version
   @Column(name = "version")
   private Long version;
+  
+  @Column(name = "notification_dispatched_at", nullable = true)
+    private LocalDateTime notificationDispatchedAt;
+
+    @Column(name = "notification_dispatch_error", length = 500, nullable = true)
+    private String notificationDispatchError;
+
+    public void markDispatched() {
+        this.setNotificationDispatchedAt(DateUtils.getLocalDateTimeOfSystem());
+    }
+
+    public void markDispatchFailed(String error) {
+        this.setNotificationDispatchError(error);
+    }
 
   public SelfServiceRegistration() {}
 
