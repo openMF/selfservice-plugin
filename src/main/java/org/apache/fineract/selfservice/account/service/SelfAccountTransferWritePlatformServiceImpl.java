@@ -42,6 +42,7 @@ import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
 import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
+import org.apache.fineract.selfservice.account.data.SinpeTransferRequest.CustomData;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
@@ -302,7 +303,13 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
   private CommandProcessingResult executeSinpeTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
-
+    
+    ArrayList<CustomData> customDataList = new ArrayList<>();
+    CustomData customData = new CustomData();
+    customData.setName("Source");
+    customData.setValue("SelfServiceApp");
+    customDataList.add(customData);
+    
     SinpeTransferRequest sinpeRequest = SinpeTransferRequest.builder()
             .originCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : client.getAccountNumber())
             .originCustomerName(client.getDisplayName())
@@ -312,7 +319,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             .currencyCode("CRC")
             .description(request.getTransferDescription())
             .debitIBAN(true)
-            .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp")))
+            .customData(customDataList)
             .build();
 
     sinpeExternalApiClient.transferToPhone(sinpeRequest);
