@@ -490,6 +490,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private void publishFastPaymentTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+      // Prevent duplicate success notifications (e.g., from retries or double-clicks)
+      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + request.getTransferType();
+      if (!notificationCooldownCache.tryAcquire(cacheKey)) {
+        log.warn("CONFIRM: Notification cooldown active for user {}, skipping duplicate {} success notification.", user.getId(), request.getTransferType());
+        return;
+      }
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -525,6 +531,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
   private void publishPinTransferEvent(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest, Map<String, Object> externalData) {
     try {
+      // Prevent duplicate success notifications for PIN transfers
+      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":PIN";
+      if (!notificationCooldownCache.tryAcquire(cacheKey)) {
+        log.warn("CONFIRM PIN: Notification cooldown active for user {}, skipping duplicate PIN success notification.", user.getId());
+        return;
+      }  
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
