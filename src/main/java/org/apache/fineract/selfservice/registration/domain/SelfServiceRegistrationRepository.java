@@ -111,4 +111,12 @@ public interface SelfServiceRegistrationRepository
           @Param("clientId") Long clientId,
           @Param("requestType") SelfServiceRequestType requestType,
           @Param("authenticationToken") String authenticationToken);
+      
+    @Modifying
+    @Transactional
+    @Query("UPDATE SelfServiceRegistration r SET r.consumed = true " +
+       "WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.consumed = false")
+    int markOldOtpsAsConsumed(@Param("clientId") Long clientId, 
+                          @Param("requestType") SelfServiceRequestType requestType);
+      
 }

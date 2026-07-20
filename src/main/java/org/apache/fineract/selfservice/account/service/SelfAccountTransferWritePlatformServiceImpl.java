@@ -146,10 +146,27 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     String destinationTarget = "SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())
             ? request.getToPhoneNumber()
             : request.getToAccount();
+    
+    // CLEANUP OLD OTPs BEFORE ISSUING NEW ONE 
+    cleanupOldOtpRegistrations(currentUser);
 
     generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
 
     return this.gson.toJson(quote);
+  }
+  
+  private void cleanupOldOtpRegistrations(AppSelfServiceUser user) {
+    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    try {
+      // Mark all non-consumed previous TRANSFER_OTP records as consumed (safe cleanup)
+      int updated = registrationRepository.markOldOtpsAsConsumed(
+          client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
+      if (updated > 0) {
+        log.info("QUOTE: Cleaned up {} old pending OTP records for client {}", updated, client.getId());
+      }
+    } catch (Exception e) {
+      log.warn("Failed to cleanup old OTPs (non-fatal)", e);
+    }
   }
 
   @Override
@@ -191,6 +208,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     publishFastPaymentTransferEvent(result, request, httpRequest);
+    final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
+    cleanupOldOtpRegistrations(currentUser);
     return result;
   }
 
