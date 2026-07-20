@@ -10,14 +10,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
+import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 
 public interface SelfAccountTransferWritePlatformService {
-  
+
   Object prepareTransfer(AccountTransferPrepareRequest request);
-  
+
   Object quoteTransfer(AccountTransferPrepareRequest request);
-  
+
   Object confirmTransfer(AccountTransferConfirmRequest request, HttpServletRequest httpRequest);
-  
-  CommandProcessingResult createTransfer(String type, String apiRequestBodyAsJson, HttpServletRequest httpRequest);
+
+  Object resendTransferOtp(ResendOtpRequest resendRequest, HttpServletRequest httpRequest);
+
+  CommandProcessingResult createTransfer(
+      String type, String apiRequestBodyAsJson, HttpServletRequest httpRequest);
 }

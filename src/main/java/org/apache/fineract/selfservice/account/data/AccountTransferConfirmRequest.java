@@ -10,6 +10,6 @@ public class AccountTransferConfirmRequest extends AccountTransferPrepareRequest
   private String otp;
   private String transferId; // Used when validating the OTP
 
-    private BigDecimal feeAmount;
-    private BigDecimal totalAmount;
+  private BigDecimal feeAmount;
+  private BigDecimal totalAmount;
 }

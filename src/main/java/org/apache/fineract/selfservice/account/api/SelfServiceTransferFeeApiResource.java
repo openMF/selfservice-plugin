@@ -53,7 +53,7 @@ public class SelfServiceTransferFeeApiResource {
       summary = "Get All Transfer Fees",
       description =
           "Retrieves all configured transfer fees. Includes the latest BCCR exchange rate only "
-          + "for fees explicitly flagged as requiring exchange rate data.")
+              + "for fees explicitly flagged as requiring exchange rate data.")
   public String getAll() {
     context.authenticatedSelfServiceUser();
 
@@ -63,28 +63,32 @@ public class SelfServiceTransferFeeApiResource {
     Optional<BccrExchangeRate> latestRateOpt = bccrExchangeRateService.getLatestRate();
     BigDecimal currentBccrRate = latestRateOpt.map(BccrExchangeRate::getSellRate).orElse(null);
 
-    List<Map<String, Object>> responseList = fees.stream().map(fee -> {
-        Map<String, Object> feeMap = new HashMap<>();
-        feeMap.put("id", fee.getId());
-        feeMap.put("transferType", fee.getTransferType());
-        feeMap.put("currencyCode", fee.getCurrencyCode());
-        feeMap.put("transferMode", fee.getTransferMode());
-        feeMap.put("feeType", fee.getFeeType());
-        feeMap.put("feeValue", fee.getFeeValue());
-        feeMap.put("feeCurrency", fee.getFeeCurrency());
-        feeMap.put("thresholdAmount", fee.getThresholdAmount());
-        feeMap.put("thresholdFeeValue", fee.getThresholdFeeValue());
-        feeMap.put("description", fee.getDescription());
-        feeMap.put("isActive", fee.isActive());
-        feeMap.put("exchangeRateRequired", fee.isExchangeRateRequired());
+    List<Map<String, Object>> responseList =
+        fees.stream()
+            .map(
+                fee -> {
+                  Map<String, Object> feeMap = new HashMap<>();
+                  feeMap.put("id", fee.getId());
+                  feeMap.put("transferType", fee.getTransferType());
+                  feeMap.put("currencyCode", fee.getCurrencyCode());
+                  feeMap.put("transferMode", fee.getTransferMode());
+                  feeMap.put("feeType", fee.getFeeType());
+                  feeMap.put("feeValue", fee.getFeeValue());
+                  feeMap.put("feeCurrency", fee.getFeeCurrency());
+                  feeMap.put("thresholdAmount", fee.getThresholdAmount());
+                  feeMap.put("thresholdFeeValue", fee.getThresholdFeeValue());
+                  feeMap.put("description", fee.getDescription());
+                  feeMap.put("isActive", fee.isActive());
+                  feeMap.put("exchangeRateRequired", fee.isExchangeRateRequired());
 
-        // Only include BCCR rate when explicitly required by configuration
-        if (fee.isExchangeRateRequired()) {
-            feeMap.put("currentBccrRate", currentBccrRate);
-        }
+                  // Only include BCCR rate when explicitly required by configuration
+                  if (fee.isExchangeRateRequired()) {
+                    feeMap.put("currentBccrRate", currentBccrRate);
+                  }
 
-        return feeMap;
-    }).collect(Collectors.toList());
+                  return feeMap;
+                })
+            .collect(Collectors.toList());
 
     return gson.toJson(responseList);
   }
@@ -109,7 +113,8 @@ public class SelfServiceTransferFeeApiResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Update Transfer Fee",
-      description = "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
+      description =
+          "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
   public String update(@PathParam("id") Long id, final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("TRANSFER_FEE");
     SelfServiceTransferFee fee =

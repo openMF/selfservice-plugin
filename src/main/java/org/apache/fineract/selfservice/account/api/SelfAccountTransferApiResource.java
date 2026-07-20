@@ -32,6 +32,7 @@ import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSer
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
+import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
@@ -51,7 +52,8 @@ import org.springframework.stereotype.Component;
 @Component
 @Tag(
     name = "Self Account transfer",
-    description = "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) and legacy account transfers")
+    description =
+        "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) and legacy account transfers")
 @RequiredArgsConstructor
 @Slf4j
 public class SelfAccountTransferApiResource {
@@ -77,10 +79,13 @@ public class SelfAccountTransferApiResource {
   @Path("/prepare")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Prepare Transfer", description = "Validates and prepares the transfer details.")
+  @Operation(
+      summary = "Prepare Transfer",
+      description = "Validates and prepares the transfer details.")
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    AccountTransferPrepareRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
     Object result = transferWritePlatformService.prepareTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -89,10 +94,13 @@ public class SelfAccountTransferApiResource {
   @Path("/quote")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Quote Transfer", description = "Calculates the transfer fee based on business rules.")
+  @Operation(
+      summary = "Quote Transfer",
+      description = "Calculates the transfer fee based on business rules.")
   public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferPrepareRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    AccountTransferPrepareRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
     Object result = transferWritePlatformService.quoteTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -101,10 +109,14 @@ public class SelfAccountTransferApiResource {
   @Path("/confirm")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Confirm Transfer", description = "Sends OTP or executes the transfer if OTP is valid.")
-  public String confirm(final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
+  @Operation(
+      summary = "Confirm Transfer",
+      description = "Sends OTP or executes the transfer if OTP is valid.")
+  public String confirm(
+      final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    AccountTransferConfirmRequest request = new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    AccountTransferConfirmRequest request =
+        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
     Object result = transferWritePlatformService.confirmTransfer(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -115,28 +127,58 @@ public class SelfAccountTransferApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
       summary = "Retrieve Account Transfer Template",
-      description = "Returns list of loan/savings accounts that can be used for account transfer\n\nExample Requests:\n\nself/accounttransfers/template\n")
+      description =
+          "Returns list of loan/savings accounts that can be used for account transfer\n\nExample Requests:\n\nself/accounttransfers/template\n")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfAccountTransferApiResourceSwagger.GetAccountTransferTemplateResponse.class))))
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfAccountTransferApiResourceSwagger
+                                        .GetAccountTransferTemplateResponse.class))))
   })
   public String template(
       @DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type,
       @Context final UriInfo uriInfo) {
 
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    
-    Collection<SelfAccountTemplateData> selfTemplateData = this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
+    final ApiRequestJsonSerializationSettings settings =
+        this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+
+    Collection<SelfAccountTemplateData> selfTemplateData =
+        this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
 
     if ("tpt".equals(type)) {
-      Collection<SelfAccountTemplateData> tptTemplateData = this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
-      return this.toApiJsonSerializer.serialize(settings, new SelfAccountTransferData(selfTemplateData, tptTemplateData));
+      Collection<SelfAccountTemplateData> tptTemplateData =
+          this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
+      return this.toApiJsonSerializer.serialize(
+          settings, new SelfAccountTransferData(selfTemplateData, tptTemplateData));
     }
 
-    return this.toApiJsonSerializer.serialize(settings, new SelfAccountTransferData(selfTemplateData, selfTemplateData));
+    return this.toApiJsonSerializer.serialize(
+        settings, new SelfAccountTransferData(selfTemplateData, selfTemplateData));
+  }
+
+  @POST
+  @Path("/otp/resend")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Resend OTP for Transfer Confirmation",
+      description =
+          "Resends OTP for pending transfer confirmation. Regenerates new OTP and expires previous if remaining time < 50% of total expiry.")
+  public String resendOtp(
+      final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    ResendOtpRequest request = new Gson().fromJson(apiRequestBodyAsJson, ResendOtpRequest.class);
+    Object result = transferWritePlatformService.resendTransferOtp(request, httpRequest);
+    return result instanceof String ? (String) result : new Gson().toJson(result);
   }
 
   @POST
@@ -144,20 +186,30 @@ public class SelfAccountTransferApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
       summary = "Create new Transfer",
-      description = "Ability to create new transfer of monetary funds from one account to another.\n\nExample Requests:\n\nself/accounttransfers/\n")
+      description =
+          "Ability to create new transfer of monetary funds from one account to another.\n\nExample Requests:\n\nself/accounttransfers/\n")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelfAccountTransferApiResourceSwagger.PostNewTransferResponse.class))))
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfAccountTransferApiResourceSwagger.PostNewTransferResponse
+                                        .class))))
   })
   public String create(
       @DefaultValue("") @QueryParam("type") @Parameter(name = "type") final String type,
       final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
-    
+
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    CommandProcessingResult result = transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
+    CommandProcessingResult result =
+        transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
     return toApiJsonSerializer.serialize(result);
   }
 }

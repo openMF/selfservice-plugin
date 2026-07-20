@@ -51,15 +51,17 @@ public class SelfServiceAuthTokenPurgeScheduler {
         ThreadLocalContextUtil.setTenant(tenant);
 
         // Execute delete inside a transaction for the current tenant
-        transactionTemplate.execute(status -> {
-          repository.deleteByExpiresAtBefore(LocalDateTime.now());
-          return null;
-        });
+        transactionTemplate.execute(
+            status -> {
+              repository.deleteByExpiresAtBefore(LocalDateTime.now());
+              return null;
+            });
 
-        log.debug("Successfully purged expired tokens for tenant: {}", tenant.getTenantIdentifier());
+        log.debug(
+            "Successfully purged expired tokens for tenant: {}", tenant.getTenantIdentifier());
       } catch (Exception e) {
-        log.error("Expired auth token purge failed for tenant: {}", 
-            tenant.getTenantIdentifier(), e);
+        log.error(
+            "Expired auth token purge failed for tenant: {}", tenant.getTenantIdentifier(), e);
         // Continue with next tenant
       } finally {
         // CRITICAL: Always clear tenant context to prevent leakage

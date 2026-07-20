@@ -15,10 +15,9 @@ public class AccountTransferPrepareRequest {
   private String transferDescription;
   private String transferType; // SAME_BANK, PIN, SINPE_MOVIL, LINK_PAGO
   private String transferMode; // INSTANT, T_PLUS_1
-  private String currencyCode; // CRC, USD 
+  private String currencyCode; // CRC, USD
   private String institutionAccountId;
-  private String reference;           // (i.e: "Factura-001")
-  private String locale;              // (i.e: "es")
+  private String reference; // (i.e: "Factura-001")
+  private String locale; // (i.e: "es")
   private String dateFormat;
-
 }

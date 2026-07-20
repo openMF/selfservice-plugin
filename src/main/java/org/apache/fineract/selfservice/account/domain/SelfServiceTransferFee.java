@@ -45,8 +45,7 @@ public class SelfServiceTransferFee extends AbstractPersistableCustom<Long> {
 
   @Column(name = "is_active", nullable = false)
   private boolean isActive = true;
-  
+
   @Column(name = "exchange_rate_required", nullable = false)
   private boolean exchangeRateRequired;
-
 }

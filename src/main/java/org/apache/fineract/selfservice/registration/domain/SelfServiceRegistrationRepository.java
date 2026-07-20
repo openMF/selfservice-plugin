@@ -111,17 +111,23 @@ public interface SelfServiceRegistrationRepository
           @Param("clientId") Long clientId,
           @Param("requestType") SelfServiceRequestType requestType,
           @Param("authenticationToken") String authenticationToken);
-      
-    // Bulk consumption: forzamos clearAutomatically + flushAutomatically para
-    // que el 1er y 2do nivel de caché queden consistentes tras el UPDATE directo.
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE SelfServiceRegistration r SET r.consumed = true "
-         + "WHERE r.client.id = :clientId "
-         + "AND r.requestType = :requestType "
-         + "AND r.consumed = false "
-         + "AND r.createdDate < :cutoff")
-    int markOldOtpsAsConsumed(@Param("clientId") Long clientId,
-                               @Param("requestType") SelfServiceRequestType requestType,
-                               @Param("cutoff") LocalDateTime cutoff);
-      
+
+  @Query(
+      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.consumed = false ORDER BY r.id DESC")
+  Optional<SelfServiceRegistration> findTopByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
+      @Param("clientId") Long clientId, @Param("requestType") SelfServiceRequestType requestType);
+
+  // Bulk consumption: forzamos clearAutomatically + flushAutomatically para
+  // que el 1er y 2do nivel de caché queden consistentes tras el UPDATE directo.
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE SelfServiceRegistration r SET r.consumed = true "
+          + "WHERE r.client.id = :clientId "
+          + "AND r.requestType = :requestType "
+          + "AND r.consumed = false "
+          + "AND r.createdDate < :cutoff")
+  int markOldOtpsAsConsumed(
+      @Param("clientId") Long clientId,
+      @Param("requestType") SelfServiceRequestType requestType,
+      @Param("cutoff") LocalDateTime cutoff);
 }

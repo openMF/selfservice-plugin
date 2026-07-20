@@ -11,8 +11,8 @@ import lombok.Data;
 
 @Data
 public class SelfServiceFineractExternalEvent {
-    private String type;
-    private String category;
-    private String createdAt;
-    private JsonNode payload;
+  private String type;
+  private String category;
+  private String createdAt;
+  private JsonNode payload;
 }
