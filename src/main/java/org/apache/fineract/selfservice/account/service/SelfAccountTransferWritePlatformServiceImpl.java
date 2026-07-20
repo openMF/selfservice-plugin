@@ -162,7 +162,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     CommandProcessingResult result;
-    if (isSameBankIbanAccount(cleanDestination) || "MISMO_BANCO".equalsIgnoreCase(request.getTransferType())) {
+    if (isSameBankIbanAccount(cleanDestination) || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
       result = executeInternalTransfer(request, user);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
@@ -703,7 +703,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanAccount = destinationAccount.replaceAll("\\s+", "");
 
-    if ("PIN".equalsIgnoreCase(transferType) || "MISMO_BANCO".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
+    if ("PIN".equalsIgnoreCase(transferType) || "SAME_BANK".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
       log.info("PREPARE [PIN / Same Bank]: Validating account via PinExternalTransferService.getAccountInfo");
 
       try {

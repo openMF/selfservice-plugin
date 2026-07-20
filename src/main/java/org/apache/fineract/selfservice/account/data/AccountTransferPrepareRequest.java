@@ -13,12 +13,12 @@ public class AccountTransferPrepareRequest {
   private BigDecimal transferAmount;
   private String transferDate;
   private String transferDescription;
-  private String transferType; // PIN, SINPE_MOVIL, LINK_PAGO
-  private String transferMode; // INMEDIATA, T_PLUS_1
-  private String currencyCode; // CRC, USD - ADDED THIS FIELD
+  private String transferType; // SAME_BANK, PIN, SINPE_MOVIL, LINK_PAGO
+  private String transferMode; // INSTANT, T_PLUS_1
+  private String currencyCode; // CRC, USD 
   private String institutionAccountId;
-  private String reference;           // ⇐ AGREGADO (Ej: "Factura-001")
-  private String locale;              // ⇐ AGREGADO (Ej: "es")
+  private String reference;           // (i.e: "Factura-001")
+  private String locale;              // (i.e: "es")
   private String dateFormat;
 
 }
