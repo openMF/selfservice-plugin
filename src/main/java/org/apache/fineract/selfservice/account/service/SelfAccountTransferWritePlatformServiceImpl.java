@@ -24,11 +24,14 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
+import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
@@ -64,9 +67,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
   
-  // Dedicated service for safe account transfer execution in self-service context
   private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-  
   private final ExternalIdFactory externalIdFactory;
   private final SelfAccountTransferDataValidator dataValidator;
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
@@ -78,6 +79,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final JdbcTemplate jdbcTemplate;
   private final Gson gson = new Gson();
+  
+  // Injected for external ID resolution
+  private final SavingsAccountAssembler savingsAccountAssembler;
+  private final LoanAssembler loanAssembler;
 
   @Override
   @Transactional
@@ -191,7 +196,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       checkForLimits(params);
     }
 
-    // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
     JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
     CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
@@ -388,13 +392,17 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     Long fromClientId = client.getId();
     Long fromOfficeId = client.getOffice().getId();
 
+    // Resolve external IDs to internal Account IDs
+    Long fromAccountId = resolveAccountId(request.getFromAccount(), request.getFromAccountType());
+    Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
+
     Map<String, Object> commandData = new HashMap<>();
     commandData.put("fromOfficeId", fromOfficeId);
     commandData.put("fromClientId", fromClientId);
     commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
-    commandData.put("fromAccountId", request.getFromAccount());
+    commandData.put("fromAccountId", fromAccountId); // Use resolved internal ID
     commandData.put("toAccountType", request.getToAccountType() != null ? request.getToAccountType() : 2);
-    commandData.put("toAccountId", request.getToAccount());
+    commandData.put("toAccountId", toAccountId); // Use resolved internal ID
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", request.getTransferDate());
     commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
@@ -403,7 +411,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String jsonRequestBody = gson.toJson(commandData);
 
-    // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
     JsonCommand command = JsonCommand.from(jsonRequestBody);
     return accountTransfersWritePlatformService.create(command);
   }
@@ -696,9 +703,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanAccount = destinationAccount.replaceAll("\\s+", "");
 
-    if ("PIN".equalsIgnoreCase(transferType) || "SAME_BANK".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
-      log.info("PREPARE [PIN / Same Bank]: Validating account via PinExternalTransferService.getAccountInfo");
-
+    if ("SAME_BANK".equalsIgnoreCase(transferType)) {
+      log.info("PREPARE [SAME_BANK]: Destination is an internal account. Validation will be performed via external ID resolution during execution.");
+    } else if ("PIN".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
+      log.info("PREPARE [PIN / Same Bank IBAN]: Validating account via PinExternalTransferService.getAccountInfo");
       try {
         String accountInfoResponse = pinExternalTransferService.getAccountInfo(cleanAccount);
 
@@ -708,7 +716,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         Map<String, Object> accountData = gson.fromJson(accountInfoResponse, Map.class);
 
-        if (accountData.containsKey("error") || accountData.containsKey("message") && accountInfoResponse.contains("not found")) {
+        if (accountData.containsKey("error") || (accountData.containsKey("message") && accountInfoResponse.contains("not found"))) {
           throw new IllegalArgumentException("The destination account does not exist in the financial system.");
         }
 
@@ -729,10 +737,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         log.error("Error validating account via PIN/Same Bank: {}", e.getMessage());
         throw new IllegalArgumentException("Could not verify the existence or status of the account.");
       }
-
     } else if ("SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
       log.info("PREPARE [SINPE]: Executing specific validation flow for SINPE.");
-
     } else {
       log.warn("PREPARE: Could not determine the validation channel for account: {} with type: {}",
               destinationAccount, transferType);
@@ -811,40 +817,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       Long fromClientId = client.getId();
       Long fromOfficeId = client.getOffice().getId();
 
-      Long internalSavingsAccountId = null;
-      try {
-        String cleanAccount = request.getFromAccount().replaceAll("\\s+", "");
-
-        if (cleanAccount.length() >= 7) {
-          String last7Digits = cleanAccount.substring(cleanAccount.length() - 7);
-          log.info("ACCOUNTING CONFIRM: Mapping last 7 digits of IBAN: {}", last7Digits);
-
-          String cleanDigits = last7Digits.replaceFirst("^0+", "");
-
-          if (cleanDigits.isEmpty()) {
-            cleanDigits = "0";
-          }
-
-          internalSavingsAccountId = Long.valueOf(cleanDigits);
-          log.info("ACCOUNTING CONFIRM: Account ID successfully resolved: {}", internalSavingsAccountId);
-        } else {
-          if (cleanAccount.matches("\\d+")) {
-            internalSavingsAccountId = Long.valueOf(cleanAccount);
-          }
-        }
-      } catch (Exception e) {
-        log.error("ACCOUNTING CONFIRM: Error processing the extraction of the last 7 digits for account: {}", request.getFromAccount(), e);
-      }
-
-      if (internalSavingsAccountId == null) {
-        log.warn("ACCOUNTING CONFIRM: Activating default contingency account ID.");        
-      }
+      // Resolve fromAccount external ID to internal account ID
+      Long fromAccountId = resolveAccountId(request.getFromAccount(), request.getFromAccountType() != null ? request.getFromAccountType() : 2);
 
       Map<String, Object> commandData = new HashMap<>();
       commandData.put("fromOfficeId", fromOfficeId);
       commandData.put("fromClientId", fromClientId);
       commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
-      commandData.put("fromAccountId", internalSavingsAccountId);
+      commandData.put("fromAccountId", fromAccountId);
 
       commandData.put("toOfficeId", toOfficeId);
       commandData.put("toClientId", toClientId);
@@ -860,7 +840,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
       String jsonRequestBody = this.gson.toJson(commandData);
 
-      // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
       JsonCommand command = JsonCommand.from(jsonRequestBody);
       log.info("ACCOUNTING CONFIRM: Executing internal transfer command for fee collection...");
       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
@@ -902,5 +881,37 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       properties.put((String) row.get("name"), (String) row.get("value"));
     }
     return properties;
+  }
+
+  /**
+   * Resolves an external ID to an internal account ID based on the account type.
+   * This ensures that transfers can be executed using external identifiers securely.
+   *
+   * @param externalId  The external identifier of the account (passed as String)
+   * @param accountType The type of the account (e.g., 2 for Savings, 1 for Loan)
+   * @return The internal Long ID of the account
+   */
+  private Long resolveAccountId(String externalId, Integer accountType) {
+    if (externalId == null || externalId.isBlank()) {
+      throw new IllegalArgumentException("Account external ID cannot be null or blank.");
+    }
+    
+    // Parse the String ID to a Long to match the Assembler method signatures
+    Long accountId;
+    try {
+        accountId = Long.valueOf(externalId.trim());
+    } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Account ID must be a valid numeric identifier: " + externalId, e);
+    }
+    
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    
+    if (type == PortfolioAccountType.SAVINGS) {
+      return savingsAccountAssembler.assembleFrom(accountId, false).getId();
+    } else if (type == PortfolioAccountType.LOAN) {
+      return loanAssembler.assembleFrom(accountId).getId();
+    }
+    
+    throw new IllegalArgumentException("Unsupported account type for external ID resolution: " + accountType);
   }
 }
