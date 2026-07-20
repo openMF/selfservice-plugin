@@ -305,7 +305,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     SinpeTransferRequest sinpeRequest = SinpeTransferRequest.builder()
             .originCustomerId(client.getExternalId() != null ? client.getExternalId().getValue() : client.getAccountNumber())
-            .originCustomerName(client.getFullname())
+            .originCustomerName(client.getDisplayName())
             .originIban(request.getFromAccount())
             .destinationPhone(request.getToAccount())
             .amount(request.getTransferAmount())
