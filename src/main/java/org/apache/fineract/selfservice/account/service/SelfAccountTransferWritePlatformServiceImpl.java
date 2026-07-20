@@ -21,8 +21,8 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
-import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
@@ -63,7 +63,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final SelfServiceRegistrationRepository registrationRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  
+  // Dedicated service for safe account transfer execution in self-service context
   private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
+  
+  private final ExternalIdFactory externalIdFactory;
   private final SelfAccountTransferDataValidator dataValidator;
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
   private final ConfigurationDomainService configurationDomainService;
@@ -73,7 +77,6 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final PinExternalTransferService pinExternalTransferService;
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final JdbcTemplate jdbcTemplate;
-  private final FromJsonHelper fromApiJsonHelper;
   private final Gson gson = new Gson();
 
   @Override
@@ -153,7 +156,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     String cleanDestination = request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
-    // Handle PIN transfer separately to return the custom response structure and trigger notifications
+    // Handle external transfers separately to return custom response structures and trigger notifications
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       return executePinTransfer(request, user, httpRequest);
     }
@@ -165,6 +168,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       result = executeSinpeTransfer(request, user);
     } else {
+      log.info("CONFIRM -> Fallback to internal transfer.");
       result = executeInternalTransfer(request, user);
     }
 
@@ -188,8 +192,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
-    JsonCommand command = JsonCommand.from(apiRequestBodyAsJson, fromApiJsonHelper);
-    CommandProcessingResult result = accountTransfersWritePlatformService.makeAccountTransfer(command);
+    JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
+    CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
     publishTransferEvent(result, params, params, httpRequest);
     return result;
@@ -397,11 +401,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
     commandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
 
-    String apiRequestBodyAsJson = gson.toJson(commandData);
+    String jsonRequestBody = gson.toJson(commandData);
 
     // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
-    JsonCommand command = JsonCommand.from(apiRequestBodyAsJson, fromApiJsonHelper);
-    return accountTransfersWritePlatformService.makeAccountTransfer(command);
+    JsonCommand command = JsonCommand.from(jsonRequestBody);
+    return accountTransfersWritePlatformService.create(command);
   }
 
   private void publishFastPaymentTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
@@ -857,9 +861,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       String jsonRequestBody = this.gson.toJson(commandData);
 
       // Use the dedicated account transfer service to avoid AppUser cascade persistence issues
-      JsonCommand command = JsonCommand.from(jsonRequestBody, fromApiJsonHelper);
+      JsonCommand command = JsonCommand.from(jsonRequestBody);
       log.info("ACCOUNTING CONFIRM: Executing internal transfer command for fee collection...");
-      accountTransfersWritePlatformService.makeAccountTransfer(command);
+      CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+
+      if (result != null && result.getResourceId() != null) {
+        log.info("ACCOUNTING CONFIRM: Fee successfully collected via internal command. Transaction ID: {}", result.getResourceId());
+      } else {
+        log.warn("ACCOUNTING CONFIRM: Fee collection command executed but did not return a valid resource ID.");
+      }
 
     } catch (Exception e) {
       log.error("ACCOUNTING CONFIRM: Internal fee collection execution failed: ", e);
