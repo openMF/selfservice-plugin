@@ -81,11 +81,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final JdbcTemplate jdbcTemplate;
   private final Gson gson = new Gson();
-  private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
   
   // Injected for external ID resolution
   private final SavingsAccountAssembler savingsAccountAssembler;
   private final LoanAssembler loanAssembler;
+  private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
 
   @Override
   @Transactional
@@ -399,13 +399,23 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     Long fromAccountId = resolveAccountId(request.getFromAccount(), request.getFromAccountType());
     Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
 
+    // Fetch destination account details to get toClientId and toOfficeId (Strictly required by Fineract's AccountTransfersDetailDataValidator)
+    SavingsAccount toSavingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
+    Long toClientId = toSavingsAccount.getClient().getId();
+    Long toOfficeId = toSavingsAccount.getClient().getOffice().getId();
+
     Map<String, Object> commandData = new HashMap<>();
     commandData.put("fromOfficeId", fromOfficeId);
     commandData.put("fromClientId", fromClientId);
     commandData.put("fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
-    commandData.put("fromAccountId", fromAccountId); // Use resolved internal ID
+    commandData.put("fromAccountId", fromAccountId);
+    
+    // Required fields for internal transfers
+    commandData.put("toOfficeId", toOfficeId);
+    commandData.put("toClientId", toClientId);
     commandData.put("toAccountType", request.getToAccountType() != null ? request.getToAccountType() : 2);
-    commandData.put("toAccountId", toAccountId); // Use resolved internal ID
+    commandData.put("toAccountId", toAccountId);
+    
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", request.getTransferDate());
     commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
@@ -890,56 +900,55 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
    * Resolves an external ID to an internal account ID based on the account type.
    * This ensures that transfers can be executed using external identifiers securely.
    *
-   * @param externalId  The external identifier of the account (passed as String)
+   * @param accountIdentifier The external identifier of the account (passed as String)
    * @param accountType The type of the account (e.g., 2 for Savings, 1 for Loan)
    * @return The internal Long ID of the account
    */
   private Long resolveAccountId(String accountIdentifier, Integer accountType) {
-        if (StringUtils.isBlank(accountIdentifier)) {
-            throw new IllegalArgumentException("Account identifier cannot be null or blank.");
-        }
-
-        String trimmed = accountIdentifier.trim();
-        log.debug("Resolving account identifier: {}", trimmed);
-
-        // Try as numeric internal ID first (backward compatibility)
-        try {
-            Long numericId = Long.valueOf(trimmed);
-            log.debug("Parsed as numeric ID: {}", numericId);
-            return resolveNumericAccountId(numericId, accountType);
-        } catch (NumberFormatException e) {
-            log.debug("Not a numeric ID, treating as external ID / IBAN");
-        }
-
-        // External ID / IBAN path
-        PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
-        org.apache.fineract.infrastructure.core.domain.ExternalId externalId = externalIdFactory.create(trimmed);
-
-        if (type == PortfolioAccountType.SAVINGS) {
-            Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
-            SavingsAccount savingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
-            if (savingsAccount == null) {
-                throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
-            }
-            log.info("Resolved savings account externalId={} -> internalId={}", trimmed, savingsAccount.getId());
-            return savingsAccount.getId();
-        } else if (type == PortfolioAccountType.LOAN) {
-            // Similar for loans if needed (add LoanRepositoryWrapper if required)
-            var loan = loanAssembler.assembleFrom(externalId); // Assembler supports externalId in newer Fineract
-            log.info("Resolved loan externalId={} -> internalId={}", trimmed, loan.getId());
-            return loan.getId();
-        }
-
-        throw new IllegalArgumentException("Unsupported account type: " + accountType + " for identifier: " + trimmed);
+    if (StringUtils.isBlank(accountIdentifier)) {
+      throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
+
+    String trimmed = accountIdentifier.trim();
+    log.debug("Resolving account identifier: {}", trimmed);
+
+    // Try as numeric internal ID first (backward compatibility)
+    try {
+      Long numericId = Long.valueOf(trimmed);
+      log.debug("Parsed as numeric ID: {}", numericId);
+      return resolveNumericAccountId(numericId, accountType);
+    } catch (NumberFormatException e) {
+      log.debug("Not a numeric ID, treating as external ID / IBAN");
+    }
+
+    // External ID / IBAN path
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    org.apache.fineract.infrastructure.core.domain.ExternalId externalId = externalIdFactory.create(trimmed);
+
+    if (type == PortfolioAccountType.SAVINGS) {
+      Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
+      SavingsAccount savingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
+      if (savingsAccount == null) {
+        throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
+      }
+      log.info("Resolved savings account externalId={} -> internalId={}", trimmed, savingsAccount.getId());
+      return savingsAccount.getId();
+    } else if (type == PortfolioAccountType.LOAN) {
+      var loan = loanAssembler.assembleFrom(externalId);
+      log.info("Resolved loan externalId={} -> internalId={}", trimmed, loan.getId());
+      return loan.getId();
+    }
+
+    throw new IllegalArgumentException("Unsupported account type: " + accountType + " for identifier: " + trimmed);
+  }
   
-    private Long resolveNumericAccountId(Long numericId, Integer accountType) {
-        PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
-        if (type == PortfolioAccountType.SAVINGS) {
-            return savingsAccountAssembler.assembleFrom(numericId, false).getId();
-        } else if (type == PortfolioAccountType.LOAN) {
-            return loanAssembler.assembleFrom(numericId).getId();
-        }
-        throw new IllegalArgumentException("Unsupported numeric account type: " + accountType);
+  private Long resolveNumericAccountId(Long numericId, Integer accountType) {
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    if (type == PortfolioAccountType.SAVINGS) {
+      return savingsAccountAssembler.assembleFrom(numericId, false).getId();
+    } else if (type == PortfolioAccountType.LOAN) {
+      return loanAssembler.assembleFrom(numericId).getId();
     }
+    throw new IllegalArgumentException("Unsupported numeric account type: " + accountType);
+  }
 }
