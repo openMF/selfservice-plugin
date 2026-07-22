@@ -118,11 +118,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException(
-          "The transfer amount (transferAmount) must be greater than zero.");
+              "The transfer amount (transferAmount) must be greater than zero.");
     }
     if (toAccount == null || toAccount.isBlank()) {
       throw new IllegalArgumentException(
-          "The destination account or number (toAccount) is required.");
+              "The destination account or number (toAccount) is required.");
     }
     if (fromAccount == null || fromAccount.isBlank()) {
       throw new IllegalArgumentException("The source account (fromAccount) is required.");
@@ -132,19 +132,33 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     log.info("PREPARE: Validating status and funds of the local source account: {}", fromAccount);
 
+    BigDecimal feeAmount = BigDecimal.ZERO;
+    try {
+      AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
+      if (quote != null && quote.getFeeAmount() != null) {
+        feeAmount = quote.getFeeAmount();
+      }
+    } catch (Exception e) {
+      log.warn("PREPARE: Could not calculate fee during prepare stage, defaulting to 0", e);
+    }
+
+    BigDecimal totalAmount = transferAmount.add(feeAmount);
+
     Map<String, Object> prepareResponse = new HashMap<>();
     prepareResponse.put("status", "PREPARED");
     prepareResponse.put("fromAccount", fromAccount);
     prepareResponse.put("toAccount", toAccount);
     prepareResponse.put("transferAmount", transferAmount);
+    prepareResponse.put("feeAmount", feeAmount);
+    prepareResponse.put("totalAmount", totalAmount);
     prepareResponse.put("transferType", transferType);
     prepareResponse.put("currencyCode", currencyCode);
     prepareResponse.put(
-        "message",
-        "The destination account was verified and the status is suitable to proceed with the quote.");
+            "message",
+            "The destination account was verified and the status is suitable to proceed with the quote.");
 
     log.info(
-        "PREPARE: Transfer successfully validated and prepared for destination: {}", toAccount);
+            "PREPARE: Transfer successfully validated and prepared for destination: {}", toAccount);
     return prepareResponse;
   }
 
