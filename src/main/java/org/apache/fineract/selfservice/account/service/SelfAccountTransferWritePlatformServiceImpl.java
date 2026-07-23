@@ -227,16 +227,16 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
       return executeSinpeTransfer(request, user, httpRequest);
     }
 
-    CommandProcessingResult result;
+    Object result;
     boolean isSameBankTransfer = false;
 
     if (isSameBankIbanAccount(cleanDestination) || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
-      result = executeInternalTransfer(request, user);
+      result = executeInternalTransfer(request, user, httpRequest);
       isSameBankTransfer = true;
     } else {
       log.info("CONFIRM -> Fallback to internal transfer.");
-      result = executeInternalTransfer(request, user);
+      result = executeInternalTransfer(request, user, httpRequest);
       // For consistency, we could also wrap fallback transfers, but requirement only specifies SAME_BANK.
       // We leave as-is to avoid breaking existing clients.
     }
@@ -244,19 +244,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
       log.info("ACCOUNTING CONFIRM: Shifting fee of {} {} to the collector account configured in c_external_service.", feeAmountFromClient, request.getCurrencyCode());
       executeCommissionChargeViaSameBank(request, feeAmountFromClient);
-    }
+    }   
 
-    publishFastPaymentTransferEvent(result, request, httpRequest);
-
-    // For SAME_BANK transfers, wrap the Fineract response with transferType.
-    if (isSameBankTransfer) {
-      Map<String, Object> wrappedResponse = new HashMap<>();
-      wrappedResponse.put("transferType", "SAME_BANK");
-      wrappedResponse.put("data", result); // result is CommandProcessingResult – the exact Fineract response type
-      return wrappedResponse;
-    }
-
-    // For other internal transfers (if any), return the raw Fineract response as before.
     return result;
   }
 
@@ -484,7 +473,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
   }
 
-  private CommandProcessingResult executeInternalTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
+  private Object executeInternalTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     Long fromClientId = client.getId();
     Long fromOfficeId = client.getOffice().getId();
@@ -525,7 +514,17 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     log.info("JSON Request Body for Internal Transfer: {}", jsonRequestBody);
 
     JsonCommand command = createJsonCommand(jsonRequestBody);
-    return accountTransfersWritePlatformService.create(command);
+    CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+    // For SAME_BANK transfers, wrap the Fineract response with transferType.
+    
+    Map<String, Object> wrappedResponse = new HashMap<>();
+    wrappedResponse.put("transferType", "SAME_BANK");
+    wrappedResponse.put("data", result); // result is CommandProcessingResult 
+    
+    publishFastPaymentTransferEvent(result, request, httpRequest);
+    
+    return wrappedResponse;
+    
   }
 
   private void publishFastPaymentTransferEvent(CommandProcessingResult result, AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
