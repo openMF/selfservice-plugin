@@ -111,6 +111,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
     // Date formatter used for internalRefNumber generation
     private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    
+    // Fineract expected full datetime format for internal transfers (prevents future-date validation errors)
+    private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy HH:mm:ss");
 
     // =====================================================================
     //  PREPARE
@@ -310,6 +313,26 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         // Resolve the currency from the source savings account; fall back to the request
         String resolvedCurrencyCode = resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
+        
+        // Build Fineract-compatible full datetime ===
+        String transferDateForFineract;
+        String dateFormatForFineract = "dd MMMM yyyy HH:mm:ss";
+
+        if (StringUtils.isNotBlank(request.getTransferDate())) {
+            // Parse client date and append current time to avoid "future date" issues
+            try {
+                LocalDate clientDate = LocalDate.parse(request.getTransferDate(),
+                        DateTimeFormatter.ofPattern(request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
+                LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
+                LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
+                transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
+            } catch (Exception e) {
+                log.warn("Failed to parse client transferDate, falling back to now", e);
+                transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
+            }
+        } else {
+            transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
+        }
 
         // Build the Fineract internal-transfer command
         Map<String, Object> commandData = new HashMap<>();
@@ -322,11 +345,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         commandData.put("toAccountType", request.getToAccountType() != null ? request.getToAccountType() : 2);
         commandData.put("toAccountId", toAccountId);
         commandData.put("transferAmount", request.getTransferAmount());
-        commandData.put("transferDate", request.getTransferDate());
+        commandData.put("transferDate", transferDateForFineract); // Full datetime string
         commandData.put("transferDescription",
                 request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
         commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
-        commandData.put("dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
+        commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
         String jsonRequestBody = gson.toJson(commandData);
 
