@@ -408,8 +408,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         SavingsAccountTransaction transferTransaction = null;
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
-            log.info("Transfer created with id: {}. Fetching created_on_utc: ", result.getResourceId());
+            log.info("Transfer created with id: {}. ", result.getResourceId());            
             processingDate = getCreatedOnUtcByTransferId(transferTransaction.getId());
+            log.info("Fetching created_on_utc: {} ", processingDate);
         }        
 
         log.info("Build the structured SAME_BANK response");
