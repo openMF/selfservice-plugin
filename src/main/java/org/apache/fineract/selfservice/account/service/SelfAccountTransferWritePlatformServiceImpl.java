@@ -343,10 +343,12 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         LocalDateTime registrationDate = DateUtils.getLocalDateTimeOfSystem();
 
         CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+        
+        log.info("JSON Response Body for Internal Transfer: {}", result.toString());
 
         LocalDateTime processingDate = DateUtils.getLocalDateTimeOfSystem();
 
-        // Build the structured SAME_BANK response
+        log.info("Build the structured SAME_BANK response");
         BigDecimal feeAmount = request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
         BigDecimal transferAmount = request.getTransferAmount();
         BigDecimal totalAmount = transferAmount.add(feeAmount);
@@ -381,7 +383,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 .successful(true)
                 .build();
 
-        // Persist the audit trail
+        log.info("Persist the audit trail");
         persistSameBankTransferAudit(
                 client.getId(), fromAccountId, toAccountId,
                 request.getFromAccount(), request.getToAccount(),
@@ -391,7 +393,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 "Completada", true, "",
                 registrationDate, processingDate);
 
-        // Wrap in the generic confirm-response envelope
+        log.info("Wrap in the generic confirm-response envelope");
         AccountTransferConfirmResponse wrappedResponse = AccountTransferConfirmResponse.builder()
                 .transferType("SAME_BANK")
                 .data(responseData)
@@ -406,7 +408,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // =====================================================================
-    //  ★ Helper: resolve currency code from SavingsAccount
+    // Helper: resolve currency code from SavingsAccount
     // =====================================================================
     private String resolveCurrencyCode(SavingsAccount savingsAccount, String fallbackCurrencyCode) {
         try {
@@ -421,7 +423,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // =====================================================================
-    //  ★ Helper: generate the internal reference number
+    //  Helper: generate the internal reference number
     //  Format: YYYYMMDD + officeId (5 digits, zero-padded) + resourceId (12 digits, zero-padded)
     //  Example: 2026072237383000000001040
     // =====================================================================
@@ -433,7 +435,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // =====================================================================
-    //  ★ Helper: persist the SAME_BANK audit record
+    // Helper: persist the SAME_BANK audit record
     // =====================================================================
     private void persistSameBankTransferAudit(
             Long clientId, Long fromAccountId, Long toAccountId,
