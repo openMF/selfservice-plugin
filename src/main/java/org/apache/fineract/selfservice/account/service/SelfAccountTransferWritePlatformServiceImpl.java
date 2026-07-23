@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -119,7 +120,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
     
     // Fineract expected full datetime format for internal transfers (prevents future-date validation errors)
-    private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy HH:mm:ss");
+    private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
     
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository; // inject via constructor
 
@@ -294,7 +295,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         return result;
     }
     
-    private LocalDateTime getCreatedOnUtcByTransferId(Long transferId) {
+    private Instant getInstantByTransferId(Long transferId) {
         if (transferId == null) {
             return null;
         }
@@ -306,9 +307,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
             if (ts != null) {
                 // Convert to system default timezone
-                return ts.toInstant()
-                         .atZone(ZoneId.systemDefault())
-                         .toLocalDateTime();
+                return ts.toInstant();
             }
         } catch (Exception e) {
             log.warn("Could not fetch created_on_utc for transfer id: {}", transferId, e);
@@ -406,11 +405,13 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         LocalDateTime processingDate = DateUtils.getLocalDateTimeOfSystem();
         
         SavingsAccountTransaction transferTransaction = null;
+        Instant instant = null;
+        
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
             log.info("Transfer created with id: {}. ", result.getResourceId());            
-            processingDate = getCreatedOnUtcByTransferId(transferTransaction.getId());
-            log.info("Fetching created_on_utc: {} ", processingDate);
+            instant = getInstantByTransferId(transferTransaction.getId());
+            log.info("Fetching created_on_utc: {} ", instant);
         }        
 
         log.info("Build the structured SAME_BANK response");
