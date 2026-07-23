@@ -412,6 +412,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             log.info("Transfer created with id: {}. ", result.getResourceId());            
             instant = getInstantByTransferId(transferTransaction.getId());
             log.info("Fetching created_on_utc: {} ", instant);
+             processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+             log.info("Fetching created_on_tz: {} ", processingDate);
+       
         }        
 
         log.info("Build the structured SAME_BANK response");
