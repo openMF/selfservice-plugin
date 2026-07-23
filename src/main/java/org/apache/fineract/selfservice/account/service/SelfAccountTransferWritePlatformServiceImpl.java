@@ -395,7 +395,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
             log.info("Transfer created with id: {}. ", result.getResourceId());            
-            instant = selfServiceAccountTransferRepository.getCreatedOnUtcByTransferId(result.getResourceId());
+            instant = selfServiceAccountTransferRepository.findCreatedOnUtcByTransferId(result.getResourceId());
             log.info("Fetching created_on_utc: {} ", instant);
             processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
             log.info("Fetching created_on_tz: {} ", processingDate);
