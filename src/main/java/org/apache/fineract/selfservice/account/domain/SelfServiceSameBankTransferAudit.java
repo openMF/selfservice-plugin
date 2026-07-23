@@ -11,6 +11,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -77,13 +78,13 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
     private String rejectDescription;
 
     @Column(name = "registration_date", nullable = false)
-    private LocalDateTime registrationDate;
+    private OffsetDateTime registrationDate;
 
     @Column(name = "processing_date", nullable = false)
-    private LocalDateTime processingDate;
+    private OffsetDateTime processingDate;
 
     @Column(name = "created_on_utc", nullable = false)
-    private LocalDateTime createdOnUtc;
+    private OffsetDateTime createdOnUtc;
 
     /**
      * Static factory that builds a fully-populated audit instance ready for persistence.
@@ -105,8 +106,8 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
             final String stateDescription,
             final boolean successful,
             final String rejectDescription,
-            final LocalDateTime registrationDate,
-            final LocalDateTime processingDate) {
+            final OffsetDateTime registrationDate,
+            final OffsetDateTime processingDate) {
 
         SelfServiceSameBankTransferAudit audit = new SelfServiceSameBankTransferAudit();
         audit.clientId = clientId;
@@ -127,7 +128,7 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
         audit.rejectDescription = rejectDescription;
         audit.registrationDate = registrationDate;
         audit.processingDate = processingDate;
-        audit.createdOnUtc = LocalDateTime.now();
+        audit.createdOnUtc = OffsetDateTime.now();
         return audit;
     }
 }

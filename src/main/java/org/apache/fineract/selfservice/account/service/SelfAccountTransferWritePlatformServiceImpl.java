@@ -15,6 +15,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -379,16 +380,16 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         JsonCommand command = createJsonCommand(jsonRequestBody);
 
         // Capture timestamps before and after the Fineract call
-        LocalDateTime registrationDate = DateUtils.getLocalDateTimeOfSystem();
+        OffsetDateTime registrationDate = OffsetDateTime.now();
 
         CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
         
         log.info("JSON Response Body for Internal Transfer: {}", result.toString());
         
-        LocalDateTime processingDate = DateUtils.getLocalDateTimeOfSystem();
+        OffsetDateTime processingDate = OffsetDateTime.now();
         
         SavingsAccountTransaction transferTransaction = null;
-        Instant instant = Instant.now();
+        OffsetDateTime instant = OffsetDateTime.now();
         String operationId = UUID.randomUUID().toString();
         String description = "Rejected";
         
@@ -397,7 +398,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             log.info("Transfer created with id: {}. ", result.getResourceId());            
             instant = selfServiceAccountTransferRepository.findCreatedOnUtcByTransferId(result.getResourceId());
             log.info("Fetching created_on_utc: {} ", instant);
-            processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+            processingDate = instant;
             log.info("Fetching created_on_tz: {} ", processingDate);
             operationId = transferTransaction.getRefNo();
             log.info("Fetching RefNo: {} ", operationId);
@@ -483,7 +484,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     //  Format: YYYYMMDD + officeId (5 digits, zero-padded) + resourceId (12 digits, zero-padded)
     //  Example: 2026072237383000000001040
     // =====================================================================
-    private String generateInternalRefNumber(LocalDateTime dateTime, Long officeId, Long resourceId) {
+    private String generateInternalRefNumber(OffsetDateTime dateTime, Long officeId, Long resourceId) {
         String datePart = dateTime.format(REF_DATE_FMT);
         String officePart = String.format("%05d", officeId != null ? officeId : 0L);
         String resourcePart = String.format("%012d", resourceId != null ? resourceId : 0L);
@@ -500,7 +501,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             String operationId, String internalRefNumber, Long fineractTransferId,
             String transferDescription, String reference,
             String stateDescription, boolean successful, String rejectDescription,
-            LocalDateTime registrationDate, LocalDateTime processingDate) {
+            OffsetDateTime registrationDate, OffsetDateTime processingDate) {
         try {
             SelfServiceSameBankTransferAudit audit = SelfServiceSameBankTransferAudit.instance(
                     clientId, fromAccountId, toAccountId,
