@@ -11,8 +11,11 @@ import com.google.gson.JsonElement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,6 +48,8 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmResponse;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
@@ -115,6 +120,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     
     // Fineract expected full datetime format for internal transfers (prevents future-date validation errors)
     private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy HH:mm:ss");
+    
+    private final SavingsAccountTransactionRepository savingsAccountTransactionRepository; // inject via constructor
 
     // =====================================================================
     //  PREPARE
@@ -286,9 +293,32 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         publishTransferEvent(result, params, params, httpRequest);
         return result;
     }
+    
+    private LocalDateTime getCreatedOnUtcByTransferId(Long transferId) {
+        if (transferId == null) {
+            return null;
+        }
+
+        String sql = "SELECT created_on_utc FROM m_savings_account_transaction WHERE id = ?";
+
+        try {
+            Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class, transferId);
+
+            if (ts != null) {
+                // Convert to system default timezone
+                return ts.toInstant()
+                         .atZone(ZoneId.systemDefault())
+                         .toLocalDateTime();
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch created_on_utc for transfer id: {}", transferId, e);
+        }
+
+        return null;
+    }
 
     // =====================================================================
-    //  Now builds a fully-structured SameBankTransferResponseData instead of
+    //  Builds a fully-structured SameBankTransferResponseData instead of
     //  returning the raw CommandProcessingResult.
     // =====================================================================
     private Object executeInternalTransfer(AccountTransferConfirmRequest request,
@@ -315,10 +345,10 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         // Resolve the currency from the source savings account; fall back to the request
         String resolvedCurrencyCode = resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
         
-        // Build Fineract-compatible full datetime ===
+        // Build Fineract-compatible date
         String transferDateForFineract;
         String localeForFineract = "en";
-        String dateFormatForFineract = "dd MMMM yyyy HH:mm:ss";
+        String dateFormatForFineract = "dd MMMM yyyy";
 
         if (StringUtils.isNotBlank(request.getTransferDate())) {
             // Parse client date and append current time to avoid "future date" issues
@@ -372,8 +402,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
         
         log.info("JSON Response Body for Internal Transfer: {}", result.toString());
-
+        
         LocalDateTime processingDate = DateUtils.getLocalDateTimeOfSystem();
+        
+        SavingsAccountTransaction transferTransaction = null;
+        if (result.getResourceId() != null) {
+            transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
+            log.info("Transfer created with id: {}. Fetching created_on_utc: ", result.getResourceId());
+            processingDate = getCreatedOnUtcByTransferId(transferTransaction.getId());
+        }        
 
         log.info("Build the structured SAME_BANK response");
         BigDecimal feeAmount = request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
