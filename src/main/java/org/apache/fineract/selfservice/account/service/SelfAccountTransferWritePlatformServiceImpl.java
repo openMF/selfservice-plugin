@@ -388,8 +388,9 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         LocalDateTime processingDate = DateUtils.getLocalDateTimeOfSystem();
         
         SavingsAccountTransaction transferTransaction = null;
-        Instant instant = null;
+        Instant instant = Instant.now();
         String operationId = UUID.randomUUID().toString();
+        String description = "Rejected";
         
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
@@ -399,7 +400,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
             log.info("Fetching created_on_tz: {} ", processingDate);
             operationId = transferTransaction.getRefNo();
-            log.info("Fetching RedNo: {} ", operationId);
+            log.info("Fetching RefNo: {} ", operationId);
+            description = "Completed";
         }        
 
         log.info("Build the structured SAME_BANK response");
@@ -433,7 +435,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 .registrationDate(registrationDate.toString())
                 .rejectDescription("")
                 .internalRefNumber(internalRefNumber)
-                .stateDescription("Completada")
+                .stateDescription(description)
                 .successful(true)
                 .build();
 
@@ -444,7 +446,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 transferAmount, feeAmount, resolvedCurrencyCode,
                 operationId, internalRefNumber, result.getResourceId(),
                 request.getTransferDescription(), request.getReference(),
-                "Completada", true, "",
+                description, true, "",
                 registrationDate, processingDate);
 
         log.info("Wrap in the generic confirm-response envelope");
