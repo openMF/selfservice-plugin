@@ -16,7 +16,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,6 +61,7 @@ import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
 import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
@@ -123,6 +123,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
     
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository; // inject via constructor
+    
+    private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository; // NEW
 
     // =====================================================================
     //  PREPARE
@@ -295,26 +297,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         return result;
     }
     
-    private Instant getInstantByTransferId(Long transferId) {
-        if (transferId == null) {
-            return null;
-        }
-
-        String sql = "SELECT created_on_utc FROM m_savings_account_transaction WHERE id = ?";
-
-        try {
-            Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class, transferId);
-
-            if (ts != null) {
-                // Convert to system default timezone
-                return ts.toInstant();
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch created_on_utc for transfer id: {}", transferId, e);
-        }
-
-        return null;
-    }
+    
 
     // =====================================================================
     //  Builds a fully-structured SameBankTransferResponseData instead of
@@ -411,7 +394,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
             log.info("Transfer created with id: {}. ", result.getResourceId());            
-            instant = getInstantByTransferId(transferTransaction.getId());
+            instant = selfServiceAccountTransferRepository.getCreatedOnUtcByTransferId(result.getResourceId());
             log.info("Fetching created_on_utc: {} ", instant);
             processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
             log.info("Fetching created_on_tz: {} ", processingDate);
