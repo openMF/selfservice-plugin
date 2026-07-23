@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ============================================================ -->
+    <!-- Create the SAME_BANK transfer audit table                    -->
+    <!-- ============================================================ -->
+    <changeSet author="fineract" id="ss-051-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_same_bank_transfer_audit"/>
+            </not>
+        </preConditions>
+        <comment>Create audit table for SAME_BANK internal transfers executed via Self-Service</comment>
+
+        <createTable tableName="m_selfservice_same_bank_transfer_audit">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="from_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="to_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="from_account_identifier" type="VARCHAR(100)"/>
+            <column name="to_account_identifier" type="VARCHAR(100)"/>
+            <column name="transfer_amount" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fee_amount" type="DECIMAL(19,6)"/>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="internal_ref_number" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fineract_transfer_id" type="BIGINT"/>
+            <column name="transfer_description" type="VARCHAR(500)"/>
+            <column name="reference" type="VARCHAR(200)"/>
+            <column name="state_description" type="VARCHAR(100)"/>
+            <column name="successful" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reject_description" type="VARCHAR(500)"/>
+            <column name="registration_date" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processing_date" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_on_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Indexes for common query paths -->
+        <createIndex indexName="idx_ss_sbt_audit_client_id"
+                     tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="client_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ss_sbt_audit_operation_id"
+                     tableName="m_selfservice_same_bank_transfer_audit"
+                     unique="true">
+            <column name="operation_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ss_sbt_audit_internal_ref"
+                     tableName="m_selfservice_same_bank_transfer_audit"
+                     unique="true">
+            <column name="internal_ref_number"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ss_sbt_audit_fineract_txn"
+                     tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="fineract_transfer_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ss_sbt_audit_created"
+                     tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="created_on_utc"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- ============================================================ -->
+    <!-- Foreign key to m_client (soft — no cascade delete)           -->
+    <!-- ============================================================ -->
+    <changeSet author="fineract" id="ss-051-2">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_same_bank_transfer_audit"/>
+            <tableExists tableName="m_client"/>
+        </preConditions>
+        <comment>Add FK from same-bank audit to m_client</comment>
+        <addForeignKeyConstraint
+            baseTableName="m_selfservice_same_bank_transfer_audit"
+            baseColumnNames="client_id"
+            referencedTableName="m_client"
+            referencedColumnNames="id"
+            constraintName="fk_ss_sbt_audit_client"
+            onDelete="SET NULL"
+            onUpdate="CASCADE"/>
+    </changeSet>
+
+</databaseChangeLog>
