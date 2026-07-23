@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -316,6 +317,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         
         // Build Fineract-compatible full datetime ===
         String transferDateForFineract;
+        String localeForFineract = "en";
         String dateFormatForFineract = "dd MMMM yyyy HH:mm:ss";
 
         if (StringUtils.isNotBlank(request.getTransferDate())) {
@@ -326,6 +328,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
                 LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
                 transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
+                Locale defaultLocale = Locale.getDefault();
+                localeForFineract = defaultLocale.getLanguage();
             } catch (Exception e) {
                 log.warn("Failed to parse client transferDate, falling back to now", e);
                 transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
@@ -348,7 +352,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         commandData.put("transferDate", transferDateForFineract); // Full datetime string
         commandData.put("transferDescription",
                 request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
-        commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
+        commandData.put("locale", localeForFineract);
         commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
         String jsonRequestBody = gson.toJson(commandData);
