@@ -400,8 +400,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             log.info("Fetching created_on_utc: {} ", instant);
             processingDate = instant;
             log.info("Fetching created_on_tz: {} ", processingDate);
-            operationId = transferTransaction.getRefNo();
+            String refNo = transferTransaction.getRefNo();
             log.info("Fetching RefNo: {} ", operationId);
+            if(refNo != null){
+                operationId = refNo;
+            }            
             description = "Completed";
         }        
 
