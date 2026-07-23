@@ -49,10 +49,10 @@ public class SameBankTransferResponseData {
     private String operationId;
 
     /** Timestamp when the transfer was processed by the core. */
-    private LocalDateTime processingDate;
+    private String processingDate;
 
     /** Timestamp when the transfer was initially registered / received. */
-    private LocalDateTime registrationDate;
+    private String registrationDate;
 
     /** Rejection reason. Empty string when the transfer is successful. */
     private String rejectDescription;

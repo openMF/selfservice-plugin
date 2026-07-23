@@ -406,15 +406,17 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         
         SavingsAccountTransaction transferTransaction = null;
         Instant instant = null;
+        String operationId = UUID.randomUUID().toString();
         
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
             log.info("Transfer created with id: {}. ", result.getResourceId());            
             instant = getInstantByTransferId(transferTransaction.getId());
             log.info("Fetching created_on_utc: {} ", instant);
-             processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
-             log.info("Fetching created_on_tz: {} ", processingDate);
-       
+            processingDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+            log.info("Fetching created_on_tz: {} ", processingDate);
+            operationId = transferTransaction.getRefNo();
+            log.info("Fetching RedNo: {} ", operationId);
         }        
 
         log.info("Build the structured SAME_BANK response");
@@ -422,7 +424,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         BigDecimal transferAmount = request.getTransferAmount();
         BigDecimal totalAmount = transferAmount.add(feeAmount);
 
-        String operationId = UUID.randomUUID().toString();
+        
         String internalRefNumber = generateInternalRefNumber(
                 processingDate, fromOfficeId, result.getResourceId());
 
@@ -444,8 +446,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 .debitedAmount(transferAmount)
                 .exchangeRate(BigDecimal.ZERO)
                 .operationId(operationId)
-                .processingDate(processingDate)
-                .registrationDate(registrationDate)
+                .processingDate(processingDate.toString())
+                .registrationDate(registrationDate.toString())
                 .rejectDescription("")
                 .internalRefNumber(internalRefNumber)
                 .stateDescription("Completada")
