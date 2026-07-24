@@ -15,4 +15,5 @@ public class ResendOtpRequest {
   private String toAccount;
   private String transferType; // e.g., SAME_BANK, SINPE_MOVIL, etc.
   // Can be extended with transferId if needed for future tracking
+  private String transferDescription; // optional for context in notification
 }
