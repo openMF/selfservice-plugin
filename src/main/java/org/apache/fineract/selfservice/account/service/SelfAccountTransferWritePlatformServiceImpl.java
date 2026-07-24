@@ -297,8 +297,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         publishTransferEvent(result, params, params, httpRequest);
         return result;
     }
-    
-    
+
+
 
     // =====================================================================
     //  Builds a fully-structured SameBankTransferResponseData instead of
@@ -327,7 +327,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         // Resolve the currency from the source savings account; fall back to the request
         String resolvedCurrencyCode = resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
-        
+
         // Build Fineract-compatible date
         String transferDateForFineract;
         String localeForFineract = "en";
@@ -383,11 +383,11 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         OffsetDateTime registrationDate = OffsetDateTime.now();
 
         CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
-        
+
         log.info("JSON Response Body for Internal Transfer: {}", result.toString());
-        
+
         OffsetDateTime processingDate = OffsetDateTime.now();
-        
+
         SavingsAccountTransaction transferTransaction = null;
         OffsetDateTime instant = OffsetDateTime.now();
         String operationId = UUID.randomUUID().toString();
@@ -396,7 +396,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
-            log.info("Transfer created with id: {}. ", result.getResourceId());            
+            log.info("Transfer created with id: {}. ", result.getResourceId());
             instant = selfServiceAccountTransferRepository.findCreatedOnUtcByTransferId(result.getResourceId());
             log.info("Fetching created_on_utc: {} ", instant);
             processingDate = instant;
@@ -405,17 +405,16 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
             log.info("Fetching RefNo: {} ", operationId);
             if(refNo != null){
                 operationId = refNo;
-            }            
+            }
             description = "Completed";
             stateCode = 32;
-        }        
+        }
 
         log.info("Build the structured SAME_BANK response");
         BigDecimal feeAmount = request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
         BigDecimal transferAmount = request.getTransferAmount();
         BigDecimal totalAmount = transferAmount.add(feeAmount);
 
-        
         String internalRefNumber = generateInternalRefNumber(
                 processingDate, fromOfficeId, result.getResourceId());
 
@@ -456,10 +455,18 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 description, true, "",
                 registrationDate, processingDate);
 
+        log.info("Homologating SAME_BANK response structure");
+        Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
+        Map<String, Object> homologatedData = homologateResponseData(
+                rawInternalMap,
+                request.getTransferAmount(),
+                resolvedCurrencyCode
+        );
+
         log.info("Wrap in the generic confirm-response envelope");
         AccountTransferConfirmResponse wrappedResponse = AccountTransferConfirmResponse.builder()
                 .transferType("SAME_BANK")
-                .data(responseData)
+                .data(homologatedData)
                 .build();
 
         publishFastPaymentTransferEvent(result, request, httpRequest);
@@ -527,7 +534,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // =====================================================================
-    //  PIN TRANSFER  
+    //  PIN TRANSFER
     // =====================================================================
     private Object executePinTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
         log.info("CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
@@ -626,9 +633,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
             Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
 
+            Map<String, Object> homologatedData = homologateResponseData(
+                    externalData,
+                    request.getTransferAmount(),
+                    dynamicCurrencyCode
+            );
+
             Map<String, Object> response = new HashMap<>();
             response.put("transferType", "PIN");
-            response.put("data", externalData);
+            response.put("data", homologatedData);
 
             publishPinTransferEvent(request, user, httpRequest, externalData);
 
@@ -643,7 +656,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
     }
 
     // =====================================================================
-    //  SINPE TRANSFER  
+    //  SINPE TRANSFER
     // =====================================================================
     private Object executeSinpeTransfer(AccountTransferConfirmRequest request, AppSelfServiceUser user, HttpServletRequest httpRequest) {
         Client client = user.getAppUserClientMappings().iterator().next().getClient();
@@ -676,9 +689,15 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
 
         Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
 
+        Map<String, Object> homologatedData = homologateResponseData(
+                externalData,
+                request.getTransferAmount(),
+                "CRC"
+        );
+
         Map<String, Object> response = new HashMap<>();
         response.put("transferType", "SINPE_MOVIL");
-        response.put("data", externalData);
+        response.put("data", homologatedData);
 
         publishSinpeTransferEvent(request, user, httpRequest, externalData);
 
@@ -1379,5 +1398,107 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
                 user.getUsername(), user.getEmail(), extractMobile(user), determineMode(user.getEmail(), extractMobile(user)),
                 extractClientIp(httpRequest), LocaleContextHolder.getLocale(), contextData));
+    }
+
+
+    private Map<String, Object> homologateResponseData(Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency) {
+        if (rawData == null) {
+            rawData = new HashMap<>();
+        }
+
+        Map<String, Object> data = new HashMap<>(rawData);
+
+        String operationId = data.containsKey("operationId") && data.get("operationId") != null
+                ? data.get("operationId").toString() : "";
+
+        String internalRef = data.get("internalRefNumber") != null ? data.get("internalRefNumber").toString()
+                : (data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString() : "");
+
+        String channelRef = data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString()
+                : (data.get("internalRefNumber") != null ? data.get("internalRefNumber").toString() : "");
+
+        String sinpeRef = data.get("sinpeRefNumber") != null ? data.get("sinpeRefNumber").toString() : "";
+
+        Object rawDebited = data.get("debitedAmount") != null ? data.get("debitedAmount") : data.get("amount");
+        BigDecimal debitedAmount = rawDebited != null ? new BigDecimal(rawDebited.toString()) : fallbackAmount;
+
+        String debitCurrencyCode = data.get("debitCurrencyCode") != null ? data.get("debitCurrencyCode").toString()
+                : (data.get("currency") != null ? data.get("currency").toString() : fallbackCurrency);
+
+        BigDecimal commissionAmount = data.get("commissionAmount") != null
+                ? new BigDecimal(data.get("commissionAmount").toString()) : BigDecimal.ZERO;
+
+        String commissionCurrency = data.get("commissionCurrency") != null ? data.get("commissionCurrency").toString()
+                : (debitCurrencyCode != null ? debitCurrencyCode : "");
+
+        BigDecimal exchangeRate = data.get("exchangeRate") != null
+                ? new BigDecimal(data.get("exchangeRate").toString()) : BigDecimal.ZERO;
+
+        String registrationDate = data.get("registrationDate") != null ? data.get("registrationDate").toString() : "";
+        String processingDate = data.get("processingDate") != null ? data.get("processingDate").toString() : "";
+
+        // 4. Normalización de Estado (stateCode & stateDescription en Inglés)
+        Integer stateCode = 32;
+        Object rawState = data.containsKey("stateCode") ? data.get("stateCode") : data.get("state");
+        if (rawState != null) {
+            try {
+                stateCode = Double.valueOf(rawState.toString()).intValue();
+            } catch (Exception ignored) {}
+        }
+
+        String stateDescription;
+        switch (stateCode) {
+            case 1:   stateDescription = "Registered"; break;
+            case 32:  stateDescription = "Completed";  break;
+            case 128: stateDescription = "Rejected";   break;
+            case 256: stateDescription = "Pending";    break;
+            default:  stateDescription = "Completed";  break;
+        }
+
+        // 5. Manejo de Rechazo (rejectCode & rejectDescription)
+        Integer rejectCode = 0;
+        if (data.get("rejectCode") != null) {
+            try {
+                rejectCode = Double.valueOf(data.get("rejectCode").toString()).intValue();
+            } catch (Exception ignored) {}
+        } else if (stateCode == 128) {
+            rejectCode = 128;
+        }
+
+        String rejectDescription = data.get("rejectDescription") != null ? data.get("rejectDescription").toString() : "";
+        if (rejectDescription.isEmpty() && stateCode == 128) {
+            rejectDescription = "Transaction rejected";
+        }
+
+        boolean successful = data.get("successful") != null
+                ? Boolean.parseBoolean(data.get("successful").toString()) : (stateCode == 32);
+
+        Object customData = data.get("customData");
+
+        // Limpieza de campos viejos/no homologados que venían en el raw map
+        data.remove("amount");
+        data.remove("currency");
+        data.remove("state");
+
+        // 6. Inyección de las llaves homologadas estandarizadas
+        data.put("operationId", operationId);
+        data.put("internalRefNumber", internalRef);
+        data.put("channelRefNumber", channelRef);
+        data.put("sinpeRefNumber", sinpeRef);
+        data.put("debitedAmount", debitedAmount);
+        data.put("debitCurrencyCode", debitCurrencyCode);
+        data.put("commissionAmount", commissionAmount);
+        data.put("commissionCurrency", commissionCurrency);
+        data.put("exchangeRate", exchangeRate);
+        data.put("registrationDate", registrationDate);
+        data.put("processingDate", processingDate);
+        data.put("stateCode", stateCode);
+        data.put("stateDescription", stateDescription);
+        data.put("rejectCode", rejectCode);
+        data.put("rejectDescription", rejectDescription);
+        data.put("successful", successful);
+        data.put("customData", customData);
+
+        return data;
     }
 }
