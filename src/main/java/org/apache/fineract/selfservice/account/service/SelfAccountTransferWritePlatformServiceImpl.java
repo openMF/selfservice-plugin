@@ -1337,38 +1337,41 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
         LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
-        Optional<SelfServiceRegistration> optionalLatest = registrationRepository.findTopByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
+        Optional<SelfServiceRegistration> optionalLatest = registrationRepository
+                .findTopByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
+                        client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
 
-        if (optionalLatest.isEmpty()) {
+        if (optionalLatest.isEmpty() || optionalLatest.get().isExpired(now)) {
+            if (optionalLatest.isPresent()) {
+                markAsExpired(optionalLatest.get());
+            }
+            log.info("RESEND OTP: No valid OTP found or expired → generating fresh one.");
             return generateNewOtpForResend(user, resendRequest, httpRequest);
         }
 
         SelfServiceRegistration latest = optionalLatest.get();
 
-        if (latest.isExpired(now)) {
-            markAsExpired(latest);
-            return generateNewOtpForResend(user, resendRequest, httpRequest);
-        }
+        // Cooldown release for resend (critical fix)
+        releaseOtpCooldown(user);
 
-        long totalExpiryMs = 10 * 60 * 1000;
-        LocalDateTime created = latest.getCreatedDate() != null ? latest.getCreatedDate() : now.minusMinutes(10);
-        long totalDurationMs = java.time.Duration.between(created, latest.getExpiresAt()).toMillis();
+        long totalDurationMs = java.time.Duration.between(
+                latest.getCreatedDate() != null ? latest.getCreatedDate() : now.minusMinutes(10),
+                latest.getExpiresAt()).toMillis();
         long remainingMs = java.time.Duration.between(now, latest.getExpiresAt()).toMillis();
-
-        double remainingRatio = (double) remainingMs / totalDurationMs;
+        double remainingRatio = totalDurationMs > 0 ? (double) remainingMs / totalDurationMs : 0.0;
 
         if (remainingRatio < 0.5) {
-            log.info("Resend OTP: Remaining time < 50% ({}%), expiring old and generating new.", remainingRatio * 100);
+            log.info("RESEND OTP: Remaining <50% → expire old + generate new.");
             markAsExpired(latest);
             return generateNewOtpForResend(user, resendRequest, httpRequest);
         } else {
-            log.info("Resend OTP: Remaining time sufficient ({}%), resending same OTP notification.", remainingRatio * 100);
+            log.info("RESEND OTP: Re-using existing OTP ({}% remaining).", Math.round(remainingRatio * 100));
             resendExistingOtpNotification(latest, user, httpRequest);
             Map<String, Object> response = new HashMap<>();
             response.put("status", "OTP_RESENT");
-            response.put("message", "OTP resent successfully.");
+            response.put("message", "OTP resent successfully via configured channel (SMS/Email).");
             response.put("expiresAt", latest.getExpiresAt());
+            response.put("otpId", latest.getId()); // for debugging/tracking
             return gson.toJson(response);
         }
     }
@@ -1378,7 +1381,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         dummy.setFromAccount(resendRequest.getFromAccount());
         dummy.setToAccount(resendRequest.getToAccount());
         dummy.setTransferType(resendRequest.getTransferType());
-        dummy.setTransferAmount(BigDecimal.ZERO);
+        dummy.setTransferAmount(BigDecimal.ZERO); // dummy for new OTP
         return generateAndSendOtp(dummy, user, httpRequest);
     }
 
@@ -1392,12 +1395,32 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         Map<String, Object> contextData = new HashMap<>();
         contextData.put("authCode", reg.getAuthenticationToken());
         contextData.put("expirationMinutes", 10);
-        contextData.put("transferAmount", "N/A");
+        contextData.put("transferAmount", "N/A (resend)");
+        contextData.put("isResend", true); // useful for templates
 
-        applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-                this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
-                user.getUsername(), user.getEmail(), extractMobile(user), determineMode(user.getEmail(), extractMobile(user)),
-                extractClientIp(httpRequest), LocaleContextHolder.getLocale(), contextData));
+        // Ensure cooldown is honored but allow resend
+        String cacheKey = SelfServiceNotificationEvent.Type.TRANSFER_OTP.name() + ":" + user.getId();
+        if (!notificationCooldownCache.tryAcquire(cacheKey)) {
+            log.info("Cooldown still active but forcing resend notification as per business rule.");
+        }
+
+        applicationEventPublisher.publishEvent(
+            SelfServiceNotificationEvent.withTenantContext(
+                this,
+                SelfServiceNotificationEvent.Type.TRANSFER_OTP,
+                user.getId(),
+                user.getFirstname(),
+                user.getLastname(),
+                user.getUsername(),
+                user.getEmail(),
+                extractMobile(user),
+                determineMode(user.getEmail(), extractMobile(user)),
+                extractClientIp(httpRequest),
+                LocaleContextHolder.getLocale(),
+                contextData
+            )
+        );
+        log.info("RESEND OTP: Notification event published successfully for existing OTP.");
     }
 
 
