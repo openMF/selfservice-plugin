@@ -392,7 +392,8 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         OffsetDateTime instant = OffsetDateTime.now();
         String operationId = UUID.randomUUID().toString();
         String description = "Rejected";
-        
+        Integer stateCode = 128;
+
         if (result.getResourceId() != null) {
             transferTransaction = savingsAccountTransactionRepository.findById(result.getResourceId()).orElse(null);
             log.info("Transfer created with id: {}. ", result.getResourceId());            
@@ -406,6 +407,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 operationId = refNo;
             }            
             description = "Completed";
+            stateCode = 32;
         }        
 
         log.info("Build the structured SAME_BANK response");
@@ -440,6 +442,7 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
                 .rejectDescription("")
                 .internalRefNumber(internalRefNumber)
                 .stateDescription(description)
+                .stateCode(stateCode)
                 .successful(true)
                 .build();
 

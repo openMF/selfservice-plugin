@@ -68,4 +68,6 @@ public class SameBankTransferResponseData {
 
     /** Whether the transfer completed successfully. */
     private boolean successful;
+
+    private int stateCode;
 }
