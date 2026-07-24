@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.registration.domain;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -122,4 +123,8 @@ public interface SelfServiceRegistrationRepository
       @Param("clientId") Long clientId,
       @Param("requestType") SelfServiceRequestType requestType,
       @Param("cutoff") LocalDateTime cutoff);
+  
+  // Returns List, never throws NonUniqueResultException
+    List<SelfServiceRegistration> findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
+            Long clientId, SelfServiceRequestType requestType);
 }
