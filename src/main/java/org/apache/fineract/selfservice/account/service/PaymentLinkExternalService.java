@@ -9,13 +9,13 @@ package org.apache.fineract.selfservice.account.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.configuration.data.ExternalServiceConfigurationData;
+import org.apache.fineract.infrastructure.configuration.service.ExternalServiceConfigurationService;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
@@ -33,7 +33,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -45,13 +44,13 @@ public class PaymentLinkExternalService {
 
   private static final String SERVICE_NAME = "PaymentLinkService";
 
-  private final JdbcTemplate jdbcTemplate;
   private final SelfServicePaymentLinkRepository paymentLinkRepository;
   private final PlatformSelfServiceSecurityContext securityContext;
-  private final ObjectMapper objectMapper = new ObjectMapper();
-  private final RestTemplate restTemplate = new RestTemplate();
+  private final ExternalServiceConfigurationService externalServiceConfigurationService;
   private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
   private final ExternalIdFactory externalIdFactory;
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final RestTemplate restTemplate = new RestTemplate();
 
   @Transactional
   public PaymentLinkResponse createPaymentLink(PaymentLinkRequest request) {
@@ -67,36 +66,34 @@ public class PaymentLinkExternalService {
 
     Client client = selfUser.getAppUserClientMappings().iterator().next().getClient();
     Long clientId = client.getId();
-    SavingsAccount savingsAccount = null;
+    SavingsAccount savingsAccount;
 
-    // Basic ownership / permission guard (extend as needed for savings account ownership)
     if (request.getClientAccount() == null
         || request.getAmount() == null
         || request.getAmount().signum() <= 0) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.payment.link.invalid.request",
           "Client Account and a positive amount are required");
-    } else {
-      savingsAccount = resolveSavingsAccount(request.getClientAccount());
-      if (savingsAccount == null) {
-        throw new GeneralPlatformDomainRuleException(
-            "error.msg.payment.link.invalid.account",
-            "Client Account not found and it is required");
-      }
-      if (!Objects.equals(savingsAccount.getClient().getId(), clientId)) {
-        throw new GeneralPlatformDomainRuleException(
-            "error.msg.payment.client.notlinked.to.account",
-            "Client is not linked to that savings account");
-      }
-      if (!Objects.equals(savingsAccount.getCurrency().getCode(), request.getCurrency())) {
-        throw new GeneralPlatformDomainRuleException(
-            "error.msg.payment.account.currency.doesnt.match",
-            "Savings account currency doesn't match");
-      }
+    }
+
+    savingsAccount = resolveSavingsAccount(request.getClientAccount());
+    if (savingsAccount == null) {
+      throw new GeneralPlatformDomainRuleException(
+          "error.msg.payment.link.invalid.account",
+          "Client Account not found and it is required");
+    }
+    if (!Objects.equals(savingsAccount.getClient().getId(), clientId)) {
+      throw new GeneralPlatformDomainRuleException(
+          "error.msg.payment.client.notlinked.to.account",
+          "Client is not linked to that savings account");
+    }
+    if (!Objects.equals(savingsAccount.getCurrency().getCode(), request.getCurrency())) {
+      throw new GeneralPlatformDomainRuleException(
+          "error.msg.payment.account.currency.doesnt.match",
+          "Savings account currency doesn't match");
     }
 
     ExternalPaymentLinkRequest externalPaymentLinkRequest = new ExternalPaymentLinkRequest();
-
     externalPaymentLinkRequest.setCustomerName(request.getPayerName());
     externalPaymentLinkRequest.setCustomerEmail(request.getPayerEmail());
     externalPaymentLinkRequest.setCustomerPhone(request.getPayerPhone());
@@ -105,22 +102,24 @@ public class PaymentLinkExternalService {
     externalPaymentLinkRequest.setCurrency(savingsAccount.getCurrency().getCode());
     externalPaymentLinkRequest.setCustomerAccount(savingsAccount.getId());
 
-    Map<String, String> props = getServiceProperties();
-    if (!isEnabled(props)) {
+    ExternalServiceConfigurationData config =
+        externalServiceConfigurationService.getConfiguration(SERVICE_NAME);
+
+    if (!config.isEnabled()) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.payment.link.service.disabled",
           "PaymentLinkService is disabled in configuration");
     }
 
-    String host = getHost(props);
-    if (host == null || host.isBlank()) {
+    String host = config.getHost();
+    if (StringUtils.isBlank(host)) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.payment.link.host.missing", "PaymentLinkService host is not configured");
     }
 
     String url = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
 
-    HttpHeaders headers = buildHeaders(props);
+    HttpHeaders headers = buildHeaders(config);
     HttpEntity<ExternalPaymentLinkRequest> entity =
         new HttpEntity<>(externalPaymentLinkRequest, headers);
 
@@ -142,7 +141,6 @@ public class PaymentLinkExternalService {
               .success(node.path("success").asBoolean(false))
               .build();
 
-      // Persist audit record
       SelfServicePaymentLink entityToSave = new SelfServicePaymentLink();
       entityToSave.setAppSelfServiceUserId(userId);
       entityToSave.setClientId(clientId);
@@ -171,14 +169,12 @@ public class PaymentLinkExternalService {
   }
 
   private SavingsAccount resolveSavingsAccount(String accountIdentifier) {
-
     if (StringUtils.isBlank(accountIdentifier)) {
       throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
 
     String trimmed = accountIdentifier.trim();
     log.debug("Resolving account identifier: {}", trimmed);
-    SavingsAccount savingsAccount = null;
 
     try {
       Long numericId = Long.valueOf(trimmed);
@@ -192,9 +188,10 @@ public class PaymentLinkExternalService {
     org.apache.fineract.infrastructure.core.domain.ExternalId externalId =
         externalIdFactory.create(trimmed);
 
+    SavingsAccount savingsAccount = null;
     if (type == PortfolioAccountType.SAVINGS) {
       Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
-      savingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);      
+      savingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
       if (savingsAccount == null) {
         throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
       }
@@ -206,43 +203,13 @@ public class PaymentLinkExternalService {
     return savingsAccount;
   }
 
-  private Map<String, String> getServiceProperties() {
-    Map<String, String> props = new HashMap<>();
-    String sql =
-        """
-                SELECT p.name, p.value
-                FROM c_external_service_properties p
-                INNER JOIN c_external_service s ON p.external_service_id = s.id
-                WHERE s.name = ?
-                """;
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, SERVICE_NAME);
-    for (Map<String, Object> row : rows) {
-      String name = (String) row.get("name");
-      String value = (String) row.get("value");
-      if (name != null && value != null) {
-        props.put(name, value);
-      }
-    }
-    return props;
-  }
-
-  private boolean isEnabled(Map<String, String> props) {
-    return "true".equalsIgnoreCase(props.get("isEnabled"));
-  }
-
-  private String getHost(Map<String, String> props) {
-    return props.getOrDefault("host", "");
-  }
-
-  private HttpHeaders buildHeaders(Map<String, String> props) {
+  private HttpHeaders buildHeaders(ExternalServiceConfigurationData config) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setAccept(List.of(MediaType.APPLICATION_JSON));
 
-    String headerName = props.get("header");
-    String headerValue = props.get("headerValue");
-    if (headerName != null && !headerName.isBlank() && headerValue != null) {
-      headers.set(headerName, headerValue);
+    if (config.hasCustomHeader()) {
+      headers.set(config.getHeaderName(), config.getHeaderValue());
     }
     return headers;
   }
