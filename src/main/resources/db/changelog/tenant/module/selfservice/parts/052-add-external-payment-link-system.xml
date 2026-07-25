@@ -25,7 +25,7 @@
 
         <insert tableName="c_external_service_properties">
             <column name="name" value="host"/>
-            <column name="value" value="https://api.apolocapital.io/1.0/linkdepago"/>
+            <column name="value" value="https://apis.mifos.community/1.0/paymentlink"/>
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
         </insert>
 
