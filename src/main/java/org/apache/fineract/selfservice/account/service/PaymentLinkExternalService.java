@@ -12,6 +12,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -70,7 +71,7 @@ public class PaymentLinkExternalService {
 
     Client client = selfUser.getAppUserClientMappings().iterator().next().getClient();
     Long clientId = client.getId();
-    Long accountId = null;
+    SavingsAccount savingsAccount = null;    
 
     // Basic ownership / permission guard (extend as needed for savings account ownership)
     if (request.getClientAccount() == null
@@ -81,11 +82,21 @@ public class PaymentLinkExternalService {
           "Client Account and a positive amount are required");
     }
     else{
-        accountId = resolveAccountId(request.getClientAccount(),2);
-        if (accountId == null) {
+        savingsAccount = resolveSavingsAccount(request.getClientAccount());
+        if (savingsAccount == null) {
             throw new GeneralPlatformDomainRuleException(
                 "error.msg.payment.link.invalid.account",
                 "Client Account not found and it is required");
+        }
+        if(!Objects.equals(savingsAccount.getClient().getId(), clientId)){
+            throw new GeneralPlatformDomainRuleException(
+                "error.msg.payment.client.notlinked.to.account",
+                "Client is not linked to that savings account");
+        }
+        if(!Objects.equals(savingsAccount.getCurrency().getCode(), request.getCurrency())){
+            throw new GeneralPlatformDomainRuleException(
+                "error.msg.payment.account.currency.doesnt.match",
+                "Savings account currency doesn't match");
         }
     }
     
@@ -95,9 +106,9 @@ public class PaymentLinkExternalService {
     externalPaymentLinkRequest.setCustomerEmail(request.getPayerEmail());
     externalPaymentLinkRequest.setCustomerPhone(request.getPayerPhone());
     externalPaymentLinkRequest.setAmount(request.getAmount());
-    externalPaymentLinkRequest.setCurrency(request.getCurrency());
     externalPaymentLinkRequest.setDescription(request.getDescription());
-    externalPaymentLinkRequest.setCustomerAccount(accountId);
+    externalPaymentLinkRequest.setCurrency(savingsAccount.getCurrency().getCode());    
+    externalPaymentLinkRequest.setCustomerAccount(savingsAccount.getId());
 
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
@@ -163,29 +174,30 @@ public class PaymentLinkExternalService {
     }
   }
   
-  private Long resolveAccountId(String accountIdentifier, Integer accountType) {
+  private SavingsAccount resolveSavingsAccount(String accountIdentifier) {      
+      
     if (StringUtils.isBlank(accountIdentifier)) {
       throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
 
     String trimmed = accountIdentifier.trim();
     log.debug("Resolving account identifier: {}", trimmed);
+    SavingsAccount savingsAccount = null;
 
     try {
       Long numericId = Long.valueOf(trimmed);
       log.debug("Parsed as numeric ID: {}", numericId);
-      return resolveNumericAccountId(numericId, accountType);
+      return savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(numericId);      
     } catch (NumberFormatException e) {
       log.debug("Not a numeric ID, treating as external ID / IBAN");
     }
 
-    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
-    org.apache.fineract.infrastructure.core.domain.ExternalId externalId =
-        externalIdFactory.create(trimmed);
+    PortfolioAccountType type = PortfolioAccountType.fromInt(2);
+    org.apache.fineract.infrastructure.core.domain.ExternalId externalId = externalIdFactory.create(trimmed);
 
     if (type == PortfolioAccountType.SAVINGS) {
       Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
-      SavingsAccount savingsAccount =
+      savingsAccount =
           savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
          log.info("Currency Code={}",   savingsAccount.getCurrency().getCode());
       if (savingsAccount == null) {
@@ -195,26 +207,11 @@ public class PaymentLinkExternalService {
           "Resolved savings account externalId={} -> internalId={}",
           trimmed,
           savingsAccount.getId());
-      return savingsAccount.getId();
-    } else if (type == PortfolioAccountType.LOAN) {
-      var loan = loanAssembler.assembleFrom(externalId);
-      log.info("Resolved loan externalId={} -> internalId={}", trimmed, loan.getId());
-      return loan.getId();
-    }
-
-    throw new IllegalArgumentException(
-        "Unsupported account type: " + accountType + " for identifier: " + trimmed);
+      
+    } 
+    return savingsAccount;
   }
   
-  private Long resolveNumericAccountId(Long numericId, Integer accountType) {
-    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
-    if (type == PortfolioAccountType.SAVINGS) {
-      return savingsAccountAssembler.assembleFrom(numericId, false).getId();
-    } else if (type == PortfolioAccountType.LOAN) {
-      return loanAssembler.assembleFrom(numericId).getId();
-    }
-    throw new IllegalArgumentException("Unsupported numeric account type: " + accountType);
-  }
 
   private Map<String, String> getServiceProperties() {
     Map<String, String> props = new HashMap<>();
