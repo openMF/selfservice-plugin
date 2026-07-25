@@ -187,6 +187,7 @@ public class PaymentLinkExternalService {
       Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
       SavingsAccount savingsAccount =
           savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
+         log.info("Currency Code={}",   savingsAccount.getCurrency().getCode());
       if (savingsAccount == null) {
         throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
       }
