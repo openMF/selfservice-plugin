@@ -261,6 +261,25 @@ public class SelfAccountTransferWritePlatformServiceImpl
        log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
      }
    }
+   
+   /**
+ * Releases the cooldown key used by {@link org.apache.fineract.selfservice.notification.service.SelfServiceNotificationService}.
+ * Key format MUST match the listener: {@code TRANSFER_SUCCESS:{userId}} (no channel suffix).
+ * Multi-tenant safe: userId is tenant-scoped.
+ */
+private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
+  try {
+    String cacheKey =
+        SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS.name() + ":" + user.getId();
+    notificationCooldownCache.release(cacheKey);
+    log.info(
+        "CONFIRM: Released TRANSFER_SUCCESS cooldown key={} for user {}",
+        cacheKey,
+        user.getId());
+  } catch (Exception e) {
+    log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
+  }
+}
 
   // =====================================================================
   //  CONFIRM  (entry-point)
@@ -531,7 +550,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .transferType("SAME_BANK")
             .data(homologatedData)
             .build();
-    releaseTransferSuccessCooldown(user, "SAME_BANK");
+    releaseTransferSuccessCooldown(user);
     publishFastPaymentTransferEvent(result, request, httpRequest);
 
     log.info(
@@ -766,7 +785,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       Map<String, Object> response = new HashMap<>();
       response.put("transferType", "PIN");
       response.put("data", homologatedData);
-      releaseTransferSuccessCooldown(user, "PIN");
+      releaseTransferSuccessCooldown(user);
       publishPinTransferEvent(request, user, httpRequest, externalData);
 
       return response;
@@ -830,7 +849,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", "SINPE_MOVIL");
     response.put("data", homologatedData);
-    releaseTransferSuccessCooldown(user, "SINPE_MOVIL");
+    releaseTransferSuccessCooldown(user);
     publishSinpeTransferEvent(request, user, httpRequest, externalData);
 
     return response;
@@ -849,7 +868,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         StringUtils.isNotBlank(request.getTransferType())
             ? request.getTransferType().toUpperCase()
             : "SAME_BANK";
-      releaseTransferSuccessCooldown(user, transferType);
+      releaseTransferSuccessCooldown(user);
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + request.getTransferType();
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
@@ -929,7 +948,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
-        releaseTransferSuccessCooldown(user, "SINPE_MOVIL");
+        releaseTransferSuccessCooldown(user);
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":SINPE_MOVIL";
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
@@ -1016,7 +1035,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       Map<String, Object> externalData) {
     try {
         // Invalidate any prior cooldown so a successful PIN confirm always notifies
-    releaseTransferSuccessCooldown(user, "PIN");
+    releaseTransferSuccessCooldown(user);
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":PIN";
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
