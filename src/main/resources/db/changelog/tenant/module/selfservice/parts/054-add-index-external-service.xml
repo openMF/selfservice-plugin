@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- OPTIONAL only: performance aid. Core tables already exist and are unique on name. -->
+    <changeSet author="fineract" id="ss-0054-1">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="c_external_service"/>
+                <not>
+                    <indexExists tableName="c_external_service" indexName="idx_c_external_service_name"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Optional index on c_external_service.name for tenant-local external config lookups</comment>
+        <createIndex tableName="c_external_service" indexName="idx_c_external_service_name">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

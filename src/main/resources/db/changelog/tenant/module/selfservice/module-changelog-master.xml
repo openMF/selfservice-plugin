@@ -63,4 +63,5 @@
   <include file="parts/051-create-same-bank-transfer-audit-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/052-add-external-payment-link-system.xml" relativeToChangelogFile="true"/>
   <include file="parts/053-create-payment-link-table.xml" relativeToChangelogFile="true"/>
+  <include file="parts/054-add-index-external-service.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>
