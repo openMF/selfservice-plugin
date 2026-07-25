@@ -531,7 +531,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .transferType("SAME_BANK")
             .data(homologatedData)
             .build();
-
+    releaseTransferSuccessCooldown(user, "SAME_BANK");
     publishFastPaymentTransferEvent(result, request, httpRequest);
 
     log.info(
@@ -766,7 +766,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       Map<String, Object> response = new HashMap<>();
       response.put("transferType", "PIN");
       response.put("data", homologatedData);
-
+      releaseTransferSuccessCooldown(user, "PIN");
       publishPinTransferEvent(request, user, httpRequest, externalData);
 
       return response;
@@ -830,7 +830,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", "SINPE_MOVIL");
     response.put("data", homologatedData);
-
+    releaseTransferSuccessCooldown(user, "SINPE_MOVIL");
     publishSinpeTransferEvent(request, user, httpRequest, externalData);
 
     return response;
