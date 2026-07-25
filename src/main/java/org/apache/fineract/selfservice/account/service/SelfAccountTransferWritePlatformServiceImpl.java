@@ -307,20 +307,20 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     // Route to the correct execution strategy
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       return executePinTransfer(request, user, httpRequest);
-    } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+    } 
+    else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       return executeSinpeTransfer(request, user, httpRequest);
-    }
-
-    Object result;
-
-    if (isSameBankIbanAccount(cleanDestination)
+    } 
+    else if (isSameBankIbanAccount(cleanDestination)
         || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
-      result = executeInternalTransfer(request, user, httpRequest);
-    } else {
+      return executeInternalTransfer(request, user, httpRequest);
+    } 
+    else {
       log.info("CONFIRM -> Fallback to internal transfer.");
-      result = executeInternalTransfer(request, user, httpRequest);
+      return executeInternalTransfer(request, user, httpRequest);
     }
+    /*
 
     if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
       log.info(
@@ -329,8 +329,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           request.getCurrencyCode());
       executeCommissionChargeViaSameBank(request, feeAmountFromClient);
     }
-
-    return result;
+    */
   }
 
   // =====================================================================
