@@ -864,19 +864,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      String transferType =
-        StringUtils.isNotBlank(request.getTransferType())
-            ? request.getTransferType().toUpperCase()
-            : "SAME_BANK";
+      
       releaseTransferSuccessCooldown(user);
-      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + request.getTransferType();
-      if (!notificationCooldownCache.tryAcquire(cacheKey)) {
-        log.warn(
-            "CONFIRM: Notification cooldown active for user {}, skipping duplicate {} success notification.",
-            user.getId(),
-            request.getTransferType());
-        return;
-      }
+      
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -949,13 +939,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       Map<String, Object> externalData) {
     try {
         releaseTransferSuccessCooldown(user);
-      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":SINPE_MOVIL";
-      if (!notificationCooldownCache.tryAcquire(cacheKey)) {
-        log.warn(
-            "CONFIRM SINPE_MOVIL: Notification cooldown active for user {}, skipping duplicate SINPE_MOVIL success notification.",
-            user.getId());
-        return;
-      }
+      
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -1035,14 +1019,8 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       Map<String, Object> externalData) {
     try {
         // Invalidate any prior cooldown so a successful PIN confirm always notifies
-    releaseTransferSuccessCooldown(user);
-      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":PIN";
-      if (!notificationCooldownCache.tryAcquire(cacheKey)) {
-        log.warn(
-            "CONFIRM PIN: Notification cooldown active for user {}, skipping duplicate PIN success notification.",
-            user.getId());
-        return;
-      }
+        releaseTransferSuccessCooldown(user);
+    
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);

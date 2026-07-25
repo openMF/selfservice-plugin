@@ -91,7 +91,7 @@ public class SelfServiceNotificationService {
 
       String cacheKey = event.getType().name() + ":" + event.getUserId();
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
-        log.debug(
+        log.info(
             "Skipping notification for event type {} and user ID {} due to cooldown.",
             event.getType(),
             event.getUserId());
