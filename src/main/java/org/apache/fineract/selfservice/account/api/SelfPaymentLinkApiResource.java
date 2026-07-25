@@ -22,11 +22,11 @@ import org.apache.fineract.selfservice.account.service.PaymentLinkExternalServic
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.stereotype.Component;
 
-@Path("/v1/self/payments/checkout-links")
+@Path("/v1/self/paymentrequests")
 @Component
 @Tag(
-    name = "Self Payment Links",
-    description = "Create payment/checkout links via external payment provider (Apolo/OnvoPay)")
+    name = "Self Payment Request",
+    description = "Create payment/checkout request via external payment provider")
 @RequiredArgsConstructor
 public class SelfPaymentLinkApiResource {
 
@@ -36,6 +36,7 @@ public class SelfPaymentLinkApiResource {
   private final Gson gson = new Gson();
 
   @POST
+  @Path("/paymentlink")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
@@ -45,7 +46,7 @@ public class SelfPaymentLinkApiResource {
   public String createCheckoutLink(final String apiRequestBodyAsJson) {
     // Re-use an existing transfer-related permission (or create a dedicated one via Liquibase if
     // preferred)
-    context.authenticatedSelfServiceUser().validateHasCreatePermission("SSACCOUNTTRANSFER");
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
 
     PaymentLinkRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkRequest.class);
     PaymentLinkResponse response = paymentLinkService.createPaymentLink(request);
