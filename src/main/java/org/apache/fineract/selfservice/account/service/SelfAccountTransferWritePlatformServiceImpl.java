@@ -241,6 +241,26 @@ public class SelfAccountTransferWritePlatformServiceImpl
       log.warn("Failed to release OTP cooldown (non-fatal)", e);
     }
   }
+  
+  /**
+    * Releases the TRANSFER_SUCCESS notification cooldown for the given user and channel.
+    * Called on successful confirm so a legitimate completed transfer always notifies,
+    * even if a previous attempt still holds the cooldown entry.
+    * Multi-tenant safe: key is scoped by self-service user id (tenant-bound).
+    */
+   private void releaseTransferSuccessCooldown(AppSelfServiceUser user, String transferType) {
+     try {
+       String type = StringUtils.isNotBlank(transferType) ? transferType.toUpperCase() : "UNKNOWN";
+       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + type;
+       notificationCooldownCache.release(cacheKey);
+       log.info(
+           "CONFIRM: Released TRANSFER_SUCCESS cooldown for user {} channel {}",
+           user.getId(),
+           type);
+     } catch (Exception e) {
+       log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
+     }
+   }
 
   // =====================================================================
   //  CONFIRM  (entry-point)
@@ -825,6 +845,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
       HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+      String transferType =
+        StringUtils.isNotBlank(request.getTransferType())
+            ? request.getTransferType().toUpperCase()
+            : "SAME_BANK";
+      releaseTransferSuccessCooldown(user, transferType);
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + request.getTransferType();
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
@@ -904,6 +929,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
+        releaseTransferSuccessCooldown(user, "SINPE_MOVIL");
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":SINPE_MOVIL";
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
@@ -989,6 +1015,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
+        // Invalidate any prior cooldown so a successful PIN confirm always notifies
+    releaseTransferSuccessCooldown(user, "PIN");
       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":PIN";
       if (!notificationCooldownCache.tryAcquire(cacheKey)) {
         log.warn(
@@ -1924,4 +1952,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     return data;
   }
+  
+  
 }
