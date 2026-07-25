@@ -1369,8 +1369,14 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         List<SelfServiceRegistration> activeOtps = registrationRepository
                 .findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
                         client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
-
-        if (activeOtps.isEmpty()) {
+        
+        if (!activeOtps.isEmpty()) {
+            log.info("RESEND OTP: Found {} active OTP(s) – marking them expired/consumed", activeOtps.size());
+            for (SelfServiceRegistration reg : activeOtps) {
+                markAsExpired(reg);
+            }
+        }
+        else if (activeOtps.isEmpty()) {
             log.info("RESEND OTP: No active OTP found → generating fresh one.");
             return generateNewOtpForResend(user, resendRequest, httpRequest);
         }
@@ -1396,64 +1402,13 @@ public class SelfAccountTransferWritePlatformServiceImpl implements SelfAccountT
         return generateAndSendOtp(dummy, user, httpRequest);
     }
     
-    /**
-     * Now updates registration dispatch metadata + always publishes full event with context.
-     */
-    private void resendExistingOtpNotification(SelfServiceRegistration reg,
-                                           AppSelfServiceUser user,
-                                           ResendOtpRequest resendRequest,
-                                           HttpServletRequest httpRequest) {
-        // Update dispatch metadata
-        reg.markDispatched();
-        registrationRepository.saveAndFlush(reg);
-
-        Map<String, Object> contextData = new HashMap<>();
-        contextData.put("authCode", reg.getAuthenticationToken());
-        contextData.put("expirationMinutes", 10);
-        contextData.put("transferAmount", "N/A");
-        contextData.put("resend", true);
-        if (StringUtils.isNotBlank(resendRequest.getTransferDescription())) {
-            contextData.put("transferDescription", resendRequest.getTransferDescription());
-        }
-
-        applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-                this,
-                SelfServiceNotificationEvent.Type.TRANSFER_OTP,
-                user.getId(),
-                user.getFirstname(),
-                user.getLastname(),
-                user.getUsername(),
-                user.getEmail(),
-                extractMobile(user),
-                determineMode(user.getEmail(), extractMobile(user)),
-                extractClientIp(httpRequest),
-                LocaleContextHolder.getLocale(),
-                contextData));
-
-        log.info("RESEND OTP: Notification event re-published for registrationId={}, userId={}",
-                reg.getId(), user.getId());
-    }
-
     private void markAsExpired(SelfServiceRegistration reg) {
         reg.setExpiresAt(DateUtils.getLocalDateTimeOfSystem().minusSeconds(1));
         reg.markConsumed();
         registrationRepository.saveAndFlush(reg);
         log.info("Marked OTP registration {} as expired/consumed", reg.getId());
     }
-
-    private void resendExistingOtpNotification(SelfServiceRegistration reg, AppSelfServiceUser user, HttpServletRequest httpRequest) {
-        Map<String, Object> contextData = new HashMap<>();
-        contextData.put("authCode", reg.getAuthenticationToken());
-        contextData.put("expirationMinutes", 10);
-        contextData.put("transferAmount", "N/A");
-
-        applicationEventPublisher.publishEvent(SelfServiceNotificationEvent.withTenantContext(
-                this, SelfServiceNotificationEvent.Type.TRANSFER_OTP, user.getId(), user.getFirstname(), user.getLastname(),
-                user.getUsername(), user.getEmail(), extractMobile(user), determineMode(user.getEmail(), extractMobile(user)),
-                extractClientIp(httpRequest), LocaleContextHolder.getLocale(), contextData));
-    }
-
-
+    
     private Map<String, Object> homologateResponseData(Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency) {
         if (rawData == null) {
             rawData = new HashMap<>();
