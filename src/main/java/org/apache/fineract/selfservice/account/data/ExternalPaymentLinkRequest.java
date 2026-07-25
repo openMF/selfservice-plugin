@@ -12,12 +12,12 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class PaymentLinkRequest {
+public class ExternalPaymentLinkRequest {
 
-  private String payerName;
-  private String payerEmail;
-  private String payerPhone;
-  private String clientAccount; // savings external id
+  private String customerName;
+  private String customerEmail;
+  private String customerPhone;
+  private Long customerAccount; // savings account id
   private BigDecimal amount;
   private String currency;
   private String description;

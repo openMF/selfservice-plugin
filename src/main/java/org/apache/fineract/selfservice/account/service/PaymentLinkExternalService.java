@@ -14,8 +14,16 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
+import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
+import org.apache.fineract.selfservice.account.data.ExternalPaymentLinkRequest;
 import org.apache.fineract.selfservice.account.data.PaymentLinkRequest;
 import org.apache.fineract.selfservice.account.data.PaymentLinkResponse;
 import org.apache.fineract.selfservice.account.domain.SelfServicePaymentLink;
@@ -43,6 +51,10 @@ public class PaymentLinkExternalService {
   private final PlatformSelfServiceSecurityContext securityContext;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final RestTemplate restTemplate = new RestTemplate();
+  private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
+  private final SavingsAccountAssembler savingsAccountAssembler;
+  private final LoanAssembler loanAssembler;
+  private final ExternalIdFactory externalIdFactory;
 
   @Transactional
   public PaymentLinkResponse createPaymentLink(PaymentLinkRequest request) {
@@ -58,15 +70,34 @@ public class PaymentLinkExternalService {
 
     Client client = selfUser.getAppUserClientMappings().iterator().next().getClient();
     Long clientId = client.getId();
+    Long accountId = null;
 
     // Basic ownership / permission guard (extend as needed for savings account ownership)
-    if (request.getCustomerAccount() == null
+    if (request.getClientAccount() == null
         || request.getAmount() == null
         || request.getAmount().signum() <= 0) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.payment.link.invalid.request",
-          "customerAccount and a positive amount are required");
+          "Client Account and a positive amount are required");
     }
+    else{
+        accountId = resolveAccountId(request.getClientAccount(),2);
+        if (accountId == null) {
+            throw new GeneralPlatformDomainRuleException(
+                "error.msg.payment.link.invalid.account",
+                "Client Account not found and it is required");
+        }
+    }
+    
+    ExternalPaymentLinkRequest externalPaymentLinkRequest = new ExternalPaymentLinkRequest();
+    
+    externalPaymentLinkRequest.setCustomerName(request.getPayerName());
+    externalPaymentLinkRequest.setCustomerEmail(request.getPayerEmail());
+    externalPaymentLinkRequest.setCustomerPhone(request.getPayerPhone());
+    externalPaymentLinkRequest.setAmount(request.getAmount());
+    externalPaymentLinkRequest.setCurrency(request.getCurrency());
+    externalPaymentLinkRequest.setDescription(request.getDescription());
+    externalPaymentLinkRequest.setCustomerAccount(accountId);
 
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
@@ -84,7 +115,7 @@ public class PaymentLinkExternalService {
     String url = host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
 
     HttpHeaders headers = buildHeaders(props);
-    HttpEntity<PaymentLinkRequest> entity = new HttpEntity<>(request, headers);
+    HttpEntity<ExternalPaymentLinkRequest> entity = new HttpEntity<>(externalPaymentLinkRequest, headers);
 
     try {
       log.info("Calling external PaymentLinkService: {} payload={}", url, request);
@@ -108,16 +139,16 @@ public class PaymentLinkExternalService {
       SelfServicePaymentLink entityToSave = new SelfServicePaymentLink();
       entityToSave.setAppSelfServiceUserId(userId);
       entityToSave.setClientId(clientId);
-      entityToSave.setSavingsAccountId(request.getCustomerAccount());
+      entityToSave.setSavingsAccountId(externalPaymentLinkRequest.getCustomerAccount());
       entityToSave.setCheckoutId(result.getCheckoutId());
       entityToSave.setPaymentUrl(result.getPaymentUrl());
       entityToSave.setPaymentStatus(result.getPaymentStatus());
-      entityToSave.setCustomerName(request.getCustomerName());
-      entityToSave.setCustomerEmail(request.getCustomerEmail());
-      entityToSave.setCustomerPhone(request.getCustomerPhone());
-      entityToSave.setAmount(request.getAmount());
-      entityToSave.setCurrency(request.getCurrency());
-      entityToSave.setDescription(request.getDescription());
+      entityToSave.setCustomerName(externalPaymentLinkRequest.getCustomerName());
+      entityToSave.setCustomerEmail(externalPaymentLinkRequest.getCustomerEmail());
+      entityToSave.setCustomerPhone(externalPaymentLinkRequest.getCustomerPhone());
+      entityToSave.setAmount(externalPaymentLinkRequest.getAmount());
+      entityToSave.setCurrency(externalPaymentLinkRequest.getCurrency());
+      entityToSave.setDescription(externalPaymentLinkRequest.getDescription());
       entityToSave.setSuccess(result.isSuccess());
       entityToSave.setExternalResponse(body);
 
@@ -130,6 +161,58 @@ public class PaymentLinkExternalService {
           "error.msg.payment.link.external.failure",
           "External payment link creation failed: " + e.getMessage());
     }
+  }
+  
+  private Long resolveAccountId(String accountIdentifier, Integer accountType) {
+    if (StringUtils.isBlank(accountIdentifier)) {
+      throw new IllegalArgumentException("Account identifier cannot be null or blank.");
+    }
+
+    String trimmed = accountIdentifier.trim();
+    log.debug("Resolving account identifier: {}", trimmed);
+
+    try {
+      Long numericId = Long.valueOf(trimmed);
+      log.debug("Parsed as numeric ID: {}", numericId);
+      return resolveNumericAccountId(numericId, accountType);
+    } catch (NumberFormatException e) {
+      log.debug("Not a numeric ID, treating as external ID / IBAN");
+    }
+
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    org.apache.fineract.infrastructure.core.domain.ExternalId externalId =
+        externalIdFactory.create(trimmed);
+
+    if (type == PortfolioAccountType.SAVINGS) {
+      Long accountId = savingsAccountRepositoryWrapper.findIdByExternalId(externalId);
+      SavingsAccount savingsAccount =
+          savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
+      if (savingsAccount == null) {
+        throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
+      }
+      log.info(
+          "Resolved savings account externalId={} -> internalId={}",
+          trimmed,
+          savingsAccount.getId());
+      return savingsAccount.getId();
+    } else if (type == PortfolioAccountType.LOAN) {
+      var loan = loanAssembler.assembleFrom(externalId);
+      log.info("Resolved loan externalId={} -> internalId={}", trimmed, loan.getId());
+      return loan.getId();
+    }
+
+    throw new IllegalArgumentException(
+        "Unsupported account type: " + accountType + " for identifier: " + trimmed);
+  }
+  
+  private Long resolveNumericAccountId(Long numericId, Integer accountType) {
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    if (type == PortfolioAccountType.SAVINGS) {
+      return savingsAccountAssembler.assembleFrom(numericId, false).getId();
+    } else if (type == PortfolioAccountType.LOAN) {
+      return loanAssembler.assembleFrom(numericId).getId();
+    }
+    throw new IllegalArgumentException("Unsupported numeric account type: " + accountType);
   }
 
   private Map<String, String> getServiceProperties() {
