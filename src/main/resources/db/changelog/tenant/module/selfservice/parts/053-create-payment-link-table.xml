@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0053-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_payment_link"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="m_selfservice_payment_link">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="app_selfservice_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="savings_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="checkout_id" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payment_url" type="VARCHAR(512)"/>
+            <column name="payment_status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="customer_name" type="VARCHAR(200)"/>
+            <column name="customer_email" type="VARCHAR(100)"/>
+            <column name="customer_phone" type="VARCHAR(30)"/>
+            <column name="amount" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(255)"/>
+            <column name="success" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_on" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="external_response" type="TEXT"/>
+        </createTable>
+
+        <createIndex tableName="m_selfservice_payment_link" indexName="idx_ss_payment_link_checkout">
+            <column name="checkout_id"/>
+        </createIndex>
+        <createIndex tableName="m_selfservice_payment_link" indexName="idx_ss_payment_link_user">
+            <column name="app_selfservice_user_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

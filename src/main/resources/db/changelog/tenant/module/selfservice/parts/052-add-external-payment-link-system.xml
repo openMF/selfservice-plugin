@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0052-1">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'PaymentLinkService'
+                </sqlCheck>
+            </and>
+        </preConditions>
+
+        <comment>Bootstrap PaymentLinkService external configuration</comment>
+
+        <insert tableName="c_external_service">
+            <column name="name" value="PaymentLinkService"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="host"/>
+            <column name="value" value="https://api.apolocapital.io/1.0/linkdepago"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="header"/>
+            <column name="value" value="X-Api-Key"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="headerValue"/>
+            <column name="value" value="REPLACE-WITH-REAL-API-KEY"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="httpMethod"/>
+            <column name="value" value="POST"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="isEnabled"/>
+            <column name="value" value="false"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="c_external_service_properties">
+                <where>external_service_id = (SELECT id FROM c_external_service WHERE name = 'PaymentLinkService')</where>
+            </delete>
+            <delete tableName="c_external_service">
+                <where>name = 'PaymentLinkService'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -13,8 +13,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Generic envelope returned by the {@code /self/accounttransfers/confirm} endpoint. The
- * {@code transferType} discriminator tells the client which concrete shape {@code data} carries:
+ * Generic envelope returned by the {@code /self/accounttransfers/confirm} endpoint. The {@code
+ * transferType} discriminator tells the client which concrete shape {@code data} carries:
  *
  * <ul>
  *   <li>{@code SAME_BANK} → {@link SameBankTransferResponseData}
@@ -29,9 +29,9 @@ import lombok.NoArgsConstructor;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AccountTransferConfirmResponse {
 
-    /** Transfer channel discriminator: SAME_BANK, PIN, SINPE_MOVIL, etc. */
-    private String transferType;
+  /** Transfer channel discriminator: SAME_BANK, PIN, SINPE_MOVIL, etc. */
+  private String transferType;
 
-    /** Channel-specific response payload. */
-    private Object data;
+  /** Channel-specific response payload. */
+  private Object data;
 }

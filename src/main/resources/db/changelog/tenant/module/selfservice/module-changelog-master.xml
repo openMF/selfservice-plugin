@@ -61,4 +61,6 @@
   <include file="parts/049-add-account-for-fees.xml" relativeToChangelogFile="true"/>
   <include file="parts/050-update-request-audit-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/051-create-same-bank-transfer-audit-table.xml" relativeToChangelogFile="true"/>
+  <include file="parts/052-add-external-payment-link-system.xml" relativeToChangelogFile="true"/>
+  <include file="parts/053-create-payment-link-table.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -22,18 +22,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SameBankTransferCustomData {
 
-    /** Total amount debited (transfer + fee), as a plain string for display purposes. */
-    private String totalAmount;
+  /** Total amount debited (transfer + fee), as a plain string for display purposes. */
+  private String totalAmount;
 
-    /** Free-text description supplied by the customer. */
-    private String transferDescription;
+  /** Free-text description supplied by the customer. */
+  private String transferDescription;
 
-    /** Commission / fee charged for the transfer, as a plain string. */
-    private String feeAmount;
+  /** Commission / fee charged for the transfer, as a plain string. */
+  private String feeAmount;
 
-    /** Net debit amount (transfer amount only), as a plain string. */
-    private String debitAmount;
+  /** Net debit amount (transfer amount only), as a plain string. */
+  private String debitAmount;
 
-    /** Exchange rate applied. Always "1" for same-bank, same-currency transfers. */
-    private String exchangeRateAmount;
+  /** Exchange rate applied. Always "1" for same-bank, same-currency transfers. */
+  private String exchangeRateAmount;
 }

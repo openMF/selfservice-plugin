@@ -16,66 +16,54 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
- * Spring Data JPA repository for {@link SelfServiceSameBankTransferAudit}. Multi-tenancy is
- * handled transparently by Fineract's {@code TenantDataSource} routing — every query is
- * automatically scoped to the current tenant schema.
+ * Spring Data JPA repository for {@link SelfServiceSameBankTransferAudit}. Multi-tenancy is handled
+ * transparently by Fineract's {@code TenantDataSource} routing — every query is automatically
+ * scoped to the current tenant schema.
  */
 @Repository
 public interface SelfServiceSameBankTransferAuditRepository
-        extends JpaRepository<SelfServiceSameBankTransferAudit, Long> {
+    extends JpaRepository<SelfServiceSameBankTransferAudit, Long> {
 
-    /**
-     * Retrieves an audit record by the generated operation UUID.
-     */
-    Optional<SelfServiceSameBankTransferAudit> findByOperationId(String operationId);
+  /** Retrieves an audit record by the generated operation UUID. */
+  Optional<SelfServiceSameBankTransferAudit> findByOperationId(String operationId);
 
-    /**
-     * Retrieves an audit record by the platform-generated internal reference number.
-     */
-    Optional<SelfServiceSameBankTransferAudit> findByInternalRefNumber(String internalRefNumber);
+  /** Retrieves an audit record by the platform-generated internal reference number. */
+  Optional<SelfServiceSameBankTransferAudit> findByInternalRefNumber(String internalRefNumber);
 
-    /**
-     * Lists all transfers for a given client, most recent first.
-     */
-    List<SelfServiceSameBankTransferAudit> findByClientIdOrderByCreatedOnUtcDesc(Long clientId);
+  /** Lists all transfers for a given client, most recent first. */
+  List<SelfServiceSameBankTransferAudit> findByClientIdOrderByCreatedOnUtcDesc(Long clientId);
 
-    /**
-     * Lists all transfers for a given client within a date range.
-     */
-    @Query("SELECT a FROM SelfServiceSameBankTransferAudit a "
-            + "WHERE a.clientId = :clientId "
-            + "AND a.createdOnUtc BETWEEN :from AND :to "
-            + "ORDER BY a.createdOnUtc DESC")
-    List<SelfServiceSameBankTransferAudit> findByClientIdAndDateRange(
-            @Param("clientId") Long clientId,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to);
+  /** Lists all transfers for a given client within a date range. */
+  @Query(
+      "SELECT a FROM SelfServiceSameBankTransferAudit a "
+          + "WHERE a.clientId = :clientId "
+          + "AND a.createdOnUtc BETWEEN :from AND :to "
+          + "ORDER BY a.createdOnUtc DESC")
+  List<SelfServiceSameBankTransferAudit> findByClientIdAndDateRange(
+      @Param("clientId") Long clientId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
 
-    /**
-     * Looks up an audit record by the Fineract account-transfer resource id.
-     */
-    Optional<SelfServiceSameBankTransferAudit> findByFineractTransferId(Long fineractTransferId);
+  /** Looks up an audit record by the Fineract account-transfer resource id. */
+  Optional<SelfServiceSameBankTransferAudit> findByFineractTransferId(Long fineractTransferId);
 
-    /**
-     * Counts successful transfers for a client on a given day (useful for daily-limit checks).
-     */
-    @Query("SELECT COUNT(a) FROM SelfServiceSameBankTransferAudit a "
-            + "WHERE a.clientId = :clientId "
-            + "AND a.successful = true "
-            + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
-    long countSuccessfulByClientIdAndDate(
-            @Param("clientId") Long clientId,
-            @Param("date") LocalDateTime date);
+  /** Counts successful transfers for a client on a given day (useful for daily-limit checks). */
+  @Query(
+      "SELECT COUNT(a) FROM SelfServiceSameBankTransferAudit a "
+          + "WHERE a.clientId = :clientId "
+          + "AND a.successful = true "
+          + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
+  long countSuccessfulByClientIdAndDate(
+      @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
 
-    /**
-     * Sums the transfer amounts for a client on a given day (useful for daily-amount-limit
-     * checks).
-     */
-    @Query("SELECT COALESCE(SUM(a.transferAmount), 0) FROM SelfServiceSameBankTransferAudit a "
-            + "WHERE a.clientId = :clientId "
-            + "AND a.successful = true "
-            + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
-    BigDecimal sumSuccessfulAmountByClientIdAndDate(
-            @Param("clientId") Long clientId,
-            @Param("date") LocalDateTime date);
+  /**
+   * Sums the transfer amounts for a client on a given day (useful for daily-amount-limit checks).
+   */
+  @Query(
+      "SELECT COALESCE(SUM(a.transferAmount), 0) FROM SelfServiceSameBankTransferAudit a "
+          + "WHERE a.clientId = :clientId "
+          + "AND a.successful = true "
+          + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
+  BigDecimal sumSuccessfulAmountByClientIdAndDate(
+      @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
 }

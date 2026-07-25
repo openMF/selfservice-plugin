@@ -123,8 +123,8 @@ public interface SelfServiceRegistrationRepository
       @Param("clientId") Long clientId,
       @Param("requestType") SelfServiceRequestType requestType,
       @Param("cutoff") LocalDateTime cutoff);
-  
+
   // Returns List, never throws NonUniqueResultException
-    List<SelfServiceRegistration> findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            Long clientId, SelfServiceRequestType requestType);
+  List<SelfServiceRegistration> findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
+      Long clientId, SelfServiceRequestType requestType);
 }

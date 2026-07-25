@@ -154,26 +154,26 @@ public class SinpeExternalApiClient {
     }
   }
 
-    public String transferToPhone(SinpeTransferRequest request) {
-      Map<String, String> props = getServiceProperties();
+  public String transferToPhone(SinpeTransferRequest request) {
+    Map<String, String> props = getServiceProperties();
 
-      if (!isEnabled(props)) {
-        log.warn(
-            "SinpeService is disabled in c_external_service. Skipping transferToPhone for phone: {}",
-            request.getDestinationPhone());
-        return null;
-      }
-
-      String url = getHost(props) + "/transfer/account-to-phone";
-      HttpEntity<SinpeTransferRequest> entity = new HttpEntity<>(request, buildHeaders(props));
-
-      try {
-        String response = restTemplate.postForObject(url, entity, String.class);
-        log.info("SINPE transfer to phone {} processed successfully", request.getDestinationPhone());
-        return response;
-      } catch (Exception e) {
-        log.error("Failed to process SINPE transfer to phone: {}", request.getDestinationPhone(), e);
-        throw new RuntimeException("Failed to process SINPE transfer: " + e.getMessage(), e);
-      }
+    if (!isEnabled(props)) {
+      log.warn(
+          "SinpeService is disabled in c_external_service. Skipping transferToPhone for phone: {}",
+          request.getDestinationPhone());
+      return null;
     }
+
+    String url = getHost(props) + "/transfer/account-to-phone";
+    HttpEntity<SinpeTransferRequest> entity = new HttpEntity<>(request, buildHeaders(props));
+
+    try {
+      String response = restTemplate.postForObject(url, entity, String.class);
+      log.info("SINPE transfer to phone {} processed successfully", request.getDestinationPhone());
+      return response;
+    } catch (Exception e) {
+      log.error("Failed to process SINPE transfer to phone: {}", request.getDestinationPhone(), e);
+      throw new RuntimeException("Failed to process SINPE transfer: " + e.getMessage(), e);
+    }
+  }
 }
