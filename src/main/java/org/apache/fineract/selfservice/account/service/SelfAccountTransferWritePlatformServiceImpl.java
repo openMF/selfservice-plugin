@@ -84,6 +84,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -1655,214 +1656,255 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
   }
 
     /**
-    * Collects the fee for PIN, SINPE_MOVIL and SAME_BANK transfers.
-    *
-    * <ul>
-    *   <li>Configuration is multi-tenant (c_external_service + m_selfservice_transfer_fees).</li>
-    *   <li>USD fees are converted with the official BCCR sell rate via {@link BccrExchangeRateService}.</li>
-    *   <li>SINPE_MOVIL daily threshold is evaluated against already-posted transactions of the day.</li>
-    *   <li>Failure of the commission transfer never rolls back the original payment.</li>
-    * </ul>
-    */
-   private void executeFeeTransaction(AccountTransferConfirmRequest request) {
-     log.info(
-         "ACCOUNTING CONFIRM: Starting fee collection for type={}, currency={}, amount={}",
-         request.getTransferType(),
-         request.getCurrencyCode(),
-         request.getTransferAmount());
-     
-     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-     Client client = user.getAppUserClientMappings().iterator().next().getClient();
+ * Collects the fee for PIN, SINPE_MOVIL and SAME_BANK transfers.
+ *
+ * <p>Runs in a brand-new transaction (REQUIRES_NEW) so that:
+ * <ul>
+ *   <li>the SavingsAccount is reloaded with the current optimistic-lock version
+ *       after any external debit has already committed,</li>
+ *   <li>a fee failure never rolls back the original transfer,</li>
+ *   <li>the operation remains fully multi-tenant (config comes from
+ *       c_external_service + m_selfservice_transfer_fees).</li>
+ * </ul>
+ */
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+private void executeFeeTransaction(AccountTransferConfirmRequest request) {
+  log.info(
+      "ACCOUNTING CONFIRM: Starting fee collection for type={}, currency={}, amount={}",
+      request.getTransferType(),
+      request.getCurrencyCode(),
+      request.getTransferAmount());
 
-     try {
-       // ------------------------------------------------------------------
-       // 1. Multi-tenant feature flag & GL destination accounts
-       // ------------------------------------------------------------------
-       Map<String, String> feeConfiguration = externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
-       
-       Map<String, String> institutionAccountConfig = externalServicePropertiesRepository.getProperties("INSTITUTION_ACCOUNT_FOR_FEES");
-       
+  AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+  Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
-       boolean isTransferFeeEnabled = Boolean.parseBoolean(feeConfiguration.getOrDefault("transfer_fee_enabled", "false"));
-       if (!isTransferFeeEnabled) {
-         log.info("ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration. Skipping.");
-         return;
-       }
+  try {
+    // ------------------------------------------------------------------
+    // 1. Multi-tenant feature flag & GL destination accounts
+    // ------------------------------------------------------------------
+    Map<String, String> feeConfiguration =
+        externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
+    Map<String, String> institutionAccountConfig =
+        externalServicePropertiesRepository.getProperties("INSTITUTION_ACCOUNT_FOR_FEES");
 
-       // ------------------------------------------------------------------
-       // 2. Resolve fee configuration (same rules used by the Quote service)
-       // ------------------------------------------------------------------
-       String currency =
-           StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
-       String transferMode =
-           StringUtils.isNotBlank(request.getTransferMode())
-               ? request.getTransferMode()
-               : "INMEDIATA";
+    boolean isTransferFeeEnabled =
+        Boolean.parseBoolean(feeConfiguration.getOrDefault("transfer_fee_enabled", "false"));
+    if (!isTransferFeeEnabled) {
+      log.info("ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration. Skipping.");
+      return;
+    }
 
-       Optional<SelfServiceTransferFee> feeOpt =
-           feeRepository.findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(
-               request.getTransferType(), currency, transferMode);
+    // ------------------------------------------------------------------
+    // 2. Resolve fee configuration (same rules used by the Quote service)
+    // ------------------------------------------------------------------
+    String currency =
+        StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
+    String transferMode =
+        StringUtils.isNotBlank(request.getTransferMode()) ? request.getTransferMode() : "INMEDIATA";
 
-       if (feeOpt.isEmpty()) {
-         log.info(
-             "No active fee configuration for type={}, currency={}, mode={}. Skipping charge.",
-             request.getTransferType(),
-             currency,
-             transferMode);
-         return;
-       }
+    Optional<SelfServiceTransferFee> feeOpt =
+        feeRepository.findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(
+            request.getTransferType(), currency, transferMode);
 
-       SelfServiceTransferFee feeConfig = feeOpt.get();
-       if (!feeConfig.isActive()) {
-         log.info("Fee configuration id={} is inactive. Skipping.", feeConfig.getId());
-         return;
-       }
+    if (feeOpt.isEmpty()) {
+      log.info(
+          "No active fee configuration for type={}, currency={}, mode={}. Skipping charge.",
+          request.getTransferType(),
+          currency,
+          transferMode);
+      return;
+    }
 
-       // ------------------------------------------------------------------
-       // 3. Calculate the concrete fee amount (mirrors QuoteService logic)
-       // ------------------------------------------------------------------
-       BigDecimal feeAmount = BigDecimal.ZERO;
-       String feeDescription =
-           StringUtils.defaultIfBlank(feeConfig.getDescription(), "Comisión de transferencia");
+    SelfServiceTransferFee feeConfig = feeOpt.get();
+    if (!feeConfig.isActive()) {
+      log.info("Fee configuration id={} is inactive. Skipping.", feeConfig.getId());
+      return;
+    }
 
-       if ("PERCENTAGE".equalsIgnoreCase(feeConfig.getFeeType())) {
-         feeAmount =
-             request
-                 .getTransferAmount()
-                 .multiply(feeConfig.getFeeValue())
-                 .setScale(2, RoundingMode.HALF_UP);
-       } else { // FIXED
-         feeAmount = feeConfig.getFeeValue();
+    // ------------------------------------------------------------------
+    // 3. Calculate the concrete fee amount (mirrors QuoteService logic)
+    // ------------------------------------------------------------------
+    BigDecimal feeAmount = BigDecimal.ZERO;
+    String feeDescription =
+        StringUtils.defaultIfBlank(feeConfig.getDescription(), "Comisión de transferencia");
 
-         // Currency conversion when the fee is stored in a different currency
-         // (classic case: PIN-USD fee expressed as 950 CRC → convert to USD)
-         if (feeConfig.getFeeCurrency() != null
-             && !feeConfig.getFeeCurrency().equalsIgnoreCase(currency)
-             && "CRC".equalsIgnoreCase(feeConfig.getFeeCurrency())
-             && "USD".equalsIgnoreCase(currency)) {
+    if ("PERCENTAGE".equalsIgnoreCase(feeConfig.getFeeType())) {
+      feeAmount =
+          request
+              .getTransferAmount()
+              .multiply(feeConfig.getFeeValue())
+              .setScale(2, RoundingMode.HALF_UP);
+    } else { // FIXED
+      feeAmount = feeConfig.getFeeValue();
 
-           Optional<BccrExchangeRate> bccrRate = bccrExchangeRateService.getLatestRate();
-           BigDecimal rate =
-               bccrRate
-                   .map(BccrExchangeRate::getSellRate)
-                   .orElseThrow(() -> new IllegalArgumentException("Exchange Rate not found"));
+      // Currency conversion when the fee is stored in a different currency
+      // (classic case: PIN-USD fee expressed as 950 CRC → convert to USD)
+      if (feeConfig.getFeeCurrency() != null
+          && !feeConfig.getFeeCurrency().equalsIgnoreCase(currency)
+          && "CRC".equalsIgnoreCase(feeConfig.getFeeCurrency())
+          && "USD".equalsIgnoreCase(currency)) {
 
-           // fee is in CRC → convert to USD (divide)
-           feeAmount = feeAmount.divide(rate, 2, RoundingMode.HALF_UP);
-           feeDescription =
-               String.format(
-                   "%s (Tasa BCCR venta: %s CRC/USD)", feeDescription, rate.toPlainString());
-           log.info(
-               "Converted CRC fee {} → {} USD using BCCR sell rate {}",
-               feeConfig.getFeeValue(),
-               feeAmount,
-               rate);
-         }
-       }
+        Optional<BccrExchangeRate> bccrRate = bccrExchangeRateService.getLatestRate();
+        BigDecimal rate =
+            bccrRate
+                .map(BccrExchangeRate::getSellRate)
+                .orElseThrow(() -> new IllegalArgumentException("Exchange Rate not found"));
 
-       // ------------------------------------------------------------------
-       // 4. Apply daily threshold (SINPE_MOVIL)
-       // ------------------------------------------------------------------
-       if ("DAILY".equalsIgnoreCase(feeConfig.getThresholdPeriod())
-           && feeConfig.getThresholdAmount() != null
-           && feeConfig.getThresholdAmount().compareTo(BigDecimal.ZERO) > 0) {
+        // fee is in CRC → convert to USD (divide)
+        feeAmount = feeAmount.divide(rate, 2, RoundingMode.HALF_UP);
+        feeDescription =
+            String.format(
+                "%s (Tasa BCCR venta: %s CRC/USD)", feeDescription, rate.toPlainString());
+        log.info(
+            "Converted CRC fee {} → {} USD using BCCR sell rate {}",
+            feeConfig.getFeeValue(),
+            feeAmount,
+            rate);
+      }
+    }
 
-         LocalDate today = DateUtils.getLocalDateOfTenant();
-         
-         BigDecimal alreadyTransferredToday = transferAuditRepository.getDailySinpeMovilTotal(client.getId(), today);
-         
-         if (alreadyTransferredToday == null) {
-           alreadyTransferredToday = BigDecimal.ZERO;
-         }
+    // ------------------------------------------------------------------
+    // 4. Apply daily threshold (SINPE_MOVIL)
+    // ------------------------------------------------------------------
+    if ("DAILY".equalsIgnoreCase(feeConfig.getThresholdPeriod())
+        && feeConfig.getThresholdAmount() != null
+        && feeConfig.getThresholdAmount().compareTo(BigDecimal.ZERO) > 0) {
 
-         BigDecimal projected = alreadyTransferredToday.add(request.getTransferAmount());
+      LocalDate today = DateUtils.getLocalDateOfTenant();
+      BigDecimal alreadyTransferredToday =
+          transferAuditRepository.getDailySinpeMovilTotal(client.getId(), today);
 
-         if (projected.compareTo(feeConfig.getThresholdAmount()) <= 0) {
-           feeAmount = BigDecimal.ZERO;
-           feeDescription = "Exento: Dentro del umbral diario SINPE Móvil";
-           log.info("SINPE_MOVIL threshold: projected {} ≤ {}. Fee waived.", projected, feeConfig.getThresholdAmount());
-         } else {
-           // Apply the threshold fee (or keep the already-calculated fee)
-           if (feeConfig.getThresholdFeeValue() != null) {
-             feeAmount = feeConfig.getThresholdFeeValue();
-           }
-           log.info("SINPE_MOVIL threshold exceeded (projected {}). Applying fee {}.", projected, feeAmount);
-         }
-       }
-       
-       if (feeAmount.compareTo(BigDecimal.ZERO) <= 0) {
-         log.info("Final fee amount is zero – nothing to charge.");
-         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "COMPLETED");
-         return;
-       }
+      if (alreadyTransferredToday == null) {
+        alreadyTransferredToday = BigDecimal.ZERO;
+      }
 
-       // ------------------------------------------------------------------
-       // 5. Build the internal account-transfer command (GL → commission account)
-       // ------------------------------------------------------------------
-       Long toOfficeId = Long.valueOf(institutionAccountConfig.get("to_office_id"));
-       Long toClientId = Long.valueOf(institutionAccountConfig.get("to_client_id"));
-       Integer toAccountType = Integer.valueOf(institutionAccountConfig.get("to_account_type"));
+      BigDecimal projected = alreadyTransferredToday.add(request.getTransferAmount());
 
-       String toAccountIdStr =
-           "USD".equalsIgnoreCase(currency)
-               ? institutionAccountConfig.get("to_account_id_usd")
-               : institutionAccountConfig.get("to_account_id_crc");
-       Long toAccountId = Long.valueOf(toAccountIdStr);
-       
-       log.error("ACCOUNTING CONFIRM: SELF_SERVICE_FEE_CONFIG "
-          + "(to_office_id={}, to_client_id={}, to_account_type={}, to_account_id={}). ",
-          toOfficeId, toClientId, toAccountType, toAccountIdStr);
+      if (projected.compareTo(feeConfig.getThresholdAmount()) <= 0) {
+        feeAmount = BigDecimal.ZERO;
+        feeDescription = "Exento: Dentro del umbral diario SINPE Móvil";
+        log.info(
+            "SINPE_MOVIL threshold: projected {} ≤ {}. Fee waived.",
+            projected,
+            feeConfig.getThresholdAmount());
+      } else {
+        if (feeConfig.getThresholdFeeValue() != null) {
+          feeAmount = feeConfig.getThresholdFeeValue();
+        }
+        log.info(
+            "SINPE_MOVIL threshold exceeded (projected {}). Applying fee {}.",
+            projected,
+            feeAmount);
+      }
+    }
 
-       Long fromClientId = client.getId();
-       Long fromOfficeId = client.getOffice().getId();
-       Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
+    if (feeAmount.compareTo(BigDecimal.ZERO) <= 0) {
+      log.info("Final fee amount is zero – nothing to charge.");
+      persistTransferAudit(
+          client.getId(),
+          request.getTransferType(),
+          request.getCurrencyCode(),
+          request.getTransferAmount(),
+          feeAmount,
+          "COMPLETED");
+      return;
+    }
 
-       String transferDateForFineract = getTransferDateForApacheFineract(request);
-       String localeForFineract = "en";
-       String dateFormatForFineract = "dd MMMM yyyy";
+    // ------------------------------------------------------------------
+    // 5. Build the internal account-transfer command
+    // ------------------------------------------------------------------
+    Long toOfficeId = Long.valueOf(institutionAccountConfig.get("to_office_id"));
+    Long toClientId = Long.valueOf(institutionAccountConfig.get("to_client_id"));
+    Integer toAccountType = Integer.valueOf(institutionAccountConfig.get("to_account_type"));
 
-       Map<String, Object> commandData = new HashMap<>();
-       commandData.put("fromOfficeId", fromOfficeId);
-       commandData.put("fromClientId", fromClientId);
-       commandData.put("fromAccountType", 2);
-       commandData.put("fromAccountId", fromAccountId);
-       commandData.put("toOfficeId", toOfficeId);
-       commandData.put("toClientId", toClientId);
-       commandData.put("toAccountType", toAccountType);
-       commandData.put("toAccountId", toAccountId);
-       commandData.put("transferAmount", feeAmount);
-       commandData.put("transferDate", transferDateForFineract);
-       commandData.put("transferDescription", feeDescription);
-       commandData.put("locale", localeForFineract);
-       commandData.put("dateFormat", dateFormatForFineract);
+    String toAccountIdStr =
+        "USD".equalsIgnoreCase(currency)
+            ? institutionAccountConfig.get("to_account_id_usd")
+            : institutionAccountConfig.get("to_account_id_crc");
+    Long toAccountId = Long.valueOf(toAccountIdStr);
 
-       String jsonRequestBody = gson.toJson(commandData);
-       if (StringUtils.isBlank(jsonRequestBody)) {
-         throw new IllegalArgumentException("Failed to serialise commission transfer command");
-       }
+    log.info(
+        "ACCOUNTING CONFIRM: SELF_SERVICE_FEE_CONFIG "
+            + "(to_office_id={}, to_client_id={}, to_account_type={}, to_account_id={}).",
+        toOfficeId,
+        toClientId,
+        toAccountType,
+        toAccountIdStr);
 
-       JsonCommand command = createJsonCommand(jsonRequestBody);
-       log.info("ACCOUNTING CONFIRM: Executing commission transfer of {} {} ", feeAmount, currency);
+    Long fromClientId = client.getId();
+    Long fromOfficeId = client.getOffice().getId();
+    // resolveAccountId is safe here – new transaction → fresh entity
+    Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
 
-       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+    String transferDateForFineract = getTransferDateForApacheFineract(request);
+    String localeForFineract = "en";
+    String dateFormatForFineract = "dd MMMM yyyy";
 
-       if (result != null && result.getResourceId() != null) {
-         log.info("ACCOUNTING CONFIRM: Commission successfully collected. " + "Transaction ID = {}, amount = {} {}",
-             result.getResourceId(),
-             feeAmount,
-             currency);
-         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "COMPLETED");
-       } else {
-         log.warn("ACCOUNTING CONFIRM: Commission command executed but returned no resourceId.");
-         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "FAILED");
-       }
+    Map<String, Object> commandData = new HashMap<>();
+    commandData.put("fromOfficeId", fromOfficeId);
+    commandData.put("fromClientId", fromClientId);
+    commandData.put("fromAccountType", 2);
+    commandData.put("fromAccountId", fromAccountId);
+    commandData.put("toOfficeId", toOfficeId);
+    commandData.put("toClientId", toClientId);
+    commandData.put("toAccountType", toAccountType);
+    commandData.put("toAccountId", toAccountId);
+    commandData.put("transferAmount", feeAmount);
+    commandData.put("transferDate", transferDateForFineract);
+    commandData.put("transferDescription", feeDescription);
+    commandData.put("locale", localeForFineract);
+    commandData.put("dateFormat", dateFormatForFineract);
 
-     } catch (Exception e) {
-       // NEVER roll back the original payment because of a commission failure
-       log.error("ACCOUNTING CONFIRM: Commission collection failed (non-fatal). Original transfer remains intact.", e);
-       persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), request.getFeeAmount(), "FAILED");
-     }
-   }
+    String jsonRequestBody = gson.toJson(commandData);
+    if (StringUtils.isBlank(jsonRequestBody)) {
+      throw new IllegalArgumentException("Failed to serialise commission transfer command");
+    }
+
+    JsonCommand command = createJsonCommand(jsonRequestBody);
+    log.info("ACCOUNTING CONFIRM: Executing commission transfer of {} {}", feeAmount, currency);
+
+    CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+
+    if (result != null && result.getResourceId() != null) {
+      log.info(
+          "ACCOUNTING CONFIRM: Commission successfully collected. "
+              + "Transaction ID = {}, amount = {} {}",
+          result.getResourceId(),
+          feeAmount,
+          currency);
+      persistTransferAudit(
+          client.getId(),
+          request.getTransferType(),
+          request.getCurrencyCode(),
+          request.getTransferAmount(),
+          feeAmount,
+          "COMPLETED");
+    } else {
+      log.warn("ACCOUNTING CONFIRM: Commission command executed but returned no resourceId.");
+      persistTransferAudit(
+          client.getId(),
+          request.getTransferType(),
+          request.getCurrencyCode(),
+          request.getTransferAmount(),
+          feeAmount,
+          "FAILED");
+    }
+
+  } catch (Exception e) {
+    // NEVER roll back the original payment because of a commission failure
+    log.error(
+        "ACCOUNTING CONFIRM: Commission collection failed (non-fatal). "
+            + "Original transfer remains intact.",
+        e);
+    persistTransferAudit(
+        client.getId(),
+        request.getTransferType(),
+        request.getCurrencyCode(),
+        request.getTransferAmount(),
+        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO,
+        "FAILED");
+  }
+}
 
   private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
     if (destinationAccount == null || destinationAccount.isBlank()) {
