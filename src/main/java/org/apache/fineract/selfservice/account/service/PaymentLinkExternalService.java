@@ -31,6 +31,8 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -132,14 +134,26 @@ public class PaymentLinkExternalService {
       log.info("PaymentLinkService response: {}", body);
 
       JsonNode node = objectMapper.readTree(body);
-
-      PaymentLinkResponse result =
+      
+      PaymentLinkResponse result;
+      
+      if(response.getStatusCode() != HttpStatus.OK){
+          result =
           PaymentLinkResponse.builder()
               .checkoutId(text(node, "checkoutId"))
               .paymentUrl(text(node, "paymentUrl"))
               .paymentStatus(text(node, "paymentStatus"))
-              .success(node.path("success").asBoolean(false))
+              .success(true)
               .build();
+      } else {
+          result =
+          PaymentLinkResponse.builder()
+              .checkoutId("")
+              .paymentUrl("")
+              .paymentStatus("error")
+              .success(false)
+              .build();
+      }      
 
       SelfServicePaymentLink entityToSave = new SelfServicePaymentLink();
       entityToSave.setAppSelfServiceUserId(userId);
