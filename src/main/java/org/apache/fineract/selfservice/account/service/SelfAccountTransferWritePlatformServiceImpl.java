@@ -306,9 +306,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
     // Route to the correct execution strategy
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
+      log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");  
       return executePinTransfer(request, user, httpRequest);
     } 
     else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+        log.info("CONFIRM -> SINPE_MOVIL account detected. Executing SINPE_MOVIL transfer.");  
       return executeSinpeTransfer(request, user, httpRequest);
     } 
     else if (isSameBankIbanAccount(cleanDestination)
@@ -319,17 +321,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     else {
       log.info("CONFIRM -> Fallback to internal transfer.");
       return executeInternalTransfer(request, user, httpRequest);
-    }
-    /*
-
-    if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
-      log.info(
-          "ACCOUNTING CONFIRM: Shifting fee of {} {} to the collector account configured in c_external_service.",
-          feeAmountFromClient,
-          request.getCurrencyCode());
-      executeCommissionChargeViaSameBank(request, feeAmountFromClient);
-    }
-    */
+    }    
   }
 
   // =====================================================================
@@ -476,6 +468,17 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       }
       description = "Completed";
       stateCode = 32;
+      
+      if(request.getFeeAmount() != null){
+          if (request.getFeeAmount().compareTo(BigDecimal.ZERO) > 0) {
+            log.info(
+                "ACCOUNTING CONFIRM: Shifting fee of {} {} to the collector account configured in c_external_service.",
+                request.getFeeAmount(),
+                request.getCurrencyCode());
+            executeCommissionChargeViaSameBank(request, request.getFeeAmount());
+          }          
+      }
+      
     }
 
     log.info("Build the structured SAME_BANK response");
@@ -1604,15 +1607,15 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         return;
       }
 
-      Long toOfficeId = Long.parseLong(config.getOrDefault("to_office_id", "1"));
-      Long toClientId = Long.parseLong(config.getOrDefault("to_client_id", "199"));
-      Integer toAccountType = Integer.parseInt(config.getOrDefault("to_account_type", "2"));
+      Long toOfficeId = Long.valueOf(config.get("to_office_id"));
+      Long toClientId = Long.valueOf(config.get("to_client_id"));
+      Integer toAccountType = Integer.valueOf(config.get("to_account_type"));
 
       String toAccountIdStr =
           "USD".equalsIgnoreCase(request.getCurrencyCode())
-              ? config.getOrDefault("to_account_id_usd", "140")
-              : config.getOrDefault("to_account_id_crc", "139");
-      Long toAccountId = Long.parseLong(toAccountIdStr);
+              ? config.get("to_account_id_usd")
+              : config.get("to_account_id_crc");
+      Long toAccountId = Long.valueOf(toAccountIdStr);
 
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       Client client = user.getAppUserClientMappings().iterator().next().getClient();
