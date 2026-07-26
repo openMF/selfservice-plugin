@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,10 +22,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.exchangerate.domain.BccrExchangeRate;
+import org.apache.fineract.exchangerate.service.BccrExchangeRateService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -61,6 +65,8 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesR
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
@@ -128,6 +134,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository; 
   
   private final SelfServiceTransferFeeRepository feeRepository;
+  private final BccrExchangeRateService bccrExchangeRateService;
+  private final SelfServiceTransferAuditRepository transferAuditRepository;
 
   // =====================================================================
   //  PREPARE
@@ -532,6 +540,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         "",
         registrationDate,
         processingDate);
+    
+    // Execute Commission Charge for SAME_BANK
+    executeCommissionCharge(request);    
 
     log.info("Homologating SAME_BANK response structure");
     Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
@@ -584,6 +595,23 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     String resourcePart = String.format("%012d", resourceId != null ? resourceId : 0L);
     return datePart + officePart + resourcePart;
   }
+  
+  private void persistTransferAudit(Long clientId, String transferType, String currencyCode, BigDecimal transferAmount, BigDecimal feeAmount, String status) {
+        try {
+            SelfServiceTransferAudit audit = SelfServiceTransferAudit.builder()
+                    .clientId(clientId)
+                    .transferType(transferType)
+                    .currencyCode(currencyCode)
+                    .transferAmount(transferAmount)
+                    .feeAmount(feeAmount)
+                    .processingDate(OffsetDateTime.now())
+                    .status(status)
+                    .build();
+            transferAuditRepository.saveAndFlush(audit);
+        } catch (Exception e) {
+            log.error("Failed to persist transfer audit", e);
+        }
+    }
 
   // =====================================================================
   // Helper: persist the SAME_BANK audit record
@@ -771,6 +799,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
       
+      // Execute Commission Charge for SAME_BANK
       executeCommissionCharge(request);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
@@ -835,11 +864,13 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     }
 
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
+    
+    // Execute Commission Charge for SAME_BANK
+    executeCommissionCharge(request);
 
     Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
 
-    Map<String, Object> homologatedData =
-        homologateResponseData(externalData, request.getTransferAmount(), "CRC");
+    Map<String, Object> homologatedData = homologateResponseData(externalData, request.getTransferAmount(), "CRC");
 
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", "SINPE_MOVIL");
@@ -1583,104 +1614,213 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
-  private void executeCommissionCharge(AccountTransferConfirmRequest request) {
-    log.info("ACCOUNTING CONFIRM: Starting fee collection.");
-    BigDecimal feeAmount = BigDecimal.ZERO;
-    String feeDescription = "";
-    try {
-      Map<String, String> config =  externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
+    /**
+    * Collects the commission for PIN, SINPE_MOVIL and SAME_BANK transfers.
+    *
+    * <ul>
+    *   <li>Configuration is multi-tenant (c_external_service + m_selfservice_transfer_fees).</li>
+    *   <li>USD fees are converted with the official BCCR sell rate via {@link BccrExchangeRateService}.</li>
+    *   <li>SINPE_MOVIL daily threshold is evaluated against already-posted transactions of the day.</li>
+    *   <li>Failure of the commission transfer never rolls back the original payment.</li>
+    * </ul>
+    */
+   private void executeCommissionCharge(AccountTransferConfirmRequest request) {
+     log.info(
+         "ACCOUNTING CONFIRM: Starting fee collection for type={}, currency={}, amount={}",
+         request.getTransferType(),
+         request.getCurrencyCode(),
+         request.getTransferAmount());
+     
+     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+     Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
-      boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
-      if (!isTransferFeeEnabled) {
-        log.info("ACCOUNTING CONFIRM: Fee collection is disabled in the external configuration (c_external_service).");
-        return;
-      }
-            
-      SelfServiceTransferFee fee = feeRepository
-                                    .findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(request.getTransferType(), request.getCurrencyCode(), request.getTransferMode())
-                                    .orElseThrow(() -> new IllegalArgumentException("Fee configuration not found"));
-      
-      if (!fee.isActive()) {
-        log.info("Fee {} is disabled.", fee.getDescription());
-        return;
-      }
-      
-      if(fee.getFeeType().equalsIgnoreCase("FIXED")){
-          feeAmount = fee.getFeeValue();
-      }
-      else if (fee.getFeeType().equalsIgnoreCase("PERCENTAGE")){
-        log.info("TODO: PERCENTAGE fee Type to be implemented");  
-      }
-      
-      if(fee.getThresholdPeriod().equalsIgnoreCase("DAILY")){
-        log.info("TODO: Threshold Period Daily to be implemented");    
-      }
-      
-      if (fee.getDescription() != null ) {
-        feeDescription = fee.getDescription();
-      }
-          
-      if (feeAmount.compareTo(BigDecimal.ZERO) <= 0) {
-        log.info("Fee {} amount cannot be charged.", feeAmount);
-        return;
-      }
-      
-      // Build Fineract-compatible date
-    String transferDateForFineract = this.getTransferDateForApacheFineract(request);
-    String localeForFineract = "en";  
-    String dateFormatForFineract = "dd MMMM yyyy";
+     try {
+       // ------------------------------------------------------------------
+       // 1. Multi-tenant feature flag & GL destination accounts
+       // ------------------------------------------------------------------
+       Map<String, String> config =
+           externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
 
-      Long toOfficeId = Long.valueOf(config.get("to_office_id"));
-      Long toClientId = Long.valueOf(config.get("to_client_id"));
-      Integer toAccountType = Integer.valueOf(config.get("to_account_type"));
+       boolean isTransferFeeEnabled =
+           Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
+       if (!isTransferFeeEnabled) {
+         log.info(
+             "ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration "
+                 + "(c_external_service). Skipping.");
+         return;
+       }
 
-      String toAccountIdStr = "USD".equalsIgnoreCase(request.getCurrencyCode()) ? config.get("to_account_id_usd") : config.get("to_account_id_crc");
-      Long toAccountId = Long.valueOf(toAccountIdStr);
+       // ------------------------------------------------------------------
+       // 2. Resolve fee configuration (same rules used by the Quote service)
+       // ------------------------------------------------------------------
+       String currency =
+           StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
+       String transferMode =
+           StringUtils.isNotBlank(request.getTransferMode())
+               ? request.getTransferMode()
+               : "INMEDIATA";
 
-      AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      Client client = user.getAppUserClientMappings().iterator().next().getClient();
-      Long fromClientId = client.getId();
-      Long fromOfficeId = client.getOffice().getId();
+       Optional<SelfServiceTransferFee> feeOpt =
+           feeRepository.findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(
+               request.getTransferType(), currency, transferMode);
 
-      Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
+       if (feeOpt.isEmpty()) {
+         log.info(
+             "No active fee configuration for type={}, currency={}, mode={}. Skipping charge.",
+             request.getTransferType(),
+             currency,
+             transferMode);
+         return;
+       }
 
-      Map<String, Object> commandData = new HashMap<>();
-      commandData.put("fromOfficeId", fromOfficeId);
-      commandData.put("fromClientId", fromClientId);
-      commandData.put("fromAccountType", 2);
-      commandData.put("fromAccountId", fromAccountId);
-      commandData.put("toOfficeId", toOfficeId);
-      commandData.put("toClientId", toClientId);
-      commandData.put("toAccountType", toAccountType);
-      commandData.put("toAccountId", toAccountId);
-      commandData.put("transferAmount", feeAmount);
-      commandData.put("transferDate", transferDateForFineract);
-      commandData.put("transferDescription", feeDescription);
-      commandData.put("locale", localeForFineract);
-      commandData.put("dateFormat", dateFormatForFineract);
+       SelfServiceTransferFee feeConfig = feeOpt.get();
+       if (!feeConfig.isActive()) {
+         log.info("Fee configuration id={} is inactive. Skipping.", feeConfig.getId());
+         return;
+       }
 
-      String jsonRequestBody = this.gson.toJson(commandData);
+       // ------------------------------------------------------------------
+       // 3. Calculate the concrete fee amount (mirrors QuoteService logic)
+       // ------------------------------------------------------------------
+       BigDecimal feeAmount = BigDecimal.ZERO;
+       String feeDescription =
+           StringUtils.defaultIfBlank(feeConfig.getDescription(), "Comisión de transferencia");
 
-      if (StringUtils.isBlank(jsonRequestBody)) {
-        log.error("Failed to serialize command data to JSON. commandData: {}", commandData);
-        throw new IllegalArgumentException(
-            "Internal error: Failed to serialize transfer command data.");
-      }
+       if ("PERCENTAGE".equalsIgnoreCase(feeConfig.getFeeType())) {
+         feeAmount =
+             request
+                 .getTransferAmount()
+                 .multiply(feeConfig.getFeeValue())
+                 .setScale(2, RoundingMode.HALF_UP);
+       } else { // FIXED
+         feeAmount = feeConfig.getFeeValue();
 
-      JsonCommand command = createJsonCommand(jsonRequestBody);
-      log.info("ACCOUNTING CONFIRM: Executing internal transfer command for fee collection...");
-      CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+         // Currency conversion when the fee is stored in a different currency
+         // (classic case: PIN-USD fee expressed as 950 CRC → convert to USD)
+         if (feeConfig.getFeeCurrency() != null
+             && !feeConfig.getFeeCurrency().equalsIgnoreCase(currency)
+             && "CRC".equalsIgnoreCase(feeConfig.getFeeCurrency())
+             && "USD".equalsIgnoreCase(currency)) {
 
-      if (result != null && result.getResourceId() != null) {
-        log.info("ACCOUNTING CONFIRM: Fee successfully collected via internal command. Transaction ID: {}", result.getResourceId());
-      } else {
-        log.warn("ACCOUNTING CONFIRM: Fee collection command executed but did not return a valid resource ID.");
-      }
+           Optional<BccrExchangeRate> bccrRate = bccrExchangeRateService.getLatestRate();
+           BigDecimal rate =
+               bccrRate
+                   .map(BccrExchangeRate::getSellRate)
+                   .orElseThrow(() -> new IllegalArgumentException("Exchange Rate not found"));
 
-    } catch (Exception e) {
-      log.error("ACCOUNTING CONFIRM: Internal fee collection execution failed: ", e);
-    }
-  }
+           // fee is in CRC → convert to USD (divide)
+           feeAmount = feeAmount.divide(rate, 2, RoundingMode.HALF_UP);
+           feeDescription =
+               String.format(
+                   "%s (Tasa BCCR venta: %s CRC/USD)", feeDescription, rate.toPlainString());
+           log.info(
+               "Converted CRC fee {} → {} USD using BCCR sell rate {}",
+               feeConfig.getFeeValue(),
+               feeAmount,
+               rate);
+         }
+       }
+
+       // ------------------------------------------------------------------
+       // 4. Apply daily threshold (SINPE_MOVIL)
+       // ------------------------------------------------------------------
+       if ("DAILY".equalsIgnoreCase(feeConfig.getThresholdPeriod())
+           && feeConfig.getThresholdAmount() != null
+           && feeConfig.getThresholdAmount().compareTo(BigDecimal.ZERO) > 0) {
+
+         LocalDate today = DateUtils.getLocalDateOfTenant();
+         
+         BigDecimal alreadyTransferredToday = transferAuditRepository.getDailySinpeMovilTotal(client.getId(), today);
+         
+         if (alreadyTransferredToday == null) {
+           alreadyTransferredToday = BigDecimal.ZERO;
+         }
+
+         BigDecimal projected = alreadyTransferredToday.add(request.getTransferAmount());
+
+         if (projected.compareTo(feeConfig.getThresholdAmount()) <= 0) {
+           feeAmount = BigDecimal.ZERO;
+           feeDescription = "Exento – dentro del umbral diario SINPE Móvil";
+           log.info("SINPE_MOVIL threshold: projected {} ≤ {}. Fee waived.", projected, feeConfig.getThresholdAmount());
+         } else {
+           // Apply the threshold fee (or keep the already-calculated fee)
+           if (feeConfig.getThresholdFeeValue() != null) {
+             feeAmount = feeConfig.getThresholdFeeValue();
+           }
+           log.info("SINPE_MOVIL threshold exceeded (projected {}). Applying fee {}.", projected, feeAmount);
+         }
+       }
+       
+       if (feeAmount.compareTo(BigDecimal.ZERO) <= 0) {
+         log.info("Final fee amount is zero – nothing to charge.");
+         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "COMPLETED");
+         return;
+       }
+
+       // ------------------------------------------------------------------
+       // 5. Build the internal account-transfer command (GL → commission account)
+       // ------------------------------------------------------------------
+       Long toOfficeId = Long.valueOf(config.get("to_office_id"));
+       Long toClientId = Long.valueOf(config.get("to_client_id"));
+       Integer toAccountType = Integer.valueOf(config.get("to_account_type"));
+
+       String toAccountIdStr =
+           "USD".equalsIgnoreCase(currency)
+               ? config.get("to_account_id_usd")
+               : config.get("to_account_id_crc");
+       Long toAccountId = Long.valueOf(toAccountIdStr);
+
+       
+       Long fromClientId = client.getId();
+       Long fromOfficeId = client.getOffice().getId();
+       Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
+
+       String transferDateForFineract = getTransferDateForApacheFineract(request);
+       String localeForFineract = "en";
+       String dateFormatForFineract = "dd MMMM yyyy";
+
+       Map<String, Object> commandData = new HashMap<>();
+       commandData.put("fromOfficeId", fromOfficeId);
+       commandData.put("fromClientId", fromClientId);
+       commandData.put("fromAccountType", 2);
+       commandData.put("fromAccountId", fromAccountId);
+       commandData.put("toOfficeId", toOfficeId);
+       commandData.put("toClientId", toClientId);
+       commandData.put("toAccountType", toAccountType);
+       commandData.put("toAccountId", toAccountId);
+       commandData.put("transferAmount", feeAmount);
+       commandData.put("transferDate", transferDateForFineract);
+       commandData.put("transferDescription", feeDescription);
+       commandData.put("locale", localeForFineract);
+       commandData.put("dateFormat", dateFormatForFineract);
+
+       String jsonRequestBody = gson.toJson(commandData);
+       if (StringUtils.isBlank(jsonRequestBody)) {
+         throw new IllegalArgumentException("Failed to serialise commission transfer command");
+       }
+
+       JsonCommand command = createJsonCommand(jsonRequestBody);
+       log.info("ACCOUNTING CONFIRM: Executing commission transfer of {} {} …", feeAmount, currency);
+
+       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
+
+       if (result != null && result.getResourceId() != null) {
+         log.info("ACCOUNTING CONFIRM: Commission successfully collected. " + "Transaction ID = {}, amount = {} {}",
+             result.getResourceId(),
+             feeAmount,
+             currency);
+         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "COMPLETED");
+       } else {
+         log.warn("ACCOUNTING CONFIRM: Commission command executed but returned no resourceId.");
+         persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), feeAmount, "FAILED");
+       }
+
+     } catch (Exception e) {
+       // NEVER roll back the original payment because of a commission failure
+       log.error("ACCOUNTING CONFIRM: Commission collection failed (non-fatal). Original transfer remains intact.", e);
+       persistTransferAudit(client.getId(), request.getTransferType(), request.getCurrencyCode(), request.getTransferAmount(), request.getFeeAmount(), "FAILED");
+     }
+   }
 
   private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
     if (destinationAccount == null || destinationAccount.isBlank()) {
