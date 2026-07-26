@@ -1639,14 +1639,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
        // 1. Multi-tenant feature flag & GL destination accounts
        // ------------------------------------------------------------------
        Map<String, String> config =
-           externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
+           externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
 
-       boolean isTransferFeeEnabled =
-           Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
+       boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
        if (!isTransferFeeEnabled) {
-         log.info(
-             "ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration "
-                 + "(c_external_service). Skipping.");
+         log.info("ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration. Skipping.");
          return;
        }
 
