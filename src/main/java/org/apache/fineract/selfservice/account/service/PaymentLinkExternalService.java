@@ -137,6 +137,8 @@ public class PaymentLinkExternalService {
       
       PaymentLinkResponse result;
       
+      log.info("Status Code: {}", response.getStatusCode());
+      
       if(response.getStatusCode() == HttpStatus.OK){
           result =
           PaymentLinkResponse.builder()
@@ -148,10 +150,10 @@ public class PaymentLinkExternalService {
       } else {
           result =
           PaymentLinkResponse.builder()
-              .checkoutId("")
-              .paymentUrl("")
-              .paymentStatus("error")
-              .success(false)
+              .checkoutId(text(node, "checkoutId"))
+              .paymentUrl(text(node, "paymentUrl"))
+              .paymentStatus(text(node, "paymentStatus"))
+              .success(true)
               .build();
       }      
 
