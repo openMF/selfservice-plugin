@@ -137,7 +137,7 @@ public class PaymentLinkExternalService {
       
       PaymentLinkResponse result;
       
-      if(response.getStatusCode() != HttpStatus.OK){
+      if(response.getStatusCode() == HttpStatus.OK){
           result =
           PaymentLinkResponse.builder()
               .checkoutId(text(node, "checkoutId"))
