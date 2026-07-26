@@ -1638,10 +1638,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
        // ------------------------------------------------------------------
        // 1. Multi-tenant feature flag & GL destination accounts
        // ------------------------------------------------------------------
-       Map<String, String> config =
-           externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
+       Map<String, String> feeConfiguration = externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
+       
+       Map<String, String> institutionAccountConfig = externalServicePropertiesRepository.getProperties("INSTITUTION_ACCOUNT_FOR_FEES");
+       
 
-       boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
+       boolean isTransferFeeEnabled = Boolean.parseBoolean(feeConfiguration.getOrDefault("transfer_fee_enabled", "false"));
        if (!isTransferFeeEnabled) {
          log.info("ACCOUNTING CONFIRM: Fee collection disabled in tenant configuration. Skipping.");
          return;
@@ -1757,15 +1759,23 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
        // ------------------------------------------------------------------
        // 5. Build the internal account-transfer command (GL → commission account)
        // ------------------------------------------------------------------
-       Long toOfficeId = Long.valueOf(config.get("to_office_id"));
-       Long toClientId = Long.valueOf(config.get("to_client_id"));
-       Integer toAccountType = Integer.valueOf(config.get("to_account_type"));
+       Long toOfficeId = Long.valueOf(institutionAccountConfig.get("to_office_id"));
+       Long toClientId = Long.valueOf(institutionAccountConfig.get("to_client_id"));
+       Integer toAccountType = Integer.valueOf(institutionAccountConfig.get("to_account_type"));
 
        String toAccountIdStr =
            "USD".equalsIgnoreCase(currency)
-               ? config.get("to_account_id_usd")
-               : config.get("to_account_id_crc");
+               ? institutionAccountConfig.get("to_account_id_usd")
+               : institutionAccountConfig.get("to_account_id_crc");
        Long toAccountId = Long.valueOf(toAccountIdStr);
+       
+ 
+
+  log.error(
+      "ACCOUNTING CONFIRM: Incomplete SELF_SERVICE_FEE_CONFIG "
+          + "(to_office_id={}, to_client_id={}, to_account_type={}, to_account_id={}). "
+          + "Skipping commission charge.",
+      toOfficeId, toClientId, toAccountType, toAccountIdStr);
 
        
        Long fromClientId = client.getId();
