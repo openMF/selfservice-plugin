@@ -61,6 +61,8 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesR
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
@@ -113,19 +115,19 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
   // DAO for SAME_BANK transfer audit persistence
   private final SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository;
-
+  
   // Date formatter used for internalRefNumber generation
   private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
   // Fineract expected full datetime format for internal transfers (prevents future-date validation
   // errors)
-  private static final DateTimeFormatter FINERACT_DATETIME_FMT =
-      DateTimeFormatter.ofPattern("dd MMMM yyyy");
+  private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
 
-  private final SavingsAccountTransactionRepository
-      savingsAccountTransactionRepository; // inject via constructor
+  private final SavingsAccountTransactionRepository savingsAccountTransactionRepository; // inject via constructor
 
-  private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository; // NEW
+  private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository; 
+  
+  private final SelfServiceTransferFeeRepository feeRepository;
 
   // =====================================================================
   //  PREPARE
@@ -342,6 +344,35 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     publishTransferEvent(result, params, params, httpRequest);
     return result;
   }
+  
+  private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request){
+    // Build Fineract-compatible date
+    String transferDateForFineract;
+    String localeForFineract = "en";    
+
+    if (StringUtils.isNotBlank(request.getTransferDate())) {
+      // Parse client date and append current time to avoid "future date" issues
+      try {
+        LocalDate clientDate =
+            LocalDate.parse(
+                request.getTransferDate(),
+                DateTimeFormatter.ofPattern(
+                    request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
+        LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
+        LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
+        transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
+        Locale defaultLocale = Locale.getDefault();
+        localeForFineract = defaultLocale.getLanguage();
+      } catch (Exception e) {
+        log.warn("Failed to parse client transferDate, falling back to now", e);
+        transferDateForFineract =
+            DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
+      }
+    } else {
+      transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
+    }
+    return transferDateForFineract;
+  }
 
   // =====================================================================
   //  Builds a fully-structured SameBankTransferResponseData instead of
@@ -373,55 +404,26 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     }
 
     // Resolve the currency from the source savings account; fall back to the request
-    String resolvedCurrencyCode =
-        resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
+    String resolvedCurrencyCode = resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
 
     // Build Fineract-compatible date
-    String transferDateForFineract;
-    String localeForFineract = "en";
+    String transferDateForFineract = this.getTransferDateForApacheFineract(request);
+    String localeForFineract = "en";  
     String dateFormatForFineract = "dd MMMM yyyy";
-
-    if (StringUtils.isNotBlank(request.getTransferDate())) {
-      // Parse client date and append current time to avoid "future date" issues
-      try {
-        LocalDate clientDate =
-            LocalDate.parse(
-                request.getTransferDate(),
-                DateTimeFormatter.ofPattern(
-                    request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
-        LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
-        LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
-        transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
-        Locale defaultLocale = Locale.getDefault();
-        localeForFineract = defaultLocale.getLanguage();
-      } catch (Exception e) {
-        log.warn("Failed to parse client transferDate, falling back to now", e);
-        transferDateForFineract =
-            DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
-      }
-    } else {
-      transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
-    }
 
     // Build the Fineract internal-transfer command
     Map<String, Object> commandData = new HashMap<>();
     commandData.put("fromOfficeId", fromOfficeId);
     commandData.put("fromClientId", fromClientId);
-    commandData.put(
-        "fromAccountType", request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+    commandData.put("fromAccountType", 2);
     commandData.put("fromAccountId", fromAccountId);
     commandData.put("toOfficeId", toOfficeId);
     commandData.put("toClientId", toClientId);
-    commandData.put(
-        "toAccountType", request.getToAccountType() != null ? request.getToAccountType() : 2);
+    commandData.put("toAccountType", 2);
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract); // Full datetime string
-    commandData.put(
-        "transferDescription",
-        request.getTransferDescription() != null
-            ? request.getTransferDescription()
-            : "Internal Transfer");
+    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
     commandData.put("locale", localeForFineract);
     commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
@@ -468,16 +470,6 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       }
       description = "Completed";
       stateCode = 32;
-      
-      if(request.getFeeAmount() != null){
-          if (request.getFeeAmount().compareTo(BigDecimal.ZERO) > 0) {
-            log.info(
-                "ACCOUNTING CONFIRM: Shifting fee of {} {} to the collector account configured in c_external_service.",
-                request.getFeeAmount(),
-                request.getCurrencyCode());
-            executeCommissionChargeViaSameBank(request, request.getFeeAmount());
-          }          
-      }
       
     }
 
@@ -778,11 +770,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       }
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
+      
+      executeCommissionCharge(request);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
 
-      Map<String, Object> homologatedData =
-          homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
+      Map<String, Object> homologatedData = homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
 
       Map<String, Object> response = new HashMap<>();
       response.put("transferType", "PIN");
@@ -1590,31 +1583,58 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
-  private void executeCommissionChargeViaSameBank(
-      AccountTransferConfirmRequest request, BigDecimal feeAmount) {
-    log.info(
-        "ACCOUNTING CONFIRM: Starting internal fee collection via Fineract Service (Multi-tenant).");
-
+  private void executeCommissionCharge(AccountTransferConfirmRequest request) {
+    log.info("ACCOUNTING CONFIRM: Starting fee collection.");
+    BigDecimal feeAmount = BigDecimal.ZERO;
+    String feeDescription = "";
     try {
-      Map<String, String> config =
-          externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
+      Map<String, String> config =  externalServicePropertiesRepository.getProperties("SELF_SERVICE_COMMISSION_CONFIG");
 
-      boolean isTransferFeeEnabled =
-          Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
+      boolean isTransferFeeEnabled = Boolean.parseBoolean(config.getOrDefault("transfer_fee_enabled", "false"));
       if (!isTransferFeeEnabled) {
-        log.info(
-            "ACCOUNTING CONFIRM: Fee collection is disabled in the external configuration (c_external_service).");
+        log.info("ACCOUNTING CONFIRM: Fee collection is disabled in the external configuration (c_external_service).");
         return;
       }
+            
+      SelfServiceTransferFee fee = feeRepository
+                                    .findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(request.getTransferType(), request.getCurrencyCode(), request.getTransferMode())
+                                    .orElseThrow(() -> new IllegalArgumentException("Fee configuration not found"));
+      
+      if (!fee.isActive()) {
+        log.info("Fee {} is disabled.", fee.getDescription());
+        return;
+      }
+      
+      if(fee.getFeeType().equalsIgnoreCase("FIXED")){
+          feeAmount = fee.getFeeValue();
+      }
+      else if (fee.getFeeType().equalsIgnoreCase("PERCENTAGE")){
+        log.info("TODO: PERCENTAGE fee Type to be implemented");  
+      }
+      
+      if(fee.getThresholdPeriod().equalsIgnoreCase("DAILY")){
+        log.info("TODO: Threshold Period Daily to be implemented");    
+      }
+      
+      if (fee.getDescription() != null ) {
+        feeDescription = fee.getDescription();
+      }
+          
+      if (feeAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        log.info("Fee {} amount cannot be charged.", feeAmount);
+        return;
+      }
+      
+      // Build Fineract-compatible date
+    String transferDateForFineract = this.getTransferDateForApacheFineract(request);
+    String localeForFineract = "en";  
+    String dateFormatForFineract = "dd MMMM yyyy";
 
       Long toOfficeId = Long.valueOf(config.get("to_office_id"));
       Long toClientId = Long.valueOf(config.get("to_client_id"));
       Integer toAccountType = Integer.valueOf(config.get("to_account_type"));
 
-      String toAccountIdStr =
-          "USD".equalsIgnoreCase(request.getCurrencyCode())
-              ? config.get("to_account_id_usd")
-              : config.get("to_account_id_crc");
+      String toAccountIdStr = "USD".equalsIgnoreCase(request.getCurrencyCode()) ? config.get("to_account_id_usd") : config.get("to_account_id_crc");
       Long toAccountId = Long.valueOf(toAccountIdStr);
 
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
@@ -1622,28 +1642,22 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       Long fromClientId = client.getId();
       Long fromOfficeId = client.getOffice().getId();
 
-      Long fromAccountId =
-          resolveAccountId(
-              request.getFromAccount(),
-              request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+      Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
 
       Map<String, Object> commandData = new HashMap<>();
       commandData.put("fromOfficeId", fromOfficeId);
       commandData.put("fromClientId", fromClientId);
-      commandData.put(
-          "fromAccountType",
-          request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+      commandData.put("fromAccountType", 2);
       commandData.put("fromAccountId", fromAccountId);
       commandData.put("toOfficeId", toOfficeId);
       commandData.put("toClientId", toClientId);
       commandData.put("toAccountType", toAccountType);
       commandData.put("toAccountId", toAccountId);
       commandData.put("transferAmount", feeAmount);
-      commandData.put("transferDate", request.getTransferDate());
-      commandData.put("transferDescription", "Fee Collection Channel " + request.getTransferType());
-      commandData.put("locale", request.getLocale() != null ? request.getLocale() : "es");
-      commandData.put(
-          "dateFormat", request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy");
+      commandData.put("transferDate", transferDateForFineract);
+      commandData.put("transferDescription", feeDescription);
+      commandData.put("locale", localeForFineract);
+      commandData.put("dateFormat", dateFormatForFineract);
 
       String jsonRequestBody = this.gson.toJson(commandData);
 
@@ -1658,12 +1672,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
       if (result != null && result.getResourceId() != null) {
-        log.info(
-            "ACCOUNTING CONFIRM: Fee successfully collected via internal command. Transaction ID: {}",
-            result.getResourceId());
+        log.info("ACCOUNTING CONFIRM: Fee successfully collected via internal command. Transaction ID: {}", result.getResourceId());
       } else {
-        log.warn(
-            "ACCOUNTING CONFIRM: Fee collection command executed but did not return a valid resource ID.");
+        log.warn("ACCOUNTING CONFIRM: Fee collection command executed but did not return a valid resource ID.");
       }
 
     } catch (Exception e) {
