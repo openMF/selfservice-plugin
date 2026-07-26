@@ -542,7 +542,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         processingDate);
     
     // Execute Commission Charge for SAME_BANK
-    executeCommissionCharge(request);    
+    executeFeeTransaction(request);    
 
     log.info("Homologating SAME_BANK response structure");
     Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
@@ -800,7 +800,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
       
       // Execute Commission Charge for SAME_BANK
-      executeCommissionCharge(request);
+      executeFeeTransaction(request);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
 
@@ -866,7 +866,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
     
     // Execute Commission Charge for SAME_BANK
-    executeCommissionCharge(request);
+    executeFeeTransaction(request);
 
     Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
 
@@ -1615,7 +1615,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
   }
 
     /**
-    * Collects the commission for PIN, SINPE_MOVIL and SAME_BANK transfers.
+    * Collects the fee for PIN, SINPE_MOVIL and SAME_BANK transfers.
     *
     * <ul>
     *   <li>Configuration is multi-tenant (c_external_service + m_selfservice_transfer_fees).</li>
@@ -1624,7 +1624,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     *   <li>Failure of the commission transfer never rolls back the original payment.</li>
     * </ul>
     */
-   private void executeCommissionCharge(AccountTransferConfirmRequest request) {
+   private void executeFeeTransaction(AccountTransferConfirmRequest request) {
      log.info(
          "ACCOUNTING CONFIRM: Starting fee collection for type={}, currency={}, amount={}",
          request.getTransferType(),
@@ -1739,7 +1739,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
          if (projected.compareTo(feeConfig.getThresholdAmount()) <= 0) {
            feeAmount = BigDecimal.ZERO;
-           feeDescription = "Exento – dentro del umbral diario SINPE Móvil";
+           feeDescription = "Exento: Dentro del umbral diario SINPE Móvil";
            log.info("SINPE_MOVIL threshold: projected {} ≤ {}. Fee waived.", projected, feeConfig.getThresholdAmount());
          } else {
            // Apply the threshold fee (or keep the already-calculated fee)
@@ -1769,15 +1769,10 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
                : institutionAccountConfig.get("to_account_id_crc");
        Long toAccountId = Long.valueOf(toAccountIdStr);
        
- 
+       log.error("ACCOUNTING CONFIRM: SELF_SERVICE_FEE_CONFIG "
+          + "(to_office_id={}, to_client_id={}, to_account_type={}, to_account_id={}). ",
+          toOfficeId, toClientId, toAccountType, toAccountIdStr);
 
-  log.error(
-      "ACCOUNTING CONFIRM: Incomplete SELF_SERVICE_FEE_CONFIG "
-          + "(to_office_id={}, to_client_id={}, to_account_type={}, to_account_id={}). "
-          + "Skipping commission charge.",
-      toOfficeId, toClientId, toAccountType, toAccountIdStr);
-
-       
        Long fromClientId = client.getId();
        Long fromOfficeId = client.getOffice().getId();
        Long fromAccountId = resolveAccountId(request.getFromAccount(), 2);
@@ -1807,7 +1802,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
        }
 
        JsonCommand command = createJsonCommand(jsonRequestBody);
-       log.info("ACCOUNTING CONFIRM: Executing commission transfer of {} {} …", feeAmount, currency);
+       log.info("ACCOUNTING CONFIRM: Executing commission transfer of {} {} ", feeAmount, currency);
 
        CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
