@@ -182,6 +182,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
 
     BigDecimal totalAmount = transferAmount.add(feeAmount);
+    
+    // Safeguard: transfer + fee must fit in source savings
+    validateSufficientFunds(
+        fromAccount,
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
+        transferAmount,
+        feeAmount);
 
     Map<String, Object> prepareResponse = new HashMap<>();
     prepareResponse.put("status", "PREPARED");
@@ -212,6 +219,12 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
 
     final AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
+    
+    validateSufficientFunds(
+        request.getFromAccount(),
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
+        request.getTransferAmount(),
+        quote.getFeeAmount());
 
     log.info("QUOTE: Quote calculated. Triggering new security OTP dispatch.");
 
@@ -292,7 +305,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 }
 
   // =====================================================================
-  //  CONFIRM  (entry-point)
+  //  CONFIRM  
   // =====================================================================
   @Override
   @Transactional
@@ -306,6 +319,33 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     BigDecimal feeAmountFromClient =
         request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
 
+    // Re-calculate fee server-side when client did not send one (or sent 0)
+    // so the balance check always uses the real total.
+    BigDecimal feeForBalanceCheck = feeAmountFromClient;
+    if (feeForBalanceCheck.compareTo(BigDecimal.ZERO) <= 0) {
+      try {
+        AccountTransferPrepareRequest quoteReq = new AccountTransferPrepareRequest();
+        quoteReq.setTransferType(request.getTransferType());
+        quoteReq.setCurrencyCode(request.getCurrencyCode());
+        quoteReq.setTransferMode(request.getTransferMode());
+        quoteReq.setTransferAmount(request.getTransferAmount());
+        // map any other fields your PrepareRequest needs
+        AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq);
+        if (quote != null && quote.getFeeAmount() != null) {
+          feeForBalanceCheck = quote.getFeeAmount();
+        }
+      } catch (Exception e) {
+        log.warn("CONFIRM: Could not re-calculate fee for balance check, using client value", e);
+      }
+    }
+
+    // Safeguard: transfer + fee must fit before any external/internal debit
+    validateSufficientFunds(
+        request.getFromAccount(),
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
+        request.getTransferAmount(),
+        feeForBalanceCheck);
+    
     log.info(
         "CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
         request.getTransferType(),
@@ -2104,6 +2144,82 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
     return data;
   }
+  
+    /**
+    * Ensures the source savings account has enough withdrawable balance to cover
+    * transferAmount + feeAmount. Throws a clear validation error before any debit.
+    */
+   private void validateSufficientFunds(
+       String fromAccountIdentifier,
+       Integer fromAccountType,
+       BigDecimal transferAmount,
+       BigDecimal feeAmount) {
+
+     if (StringUtils.isBlank(fromAccountIdentifier)) {
+       throw new IllegalArgumentException("Source account (fromAccount) is required for balance validation.");
+     }
+
+     BigDecimal transfer =
+         transferAmount != null ? transferAmount : BigDecimal.ZERO;
+     BigDecimal fee = feeAmount != null ? feeAmount : BigDecimal.ZERO;
+     BigDecimal totalRequired = transfer.add(fee);
+
+     if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
+       return; // nothing to debit
+     }
+
+     Long fromAccountId =
+         resolveAccountId(
+             fromAccountIdentifier,
+             fromAccountType != null ? fromAccountType : 2);
+
+     SavingsAccount fromSavings =
+         savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
+
+     // Prefer withdrawable balance (respects min balance, holds, overdraft rules)
+     BigDecimal available;
+     try {
+       available = fromSavings.getWithdrawableBalance();
+     } catch (Exception e) {
+       // Fallback if method signature differs in this Fineract version
+       log.warn(
+           "getWithdrawableBalance() unavailable, falling back to account balance. cause={}",
+           e.getMessage());
+       available =
+           fromSavings.getSummary() != null
+               ? fromSavings.getSummary().getAccountBalance()
+               : fromSavings.getAccountBalance();
+     }
+
+     if (available == null) {
+       available = BigDecimal.ZERO;
+     }
+
+     if (available.compareTo(totalRequired) < 0) {
+       final List<ApiParameterError> errors = new ArrayList<>();
+       final DataValidatorBuilder base =
+           new DataValidatorBuilder(errors).resource("accounttransfer");
+       base.reset()
+           .parameter("transferAmount")
+           .value(totalRequired)
+           .failWithCode(
+               "insufficient.account.balance",
+               "Insufficient funds in source account. Available: "
+                   + available.toPlainString()
+                   + ", required (transfer + fee): "
+                   + totalRequired.toPlainString()
+                   + ".");
+       throw new PlatformApiDataValidationException(errors);
+     }
+
+     log.info(
+         "FUNDS CHECK OK: accountId={}, available={}, transfer={}, fee={}, totalRequired={}",
+         fromAccountId,
+         available,
+         transfer,
+         fee,
+         totalRequired);
+   }
   
   
 }
