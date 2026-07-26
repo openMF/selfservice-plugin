@@ -14,9 +14,9 @@
                 <columnExists tableName="m_selfservice_transfer_fees" columnName="threshold_period"/>
             </not>
         </preConditions>
-        <comment>Add threshold_period field to m_selfservice_transfer_fees</comment>
+        <comment>Add threshold_period field to m_selfservice_transfer_fees with a default value for existing rows</comment>
         <addColumn tableName="m_selfservice_transfer_fees">
-            <column name="threshold_period" type="VARCHAR(50)">
+            <column name="threshold_period" type="VARCHAR(50)" defaultValue="DAILY">
                 <constraints nullable="false"/>
             </column>
         </addColumn>
