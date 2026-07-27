@@ -28,13 +28,14 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.exchangerate.domain.BccrExchangeRate;
 import org.apache.fineract.exchangerate.service.BccrExchangeRateService;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.stereotype.Component;
 
-@Path("/v1/self/transfer-fees")
 @Component
+@Path("/v1/self/transfer-fees")
 @Tag(
     name = "Self Transfer Fees Management",
     description = "Endpoints to manage transfer fee configurations")
@@ -42,12 +43,13 @@ import org.springframework.stereotype.Component;
 public class SelfServiceTransferFeeApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
+  private final PlatformSecurityContext contextBackOffice;
   private final SelfServiceTransferFeeRepository feeRepository;
   private final DefaultToApiJsonSerializer<SelfServiceTransferFee> toApiJsonSerializer;
   private final BccrExchangeRateService bccrExchangeRateService;
   private final Gson gson = new Gson();
 
-  @GET
+  @GET  
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Get All Transfer Fees",
@@ -91,69 +93,5 @@ public class SelfServiceTransferFeeApiResource {
             .collect(Collectors.toList());
 
     return gson.toJson(responseList);
-  }
-
-  @POST
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Operation(
-      summary = "Create Transfer Fee",
-      description = "Creates a new transfer fee configuration. Requires TRANSFER_FEE permission.")
-  public String create(final String apiRequestBodyAsJson) {
-    context.authenticatedSelfServiceUser().validateHasCreatePermission("TRANSFER_FEE");
-    SelfServiceTransferFee fee = gson.fromJson(apiRequestBodyAsJson, SelfServiceTransferFee.class);
-    fee.setId(null);
-    feeRepository.save(fee);
-    return toApiJsonSerializer.serialize(fee);
-  }
-
-  @PUT
-  @Path("/{id}")
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Operation(
-      summary = "Update Transfer Fee",
-      description =
-          "Updates an existing transfer fee configuration. Requires TRANSFER_FEE permission.")
-  public String update(@PathParam("id") Long id, final String apiRequestBodyAsJson) {
-    context.authenticatedSelfServiceUser().validateHasUpdatePermission("TRANSFER_FEE");
-    SelfServiceTransferFee fee =
-        feeRepository
-            .findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Fee configuration not found"));
-
-    SelfServiceTransferFee updates =
-        gson.fromJson(apiRequestBodyAsJson, SelfServiceTransferFee.class);
-
-    // Update all fields
-    fee.setTransferType(updates.getTransferType());
-    fee.setCurrencyCode(updates.getCurrencyCode());
-    fee.setTransferMode(updates.getTransferMode());
-    fee.setFeeType(updates.getFeeType());
-    fee.setFeeValue(updates.getFeeValue());
-    fee.setFeeCurrency(updates.getFeeCurrency());
-    fee.setThresholdAmount(updates.getThresholdAmount());
-    fee.setThresholdFeeValue(updates.getThresholdFeeValue());
-    fee.setDescription(updates.getDescription());
-    fee.setActive(updates.isActive());
-    fee.setExchangeRateRequired(updates.isExchangeRateRequired());
-
-    feeRepository.save(fee);
-    return toApiJsonSerializer.serialize(fee);
-  }
-
-  @DELETE
-  @Path("/{id}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Operation(
-      summary = "Delete Transfer Fee",
-      description = "Deletes a transfer fee configuration. Requires TRANSFER_FEE permission.")
-  public String delete(@PathParam("id") Long id) {
-    context.authenticatedSelfServiceUser().validateHasDeletePermission("TRANSFER_FEE");
-    if (!feeRepository.existsById(id)) {
-      throw new IllegalArgumentException("Fee configuration not found");
-    }
-    feeRepository.deleteById(id);
-    return "{\"status\": \"deleted\", \"resourceId\": " + id + "}";
   }
 }
