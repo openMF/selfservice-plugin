@@ -155,7 +155,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final BigDecimal transferAmount = request.getTransferAmount();
     final String transferType = request.getTransferType();
     final String currencyCode = request.getCurrencyCode();
-    final String transferDescription = request.getTransferDescription();
+    final String transferDescription = request.getTransferDescription() != null ? request.getTransferDescription() : "";
     final String reference = request.getReference();
 
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -474,7 +474,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract); // Full datetime string
-    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
+    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "");
     commandData.put("locale", localeForFineract);
     commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
@@ -536,10 +536,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     SameBankTransferCustomData customData =
         SameBankTransferCustomData.builder()
             .totalAmount(totalAmount.toPlainString())
-            .transferDescription(
-                StringUtils.isNotBlank(request.getTransferDescription())
-                    ? request.getTransferDescription()
-                    : "Internal Transfer")
+            .transferDescription(request.getTransferDescription() != null ? request.getTransferDescription() : "")
             .feeAmount(feeAmount.toPlainString())
             .debitAmount(transferAmount.toPlainString())
             .exchangeRateAmount("1")
@@ -944,13 +941,8 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put(
-          "transferDescription",
-          StringUtils.isNotBlank(request.getTransferDescription())
-              ? request.getTransferDescription()
-              : "N/A");
-      contextData.put(
-          "fromAccountNumber",
+      contextData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "");
+      contextData.put("fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
           "toAccountNumber",
@@ -1017,11 +1009,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put(
-          "transferDescription",
-          StringUtils.isNotBlank(request.getTransferDescription())
-              ? request.getTransferDescription()
-              : "N/A");
+      contextData.put("transferDescription",request.getTransferDescription() != null ? request.getTransferDescription() : "");
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1099,10 +1087,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put(
-          "transferDescription",
-          StringUtils.isNotBlank(request.getTransferDescription())
-              ? request.getTransferDescription()
-              : "N/A");
+          "transferDescription",request.getTransferDescription() != null ? request.getTransferDescription() : "");
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
