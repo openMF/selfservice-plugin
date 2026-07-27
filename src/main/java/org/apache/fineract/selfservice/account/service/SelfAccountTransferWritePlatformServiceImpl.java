@@ -396,6 +396,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     return result;
   }
   
+  private String getTransferDateFormatForApacheFineract(AccountTransferConfirmRequest request){
+    // Build Fineract-compatible date
+    String transferDateFormatForFineract = request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy";
+    return transferDateFormatForFineract;
+  }
+  
   private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request){
     // Build Fineract-compatible date
     String transferDateForFineract;
@@ -423,12 +429,6 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
     }
     return transferDateForFineract;
-  }
-  
-  private String getTransferDateFormatForApacheFineract(AccountTransferConfirmRequest request){
-    // Build Fineract-compatible date
-    String transferDateFormatForFineract = request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy";    
-    return transferDateFormatForFineract;
   }
 
   // =====================================================================
@@ -466,7 +466,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     // Build Fineract-compatible date
     String transferDateForFineract = this.getTransferDateForApacheFineract(request);
     String localeForFineract = "en";  
-    String dateFormatForFineract = "dd MMMM yyyy";
+    String dateFormatForFineract = this.getTransferDateFormatForApacheFineract(request);
 
     // Build the Fineract internal-transfer command
     Map<String, Object> commandData = new HashMap<>();
@@ -1690,7 +1690,8 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
               .transferMode(request.getTransferMode())
               .transferAmount(request.getTransferAmount())
               .fromAccount(request.getFromAccount())
-              .fromAccountType(2)
+              .fromAccountType(
+                  request.getFromAccountType() != null ? request.getFromAccountType() : 2)
               .clientId(client.getId())
               .fromOfficeId(client.getOffice().getId())
               .transferDateForFineract(getTransferDateForApacheFineract(request))
@@ -1702,11 +1703,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       FeeCollectionResult result = feeCollectionService.collectFee(feeReq);
 
       log.info(
-          "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {} at date {}",
+          "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {}",
           result.getStatus(),
           result.getTransactionId(),
           result.getFeeAmount(),
-          result.getCurrency(), getTransferDateForApacheFineract(request));
+          result.getCurrency());
 
     } catch (Exception e) {
       // NEVER roll back the original payment because of a commission failure.
@@ -1724,6 +1725,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           "FAILED");
     }
   }
+  
+  
+
 
   private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
     if (destinationAccount == null || destinationAccount.isBlank()) {
