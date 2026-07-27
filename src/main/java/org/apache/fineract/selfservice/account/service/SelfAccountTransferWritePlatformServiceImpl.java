@@ -396,12 +396,6 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     return result;
   }
   
-  private String getTransferDateFormatForApacheFineract(AccountTransferConfirmRequest request){
-    // Build Fineract-compatible date
-    String transferDateFormatForFineract = request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy";
-    return transferDateFormatForFineract;
-  }
-  
   private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request){
     // Build Fineract-compatible date
     String transferDateForFineract;
@@ -466,7 +460,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     // Build Fineract-compatible date
     String transferDateForFineract = this.getTransferDateForApacheFineract(request);
     String localeForFineract = "en";  
-    String dateFormatForFineract = this.getTransferDateFormatForApacheFineract(request);
+    String dateFormatForFineract = "dd MMMM yyyy";
 
     // Build the Fineract internal-transfer command
     Map<String, Object> commandData = new HashMap<>();
@@ -1695,7 +1689,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
               .clientId(client.getId())
               .fromOfficeId(client.getOffice().getId())
               .transferDateForFineract(getTransferDateForApacheFineract(request))
-              .dateFormat(getTransferDateFormatForApacheFineract(request))
+              .dateFormat("dd MMMM yyyy")
               .locale("en")
               .clientFeeAmount(request.getFeeAmount())
               .build();
@@ -1725,9 +1719,6 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           "FAILED");
     }
   }
-  
-  
-
 
   private boolean isAlreadyRegisteredAsBeneficiary(Long appUserId, String destinationAccount) {
     if (destinationAccount == null || destinationAccount.isBlank()) {
