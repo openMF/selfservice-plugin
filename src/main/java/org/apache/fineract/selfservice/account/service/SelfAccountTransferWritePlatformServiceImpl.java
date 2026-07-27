@@ -404,11 +404,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     if (StringUtils.isNotBlank(request.getTransferDate())) {
       // Parse client date and append current time to avoid "future date" issues
       try {
-        LocalDate clientDate =
-            LocalDate.parse(
-                request.getTransferDate(),
-                DateTimeFormatter.ofPattern(
-                    request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
+        LocalDate clientDate = LocalDate.parse("dd-MM-yyyy");
         LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
         LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
         transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
