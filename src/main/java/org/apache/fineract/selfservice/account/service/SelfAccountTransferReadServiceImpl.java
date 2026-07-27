@@ -203,9 +203,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return rawData;
   }
 
-  // Helper SQL para extraer receipt_number de m_payment_detail vinculando la transacción
+  // Helper SQL para extraer el routing_code de m_payment_detail vinculando la transacción
   private String getExternalReceiptNumber(Long accountId, String txnId) {
-    String sql = "SELECT pd.receipt_number " +
+    String sql = "SELECT COALESCE(pd.routing_code, pd.receipt_number) AS external_ref " +
             "FROM m_savings_account_transaction sat " +
             "INNER JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id " +
             "WHERE sat.savings_account_id = ? " +
