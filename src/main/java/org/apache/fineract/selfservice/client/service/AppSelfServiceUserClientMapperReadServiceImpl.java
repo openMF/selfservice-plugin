@@ -38,6 +38,11 @@ public class AppSelfServiceUserClientMapperReadServiceImpl
         appUserId);
   }
 
+  /**
+   * @deprecated Use {@link
+   *     org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard#validateClientOwnership(Long)}
+   */
+  @Deprecated
   @Override
   public void validateAppSelfServiceUserClientsMapping(final Long clientId) {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();

@@ -35,6 +35,9 @@ import org.apache.fineract.infrastructure.security.service.AuthTenantDetailsServ
 import org.apache.fineract.infrastructure.security.service.PlatformUserDetailsChecker;
 import org.apache.fineract.infrastructure.security.service.TwoFactorService;
 import org.apache.fineract.notification.service.UserNotificationService;
+import org.apache.fineract.selfservice.security.audit.SelfServiceAccessAuditRepository;
+import org.apache.fineract.selfservice.security.audit.SelfServiceAccessAuditService;
+import org.apache.fineract.selfservice.security.audit.SelfServiceAccessAuditServiceImpl;
 import org.apache.fineract.selfservice.security.filter.SelfServiceAuthenticationConverter;
 import org.apache.fineract.selfservice.security.filter.SelfServiceBasicAuthenticationFilter;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
@@ -42,10 +45,12 @@ import org.apache.fineract.selfservice.security.service.SelfServiceTokenAuthenti
 import org.apache.fineract.selfservice.security.service.SelfServiceUserAuthorizationManager;
 import org.apache.fineract.selfservice.security.service.TenantAwareJpaPlatformSelfServiceUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -66,6 +71,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @Order(1) // Very important: Must have higher priority than main security config
+@EnableJpaRepositories(basePackages = "org.apache.fineract.selfservice.security.audit") // Add this!
 public class SelfServiceSecurityConfiguration {
 
   private static final PathPatternRequestMatcher.Builder API_MATCHER =
@@ -295,5 +301,12 @@ public class SelfServiceSecurityConfiguration {
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", config);
     return source;
+  }
+  
+  @Bean
+  @ConditionalOnMissingBean(SelfServiceAccessAuditService.class)
+  public SelfServiceAccessAuditService selfServiceAccessAuditService(
+        SelfServiceAccessAuditRepository repository) {
+    return new SelfServiceAccessAuditServiceImpl(repository);
   }
 }

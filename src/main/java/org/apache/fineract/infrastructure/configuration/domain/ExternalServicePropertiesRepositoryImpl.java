@@ -17,13 +17,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * JDBC implementation. Multi-tenant by construction: JdbcTemplate is bound to the
- * tenant datasource selected by Fineract's routing infrastructure for the request.
+ * JDBC implementation. Multi-tenant by construction: JdbcTemplate is bound to the tenant datasource
+ * selected by Fineract's routing infrastructure for the request.
  */
 @Repository
 @RequiredArgsConstructor
 @Slf4j
-public class ExternalServicePropertiesRepositoryImpl implements ExternalServicePropertiesRepository {
+public class ExternalServicePropertiesRepositoryImpl
+    implements ExternalServicePropertiesRepository {
 
   private static final String SQL_PROPERTIES_BY_SERVICE_NAME =
       """
@@ -48,7 +49,8 @@ public class ExternalServicePropertiesRepositoryImpl implements ExternalServiceP
   @Override
   public List<ExternalServicePropertyData> findPropertiesByServiceName(String serviceName) {
     log.debug("Loading external service properties for serviceName={}", serviceName);
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(SQL_PROPERTIES_BY_SERVICE_NAME, serviceName);
+    List<Map<String, Object>> rows =
+        jdbcTemplate.queryForList(SQL_PROPERTIES_BY_SERVICE_NAME, serviceName);
     List<ExternalServicePropertyData> result = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
       String name = (String) row.get("name");

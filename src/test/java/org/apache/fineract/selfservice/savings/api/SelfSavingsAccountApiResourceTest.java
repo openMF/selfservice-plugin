@@ -32,6 +32,7 @@ import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMa
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
 import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,7 @@ class SelfSavingsAccountApiResourceTest {
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private Environment env;
   @Mock private HttpServletRequest httpRequest;
+  @Mock private SelfServiceOwnershipGuard ownershipGuard;
 
   private SelfSavingsAccountApiResource resource;
 
@@ -101,6 +103,7 @@ class SelfSavingsAccountApiResourceTest {
             appuserSavingsMapperReadService,
             dataValidator,
             appUserClientMapperReadService,
+            ownershipGuard,
             applicationEventPublisher, // NEW
             env); // NEW
   }

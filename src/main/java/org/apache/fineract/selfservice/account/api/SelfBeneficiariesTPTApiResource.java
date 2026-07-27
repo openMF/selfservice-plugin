@@ -59,6 +59,7 @@ import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTData;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -83,6 +84,7 @@ public class SelfBeneficiariesTPTApiResource {
   // Dependencies for asynchronous notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  private final SelfServiceOwnershipGuard ownershipGuard;
 
   private static final Set<String> RESPONSE_DATA_PARAMETERS =
       Set.of(
@@ -218,6 +220,8 @@ public class SelfBeneficiariesTPTApiResource {
     context
         .authenticatedSelfServiceUser()
         .validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    // SECURITY: Centralized ownership check (uniform error, no enumeration)
+    ownershipGuard.validateBeneficiaryOwnership(beneficiaryId);
 
     final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson); // With entityId
     final CommandProcessingResult result = this.writePlatformService.update(beneficiaryId, command);
@@ -260,6 +264,8 @@ public class SelfBeneficiariesTPTApiResource {
     context
         .authenticatedSelfServiceUser()
         .validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    // SECURITY: Centralized ownership check
+    ownershipGuard.validateBeneficiaryOwnership(beneficiaryId);
 
     final JsonCommand command = JsonCommand.from(apiRequestBodyAsJson);
     final CommandProcessingResult result = this.writePlatformService.delete(beneficiaryId, command);

@@ -28,28 +28,28 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 public class SelfServiceTransferAudit {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    @Column(name = "client_id", nullable = false)
-    private Long clientId;
+  @Column(name = "client_id", nullable = false)
+  private Long clientId;
 
-    @Column(name = "transfer_type", nullable = false, length = 50)
-    private String transferType;
+  @Column(name = "transfer_type", nullable = false, length = 50)
+  private String transferType;
 
-    @Column(name = "currency_code", nullable = false, length = 10)
-    private String currencyCode;
+  @Column(name = "currency_code", nullable = false, length = 10)
+  private String currencyCode;
 
-    @Column(name = "transfer_amount", nullable = false, precision = 19, scale = 6)
-    private BigDecimal transferAmount;
+  @Column(name = "transfer_amount", nullable = false, precision = 19, scale = 6)
+  private BigDecimal transferAmount;
 
-    @Column(name = "fee_amount", precision = 19, scale = 6)
-    private BigDecimal feeAmount;
+  @Column(name = "fee_amount", precision = 19, scale = 6)
+  private BigDecimal feeAmount;
 
-    @Column(name = "processing_date", nullable = false)
-    private OffsetDateTime processingDate;
+  @Column(name = "processing_date", nullable = false)
+  private OffsetDateTime processingDate;
 
-    @Column(name = "status", length = 100)
-    private String status;
+  @Column(name = "status", length = 100)
+  private String status;
 }

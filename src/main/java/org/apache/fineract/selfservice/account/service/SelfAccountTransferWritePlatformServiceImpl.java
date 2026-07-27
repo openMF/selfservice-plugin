@@ -10,7 +10,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,13 +21,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.fineract.exchangerate.domain.BccrExchangeRate;
-import org.apache.fineract.exchangerate.service.BccrExchangeRateService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -69,8 +65,6 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransfe
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
-import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
-import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
@@ -86,7 +80,6 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -124,20 +117,22 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
   // DAO for SAME_BANK transfer audit persistence
   private final SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository;
-  
+
   // Date formatter used for internalRefNumber generation
   private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
   // Fineract expected full datetime format for internal transfers (prevents future-date validation
   // errors)
-  private static final DateTimeFormatter FINERACT_DATETIME_FMT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
+  private static final DateTimeFormatter FINERACT_DATETIME_FMT =
+      DateTimeFormatter.ofPattern("dd MMMM yyyy");
 
-  private final SavingsAccountTransactionRepository savingsAccountTransactionRepository; // inject via constructor
+  private final SavingsAccountTransactionRepository
+      savingsAccountTransactionRepository; // inject via constructor
 
-  private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository; 
-    
+  private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository;
+
   private final SelfServiceTransferAuditRepository transferAuditRepository;
-  
+
   private final SelfServiceFeeCollectionService feeCollectionService;
 
   // =====================================================================
@@ -185,7 +180,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
 
     BigDecimal totalAmount = transferAmount.add(feeAmount);
-    
+
     // Safeguard: transfer + fee must fit in source savings
     validateSufficientFunds(
         fromAccount,
@@ -222,7 +217,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
 
     final AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
-    
+
     validateSufficientFunds(
         request.getFromAccount(),
         request.getFromAccountType() != null ? request.getFromAccountType() : 2,
@@ -267,48 +262,45 @@ public class SelfAccountTransferWritePlatformServiceImpl
       log.warn("Failed to release OTP cooldown (non-fatal)", e);
     }
   }
-  
+
   /**
-    * Releases the TRANSFER_SUCCESS notification cooldown for the given user and channel.
-    * Called on successful confirm so a legitimate completed transfer always notifies,
-    * even if a previous attempt still holds the cooldown entry.
-    * Multi-tenant safe: key is scoped by self-service user id (tenant-bound).
-    */
-   private void releaseTransferSuccessCooldown(AppSelfServiceUser user, String transferType) {
-     try {
-       String type = StringUtils.isNotBlank(transferType) ? transferType.toUpperCase() : "UNKNOWN";
-       String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + type;
-       notificationCooldownCache.release(cacheKey);
-       log.info(
-           "CONFIRM: Released TRANSFER_SUCCESS cooldown for user {} channel {}",
-           user.getId(),
-           type);
-     } catch (Exception e) {
-       log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
-     }
-   }
-   
-   /**
- * Releases the cooldown key used by {@link org.apache.fineract.selfservice.notification.service.SelfServiceNotificationService}.
- * Key format MUST match the listener: {@code TRANSFER_SUCCESS:{userId}} (no channel suffix).
- * Multi-tenant safe: userId is tenant-scoped.
- */
-private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
-  try {
-    String cacheKey =
-        SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS.name() + ":" + user.getId();
-    notificationCooldownCache.release(cacheKey);
-    log.info(
-        "CONFIRM: Released TRANSFER_SUCCESS cooldown key={} for user {}",
-        cacheKey,
-        user.getId());
-  } catch (Exception e) {
-    log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
+   * Releases the TRANSFER_SUCCESS notification cooldown for the given user and channel. Called on
+   * successful confirm so a legitimate completed transfer always notifies, even if a previous
+   * attempt still holds the cooldown entry. Multi-tenant safe: key is scoped by self-service user
+   * id (tenant-bound).
+   */
+  private void releaseTransferSuccessCooldown(AppSelfServiceUser user, String transferType) {
+    try {
+      String type = StringUtils.isNotBlank(transferType) ? transferType.toUpperCase() : "UNKNOWN";
+      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + type;
+      notificationCooldownCache.release(cacheKey);
+      log.info(
+          "CONFIRM: Released TRANSFER_SUCCESS cooldown for user {} channel {}", user.getId(), type);
+    } catch (Exception e) {
+      log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
+    }
   }
-}
+
+  /**
+   * Releases the cooldown key used by {@link
+   * org.apache.fineract.selfservice.notification.service.SelfServiceNotificationService}. Key
+   * format MUST match the listener: {@code TRANSFER_SUCCESS:{userId}} (no channel suffix).
+   * Multi-tenant safe: userId is tenant-scoped.
+   */
+  private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
+    try {
+      String cacheKey =
+          SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS.name() + ":" + user.getId();
+      notificationCooldownCache.release(cacheKey);
+      log.info(
+          "CONFIRM: Released TRANSFER_SUCCESS cooldown key={} for user {}", cacheKey, user.getId());
+    } catch (Exception e) {
+      log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
+    }
+  }
 
   // =====================================================================
-  //  CONFIRM  
+  //  CONFIRM
   // =====================================================================
   @Override
   @Transactional
@@ -348,7 +340,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         request.getFromAccountType() != null ? request.getFromAccountType() : 2,
         request.getTransferAmount(),
         feeForBalanceCheck);
-    
+
     log.info(
         "CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
         request.getTransferType(),
@@ -359,22 +351,19 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
     // Route to the correct execution strategy
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
-      log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");  
+      log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");
       return executePinTransfer(request, user, httpRequest);
-    } 
-    else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
-        log.info("CONFIRM -> SINPE_MOVIL account detected. Executing SINPE_MOVIL transfer.");  
+    } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+      log.info("CONFIRM -> SINPE_MOVIL account detected. Executing SINPE_MOVIL transfer.");
       return executeSinpeTransfer(request, user, httpRequest);
-    } 
-    else if (isSameBankIbanAccount(cleanDestination)
+    } else if (isSameBankIbanAccount(cleanDestination)
         || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
       return executeInternalTransfer(request, user, httpRequest);
-    } 
-    else {
+    } else {
       log.info("CONFIRM -> Fallback to internal transfer.");
       return executeInternalTransfer(request, user, httpRequest);
-    }    
+    }
   }
 
   // =====================================================================
@@ -395,11 +384,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     publishTransferEvent(result, params, params, httpRequest);
     return result;
   }
-  
-  private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request){
+
+  private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request) {
     // Build Fineract-compatible date
     String transferDateForFineract;
-    String localeForFineract = "en";    
+    String localeForFineract = "en";
 
     if (StringUtils.isNotBlank(request.getTransferDate())) {
       // Parse client date and append current time to avoid "future date" issues
@@ -455,11 +444,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     }
 
     // Resolve the currency from the source savings account; fall back to the request
-    String resolvedCurrencyCode = resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
+    String resolvedCurrencyCode =
+        resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
 
     // Build Fineract-compatible date
     String transferDateForFineract = this.getTransferDateForApacheFineract(request);
-    String localeForFineract = "en";  
+    String localeForFineract = "en";
     String dateFormatForFineract = "dd MMMM yyyy";
 
     // Build the Fineract internal-transfer command
@@ -474,7 +464,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract); // Full datetime string
-    commandData.put("transferDescription", request.getTransferDescription() != null ? request.getTransferDescription() : "Internal Transfer");
+    commandData.put(
+        "transferDescription",
+        request.getTransferDescription() != null
+            ? request.getTransferDescription()
+            : "Internal Transfer");
     commandData.put("locale", localeForFineract);
     commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
@@ -521,7 +515,6 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       }
       description = "Completed";
       stateCode = 32;
-      
     }
 
     log.info("Build the structured SAME_BANK response");
@@ -583,9 +576,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         "",
         registrationDate,
         processingDate);
-    
+
     // Execute Commission Charge for SAME_BANK
-    executeFeeTransaction(request);    
+    executeFeeTransaction(request);
 
     log.info("Homologating SAME_BANK response structure");
     Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
@@ -638,23 +631,30 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     String resourcePart = String.format("%012d", resourceId != null ? resourceId : 0L);
     return datePart + officePart + resourcePart;
   }
-  
-  private void persistTransferAudit(Long clientId, String transferType, String currencyCode, BigDecimal transferAmount, BigDecimal feeAmount, String status) {
-        try {
-            SelfServiceTransferAudit audit = SelfServiceTransferAudit.builder()
-                    .clientId(clientId)
-                    .transferType(transferType)
-                    .currencyCode(currencyCode)
-                    .transferAmount(transferAmount)
-                    .feeAmount(feeAmount)
-                    .processingDate(OffsetDateTime.now())
-                    .status(status)
-                    .build();
-            transferAuditRepository.saveAndFlush(audit);
-        } catch (Exception e) {
-            log.error("Failed to persist transfer audit", e);
-        }
+
+  private void persistTransferAudit(
+      Long clientId,
+      String transferType,
+      String currencyCode,
+      BigDecimal transferAmount,
+      BigDecimal feeAmount,
+      String status) {
+    try {
+      SelfServiceTransferAudit audit =
+          SelfServiceTransferAudit.builder()
+              .clientId(clientId)
+              .transferType(transferType)
+              .currencyCode(currencyCode)
+              .transferAmount(transferAmount)
+              .feeAmount(feeAmount)
+              .processingDate(OffsetDateTime.now())
+              .status(status)
+              .build();
+      transferAuditRepository.saveAndFlush(audit);
+    } catch (Exception e) {
+      log.error("Failed to persist transfer audit", e);
     }
+  }
 
   // =====================================================================
   // Helper: persist the SAME_BANK audit record
@@ -841,13 +841,14 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       }
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
-      
+
       // Execute Commission Charge for SAME_BANK
       executeFeeTransaction(request);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
 
-      Map<String, Object> homologatedData = homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
+      Map<String, Object> homologatedData =
+          homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
 
       Map<String, Object> response = new HashMap<>();
       response.put("transferType", "PIN");
@@ -907,13 +908,14 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     }
 
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
-    
+
     // Execute Commission Charge for SAME_BANK
     executeFeeTransaction(request);
 
     Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
 
-    Map<String, Object> homologatedData = homologateResponseData(externalData, request.getTransferAmount(), "CRC");
+    Map<String, Object> homologatedData =
+        homologateResponseData(externalData, request.getTransferAmount(), "CRC");
 
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", "SINPE_MOVIL");
@@ -933,9 +935,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       HttpServletRequest httpRequest) {
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      
+
       releaseTransferSuccessCooldown(user);
-      
+
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -1007,8 +1009,8 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
-        releaseTransferSuccessCooldown(user);
-      
+      releaseTransferSuccessCooldown(user);
+
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -1087,9 +1089,9 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
-        // Invalidate any prior cooldown so a successful PIN confirm always notifies
-        releaseTransferSuccessCooldown(user);
-    
+      // Invalidate any prior cooldown so a successful PIN confirm always notifies
+      releaseTransferSuccessCooldown(user);
+
       String mobileNumber = extractMobile(user);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
@@ -1657,11 +1659,10 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
- /**
-   * Delegates fee collection to {@link SelfServiceFeeCollectionService} which
-   * runs in a {@code REQUIRES_NEW} transaction. This prevents the
-   * EclipseLink-5006 OptimisticLockException that occurred when the same
-   * {@code SavingsAccount} entity (already loaded during balance validation)
+  /**
+   * Delegates fee collection to {@link SelfServiceFeeCollectionService} which runs in a {@code
+   * REQUIRES_NEW} transaction. This prevents the EclipseLink-5006 OptimisticLockException that
+   * occurred when the same {@code SavingsAccount} entity (already loaded during balance validation)
    * was modified again inside the same persistence context.
    *
    * <p>Failure here is <b>non-fatal</b>: the original transfer is never rolled back.
@@ -2000,82 +2001,78 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
 
     return data;
   }
-  
-    /**
-    * Ensures the source savings account has enough withdrawable balance to cover
-    * transferAmount + feeAmount. Throws a clear validation error before any debit.
-    */
-   private void validateSufficientFunds(
-       String fromAccountIdentifier,
-       Integer fromAccountType,
-       BigDecimal transferAmount,
-       BigDecimal feeAmount) {
 
-     if (StringUtils.isBlank(fromAccountIdentifier)) {
-       throw new IllegalArgumentException("Source account (fromAccount) is required for balance validation.");
-     }
+  /**
+   * Ensures the source savings account has enough withdrawable balance to cover transferAmount +
+   * feeAmount. Throws a clear validation error before any debit.
+   */
+  private void validateSufficientFunds(
+      String fromAccountIdentifier,
+      Integer fromAccountType,
+      BigDecimal transferAmount,
+      BigDecimal feeAmount) {
 
-     BigDecimal transfer =
-         transferAmount != null ? transferAmount : BigDecimal.ZERO;
-     BigDecimal fee = feeAmount != null ? feeAmount : BigDecimal.ZERO;
-     BigDecimal totalRequired = transfer.add(fee);
+    if (StringUtils.isBlank(fromAccountIdentifier)) {
+      throw new IllegalArgumentException(
+          "Source account (fromAccount) is required for balance validation.");
+    }
 
-     if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
-       return; // nothing to debit
-     }
+    BigDecimal transfer = transferAmount != null ? transferAmount : BigDecimal.ZERO;
+    BigDecimal fee = feeAmount != null ? feeAmount : BigDecimal.ZERO;
+    BigDecimal totalRequired = transfer.add(fee);
 
-     Long fromAccountId =
-         resolveAccountId(
-             fromAccountIdentifier,
-             fromAccountType != null ? fromAccountType : 2);
+    if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
+      return; // nothing to debit
+    }
 
-     SavingsAccount fromSavings =
-         savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
+    Long fromAccountId =
+        resolveAccountId(fromAccountIdentifier, fromAccountType != null ? fromAccountType : 2);
 
-     // Prefer withdrawable balance (respects min balance, holds, overdraft rules)
-     BigDecimal available;
-     try {
-       available = fromSavings.getWithdrawableBalance();
-     } catch (Exception e) {
-       // Fallback if method signature differs in this Fineract version
-       log.warn(
-           "getWithdrawableBalance() unavailable, falling back to account balance. cause={}",
-           e.getMessage());
-       available =
-           fromSavings.getSummary() != null
-               ? fromSavings.getSummary().getAccountBalance()
-               : fromSavings.getAccountBalance();
-     }
+    SavingsAccount fromSavings =
+        savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
 
-     if (available == null) {
-       available = BigDecimal.ZERO;
-     }
+    // Prefer withdrawable balance (respects min balance, holds, overdraft rules)
+    BigDecimal available;
+    try {
+      available = fromSavings.getWithdrawableBalance();
+    } catch (Exception e) {
+      // Fallback if method signature differs in this Fineract version
+      log.warn(
+          "getWithdrawableBalance() unavailable, falling back to account balance. cause={}",
+          e.getMessage());
+      available =
+          fromSavings.getSummary() != null
+              ? fromSavings.getSummary().getAccountBalance()
+              : fromSavings.getAccountBalance();
+    }
 
-     if (available.compareTo(totalRequired) < 0) {
-       final List<ApiParameterError> errors = new ArrayList<>();
-       final DataValidatorBuilder base =
-           new DataValidatorBuilder(errors).resource("accounttransfer");
-       base.reset()
-           .parameter("transferAmount")
-           .value(totalRequired)
-           .failWithCode(
-               "insufficient.account.balance",
-               "Insufficient funds in source account. Available: "
-                   + available.toPlainString()
-                   + ", required (transfer + fee): "
-                   + totalRequired.toPlainString()
-                   + ".");
-       throw new PlatformApiDataValidationException(errors);
-     }
+    if (available == null) {
+      available = BigDecimal.ZERO;
+    }
 
-     log.info(
-         "FUNDS CHECK OK: accountId={}, available={}, transfer={}, fee={}, totalRequired={}",
-         fromAccountId,
-         available,
-         transfer,
-         fee,
-         totalRequired);
-   }
-  
-  
+    if (available.compareTo(totalRequired) < 0) {
+      final List<ApiParameterError> errors = new ArrayList<>();
+      final DataValidatorBuilder base =
+          new DataValidatorBuilder(errors).resource("accounttransfer");
+      base.reset()
+          .parameter("transferAmount")
+          .value(totalRequired)
+          .failWithCode(
+              "insufficient.account.balance",
+              "Insufficient funds in source account. Available: "
+                  + available.toPlainString()
+                  + ", required (transfer + fee): "
+                  + totalRequired.toPlainString()
+                  + ".");
+      throw new PlatformApiDataValidationException(errors);
+    }
+
+    log.info(
+        "FUNDS CHECK OK: accountId={}, available={}, transfer={}, fee={}, totalRequired={}",
+        fromAccountId,
+        available,
+        transfer,
+        fee,
+        totalRequired);
+  }
 }

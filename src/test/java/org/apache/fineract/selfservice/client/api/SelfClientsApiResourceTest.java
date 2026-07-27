@@ -46,6 +46,7 @@ import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
@@ -77,6 +78,7 @@ class SelfClientsApiResourceTest {
   @Mock private ImageReadPlatformService imageReadPlatformService;
   @Mock private ImageWritePlatformService imageWritePlatformService;
   @Mock private UriInfo uriInfo;
+  @Mock private SelfServiceOwnershipGuard ownershipGuard;
 
   private SelfClientsApiResource resource;
 
@@ -109,8 +111,8 @@ class SelfClientsApiResourceTest {
             null, // dataUrlEncoderContentProcessor
             null, // dataUrlDecoderContentProcessor
             null, // sizeContentProcessor
-            null // contentDetectorManager
-            );
+            null, // contentDetectorManager
+            ownershipGuard);
 
     org.mockito.Mockito.lenient()
         .when(uriInfo.getQueryParameters())

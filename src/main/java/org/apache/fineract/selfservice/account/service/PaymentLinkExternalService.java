@@ -32,7 +32,6 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -81,8 +80,7 @@ public class PaymentLinkExternalService {
     savingsAccount = resolveSavingsAccount(request.getClientAccount());
     if (savingsAccount == null) {
       throw new GeneralPlatformDomainRuleException(
-          "error.msg.payment.link.invalid.account",
-          "Client Account not found and it is required");
+          "error.msg.payment.link.invalid.account", "Client Account not found and it is required");
     }
     if (!Objects.equals(savingsAccount.getClient().getId(), clientId)) {
       throw new GeneralPlatformDomainRuleException(
@@ -134,28 +132,29 @@ public class PaymentLinkExternalService {
       log.info("PaymentLinkService response: {}", body);
 
       JsonNode node = objectMapper.readTree(body);
-      
+
       PaymentLinkResponse result;
-      
+
       log.info("Status Code: {}", response.getStatusCode());
-      
-      if(response.getStatusCode() == HttpStatus.CREATED || response.getStatusCode() == HttpStatus.OK){
-          result =
-          PaymentLinkResponse.builder()
-              .checkoutId(text(node, "checkoutId"))
-              .paymentUrl(text(node, "paymentUrl"))
-              .paymentStatus(text(node, "paymentStatus"))
-              .success(true)
-              .build();
+
+      if (response.getStatusCode() == HttpStatus.CREATED
+          || response.getStatusCode() == HttpStatus.OK) {
+        result =
+            PaymentLinkResponse.builder()
+                .checkoutId(text(node, "checkoutId"))
+                .paymentUrl(text(node, "paymentUrl"))
+                .paymentStatus(text(node, "paymentStatus"))
+                .success(true)
+                .build();
       } else {
-          result =
-          PaymentLinkResponse.builder()
-              .checkoutId(text(node, "checkoutId"))
-              .paymentUrl(text(node, "paymentUrl"))
-              .paymentStatus(text(node, "paymentStatus"))
-              .success(false)
-              .build();
-      }      
+        result =
+            PaymentLinkResponse.builder()
+                .checkoutId(text(node, "checkoutId"))
+                .paymentUrl(text(node, "paymentUrl"))
+                .paymentStatus(text(node, "paymentStatus"))
+                .success(false)
+                .build();
+      }
 
       SelfServicePaymentLink entityToSave = new SelfServicePaymentLink();
       entityToSave.setAppSelfServiceUserId(userId);

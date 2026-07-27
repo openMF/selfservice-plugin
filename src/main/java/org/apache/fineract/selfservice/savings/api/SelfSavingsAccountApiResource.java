@@ -50,18 +50,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.portfolio.client.domain.Client;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
-import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
 import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -85,8 +84,9 @@ public class SelfSavingsAccountApiResource {
   private final AppuserSavingsMapperReadService appuserSavingsMapperReadService;
   private final SelfSavingsDataValidator dataValidator;
   private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  private final SelfServiceOwnershipGuard ownershipGuard;
 
-  // NEW DEPENDENCIES for notifications
+  // DEPENDENCIES for notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
@@ -129,8 +129,10 @@ public class SelfSavingsAccountApiResource {
           final Integer lastTransactions,
       @Context final UriInfo uriInfo) {
 
+    // SECURITY: Centralized ownership check (replaces
+    // validateAppSelfServiceUserSavingsAccountMapping)
+    this.ownershipGuard.validateSavingsOwnership(accountId);
     this.dataValidator.validateRetrieveSavings(uriInfo);
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
 
     final boolean staffInSelectedOfficeOnly = false;
     String dateRange = null;
@@ -229,8 +231,13 @@ public class SelfSavingsAccountApiResource {
       @PathParam("transactionId") @Parameter(description = "transactionId")
           final Long transactionId,
       @Context final UriInfo uriInfo) {
+
+    // SECURITY: Centralized ownership check (replaces
+    // validateAppSelfServiceUserSavingsAccountMapping)
+    this.ownershipGuard.validateSavingsOwnership(accountId);
+
     this.dataValidator.validateRetrieveSavingsTransaction(uriInfo);
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+
     return this.savingsAccountTransactionsApiResource.retrieveOne(
         accountId, transactionId, uriInfo);
   }
@@ -266,7 +273,9 @@ public class SelfSavingsAccountApiResource {
       @DefaultValue("all") @QueryParam("chargeStatus") @Parameter(description = "chargeStatus")
           final String chargeStatus,
       @Context final UriInfo uriInfo) {
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    // SECURITY: Centralized ownership check (replaces
+    // validateAppSelfServiceUserSavingsAccountMapping)
+    this.ownershipGuard.validateSavingsOwnership(accountId);
     return this.savingsAccountChargesApiResource.retrieveAllSavingsAccountCharges(
         accountId, chargeStatus, uriInfo);
   }
@@ -300,18 +309,11 @@ public class SelfSavingsAccountApiResource {
       @PathParam("savingsAccountChargeId") @Parameter(description = "savingsAccountChargeId")
           final Long savingsAccountChargeId,
       @Context final UriInfo uriInfo) {
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    // SECURITY: Centralized ownership check (replaces
+    // validateAppSelfServiceUserSavingsAccountMapping)
+    this.ownershipGuard.validateSavingsOwnership(accountId);
     return this.savingsAccountChargesApiResource.retrieveSavingsAccountCharge(
         accountId, savingsAccountChargeId, uriInfo);
-  }
-
-  private void validateAppSelfServiceUserSavingsAccountMapping(final Long accountId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean isMappedSavings =
-        this.appuserSavingsMapperReadService.isSavingsMappedToUser(accountId, user.getId());
-    if (!isMappedSavings) {
-      throw new SavingsAccountNotFoundException(accountId);
-    }
   }
 
   @GET
@@ -321,7 +323,9 @@ public class SelfSavingsAccountApiResource {
       @QueryParam("clientId") final Long clientId,
       @QueryParam("productId") final Long productId,
       @Context final UriInfo uriInfo) {
-    validateAppSelfServiceUserClientsMapping(clientId);
+
+    // SECURITY: clientId is MANDATORY,  no bypass allowed
+    this.ownershipGuard.validateClientOwnership(clientId);
     Long groupId = null;
     boolean staffInSelectedOfficeOnly = false;
     return this.savingsAccountsApiResource.template(
@@ -341,7 +345,8 @@ public class SelfSavingsAccountApiResource {
         this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
     final Long clientId =
         (Long) parameterMap.get(SelfSavingsAccountConstants.clientIdParameterName);
-    validateAppSelfServiceUserClientsMapping(clientId);
+    // SECURITY: Validate the clientId in the request body belongs to the user
+    this.ownershipGuard.validateClientOwnership(clientId);
 
     String responseJson = this.savingsAccountsApiResource.submitApplication(apiRequestBodyAsJson);
 
@@ -377,7 +382,9 @@ public class SelfSavingsAccountApiResource {
       final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) { // ADDED httpRequest
 
-    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    // SECURITY: Validate account ownership before any modification
+    this.ownershipGuard.validateSavingsOwnership(accountId);
+
     this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
 
     String responseJson =
@@ -403,15 +410,6 @@ public class SelfSavingsAccountApiResource {
     publishSavingsEvent(eventType, accountId, contextData, httpRequest);
 
     return responseJson;
-  }
-
-  private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
   }
 
   // --- Helper Methods for Notifications ---

@@ -67,4 +67,6 @@
   <include file="parts/055-add-threshold-period-to-fees.xml" relativeToChangelogFile="true"/>
   <include file="parts/056-create-transfer-audit-table.xml" relativeToChangelogFile="true"/>  
   <include file="parts/057-add-fee-config.xml" relativeToChangelogFile="true"/>
+  <include file="parts/058-add-access-audit.xml" relativeToChangelogFile="true"/>
+  <include file="parts/059-create-ownership-guard-permissions.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>

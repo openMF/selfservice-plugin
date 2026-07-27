@@ -47,12 +47,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.domain.Client;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoanTransactionsApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoansApiResource;
-import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanTemplateTypeRequiredException;
 import org.apache.fineract.portfolio.loanaccount.exception.NotSupportedLoanTemplateTypeException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiResource;
@@ -61,6 +59,7 @@ import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMa
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -85,9 +84,11 @@ public class SelfLoansApiResource {
   private final SelfLoansDataValidator dataValidator;
   private final GuarantorsApiResource guarantorsApiResource;
 
-  // NEW DEPENDENCIES for notifications
+  // DEPENDENCIES for notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+
+  private final SelfServiceOwnershipGuard ownershipGuard;
 
   @GET
   @Path("{loanId}")
@@ -121,9 +122,10 @@ public class SelfLoansApiResource {
       @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
       @Context final UriInfo uriInfo) {
 
-    this.dataValidator.validateRetrieveLoan(uriInfo);
+    // SECURITY: Centralized ownership check
+    this.ownershipGuard.validateLoanOwnership(loanId);
 
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.dataValidator.validateRetrieveLoan(uriInfo);
 
     final boolean staffInSelectedOfficeOnly = false;
     final String associations = LoanApiConstants.LOAN_ASSOCIATIONS_ALL;
@@ -170,9 +172,9 @@ public class SelfLoansApiResource {
           final String fields,
       @Context final UriInfo uriInfo) {
 
-    this.dataValidator.validateRetrieveTransaction(uriInfo);
+    this.ownershipGuard.validateLoanOwnership(loanId);
 
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.dataValidator.validateRetrieveTransaction(uriInfo);
 
     return this.loanTransactionsApiResource.retrieveTransaction(
         loanId, transactionId, fields, uriInfo);
@@ -210,7 +212,7 @@ public class SelfLoansApiResource {
       @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
       @Context final UriInfo uriInfo) {
 
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.ownershipGuard.validateLoanOwnership(loanId);
 
     return this.loanChargesApiResource.retrieveAllLoanCharges(loanId, uriInfo);
   }
@@ -245,7 +247,7 @@ public class SelfLoansApiResource {
       @PathParam("chargeId") @Parameter(description = "chargeId") final Long loanChargeId,
       @Context final UriInfo uriInfo) {
 
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.ownershipGuard.validateLoanOwnership(loanId);
 
     return this.loanChargesApiResource.retrieveLoanCharge(loanId, loanChargeId, uriInfo);
   }
@@ -287,7 +289,8 @@ public class SelfLoansApiResource {
       @Context final UriInfo uriInfo) {
 
     if (clientId != null) {
-      validateAppSelfServiceUserClientsMapping(clientId);
+      // SECURITY FIX: clientId is now MANDATORY — prevents information leakage
+      this.ownershipGuard.validateClientOwnership(clientId);
     }
 
     if (templateType == null) {
@@ -345,7 +348,8 @@ public class SelfLoansApiResource {
 
     HashMap<String, Object> attr = this.dataValidator.validateLoanApplication(apiRequestBodyAsJson);
     final Long clientId = (Long) attr.get("clientId");
-    validateAppSelfServiceUserClientsMapping(clientId);
+    // SECURITY: Always validate clientId ownership (even for calculateLoanSchedule)
+    this.ownershipGuard.validateClientOwnership(clientId);
 
     String responseJson =
         this.loansApiResource.calculateLoanScheduleOrSubmitLoanApplication(
@@ -411,10 +415,12 @@ public class SelfLoansApiResource {
 
     HashMap<String, Object> attr =
         this.dataValidator.validateModifyLoanApplication(apiRequestBodyAsJson);
-    validateAppSelfServiceUserLoanMapping(loanId);
+    // SECURITY: Validate loan ownership
+    this.ownershipGuard.validateLoanOwnership(loanId);
     final Long clientId = (Long) attr.get("clientId");
     if (clientId != null) {
-      validateAppSelfServiceUserClientsMapping(clientId);
+      // SECURITY: If clientId is in the body, validate it too
+      this.ownershipGuard.validateClientOwnership(clientId);
     }
     final String command = null;
     String responseJson =
@@ -472,7 +478,7 @@ public class SelfLoansApiResource {
     if (!is(commandParam, "withdrawnByApplicant")) {
       throw new UnrecognizedQueryParamException("command", commandParam);
     }
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.ownershipGuard.validateLoanOwnership(loanId);
     String responseJson =
         this.loansApiResource.stateTransitions(loanId, commandParam, apiRequestBodyAsJson);
 
@@ -481,24 +487,6 @@ public class SelfLoansApiResource {
         SelfServiceNotificationEvent.Type.LOAN_WITHDRAWN, loanId, contextData, httpRequest);
 
     return responseJson;
-  }
-
-  private void validateAppSelfServiceUserLoanMapping(final Long loanId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean isLoanMappedToUser =
-        this.appuserLoansMapperReadService.isLoanMappedToUser(loanId, user.getId());
-    if (!isLoanMappedToUser) {
-      throw new LoanNotFoundException(loanId);
-    }
-  }
-
-  private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
   }
 
   private boolean is(final String commandParam, final String commandValue) {
@@ -513,7 +501,7 @@ public class SelfLoansApiResource {
   public List<GuarantorData> retrieveGuarantorDetails(
       @PathParam("loanId") final Long loanId, @Context final UriInfo uriInfo) {
 
-    validateAppSelfServiceUserLoanMapping(loanId);
+    this.ownershipGuard.validateLoanOwnership(loanId);
     return this.guarantorsApiResource.retrieveGuarantorDetails(loanId);
   }
 

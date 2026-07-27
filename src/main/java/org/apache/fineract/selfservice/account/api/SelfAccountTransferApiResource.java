@@ -48,6 +48,7 @@ import org.apache.fineract.selfservice.account.service.SelfAccountTransferWriteP
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
 import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.context.ApplicationEventPublisher;
@@ -80,6 +81,8 @@ public class SelfAccountTransferApiResource {
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
   private final ConfigurationDomainService configurationDomainService;
   private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
+  private final SelfServiceOwnershipGuard ownershipGuard;
+  private final Gson gson = new Gson();
 
   @POST
   @Path("/prepare")
@@ -89,9 +92,17 @@ public class SelfAccountTransferApiResource {
       summary = "Prepare Transfer",
       description = "Validates and prepares the transfer details.")
   public String prepare(final String apiRequestBodyAsJson) {
+
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    // ═══════════════════════════════════════════════════════════════════
+    // CRITICAL IDOR FIX: Validate source account ownership
+    // ═══════════════════════════════════════════════════════════════════
+    ownershipGuard.validateTransferSourceOwnership(
+        request.getFromAccount(),
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+
     Object result = transferWritePlatformService.prepareTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -107,6 +118,13 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    // ═══════════════════════════════════════════════════════════════════
+    // CRITICAL IDOR FIX: Validate source account ownership
+    // ═══════════════════════════════════════════════════════════════════
+    ownershipGuard.validateTransferSourceOwnership(
+        request.getFromAccount(),
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+
     Object result = transferWritePlatformService.quoteTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -123,6 +141,13 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferConfirmRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    // ═══════════════════════════════════════════════════════════════════
+    // CRITICAL IDOR FIX: Validate source account ownership BEFORE debit
+    // ═══════════════════════════════════════════════════════════════════
+    ownershipGuard.validateTransferSourceOwnership(
+        request.getFromAccount(),
+        request.getFromAccountType() != null ? request.getFromAccountType() : 2);
+
     Object result = transferWritePlatformService.confirmTransfer(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -183,6 +208,10 @@ public class SelfAccountTransferApiResource {
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     ResendOtpRequest request = new Gson().fromJson(apiRequestBodyAsJson, ResendOtpRequest.class);
+    // SECURITY: Validate source account ownership on resend too
+    ownershipGuard.validateTransferSourceOwnership(
+        request.getFromAccount(), 2); // OTP resend is always for savings source
+
     Object result = transferWritePlatformService.resendTransferOtp(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -214,6 +243,17 @@ public class SelfAccountTransferApiResource {
       @Context HttpServletRequest httpRequest) {
 
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    // ═══════════════════════════════════════════════════════════════════
+    // CRITICAL IDOR FIX: Extract and validate fromAccountId from the JSON body
+    // ═══════════════════════════════════════════════════════════════════
+    com.google.gson.JsonObject jsonObj =
+        gson.fromJson(apiRequestBodyAsJson, com.google.gson.JsonObject.class);
+    if (jsonObj.has("fromAccountId")) {
+      String fromAccountIdStr = jsonObj.get("fromAccountId").getAsString();
+      Integer fromAccountType =
+          jsonObj.has("fromAccountType") ? jsonObj.get("fromAccountType").getAsInt() : 2;
+      ownershipGuard.validateTransferSourceOwnership(fromAccountIdStr, fromAccountType);
+    }
     CommandProcessingResult result =
         transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
     return toApiJsonSerializer.serialize(result);

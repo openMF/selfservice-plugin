@@ -78,7 +78,6 @@ import org.apache.fineract.portfolio.client.api.ClientApiConstants;
 import org.apache.fineract.portfolio.client.data.ClientChargeData;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.data.ClientTransactionData;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.service.ClientChargeReadPlatformService;
 import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
@@ -88,8 +87,8 @@ import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMa
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
 import org.apache.fineract.selfservice.config.SelfServiceModuleIsEnabledCondition;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -127,6 +126,7 @@ public class SelfClientsApiResource {
   private final DataUrlDecoderContentProcessor dataUrlDecoderContentProcessor;
   private final SizeContentProcessor sizeContentProcessor;
   private final ContentDetectorManager contentDetectorManager;
+  private final SelfServiceOwnershipGuard ownershipGuard;
 
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
@@ -164,6 +164,10 @@ public class SelfClientsApiResource {
       @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
       @QueryParam("legalForm") final Integer legalForm) {
 
+    // SECURITY: retrieveAll is inherently scoped to the authenticated user
+    // via SelfServiceSearchParameters.isSelfUser=true which filters by mapped clients
+    this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
+
     final SelfServiceSearchParameters searchParameters =
         SelfServiceSearchParameters.builder()
             .isSelfUser(true)
@@ -177,7 +181,7 @@ public class SelfClientsApiResource {
             .orderBy(orderBy)
             .sortOrder(sortOrder)
             .build();
-    this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
+
     final Page<ClientData> clientData =
         selfServiceClientReadPlatformService.retrieveAll(searchParameters);
     final ApiRequestJsonSerializationSettings settings =
@@ -212,7 +216,9 @@ public class SelfClientsApiResource {
       @Context final UriInfo uriInfo) {
 
     this.dataValidator.validateRetrieveOne(uriInfo);
-    validateAppuserClientsMapping(clientId);
+    // SECURITY: Centralized ownership validation (replaces scattered validateAppuserClientsMapping)
+    this.ownershipGuard.validateClientOwnership(clientId);
+
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
 
     final ClientData clientData = selfServiceClientReadPlatformService.retrieveOne(clientId);
@@ -251,7 +257,8 @@ public class SelfClientsApiResource {
       @PathParam("clientId") @Parameter(description = "clientId") final Long clientId,
       @Context final UriInfo uriInfo) {
 
-    validateAppuserClientsMapping(clientId);
+    // SECURITY: Centralized ownership validation
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
 
     final AccountSummaryCollectionData accounts =
@@ -281,7 +288,7 @@ public class SelfClientsApiResource {
       @QueryParam("maxHeight") @Parameter(example = "maxHeight") final Integer maxHeight,
       @QueryParam("output") @Parameter(example = "output") final String output) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission("CLIENTIMAGE");
 
     final var content =
@@ -353,7 +360,7 @@ public class SelfClientsApiResource {
       @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
       @QueryParam("offset") @Parameter(description = "offset") final Integer offset) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME);
 
     final SearchParameters searchParameters =
@@ -395,8 +402,8 @@ public class SelfClientsApiResource {
       @PathParam("chargeId") @Parameter(description = "chargeId") final Long chargeId,
       @Context final UriInfo uriInfo) {
 
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.dataValidator.validateClientCharges(uriInfo);
-    validateAppuserClientsMapping(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME);
 
     final ClientChargeData charge =
@@ -434,7 +441,7 @@ public class SelfClientsApiResource {
       @QueryParam("offset") @Parameter(description = "offset") final Integer offset,
       @QueryParam("limit") @Parameter(description = "limit") final Integer limit) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME);
 
     final SearchParameters searchParameters =
@@ -476,7 +483,7 @@ public class SelfClientsApiResource {
           final Long transactionId,
       @Context final UriInfo uriInfo) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME);
 
     final ClientTransactionData clientTransaction =
@@ -484,15 +491,6 @@ public class SelfClientsApiResource {
     final ApiRequestJsonSerializationSettings settings =
         apiRequestParameterHelper.process(uriInfo.getQueryParameters());
     return clientTransactionSerializer.serialize(settings, clientTransaction);
-  }
-
-  private void validateAppuserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
   }
 
   @POST
@@ -513,7 +511,7 @@ public class SelfClientsApiResource {
       @FormDataParam("file") final FormDataContentDisposition fileDetails,
       @FormDataParam("file") final FormDataBodyPart filePart) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
 
     requireNonNull(fileDetails, "");
     requireNonNull(filePart, "");
@@ -538,7 +536,8 @@ public class SelfClientsApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   public ImageCreateResponse addNewClientImage(
       @PathParam("clientId") final Long clientId, final InputStream body) {
-    validateAppuserClientsMapping(clientId);
+
+    this.ownershipGuard.validateClientOwnership(clientId);
 
     final var ctx =
         dataUrlDecoderContentProcessor
@@ -550,7 +549,6 @@ public class SelfClientsApiResource {
     Long size = ctx.getResult(SIZE_RESULT_VALUE);
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
-
     return this.imageWritePlatformService.createImage(
         ImageCreateRequest.builder()
             .entityId(clientId)
@@ -567,8 +565,8 @@ public class SelfClientsApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   public ImageDeleteResponse deleteClientImage(@PathParam("clientId") final Long clientId) {
-    validateAppuserClientsMapping(clientId);
 
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasDeletePermission("CLIENTIMAGE");
 
     return this.imageWritePlatformService.deleteImage(
@@ -585,7 +583,7 @@ public class SelfClientsApiResource {
   public String retrieveObligeeDetails(
       @PathParam("clientId") final Long clientId, @Context final UriInfo uriInfo) {
 
-    validateAppuserClientsMapping(clientId);
+    this.ownershipGuard.validateClientOwnership(clientId);
     this.context.validateHasReadPermission(ClientApiConstants.CLIENT_RESOURCE_NAME);
 
     final List<ObligeeData> obligeeList =
