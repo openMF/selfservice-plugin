@@ -573,7 +573,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         operationId,
         internalRefNumber,
         result.getResourceId(),
-        request.getTransferDescription(),
+        request.getTransferDescription() != null ? request.getTransferDescription() : "Transfer via "+request.getTransferMode()+" "+request.getCurrencyCode()+request.getTransferAmount(),
         request.getReference(),
         description,
         true,
@@ -801,10 +801,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           new org.apache.fineract.selfservice.account.data.PinTransferRequest();
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
-      pinRequest.setDescription(
-          StringUtils.isNotBlank(request.getTransferDescription())
-              ? request.getTransferDescription()
-              : "PIN Transfer");
+      pinRequest.setDescription(request.getTransferDescription() != null ? request.getTransferDescription() : "Transfer via "+request.getTransferMode()+" "+request.getCurrencyCode()+request.getTransferAmount());
       pinRequest.setOriginCustomerName(originName);
       pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
       pinRequest.setOriginCustomerId(
@@ -882,7 +879,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
             .destinationPhone(request.getToAccount())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
-            .description(request.getTransferDescription())
+            .description(request.getTransferDescription() != null ? request.getTransferDescription() : "Transfer via "+request.getTransferMode()+" "+request.getCurrencyCode()+request.getTransferAmount())
             .debitIBAN(true)
             .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp")))
             .build();
