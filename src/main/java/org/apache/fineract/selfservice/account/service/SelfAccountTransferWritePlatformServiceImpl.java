@@ -1684,8 +1684,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
               .transferMode(request.getTransferMode())
               .transferAmount(request.getTransferAmount())
               .fromAccount(request.getFromAccount())
-              .fromAccountType(
-                  request.getFromAccountType() != null ? request.getFromAccountType() : 2)
+              .fromAccountType(2)
               .clientId(client.getId())
               .fromOfficeId(client.getOffice().getId())
               .transferDateForFineract(getTransferDateForApacheFineract(request))
@@ -1697,11 +1696,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       FeeCollectionResult result = feeCollectionService.collectFee(feeReq);
 
       log.info(
-          "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {}",
+          "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {} at date {}",
           result.getStatus(),
           result.getTransactionId(),
           result.getFeeAmount(),
-          result.getCurrency());
+          result.getCurrency(), 
+          getTransferDateForApacheFineract(request));
 
     } catch (Exception e) {
       // NEVER roll back the original payment because of a commission failure.

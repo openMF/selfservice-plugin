@@ -57,7 +57,7 @@ public class FeeCollectionRequest implements Serializable {
   private String transferDateForFineract;
 
   /** Fineract date-format pattern, e.g. "dd MMMM yyyy" */
-  @Builder.Default private String dateFormat = "dd MMMM yyyy";
+  @Builder.Default private String dateFormat = "dd-MM-yyyy";
 
   /** Locale string, e.g. "en" */
   @Builder.Default private String locale = "en";
