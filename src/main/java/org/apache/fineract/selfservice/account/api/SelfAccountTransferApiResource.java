@@ -16,17 +16,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DefaultValue;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
+import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
@@ -218,4 +214,73 @@ public class SelfAccountTransferApiResource {
         transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
     return toApiJsonSerializer.serialize(result);
   }
+
+  // =====================================================================
+  //  ENDPOINTS PARA CONSULTA DE DETALLE DE TRANSACCIÓN
+  // =====================================================================
+
+  @POST
+  @Path("/{accountId}/details")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+          summary = "Retrieve Transaction Details",
+          description = "Queries details of a specific transaction by account ID and transaction/reference ID")
+  @ApiResponses({
+          @ApiResponse(
+                  responseCode = "200",
+                  description = "OK",
+                  content = @Content(schema = @Schema(implementation = String.class)))
+  })
+  public String retrieveTransactionDetails(
+          @PathParam("accountId") final Long accountId,
+          final String apiRequestBodyAsJson) {
+
+    com.google.gson.JsonObject jsonObject =
+            new Gson().fromJson(apiRequestBodyAsJson, com.google.gson.JsonObject.class);
+
+    String txnId = jsonObject.has("txnId") && !jsonObject.get("txnId").isJsonNull()
+            ? jsonObject.get("txnId").getAsString() : null;
+    String transferType = jsonObject.has("transferType") && !jsonObject.get("transferType").isJsonNull()
+            ? jsonObject.get("transferType").getAsString() : "SAME_BANK";
+
+    if (txnId == null || txnId.isBlank()) {
+      throw new IllegalArgumentException("The 'txnId' parameter is required.");
+    }
+
+    Map<String, Object> details =
+            this.selfAccountTransferReadService.retrieveTransactionDetails(accountId, txnId, transferType);
+
+    return this.toApiJsonSerializer.serialize(details);
+  }
+
+  @GET
+  @Path("/{accountId}/details/{txnId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+          summary = "Retrieve Transaction Details via GET",
+          description = "Queries details of a specific transaction passing account ID, transaction ID, and transferType as query param")
+  @ApiResponses({
+          @ApiResponse(
+                  responseCode = "200",
+                  description = "OK",
+                  content = @Content(schema = @Schema(implementation = String.class)))
+  })
+  public String retrieveTransactionDetailsGet(
+          @PathParam("accountId") final Long accountId,
+          @PathParam("txnId") final String txnId,
+          @DefaultValue("SAME_BANK") @QueryParam("transferType") final String transferType) {
+
+    if (txnId == null || txnId.isBlank()) {
+      throw new IllegalArgumentException("The 'txnId' path parameter is required.");
+    }
+
+    Map<String, Object> details =
+            this.selfAccountTransferReadService.retrieveTransactionDetails(accountId, txnId, transferType);
+
+    return this.toApiJsonSerializer.serialize(details);
+  }
+
+
 }

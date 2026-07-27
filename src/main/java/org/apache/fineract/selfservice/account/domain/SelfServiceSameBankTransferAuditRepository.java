@@ -22,7 +22,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface SelfServiceSameBankTransferAuditRepository
-    extends JpaRepository<SelfServiceSameBankTransferAudit, Long> {
+        extends JpaRepository<SelfServiceSameBankTransferAudit, Long> {
 
   /** Retrieves an audit record by the generated operation UUID. */
   Optional<SelfServiceSameBankTransferAudit> findByOperationId(String operationId);
@@ -35,35 +35,49 @@ public interface SelfServiceSameBankTransferAuditRepository
 
   /** Lists all transfers for a given client within a date range. */
   @Query(
-      "SELECT a FROM SelfServiceSameBankTransferAudit a "
-          + "WHERE a.clientId = :clientId "
-          + "AND a.createdOnUtc BETWEEN :from AND :to "
-          + "ORDER BY a.createdOnUtc DESC")
+          "SELECT a FROM SelfServiceSameBankTransferAudit a "
+                  + "WHERE a.clientId = :clientId "
+                  + "AND a.createdOnUtc BETWEEN :from AND :to "
+                  + "ORDER BY a.createdOnUtc DESC")
   List<SelfServiceSameBankTransferAudit> findByClientIdAndDateRange(
-      @Param("clientId") Long clientId,
-      @Param("from") LocalDateTime from,
-      @Param("to") LocalDateTime to);
+          @Param("clientId") Long clientId,
+          @Param("from") LocalDateTime from,
+          @Param("to") LocalDateTime to);
 
   /** Looks up an audit record by the Fineract account-transfer resource id. */
   Optional<SelfServiceSameBankTransferAudit> findByFineractTransferId(Long fineractTransferId);
 
   /** Counts successful transfers for a client on a given day (useful for daily-limit checks). */
   @Query(
-      "SELECT COUNT(a) FROM SelfServiceSameBankTransferAudit a "
-          + "WHERE a.clientId = :clientId "
-          + "AND a.successful = true "
-          + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
+          "SELECT COUNT(a) FROM SelfServiceSameBankTransferAudit a "
+                  + "WHERE a.clientId = :clientId "
+                  + "AND a.successful = true "
+                  + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
   long countSuccessfulByClientIdAndDate(
-      @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
+          @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
 
   /**
    * Sums the transfer amounts for a client on a given day (useful for daily-amount-limit checks).
    */
   @Query(
-      "SELECT COALESCE(SUM(a.transferAmount), 0) FROM SelfServiceSameBankTransferAudit a "
-          + "WHERE a.clientId = :clientId "
-          + "AND a.successful = true "
-          + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
+          "SELECT COALESCE(SUM(a.transferAmount), 0) FROM SelfServiceSameBankTransferAudit a "
+                  + "WHERE a.clientId = :clientId "
+                  + "AND a.successful = true "
+                  + "AND CAST(a.createdOnUtc AS DATE) = CAST(:date AS DATE)")
   BigDecimal sumSuccessfulAmountByClientIdAndDate(
-      @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
+          @Param("clientId") Long clientId, @Param("date") LocalDateTime date);
+
+  /**
+   * Retrieves an audit detail validating ownership for a given client and account.
+   * Matches against operationId, internalRefNumber, or fineractTransferId.
+   */
+  @Query(
+          "SELECT a FROM SelfServiceSameBankTransferAudit a "
+                  + "WHERE a.clientId = :clientId "
+                  + "AND (a.fromAccountId = :accountId OR a.toAccountId = :accountId) "
+                  + "AND (a.operationId = :txnId OR a.internalRefNumber = :txnId OR CAST(a.fineractTransferId AS string) = :txnId)")
+  Optional<SelfServiceSameBankTransferAudit> findAuditDetail(
+          @Param("clientId") Long clientId,
+          @Param("accountId") Long accountId,
+          @Param("txnId") String txnId);
 }

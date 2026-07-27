@@ -18,12 +18,15 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPTRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
+import org.apache.fineract.selfservice.account.service.PinExternalTransferService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferReadService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferReadServiceImpl;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformServiceImpl;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformService;
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTWritePlatformServiceImpl;
+import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -36,32 +39,44 @@ public class SelfAccountConfiguration {
 
   @Bean
   @ConditionalOnMissingBean(SelfAccountTransferReadService.class)
-  public SelfAccountTransferReadService selfAccountTransferReadService(JdbcTemplate jdbcTemplate) {
-    return new SelfAccountTransferReadServiceImpl(jdbcTemplate);
+  public SelfAccountTransferReadService selfAccountTransferReadService(
+          JdbcTemplate jdbcTemplate,
+          PlatformSelfServiceSecurityContext context,
+          SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
+          SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository,
+          PinExternalTransferService pinExternalTransferService,
+          SinpeExternalApiClient sinpeExternalApiClient) {
+    return new SelfAccountTransferReadServiceImpl(
+            jdbcTemplate,
+            context,
+            savingsAccountRepositoryWrapper,
+            sameBankTransferAuditRepository,
+            pinExternalTransferService,
+            sinpeExternalApiClient);
   }
 
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTReadPlatformService.class)
   public SelfBeneficiariesTPTReadPlatformService selfBeneficiariesTPTReadPlatformService(
-      PlatformSelfServiceSecurityContext context, JdbcTemplate jdbcTemplate) {
+          PlatformSelfServiceSecurityContext context, JdbcTemplate jdbcTemplate) {
     return new SelfBeneficiariesTPTReadPlatformServiceImpl(context, jdbcTemplate);
   }
 
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTWritePlatformService.class)
   public SelfBeneficiariesTPTWritePlatformService selfBeneficiariesTPTWritePlatformService(
-      PlatformSelfServiceSecurityContext context,
-      SelfBeneficiariesTPTRepository repository,
-      SelfBeneficiariesTPTDataValidator validator,
-      LoanRepositoryWrapper loanRepositoryWrapper,
-      SavingsAccountRepositoryWrapper savingRepositoryWrapper,
-      AppSelfServiceUserRepository appSelfServiceUserRepository) {
+          PlatformSelfServiceSecurityContext context,
+          SelfBeneficiariesTPTRepository repository,
+          SelfBeneficiariesTPTDataValidator validator,
+          LoanRepositoryWrapper loanRepositoryWrapper,
+          SavingsAccountRepositoryWrapper savingRepositoryWrapper,
+          AppSelfServiceUserRepository appSelfServiceUserRepository) {
     return new SelfBeneficiariesTPTWritePlatformServiceImpl(
-        context,
-        repository,
-        validator,
-        loanRepositoryWrapper,
-        savingRepositoryWrapper,
-        appSelfServiceUserRepository);
+            context,
+            repository,
+            validator,
+            loanRepositoryWrapper,
+            savingRepositoryWrapper,
+            appSelfServiceUserRepository);
   }
 }
