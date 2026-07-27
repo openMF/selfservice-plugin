@@ -404,7 +404,11 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     if (StringUtils.isNotBlank(request.getTransferDate())) {
       // Parse client date and append current time to avoid "future date" issues
       try {
-        LocalDate clientDate = LocalDate.parse("dd-MM-yyyy");
+        LocalDate clientDate =
+            LocalDate.parse(
+                request.getTransferDate(),
+                DateTimeFormatter.ofPattern(
+                    request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
         LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
         LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
         transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
@@ -419,6 +423,12 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
     }
     return transferDateForFineract;
+  }
+  
+  private String getTransferDateFormatForApacheFineract(AccountTransferConfirmRequest request){
+    // Build Fineract-compatible date
+    String transferDateFormatForFineract = request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy";    
+    return transferDateFormatForFineract;
   }
 
   // =====================================================================
@@ -1684,7 +1694,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
               .clientId(client.getId())
               .fromOfficeId(client.getOffice().getId())
               .transferDateForFineract(getTransferDateForApacheFineract(request))
-              .dateFormat("dd MMMM yyyy")
+              .dateFormat(getTransferDateFormatForApacheFineract(request))
               .locale("en")
               .clientFeeAmount(request.getFeeAmount())
               .build();
@@ -1696,8 +1706,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           result.getStatus(),
           result.getTransactionId(),
           result.getFeeAmount(),
-          result.getCurrency(), 
-          getTransferDateForApacheFineract(request));
+          result.getCurrency(), getTransferDateForApacheFineract(request));
 
     } catch (Exception e) {
       // NEVER roll back the original payment because of a commission failure.
