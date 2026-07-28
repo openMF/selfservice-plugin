@@ -150,19 +150,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final BigDecimal transferAmount = request.getTransferAmount();
     final String transferType = request.getTransferType();
     final String currencyCode = request.getCurrencyCode();
-    final String transferDescription =
-        (request.getTransferDescription() != null
-                && !request.getTransferDescription().isBlank()
-                && request.getTransferDescription().length() >= 15
-                && request.getTransferMode().equalsIgnoreCase("PIN")
-                && request.getTransferMode().equalsIgnoreCase("SINPE")
-                && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-            ? request.getTransferDescription()
-            : (request.getTransferDescription() != null
-                    ? request.getTransferDescription()
-                    : "Transfer")
-                + " via "
-                + request.getTransferMode();
+    final String transferDescription = buildTransferDescription(request);
     final String reference = request.getReference();
 
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -477,20 +465,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract); // Full datetime string
-    commandData.put(
-        "transferDescription",
-        (request.getTransferDescription() != null
-                && !request.getTransferDescription().isBlank()
-                && request.getTransferDescription().length() >= 15
-                && request.getTransferMode().equalsIgnoreCase("PIN")
-                && request.getTransferMode().equalsIgnoreCase("SINPE")
-                && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-            ? request.getTransferDescription()
-            : (request.getTransferDescription() != null
-                    ? request.getTransferDescription()
-                    : "Transfer")
-                + " via "
-                + request.getTransferMode());
+    commandData.put("transferDescription", buildTransferDescription(request));
     commandData.put("locale", localeForFineract);
     commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
@@ -551,19 +526,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     SameBankTransferCustomData customData =
         SameBankTransferCustomData.builder()
             .totalAmount(totalAmount.toPlainString())
-            .transferDescription(
-                (request.getTransferDescription() != null
-                        && !request.getTransferDescription().isBlank()
-                        && request.getTransferDescription().length() >= 15
-                        && request.getTransferMode().equalsIgnoreCase("PIN")
-                        && request.getTransferMode().equalsIgnoreCase("SINPE")
-                        && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-                    ? request.getTransferDescription()
-                    : (request.getTransferDescription() != null
-                            ? request.getTransferDescription()
-                            : "Transfer")
-                        + " via "
-                        + request.getTransferMode())
+            .transferDescription(buildTransferDescription(request))
             .feeAmount(feeAmount.toPlainString())
             .debitAmount(transferAmount.toPlainString())
             .exchangeRateAmount("1")
@@ -600,18 +563,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         operationId,
         internalRefNumber,
         result.getResourceId(),
-        (request.getTransferDescription() != null
-                && !request.getTransferDescription().isBlank()
-                && request.getTransferDescription().length() >= 15
-                && request.getTransferMode().equalsIgnoreCase("PIN")
-                && request.getTransferMode().equalsIgnoreCase("SINPE")
-                && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-            ? request.getTransferDescription()
-            : (request.getTransferDescription() != null
-                    ? request.getTransferDescription()
-                    : "Transfer")
-                + " via "
-                + request.getTransferMode(),
+        buildTransferDescription(request),
         request.getReference(),
         description,
         true,
@@ -850,19 +802,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           new org.apache.fineract.selfservice.account.data.PinTransferRequest();
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
-      pinRequest.setDescription(
-          (request.getTransferDescription() != null
-                  && !request.getTransferDescription().isBlank()
-                  && request.getTransferDescription().length() >= 15
-                  && request.getTransferMode().equalsIgnoreCase("PIN")
-                  && request.getTransferMode().equalsIgnoreCase("SINPE")
-                  && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-              ? request.getTransferDescription()
-              : (request.getTransferDescription() != null
-                      ? request.getTransferDescription()
-                      : "Transfer")
-                  + " via "
-                  + request.getTransferMode());
+      pinRequest.setDescription(buildTransferDescription(request));
       pinRequest.setOriginCustomerName(originName);
       pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
       pinRequest.setOriginCustomerId(
@@ -941,19 +881,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .destinationPhone(request.getToAccount())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
-            .description(
-                (request.getTransferDescription() != null
-                        && !request.getTransferDescription().isBlank()
-                        && request.getTransferDescription().length() >= 15
-                        && request.getTransferMode().equalsIgnoreCase("PIN")
-                        && request.getTransferMode().equalsIgnoreCase("SINPE")
-                        && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-                    ? request.getTransferDescription()
-                    : (request.getTransferDescription() != null
-                            ? request.getTransferDescription()
-                            : "Transfer")
-                        + " via "
-                        + request.getTransferMode())
+            .description(buildTransferDescription(request))
             .debitIBAN(true)
             .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp")))
             .build();
@@ -1013,20 +941,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put(
-          "transferDescription",
-          (request.getTransferDescription() != null
-                  && !request.getTransferDescription().isBlank()
-                  && request.getTransferDescription().length() >= 15
-                  && request.getTransferMode().equalsIgnoreCase("PIN")
-                  && request.getTransferMode().equalsIgnoreCase("SINPE")
-                  && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-              ? request.getTransferDescription()
-              : (request.getTransferDescription() != null
-                      ? request.getTransferDescription()
-                      : "Transfer")
-                  + " via "
-                  + request.getTransferMode());
+      contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1097,18 +1012,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put(
           "transferDescription",
-          (request.getTransferDescription() != null
-                  && !request.getTransferDescription().isBlank()
-                  && request.getTransferDescription().length() >= 15
-                  && request.getTransferMode().equalsIgnoreCase("PIN")
-                  && request.getTransferMode().equalsIgnoreCase("SINPE")
-                  && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-              ? request.getTransferDescription()
-              : (request.getTransferDescription() != null
-                      ? request.getTransferDescription()
-                      : "Transfer")
-                  + " via "
-                  + request.getTransferMode());
+          buildTransferDescription(request));
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1187,18 +1091,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put(
           "transferDescription",
-          (request.getTransferDescription() != null
-                  && !request.getTransferDescription().isBlank()
-                  && request.getTransferDescription().length() >= 15
-                  && request.getTransferMode().equalsIgnoreCase("PIN")
-                  && request.getTransferMode().equalsIgnoreCase("SINPE")
-                  && request.getTransferMode().equalsIgnoreCase("SAME_BANK"))
-              ? request.getTransferDescription()
-              : (request.getTransferDescription() != null
-                      ? request.getTransferDescription()
-                      : "Transfer")
-                  + " via "
-                  + request.getTransferMode());
+          buildTransferDescription(request));
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -2173,4 +2066,26 @@ public class SelfAccountTransferWritePlatformServiceImpl
         fee,
         totalRequired);
   }
+  
+  private String buildTransferDescription(AccountTransferPrepareRequest request) {
+    String description = request.getTransferDescription();
+    String mode = request.getTransferMode();
+
+    boolean useOriginal =
+            description != null
+            && !description.isBlank()
+            && description.length() >= 15
+            && mode != null
+            && (mode.equalsIgnoreCase("PIN")
+                || mode.equalsIgnoreCase("SINPE")
+                || mode.equalsIgnoreCase("SAME_BANK"));
+
+    String result = useOriginal
+            ? description
+            : (description != null && !description.isBlank() ? description : "Transfer")
+              + " via "
+              + (mode != null ? mode : "");
+    
+    return String.format("%-15s", result);   // right-pad with spaces
+}
 }
