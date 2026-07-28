@@ -206,7 +206,8 @@ public class SelfServiceSavingsEventNotificationListener {
               clientId);
         } catch (Exception e) {
           log.error(
-              "Could not fetch savings account data for accountId: {}. Tenant context may still be incorrect.",
+              "Could not fetch savings account data for accountId: {}. Tenant context may still be"
+                  + " incorrect.",
               savingsAccountId,
               e);
         }
@@ -246,7 +247,8 @@ public class SelfServiceSavingsEventNotificationListener {
       clientData = clientReadPlatformService.retrieveOne(clientId);
     } catch (Exception e) {
       log.warn(
-          "Could not fetch client data for clientId: {}. Notification will be sent with limited data.",
+          "Could not fetch client data for clientId: {}. Notification will be sent with limited"
+              + " data.",
           clientId,
           e);
     }

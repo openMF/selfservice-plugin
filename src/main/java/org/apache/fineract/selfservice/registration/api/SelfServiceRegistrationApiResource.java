@@ -97,7 +97,8 @@ public class SelfServiceRegistrationApiResource {
   @Operation(
       summary = "Self Enrollment Flow",
       description =
-          "Creates a Fineract Client and a disabled Self Service User. Returns a success message (token is sent via email/SMS).")
+          "Creates a Fineract Client and a disabled Self Service User. Returns a success message"
+              + " (token is sent via email/SMS).")
   @RequestBody(
       required = true,
       content = @Content(schema = @Schema(implementation = SelfServiceEnrollmentRequest.class)))

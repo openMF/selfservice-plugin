@@ -49,7 +49,9 @@ import org.springframework.stereotype.Component;
 @Tag(
     name = "Offices",
     description =
-        "Offices are used to model an MFIs structure. A hierarchical representation of offices is supported. There will always be at least one office (which represents the MFI or an MFIs head office). All subsequent offices added must have a parent office.")
+        "Offices are used to model an MFIs structure. A hierarchical representation of offices is"
+            + " supported. There will always be at least one office (which represents the MFI or an"
+            + " MFIs head office). All subsequent offices added must have a parent office.")
 @RequiredArgsConstructor
 /**
  * JAX-RS resource exposing self-service office endpoints under {@code /v1/self/offices}.
@@ -141,7 +143,9 @@ public class SelfOfficesApiResource {
   @Operation(
       summary = "Retrieve Office Details Template",
       description =
-          "This is a convenience resource. It can be useful when building maintenance user interface screens for client applications. The template data returned consists of any or all of:\n"
+          "This is a convenience resource. It can be useful when building maintenance user"
+              + " interface screens for client applications. The template data returned consists of"
+              + " any or all of:\n"
               + "\n"
               + "Field Defaults\n"
               + "Allowed description Lists\n"
@@ -262,7 +266,9 @@ public class SelfOfficesApiResource {
   @Operation(
       summary = "Retrieve Office Details",
       description =
-          "Returns the office id, name, and external id.\n\nExample Request:\n\nself/offices/1/details")
+          "Returns the office id, name, and external id.\n\n"
+              + "Example Request:\n\n"
+              + "self/offices/1/details")
   @ApiResponse(
       responseCode = "200",
       description = "OK",
@@ -296,7 +302,9 @@ public class SelfOfficesApiResource {
   @Operation(
       summary = "Retrieve Office Services",
       description =
-          "Returns a list of services offered by the office.\n\nExample Request:\n\nself/offices/1/services")
+          "Returns a list of services offered by the office.\n\n"
+              + "Example Request:\n\n"
+              + "self/offices/1/services")
   @ApiResponse(
       responseCode = "200",
       description = "OK",
@@ -332,7 +340,9 @@ public class SelfOfficesApiResource {
   @Operation(
       summary = "Retrieve Office Geolocation",
       description =
-          "Returns the latitude and longitude of the office.\n\nExample Request:\n\nself/offices/1/geolocation")
+          "Returns the latitude and longitude of the office.\n\n"
+              + "Example Request:\n\n"
+              + "self/offices/1/geolocation")
   @ApiResponse(
       responseCode = "200",
       description = "OK",
@@ -366,7 +376,9 @@ public class SelfOfficesApiResource {
   @Operation(
       summary = "Retrieve Office Address",
       description =
-          "Returns the street, postal code, municipality, state, and country of the office.\n\nExample Request:\n\nself/offices/1/address")
+          "Returns the street, postal code, municipality, state, and country of the office.\n\n"
+              + "Example Request:\n\n"
+              + "self/offices/1/address")
   @ApiResponse(
       responseCode = "200",
       description = "OK",

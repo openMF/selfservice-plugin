@@ -201,14 +201,11 @@ public class SelfServiceNotificationConfig {
   @lombok.Setter
   public static class NotificationExecutorProperties {
 
-    @jakarta.validation.constraints.Min(1)
-    private int corePoolSize = 2;
+    @jakarta.validation.constraints.Min(1) private int corePoolSize = 2;
 
-    @jakarta.validation.constraints.Min(1)
-    private int maxPoolSize = 4;
+    @jakarta.validation.constraints.Min(1) private int maxPoolSize = 4;
 
-    @jakarta.validation.constraints.Min(0)
-    private int queueCapacity = 100;
+    @jakarta.validation.constraints.Min(0) private int queueCapacity = 100;
 
     private String threadNamePrefix = "notif-";
   }

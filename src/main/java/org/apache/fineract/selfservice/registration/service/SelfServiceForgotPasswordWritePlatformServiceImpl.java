@@ -79,7 +79,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     if (StringUtils.isBlank(email) && StringUtils.isBlank(mobileNumber)) {
       log.warn(
-          "Password reset request for user '{}' cannot be processed: no email or mobile number available",
+          "Password reset request for user '{}' cannot be processed: no email or mobile number"
+              + " available",
           username);
       return null;
     }
@@ -135,7 +136,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
             contextData));
 
     log.info(
-        "Password reset token generated for user '{}'. Token will be delivered through enabled channels.",
+        "Password reset token generated for user '{}'. Token will be delivered through enabled"
+            + " channels.",
         username);
 
     return request;

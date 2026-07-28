@@ -29,7 +29,7 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
 
   private void enrollUser(String username, String password, String email, String mobileNumber) {
     String payload =
-        """
+            """
             {
               "username": "%s",
               "password": "%s",
@@ -71,7 +71,7 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     { "externalAuthenticationToken": "%s" }
                     """
                     .formatted(enrollmentToken))
@@ -152,7 +152,7 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response requestResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     {
                       "username": "%s",
                       "authenticationMode": "email"
@@ -185,7 +185,7 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response renewResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     {
                       "externalAuthenticationToken": "%s",
                       "password": "%s",
@@ -210,7 +210,7 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response reuseResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     {
                       "externalAuthenticationToken": "%s",
                       "password": "%s",

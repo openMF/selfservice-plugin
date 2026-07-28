@@ -9,13 +9,8 @@ package org.apache.fineract.selfservice.account.api;
 import com.google.gson.Gson;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.math.BigDecimal;
@@ -49,7 +44,7 @@ public class SelfServiceTransferFeeApiResource {
   private final BccrExchangeRateService bccrExchangeRateService;
   private final Gson gson = new Gson();
 
-  @GET  
+  @GET
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Get All Transfer Fees",

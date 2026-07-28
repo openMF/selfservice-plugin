@@ -117,11 +117,11 @@ public abstract class SelfServiceIntegrationTestBase {
                   cmd.withEntrypoint(
                       "sh",
                       "-c",
-                      "CLASSPATH=$(cat /app/jib-classpath-file) && "
-                          + "exec java $JAVA_TOOL_OPTIONS "
-                          + "-Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Djava.security.egd=file:/dev/./urandom "
-                          + "-cp /app/plugins/selfservice-plugin.jar:/app/plugins/savings-plugin.jar:$CLASSPATH "
-                          + "org.apache.fineract.ServerApplication");
+                      "CLASSPATH=$(cat /app/jib-classpath-file) && exec java $JAVA_TOOL_OPTIONS"
+                          + " -Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
+                          + " -Djava.security.egd=file:/dev/./urandom -cp"
+                          + " /app/plugins/selfservice-plugin.jar:/app/plugins/savings-plugin.jar:$CLASSPATH"
+                          + " org.apache.fineract.ServerApplication");
                   cmd.withCmd();
                 })
 
@@ -152,7 +152,7 @@ public abstract class SelfServiceIntegrationTestBase {
   protected static void executeSqlInPostgres(String sql) {
     Container.ExecResult result =
         execPsql(
-            """
+                """
                 BEGIN;
                 %s
                 COMMIT;

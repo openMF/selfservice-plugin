@@ -65,18 +65,19 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
    */
   private String generateDuplicateMobilePayload(String phone) {
     String id = numericId();
-    return """
-            {
-              "username": "diffuser_%s",
-              "password": "Strong#Abc123",
-              "firstName": "Test",
-              "lastName": "User",
-              "mobileNumber": "555%s",
-              "email": "diff%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+    return
+        """
+        {
+          "username": "diffuser_%s",
+          "password": "Strong#Abc123",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "diff%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
         .formatted(id, phone, id);
   }
 
@@ -112,7 +113,7 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   private Response confirmEnrollment(String token) {
     return given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body(
-            """
+                """
                 { "externalAuthenticationToken": "%s" }
                 """
                 .formatted(token))
@@ -179,7 +180,7 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     String username = "user_" + id;
     String password = "Strong#Abc123";
     String payload =
-        """
+            """
             {
               "username": "%s",
               "password": "%s",
@@ -249,7 +250,7 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     String phone = numericId();
     String id1 = numericId();
     String payload1 =
-        """
+            """
             {
               "username": "user1_%s",
               "password": "Strong#Abc123",

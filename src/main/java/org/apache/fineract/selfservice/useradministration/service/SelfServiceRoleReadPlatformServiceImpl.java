@@ -86,7 +86,8 @@ public class SelfServiceRoleReadPlatformServiceImpl implements SelfServiceRoleRe
     }
 
     public String schema() {
-      return " r.id as id, r.name as name, r.description as description, r.is_disabled as disabled from m_role r";
+      return " r.id as id, r.name as name, r.description as description, r.is_disabled as disabled"
+          + " from m_role r";
     }
   }
 

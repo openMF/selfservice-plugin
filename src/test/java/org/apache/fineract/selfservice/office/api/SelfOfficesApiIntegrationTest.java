@@ -35,9 +35,9 @@ class SelfOfficesApiIntegrationTest extends SelfServiceIntegrationTestBase {
 
     executeSqlInPostgres(
         """
-        INSERT INTO m_selfservice_office_service(office_id, service_name, service_external_id, working_hours)
-        VALUES (%s, %s, %s, %s);
-        """,
+INSERT INTO m_selfservice_office_service(office_id, service_name, service_external_id, working_hours)
+VALUES (%s, %s, %s, %s);
+""",
         officeId, "Account Opening " + uniqueSuffix, "SVC-" + uniqueSuffix, "Mon-Fri 09:00-17:00");
 
     executeSqlInPostgres(

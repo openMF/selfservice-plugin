@@ -59,9 +59,9 @@ public class SelfForgotPasswordApiResource {
   @Operation(
       summary = "Request Password Reset",
       description =
-          "Initiates a password reset request for the self-service user. "
-              + "Only the 'username' field is required. The reset token is automatically delivered "
-              + "through the notification channels enabled in the system (Email, SMS, WhatsApp, In-App).")
+          "Initiates a password reset request for the self-service user. Only the 'username' field"
+              + " is required. The reset token is automatically delivered through the notification"
+              + " channels enabled in the system (Email, SMS, WhatsApp, In-App).")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK - Reset instructions sent"),
     @ApiResponse(

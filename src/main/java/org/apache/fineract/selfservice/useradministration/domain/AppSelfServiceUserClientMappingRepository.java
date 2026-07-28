@@ -29,13 +29,15 @@ public interface AppSelfServiceUserClientMappingRepository
   @Transactional
   @Query(
       value =
-          "INSERT INTO m_selfservice_user_client_mapping (appuser_id, client_id) VALUES (?1 ,  ?2 ) ",
+          "INSERT INTO m_selfservice_user_client_mapping (appuser_id, client_id) VALUES (?1 ,  ?2 )"
+              + " ",
       nativeQuery = true)
   public void saveClientUserMapping(
       @Param("appuserId") Long appuserId, @Param("clientId") Long clientId);
 
   @Query(
-      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where appUserMapping.client.id = :clientId")
+      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where"
+          + " appUserMapping.client.id = :clientId")
   @Cacheable(
       value = "appSelfServiceUserClientFetchByClientId",
       key =
@@ -43,7 +45,8 @@ public interface AppSelfServiceUserClientMappingRepository
   AppSelfServiceUserClientMapping fetchByClientId(@Param("clientId") Long clientId);
 
   @Query(
-      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where appUserMapping.appUser.username = :username")
+      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where"
+          + " appUserMapping.appUser.username = :username")
   @Cacheable(
       value = "appSelfServiceUserUserClientFetchByAppuserUsername",
       key =
@@ -51,12 +54,15 @@ public interface AppSelfServiceUserClientMappingRepository
   AppSelfServiceUserClientMapping fetchByAppuserUsername(@Param("username") String username);
 
   @Query(
-      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping WHERE appUserMapping.client.externalId = :externalId AND appUserMapping.appUser.email = :email")
+      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping WHERE"
+          + " appUserMapping.client.externalId = :externalId AND appUserMapping.appUser.email ="
+          + " :email")
   Optional<AppSelfServiceUserClientMapping> fetchByClientExternalIdAndUserEmail(
       @Param("externalId") String externalId, @Param("email") String email);
 
   @Query(
-      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where appUserMapping.appUser.id = :appUserId")
+      "select appUserMapping from AppSelfServiceUserClientMapping appUserMapping where"
+          + " appUserMapping.appUser.id = :appUserId")
   @Cacheable(
       value = "appSelfServiceUserUserClientFetchByAppUserId",
       key =

@@ -22,7 +22,8 @@ public class SelfServicePermissionEnforcementIntegrationTest
 
   @Test
   @DisplayName(
-      "Verify that Self-Service Users strictly require explicit READ_SAVINGSPRODUCT grant to access /v1/self/savingsproducts")
+      "Verify that Self-Service Users strictly require explicit READ_SAVINGSPRODUCT grant to access"
+          + " /v1/self/savingsproducts")
   void testSavingsProductsRequireReadSavingsProductPermission() {
 
     // 1. Create a Client
@@ -73,25 +74,25 @@ public class SelfServicePermissionEnforcementIntegrationTest
     String username = "user_" + UUID.randomUUID().toString().substring(0, 8);
 
     executeSqlInPostgres(
-        """
-        WITH new_self_user AS (
-            INSERT INTO m_appselfservice_user(
-                office_id, username, password, email, firstname, lastname, is_deleted,
-                nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
-                password_never_expires, is_self_service_user, password_reset_required
-            )
-            VALUES (
-                1, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
-                'Tomas', 'Test', false, true, true, true, true, false, true, true, false
-            )
-            RETURNING id
-        ), self_user_role AS (
-            INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
-            SELECT id, %d FROM new_self_user
-        )
-        INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
-        SELECT id, %d FROM new_self_user;
-        """
+            """
+WITH new_self_user AS (
+    INSERT INTO m_appselfservice_user(
+        office_id, username, password, email, firstname, lastname, is_deleted,
+        nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
+        password_never_expires, is_self_service_user, password_reset_required
+    )
+    VALUES (
+        1, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
+        'Tomas', 'Test', false, true, true, true, true, false, true, true, false
+    )
+    RETURNING id
+), self_user_role AS (
+    INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
+    SELECT id, %d FROM new_self_user
+)
+INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
+SELECT id, %d FROM new_self_user;
+"""
             .formatted(
                 sqlLiteral(username), sqlLiteral(username + "@fineract.org"), roleId, clientId));
 

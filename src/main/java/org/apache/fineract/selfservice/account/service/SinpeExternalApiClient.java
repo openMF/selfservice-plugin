@@ -49,9 +49,9 @@ public class SinpeExternalApiClient {
     Map<String, String> props = new HashMap<>();
 
     String sql =
-            "SELECT p.name, p.value FROM c_external_service_properties p "
-                    + "INNER JOIN c_external_service s ON p.external_service_id = s.id "
-                    + "WHERE s.name = ?";
+        "SELECT p.name, p.value FROM c_external_service_properties p "
+            + "INNER JOIN c_external_service s ON p.external_service_id = s.id "
+            + "WHERE s.name = ?";
 
     List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, SERVICE_NAME);
     for (Map<String, Object> row : rows) {
@@ -93,8 +93,9 @@ public class SinpeExternalApiClient {
 
     if (!isEnabled(props)) {
       log.warn(
-              "SinpeService is disabled in c_external_service. Skipping createSubscription for phone: {}",
-              request.getPhoneNumber());
+          "SinpeService is disabled in c_external_service. Skipping createSubscription for phone:"
+              + " {}",
+          request.getPhoneNumber());
       return;
     }
 
@@ -115,14 +116,14 @@ public class SinpeExternalApiClient {
 
     if (!isEnabled(props)) {
       log.warn(
-              "SinpeService is disabled in c_external_service. Skipping editSubscription for phone: {}",
-              request.getPhoneNumber());
+          "SinpeService is disabled in c_external_service. Skipping editSubscription for phone: {}",
+          request.getPhoneNumber());
       return;
     }
 
     String url = getHost(props) + "/sinpe/subscription/edit";
     HttpEntity<SinpeSubscriptionEditRequest> entity =
-            new HttpEntity<>(request, buildHeaders(props));
+        new HttpEntity<>(request, buildHeaders(props));
 
     try {
       restTemplate.postForObject(url, entity, String.class);
@@ -138,8 +139,9 @@ public class SinpeExternalApiClient {
 
     if (!isEnabled(props)) {
       log.warn(
-              "SinpeService is disabled in c_external_service. Skipping deleteSubscription for phone: {}",
-              phoneNumber);
+          "SinpeService is disabled in c_external_service. Skipping deleteSubscription for phone:"
+              + " {}",
+          phoneNumber);
       return;
     }
 
@@ -160,8 +162,8 @@ public class SinpeExternalApiClient {
 
     if (!isEnabled(props)) {
       log.warn(
-              "SinpeService is disabled in c_external_service. Skipping transferToPhone for phone: {}",
-              request.getDestinationPhone());
+          "SinpeService is disabled in c_external_service. Skipping transferToPhone for phone: {}",
+          request.getDestinationPhone());
       return null;
     }
 
@@ -191,7 +193,10 @@ public class SinpeExternalApiClient {
     Map<String, String> props = getServiceProperties();
 
     if (!isEnabled(props)) {
-      log.warn("SinpeService is disabled in c_external_service. Skipping getTransactionDetail for ref: {}", referenceNumber);
+      log.warn(
+          "SinpeService is disabled in c_external_service. Skipping getTransactionDetail for ref:"
+              + " {}",
+          referenceNumber);
       return null;
     }
 
@@ -199,7 +204,8 @@ public class SinpeExternalApiClient {
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
 
     try {
-      ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+      ResponseEntity<String> response =
+          restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
       log.info("SINPE transaction details fetched successfully for ref: {}", referenceNumber);
       return response.getBody();
     } catch (Exception e) {

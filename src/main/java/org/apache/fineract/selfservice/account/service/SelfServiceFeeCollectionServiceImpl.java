@@ -1,9 +1,8 @@
 /**
  * Copyright since 2026 Mifos Initiative
  *
- * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a
- * copy of the MPL was not distributed with this file, You can obtain one at
- * http://mozilla.org/MPL/2.0/.
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 package org.apache.fineract.selfservice.account.service;
 
@@ -12,6 +11,7 @@ import com.google.gson.JsonElement;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -38,28 +38,28 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
-import java.time.OffsetDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Fee-collection logic extracted from {@code SelfAccountTransferWritePlatformServiceImpl}
- * and executed inside a {@code REQUIRES_NEW} transaction.
+ * Fee-collection logic extracted from {@code SelfAccountTransferWritePlatformServiceImpl} and
+ * executed inside a {@code REQUIRES_NEW} transaction.
  *
  * <h3>Why REQUIRES_NEW?</h3>
- * The calling service ({@code confirmTransfer}) already loaded the source
- * {@code SavingsAccount} into its persistence context during balance validation.
- * Fineract's core {@code AccountTransfersWritePlatformService.create()} then
- * tries to modify and flush the <em>same</em> entity, triggering an
- * {@code OptimisticLockException} (EclipseLink-5006). A separate transaction
- * gets its own persistence context and loads the entity at the current DB
- * version, eliminating the conflict.
+ *
+ * The calling service ({@code confirmTransfer}) already loaded the source {@code SavingsAccount}
+ * into its persistence context during balance validation. Fineract's core {@code
+ * AccountTransfersWritePlatformService.create()} then tries to modify and flush the <em>same</em>
+ * entity, triggering an {@code OptimisticLockException} (EclipseLink-5006). A separate transaction
+ * gets its own persistence context and loads the entity at the current DB version, eliminating the
+ * conflict.
  *
  * <h3>Multi-tenancy</h3>
- * Fineract stores the tenant identifier in a {@code ThreadLocal}. Because
- * {@code REQUIRES_NEW} suspends (not migrates) the transaction on the same
- * thread, the tenant context is fully preserved.
+ *
+ * Fineract stores the tenant identifier in a {@code ThreadLocal}. Because {@code REQUIRES_NEW}
+ * suspends (not migrates) the transaction on the same thread, the tenant context is fully
+ * preserved.
  */
 @Service
 @RequiredArgsConstructor
@@ -159,8 +159,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
           BigDecimal rate =
               bccrRate
                   .map(BccrExchangeRate::getSellRate)
-                  .orElseThrow(
-                      () -> new IllegalStateException("BCCR exchange rate not available"));
+                  .orElseThrow(() -> new IllegalStateException("BCCR exchange rate not available"));
 
           feeAmount = feeAmount.divide(rate, 2, RoundingMode.HALF_UP);
           feeDescription =
@@ -328,9 +327,9 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   }
 
   /**
-   * Resolves an account identifier (numeric id, IBAN, or external-id) to the
-   * internal Fineract account id. Runs inside the REQUIRES_NEW persistence
-   * context so the returned entity is <b>not</b> the stale one from the caller.
+   * Resolves an account identifier (numeric id, IBAN, or external-id) to the internal Fineract
+   * account id. Runs inside the REQUIRES_NEW persistence context so the returned entity is
+   * <b>not</b> the stale one from the caller.
    */
   private Long resolveAccountId(String accountIdentifier, Integer accountType) {
     if (StringUtils.isBlank(accountIdentifier)) {
@@ -345,8 +344,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       // not numeric → treat as external id
     }
 
-    PortfolioAccountType type =
-        PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
     org.apache.fineract.infrastructure.core.domain.ExternalId extId =
         externalIdFactory.create(trimmed);
 
@@ -354,8 +352,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       Long id = savingsAccountRepositoryWrapper.findIdByExternalId(extId);
       SavingsAccount sa = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(id);
       if (sa == null) {
-        throw new IllegalArgumentException(
-            "Savings account not found for external ID: " + trimmed);
+        throw new IllegalArgumentException("Savings account not found for external ID: " + trimmed);
       }
       log.info("FEE_COLLECT: Resolved savings externalId={} → id={}", trimmed, sa.getId());
       return sa.getId();
@@ -368,8 +365,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   }
 
   private Long resolveNumericAccountId(Long numericId, Integer accountType) {
-    PortfolioAccountType type =
-        PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
+    PortfolioAccountType type = PortfolioAccountType.fromInt(accountType != null ? accountType : 2);
     if (type == PortfolioAccountType.SAVINGS) {
       return savingsAccountAssembler.assembleFrom(numericId, false).getId();
     } else if (type == PortfolioAccountType.LOAN) {
@@ -381,7 +377,22 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   private JsonCommand createJsonCommand(String json) {
     JsonElement parsed = fromApiJsonHelper.parse(json);
     return JsonCommand.from(
-        json, parsed, fromApiJsonHelper,
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        json,
+        parsed,
+        fromApiJsonHelper,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 }

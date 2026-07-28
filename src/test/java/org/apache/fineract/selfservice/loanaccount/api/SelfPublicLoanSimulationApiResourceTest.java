@@ -246,7 +246,8 @@ class SelfPublicLoanSimulationApiResourceTest {
             .anyMatch(t -> t == PlatformSelfServiceSecurityContext.class);
     assertFalse(
         hasSecurityContext,
-        "SelfPublicLoanSimulationApiResource must not depend on PlatformSelfServiceSecurityContext");
+        "SelfPublicLoanSimulationApiResource must not depend on"
+            + " PlatformSelfServiceSecurityContext");
   }
 
   @Test

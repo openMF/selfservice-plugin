@@ -888,12 +888,14 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
                   new IllegalStateException(
                       "Self-enrollment audit user '"
                           + auditUsername
-                          + "' was found in m_appuser lookup but could not be loaded from the repository."));
+                          + "' was found in m_appuser lookup but could not be loaded from the"
+                          + " repository."));
     } catch (EmptyResultDataAccessException e) {
       throw new IllegalStateException(
           "Configured self-enrollment audit user '"
               + auditUsername
-              + "' does not exist. Set fineract.selfservice.enrollment.audit-user to a valid username.",
+              + "' does not exist. Set fineract.selfservice.enrollment.audit-user to a valid"
+              + " username.",
           e);
     }
   }

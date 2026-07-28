@@ -123,25 +123,25 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
     assertThat(clientId).as("Created clientId must be present").isNotNull();
 
     executeSqlInPostgres(
-        """
-        WITH new_self_user AS (
-            INSERT INTO m_appselfservice_user(
-                office_id, username, password, email, firstname, lastname, is_deleted,
-                nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
-                password_never_expires, is_self_service_user, password_reset_required
-            )
-            VALUES (
-                1, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
-                'Tomas', 'Test', false, true, true, true, true, false, true, true, false
-            )
-            RETURNING id
-        ), self_user_role AS (
-            INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
-            SELECT id, %d FROM new_self_user
-        )
-        INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
-        SELECT id, %d FROM new_self_user;
-        """
+            """
+WITH new_self_user AS (
+    INSERT INTO m_appselfservice_user(
+        office_id, username, password, email, firstname, lastname, is_deleted,
+        nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
+        password_never_expires, is_self_service_user, password_reset_required
+    )
+    VALUES (
+        1, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
+        'Tomas', 'Test', false, true, true, true, true, false, true, true, false
+    )
+    RETURNING id
+), self_user_role AS (
+    INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
+    SELECT id, %d FROM new_self_user
+)
+INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
+SELECT id, %d FROM new_self_user;
+"""
             .formatted(
                 sqlLiteral(selfUser), sqlLiteral(selfUser + "@fineract.org"), roleId, clientId));
 

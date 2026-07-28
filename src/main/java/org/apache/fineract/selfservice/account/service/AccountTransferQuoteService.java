@@ -56,9 +56,7 @@ public class AccountTransferQuoteService {
     String currency =
         StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
     String transferMode =
-        StringUtils.isNotBlank(request.getTransferMode())
-            ? request.getTransferMode()
-            : "INMEDIATA";
+        StringUtils.isNotBlank(request.getTransferMode()) ? request.getTransferMode() : "INMEDIATA";
 
     log.debug(
         "Calculating fee for transfer: type={}, currency={}, mode={}, amount={}",
@@ -118,8 +116,7 @@ public class AccountTransferQuoteService {
         // fee is in CRC → convert to USD (divide by BCCR sell rate)
         fee = fee.divide(rate, 2, RoundingMode.HALF_UP);
         feeDescription =
-            String.format(
-                "%s (Tasa BCCR venta: %s CRC/USD)", feeDescription, rate.toPlainString());
+            String.format("%s (Tasa BCCR venta: %s CRC/USD)", feeDescription, rate.toPlainString());
         log.info(
             "Converted CRC fee {} → {} USD using BCCR sell rate {}",
             config.getFeeValue(),
@@ -156,10 +153,7 @@ public class AccountTransferQuoteService {
         if (config.getThresholdFeeValue() != null) {
           fee = config.getThresholdFeeValue();
         }
-        log.info(
-            "SINPE_MOVIL threshold exceeded (projected {}). Applying fee {}.",
-            projected,
-            fee);
+        log.info("SINPE_MOVIL threshold exceeded (projected {}). Applying fee {}.", projected, fee);
       }
     } else if (config.getThresholdAmount() != null
         && config.getThresholdAmount().compareTo(BigDecimal.ZERO) > 0) {

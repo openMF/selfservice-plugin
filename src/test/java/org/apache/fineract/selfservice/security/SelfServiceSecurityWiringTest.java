@@ -37,8 +37,7 @@ class SelfServiceSecurityWiringTest {
 
   @Autowired private ApplicationContext ctx;
 
-  @Qualifier("selfServiceAuthenticationProvider")
-  @Autowired
+  @Qualifier("selfServiceAuthenticationProvider") @Autowired
   private DaoAuthenticationProvider selfServiceProvider;
 
   @Test
@@ -91,6 +90,8 @@ class SelfServiceSecurityWiringTest {
     }
     org.junit.jupiter.api.Assertions.assertTrue(
         found,
-        "@Qualifier annotation missing on constructor parameter. Check lombok.config has: lombok.copyableAnnotations += org.springframework.beans.factory.annotation.Qualifier");
+        "@Qualifier annotation missing on constructor parameter. Check lombok.config has:"
+            + " lombok.copyableAnnotations +="
+            + " org.springframework.beans.factory.annotation.Qualifier");
   }
 }

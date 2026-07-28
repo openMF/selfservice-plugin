@@ -10,9 +10,7 @@ import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
 
-/**
- * Single name/value pair from {@code c_external_service_properties}.
- */
+/** Single name/value pair from {@code c_external_service_properties}. */
 @Value
 @Builder
 public class ExternalServicePropertyData implements Serializable {

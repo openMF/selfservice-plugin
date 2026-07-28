@@ -90,7 +90,8 @@ public class SelfServicePluginEmailService implements PlatformEmailService {
             + "password: "
             + unencodedPassword
             + "\n"
-            + "You must change this password upon first log in using Uppercase, Lowercase, number and character.\n"
+            + "You must change this password upon first log in using Uppercase, Lowercase, number"
+            + " and character.\n"
             + "Thank you and welcome to the organisation.";
 
     final EmailDetail emailDetail = new EmailDetail(subject, body, address, contactName);
@@ -195,9 +196,10 @@ public class SelfServicePluginEmailService implements PlatformEmailService {
 
     if (StringUtils.isBlank(host) || StringUtils.isBlank(fromEmail)) {
       throw new SmtpConfigurationUnavailableException(
-          "SMTP configuration unavailable: the Fineract core table 'c_external_service_properties' "
-              + "does not exist and the required Spring properties 'fineract.selfservice.smtp.host' and "
-              + "'fineract.selfservice.smtp.from-email' are not configured.",
+          "SMTP configuration unavailable: the Fineract core table 'c_external_service_properties'"
+              + " does not exist and the required Spring properties"
+              + " 'fineract.selfservice.smtp.host' and 'fineract.selfservice.smtp.from-email' are"
+              + " not configured.",
           originalCause);
     }
 

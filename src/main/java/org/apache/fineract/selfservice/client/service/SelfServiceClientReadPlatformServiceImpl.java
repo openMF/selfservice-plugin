@@ -117,7 +117,8 @@ public class SelfServiceClientReadPlatformServiceImpl
     if (searchParameters != null) {
       if (Boolean.TRUE.equals(searchParameters.getIsSelfUser())) {
         sqlBuilder.append(
-            " and c.id in (select umap.client_id from m_selfservice_user_client_mapping as umap where umap.appuser_id = ? ) ");
+            " and c.id in (select umap.client_id from m_selfservice_user_client_mapping as umap"
+                + " where umap.appuser_id = ? ) ");
         paramList.add(appUserId);
       }
 
@@ -331,11 +332,14 @@ public class SelfServiceClientReadPlatformServiceImpl
       final StringBuilder sqlBuilder = new StringBuilder(200);
 
       sqlBuilder.append(
-          "c.id as id, c.account_no as accountNo, c.external_id as externalId, c.status_enum as statusEnum,c.sub_status as subStatus, ");
+          "c.id as id, c.account_no as accountNo, c.external_id as externalId, c.status_enum as"
+              + " statusEnum,c.sub_status as subStatus, ");
       sqlBuilder.append(
-          "cvSubStatus.code_value as subStatusValue,cvSubStatus.code_description as subStatusDesc,c.office_id as officeId, o.name as officeName, ");
+          "cvSubStatus.code_value as subStatusValue,cvSubStatus.code_description as"
+              + " subStatusDesc,c.office_id as officeId, o.name as officeName, ");
       sqlBuilder.append(
-          "c.transfer_to_office_id as transferToOfficeId, transferToOffice.name as transferToOfficeName, ");
+          "c.transfer_to_office_id as transferToOfficeId, transferToOffice.name as"
+              + " transferToOfficeName, ");
       sqlBuilder.append(
           "c.firstname as firstname, c.middlename as middlename, c.lastname as lastname, ");
       sqlBuilder.append("c.fullname as fullname, c.display_name as displayName, ");
@@ -394,12 +398,14 @@ public class SelfServiceClientReadPlatformServiceImpl
       sqlBuilder.append(
           "left join m_code_value cvclienttype on cvclienttype.id = c.client_type_cv_id ");
       sqlBuilder.append(
-          "left join m_code_value cvclassification on cvclassification.id = c.client_classification_cv_id ");
+          "left join m_code_value cvclassification on cvclassification.id ="
+              + " c.client_classification_cv_id ");
       sqlBuilder.append("left join m_code_value cvSubStatus on cvSubStatus.id = c.sub_status ");
       sqlBuilder.append(
           "left join m_code_value cvConstitution on cvConstitution.id = cnp.constitution_cv_id ");
       sqlBuilder.append(
-          "left join m_code_value cvMainBusinessLine on cvMainBusinessLine.id = cnp.main_business_line_cv_id ");
+          "left join m_code_value cvMainBusinessLine on cvMainBusinessLine.id ="
+              + " cnp.main_business_line_cv_id ");
 
       this.schema = sqlBuilder.toString();
     }
@@ -558,7 +564,8 @@ public class SelfServiceClientReadPlatformServiceImpl
     final String sql =
         "select "
             + this.membersOfGroupMapper.schema()
-            + " left join m_group g on pgc.group_id=g.id where o.hierarchy like ? and g.parent_id = ? and c.status_enum = ? group by c.id";
+            + " left join m_group g on pgc.group_id=g.id where o.hierarchy like ? and g.parent_id ="
+            + " ? and c.status_enum = ? group by c.id";
 
     return this.jdbcTemplate.query(
         sql,
@@ -571,8 +578,9 @@ public class SelfServiceClientReadPlatformServiceImpl
   private static final class ParentGroupsMapper implements RowMapper<GroupGeneralData> {
 
     public String parentGroupsSchema() {
-      return "gp.id As groupId , gp.account_no as accountNo, gp.display_name As groupName from m_client cl JOIN m_group_client gc ON cl.id = gc.client_id "
-          + "JOIN m_group gp ON gp.id = gc.group_id WHERE cl.id  = ?";
+      return "gp.id As groupId , gp.account_no as accountNo, gp.display_name As groupName from"
+          + " m_client cl JOIN m_group_client gc ON cl.id = gc.client_id JOIN m_group gp ON"
+          + " gp.id = gc.group_id WHERE cl.id  = ?";
     }
 
     @Override
@@ -635,12 +643,11 @@ public class SelfServiceClientReadPlatformServiceImpl
   private static final class ClientIdentifierMapper implements RowMapper<ClientData> {
 
     public String clientLookupByIdentifierSchema() {
-      return "c.id as id, c.account_no as accountNo, c.firstname as firstname, c.middlename as middlename, c.lastname as lastname, "
-          + "c.fullname as fullname, c.display_name as displayName,"
-          + "c.office_id as officeId, o.name as officeName "
-          + " from m_client c, m_office o, m_client_identifier ci "
-          + "where o.id = c.office_id and c.id=ci.client_id "
-          + "and ci.document_type_id= ? and ci.document_key like ?";
+      return "c.id as id, c.account_no as accountNo, c.firstname as firstname, c.middlename as"
+          + " middlename, c.lastname as lastname, c.fullname as fullname, c.display_name as"
+          + " displayName,c.office_id as officeId, o.name as officeName  from m_client c,"
+          + " m_office o, m_client_identifier ci where o.id = c.office_id and"
+          + " c.id=ci.client_id and ci.document_type_id= ? and ci.document_key like ?";
     }
 
     @Override
@@ -713,7 +720,8 @@ public class SelfServiceClientReadPlatformServiceImpl
   @Override
   public Collection<Long> retrieveSelfServiceUserClients(Long aUserID) {
     String sql =
-        "SELECT  m.client_id FROM m_selfservice_user_client_mapping m INNER JOIN m_client c ON c.id = m.client_id WHERE m.appuser_id = ?";
+        "SELECT  m.client_id FROM m_selfservice_user_client_mapping m INNER JOIN m_client c ON c.id"
+            + " = m.client_id WHERE m.appuser_id = ?";
     return jdbcTemplate.queryForList(sql, Long.class, aUserID);
   }
 
@@ -730,11 +738,14 @@ public class SelfServiceClientReadPlatformServiceImpl
       final StringBuilder builder = new StringBuilder(400);
 
       builder.append(
-          "c.id as id, c.account_no as accountNo, c.external_id as externalId, c.status_enum as statusEnum,c.sub_status as subStatus, ");
+          "c.id as id, c.account_no as accountNo, c.external_id as externalId, c.status_enum as"
+              + " statusEnum,c.sub_status as subStatus, ");
       builder.append(
-          "cvSubStatus.code_value as subStatusValue,cvSubStatus.code_description as subStatusDesc,c.office_id as officeId, o.name as officeName, ");
+          "cvSubStatus.code_value as subStatusValue,cvSubStatus.code_description as"
+              + " subStatusDesc,c.office_id as officeId, o.name as officeName, ");
       builder.append(
-          "c.transfer_to_office_id as transferToOfficeId, transferToOffice.name as transferToOfficeName, ");
+          "c.transfer_to_office_id as transferToOfficeId, transferToOffice.name as"
+              + " transferToOfficeName, ");
       builder.append(
           "c.firstname as firstname, c.middlename as middlename, c.lastname as lastname, ");
       builder.append("c.fullname as fullname, c.display_name as displayName, ");
@@ -792,12 +803,14 @@ public class SelfServiceClientReadPlatformServiceImpl
       builder.append(
           "left join m_code_value cvclienttype on cvclienttype.id = c.client_type_cv_id ");
       builder.append(
-          "left join m_code_value cvclassification on cvclassification.id = c.client_classification_cv_id ");
+          "left join m_code_value cvclassification on cvclassification.id ="
+              + " c.client_classification_cv_id ");
       builder.append("left join m_code_value cvSubStatus on cvSubStatus.id = c.sub_status ");
       builder.append(
           "left join m_code_value cvConstitution on cvConstitution.id = cnp.constitution_cv_id ");
       builder.append(
-          "left join m_code_value cvMainBusinessLine on cvMainBusinessLine.id = cnp.main_business_line_cv_id ");
+          "left join m_code_value cvMainBusinessLine on cvMainBusinessLine.id ="
+              + " cnp.main_business_line_cv_id ");
 
       this.schema = builder.toString();
     }

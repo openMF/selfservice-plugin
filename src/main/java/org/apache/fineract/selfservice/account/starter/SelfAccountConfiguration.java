@@ -40,43 +40,43 @@ public class SelfAccountConfiguration {
   @Bean
   @ConditionalOnMissingBean(SelfAccountTransferReadService.class)
   public SelfAccountTransferReadService selfAccountTransferReadService(
-          JdbcTemplate jdbcTemplate,
-          PlatformSelfServiceSecurityContext context,
-          SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
-          SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository,
-          PinExternalTransferService pinExternalTransferService,
-          SinpeExternalApiClient sinpeExternalApiClient) {
+      JdbcTemplate jdbcTemplate,
+      PlatformSelfServiceSecurityContext context,
+      SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
+      SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository,
+      PinExternalTransferService pinExternalTransferService,
+      SinpeExternalApiClient sinpeExternalApiClient) {
     return new SelfAccountTransferReadServiceImpl(
-            jdbcTemplate,
-            context,
-            savingsAccountRepositoryWrapper,
-            sameBankTransferAuditRepository,
-            pinExternalTransferService,
-            sinpeExternalApiClient);
+        jdbcTemplate,
+        context,
+        savingsAccountRepositoryWrapper,
+        sameBankTransferAuditRepository,
+        pinExternalTransferService,
+        sinpeExternalApiClient);
   }
 
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTReadPlatformService.class)
   public SelfBeneficiariesTPTReadPlatformService selfBeneficiariesTPTReadPlatformService(
-          PlatformSelfServiceSecurityContext context, JdbcTemplate jdbcTemplate) {
+      PlatformSelfServiceSecurityContext context, JdbcTemplate jdbcTemplate) {
     return new SelfBeneficiariesTPTReadPlatformServiceImpl(context, jdbcTemplate);
   }
 
   @Bean
   @ConditionalOnMissingBean(SelfBeneficiariesTPTWritePlatformService.class)
   public SelfBeneficiariesTPTWritePlatformService selfBeneficiariesTPTWritePlatformService(
-          PlatformSelfServiceSecurityContext context,
-          SelfBeneficiariesTPTRepository repository,
-          SelfBeneficiariesTPTDataValidator validator,
-          LoanRepositoryWrapper loanRepositoryWrapper,
-          SavingsAccountRepositoryWrapper savingRepositoryWrapper,
-          AppSelfServiceUserRepository appSelfServiceUserRepository) {
+      PlatformSelfServiceSecurityContext context,
+      SelfBeneficiariesTPTRepository repository,
+      SelfBeneficiariesTPTDataValidator validator,
+      LoanRepositoryWrapper loanRepositoryWrapper,
+      SavingsAccountRepositoryWrapper savingRepositoryWrapper,
+      AppSelfServiceUserRepository appSelfServiceUserRepository) {
     return new SelfBeneficiariesTPTWritePlatformServiceImpl(
-            context,
-            repository,
-            validator,
-            loanRepositoryWrapper,
-            savingRepositoryWrapper,
-            appSelfServiceUserRepository);
+        context,
+        repository,
+        validator,
+        loanRepositoryWrapper,
+        savingRepositoryWrapper,
+        appSelfServiceUserRepository);
   }
 }

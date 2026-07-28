@@ -16,7 +16,6 @@ package org.apache.fineract.selfservice.account.service;
 
 import java.util.Collection;
 import java.util.Map;
-
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 

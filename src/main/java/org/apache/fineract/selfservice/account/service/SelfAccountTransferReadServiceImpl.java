@@ -51,40 +51,42 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   private final Gson gson = new Gson();
 
   @Override
-  public Collection<SelfAccountTemplateData> retrieveSelfAccountTemplateData(AppSelfServiceUser user) {
+  public Collection<SelfAccountTemplateData> retrieveSelfAccountTemplateData(
+      AppSelfServiceUser user) {
     SelfAccountTemplateMapper mapper = new SelfAccountTemplateMapper();
     StringBuilder sql =
-            new StringBuilder()
-                    .append("select s.id as accountId, ")
-                    .append("s.account_no as accountNo, ")
-                    .append("2 as accountType, ")
-                    .append("c.id as clientId, ")
-                    .append("c.display_name as clientName, ")
-                    .append("o.id as officeId, ")
-                    .append("o.name as officeName ")
-                    .append("from m_appselfservice_user as u ")
-                    .append("inner join m_selfservice_user_client_mapping as map on u.id = map.appuser_id ")
-                    .append("inner join m_client as c on map.client_id = c.id ")
-                    .append("inner join m_office as o on c.office_id = o.id ")
-                    .append("inner join m_savings_account as s on s.client_id = c.id ")
-                    .append("where u.id = ? ")
-                    .append("and s.status_enum = 300 ")
-                    .append("union ")
-                    .append("select l.id as accountId, ")
-                    .append("l.account_no as accountNo, ")
-                    .append("1 as accountType, ")
-                    .append("c.id as clientId, ")
-                    .append("c.display_name as clientName, ")
-                    .append("o.id as officeId, ")
-                    .append("o.name as officeName ")
-                    .append("from m_appselfservice_user as u ")
-                    .append("inner join m_selfservice_user_client_mapping as map on u.id = map.appuser_id ")
-                    .append("inner join m_client as c on map.client_id = c.id ")
-                    .append("inner join m_office as o on c.office_id = o.id ")
-                    .append("inner join m_loan as l on l.client_id = c.id ")
-                    .append("where u.id = ? ")
-                    .append("and l.loan_status_id = 300 ");
-    return this.jdbcTemplate.query(sql.toString(), mapper, new Object[] {user.getId(), user.getId()});
+        new StringBuilder()
+            .append("select s.id as accountId, ")
+            .append("s.account_no as accountNo, ")
+            .append("2 as accountType, ")
+            .append("c.id as clientId, ")
+            .append("c.display_name as clientName, ")
+            .append("o.id as officeId, ")
+            .append("o.name as officeName ")
+            .append("from m_appselfservice_user as u ")
+            .append("inner join m_selfservice_user_client_mapping as map on u.id = map.appuser_id ")
+            .append("inner join m_client as c on map.client_id = c.id ")
+            .append("inner join m_office as o on c.office_id = o.id ")
+            .append("inner join m_savings_account as s on s.client_id = c.id ")
+            .append("where u.id = ? ")
+            .append("and s.status_enum = 300 ")
+            .append("union ")
+            .append("select l.id as accountId, ")
+            .append("l.account_no as accountNo, ")
+            .append("1 as accountType, ")
+            .append("c.id as clientId, ")
+            .append("c.display_name as clientName, ")
+            .append("o.id as officeId, ")
+            .append("o.name as officeName ")
+            .append("from m_appselfservice_user as u ")
+            .append("inner join m_selfservice_user_client_mapping as map on u.id = map.appuser_id ")
+            .append("inner join m_client as c on map.client_id = c.id ")
+            .append("inner join m_office as o on c.office_id = o.id ")
+            .append("inner join m_loan as l on l.client_id = c.id ")
+            .append("where u.id = ? ")
+            .append("and l.loan_status_id = 300 ");
+    return this.jdbcTemplate.query(
+        sql.toString(), mapper, new Object[] {user.getId(), user.getId()});
   }
 
   // =====================================================================
@@ -92,37 +94,52 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   // =====================================================================
   @Override
   @Transactional(readOnly = true)
-  public Map<String, Object> retrieveTransactionDetails(Long accountId, String txnId, String transferType) {
+  public Map<String, Object> retrieveTransactionDetails(
+      Long accountId, String txnId, String transferType) {
 
     // 1. Validar pertenencia general de la cuenta al cliente autenticado
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
-    SavingsAccount savingsAccount = this.savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
+    SavingsAccount savingsAccount =
+        this.savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(accountId);
     if (!savingsAccount.getClient().getId().equals(client.getId())) {
-      log.error("SECURITY ALERT: User {} attempted to access account {} not belonging to them.", user.getId(), accountId);
-      throw new IllegalArgumentException("The specified account does not belong to the authenticated client.");
+      log.error(
+          "SECURITY ALERT: User {} attempted to access account {} not belonging to them.",
+          user.getId(),
+          accountId);
+      throw new IllegalArgumentException(
+          "The specified account does not belong to the authenticated client.");
     }
 
-    log.info("FETCH DETAILS: Querying details for account: {}, txnId: {}, transferType: {}", accountId, txnId, transferType);
+    log.info(
+        "FETCH DETAILS: Querying details for account: {}, txnId: {}, transferType: {}",
+        accountId,
+        txnId,
+        transferType);
 
     Map<String, Object> rawData;
 
     // 2. Delegar procesamiento al método correspondiente según el tipo
     if ("Apolo".equalsIgnoreCase(transferType) || "SAME_BANK".equalsIgnoreCase(transferType)) {
       rawData = processApoloTransfer(client.getId(), accountId, txnId);
-    } else if ("PIN".equalsIgnoreCase(transferType) || "SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
+    } else if ("PIN".equalsIgnoreCase(transferType)
+        || "SINPE".equalsIgnoreCase(transferType)
+        || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
       rawData = processExternalTransfer(accountId, txnId, transferType);
     } else {
       throw new IllegalArgumentException("Unsupported transferType: " + transferType);
     }
 
     // 3. Aplica homologación estándar
-    BigDecimal fallbackAmount = rawData.containsKey("debitedAmount") && rawData.get("debitedAmount") != null
-            ? new BigDecimal(rawData.get("debitedAmount").toString()) : BigDecimal.ZERO;
+    BigDecimal fallbackAmount =
+        rawData.containsKey("debitedAmount") && rawData.get("debitedAmount") != null
+            ? new BigDecimal(rawData.get("debitedAmount").toString())
+            : BigDecimal.ZERO;
     String fallbackCurrency = rawData.getOrDefault("debitCurrencyCode", "CRC").toString();
 
-    Map<String, Object> homologatedData = homologateResponseData(rawData, fallbackAmount, fallbackCurrency);
+    Map<String, Object> homologatedData =
+        homologateResponseData(rawData, fallbackAmount, fallbackCurrency);
 
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", transferType.toUpperCase());
@@ -136,10 +153,14 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   // =====================================================================
   private Map<String, Object> processApoloTransfer(Long clientId, Long accountId, String txnId) {
     Optional<SelfServiceSameBankTransferAudit> auditOpt =
-            this.sameBankTransferAuditRepository.findAuditDetail(clientId, accountId, txnId);
+        this.sameBankTransferAuditRepository.findAuditDetail(clientId, accountId, txnId);
 
     if (auditOpt.isEmpty()) {
-      throw new IllegalArgumentException("Internal transfer transaction not found for account " + accountId + " and txnId: " + txnId);
+      throw new IllegalArgumentException(
+          "Internal transfer transaction not found for account "
+              + accountId
+              + " and txnId: "
+              + txnId);
     }
 
     SelfServiceSameBankTransferAudit audit = auditOpt.get();
@@ -151,15 +172,22 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     rawData.put("sinpeRefNumber", "");
     rawData.put("debitedAmount", audit.getTransferAmount());
     rawData.put("debitCurrencyCode", audit.getCurrencyCode());
-    rawData.put("commissionAmount", audit.getFeeAmount() != null ? audit.getFeeAmount() : BigDecimal.ZERO);
+    rawData.put(
+        "commissionAmount", audit.getFeeAmount() != null ? audit.getFeeAmount() : BigDecimal.ZERO);
     rawData.put("commissionCurrency", audit.getCurrencyCode());
     rawData.put("exchangeRate", 0);
-    rawData.put("registrationDate", audit.getRegistrationDate() != null ? audit.getRegistrationDate().toString() : "");
-    rawData.put("processingDate", audit.getProcessingDate() != null ? audit.getProcessingDate().toString() : "");
+    rawData.put(
+        "registrationDate",
+        audit.getRegistrationDate() != null ? audit.getRegistrationDate().toString() : "");
+    rawData.put(
+        "processingDate",
+        audit.getProcessingDate() != null ? audit.getProcessingDate().toString() : "");
     rawData.put("stateDescription", audit.getStateDescription());
     rawData.put("successful", audit.isSuccessful());
     rawData.put("stateCode", audit.isSuccessful() ? 32 : 128);
-    rawData.put("rejectDescription", audit.getRejectDescription() != null ? audit.getRejectDescription() : "");
+    rawData.put(
+        "rejectDescription",
+        audit.getRejectDescription() != null ? audit.getRejectDescription() : "");
 
     Map<String, Object> customData = new HashMap<>();
     customData.put("fromAccountIdentifier", audit.getFromAccountIdentifier());
@@ -174,11 +202,13 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   // =====================================================================
   //  MÉTODO 2: PROCESAR TRANSFERENCIAS EXTERNAS (PIN / SINPE)
   // =====================================================================
-  private Map<String, Object> processExternalTransfer(Long accountId, String txnId, String transferType) {
+  private Map<String, Object> processExternalTransfer(
+      Long accountId, String txnId, String transferType) {
     // A. Obtener el receipt_number desde m_payment_detail mediante validación de pertenencia
     String externalRef = getExternalReceiptNumber(accountId, txnId);
     if (externalRef == null || externalRef.isEmpty()) {
-      throw new IllegalArgumentException("External transaction not found or does not belong to account: " + accountId);
+      throw new IllegalArgumentException(
+          "External transaction not found or does not belong to account: " + accountId);
     }
 
     Map<String, Object> rawData;
@@ -192,7 +222,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       } else {
         log.info("Querying SINPE external service with receiptRef: {}", externalRef);
         Object sinpeResponse = this.sinpeExternalApiClient.getTransactionDetail(externalRef);
-        String sinpeJson = sinpeResponse instanceof String ? (String) sinpeResponse : this.gson.toJson(sinpeResponse);
+        String sinpeJson =
+            sinpeResponse instanceof String
+                ? (String) sinpeResponse
+                : this.gson.toJson(sinpeResponse);
         rawData = this.gson.fromJson(sinpeJson, Map.class);
       }
     } catch (Exception e) {
@@ -205,11 +238,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   // Helper SQL para extraer el routing_code de m_payment_detail vinculando la transacción
   private String getExternalReceiptNumber(Long accountId, String txnId) {
-    String sql = "SELECT COALESCE(pd.routing_code, pd.receipt_number) AS external_ref " +
-            "FROM m_savings_account_transaction sat " +
-            "INNER JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id " +
-            "WHERE sat.savings_account_id = ? " +
-            "AND (CAST(sat.id AS VARCHAR) = ? OR sat.ref_no = ?)";
+    String sql =
+        "SELECT COALESCE(pd.routing_code, pd.receipt_number) AS external_ref "
+            + "FROM m_savings_account_transaction sat "
+            + "INNER JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id "
+            + "WHERE sat.savings_account_id = ? "
+            + "AND (CAST(sat.id AS VARCHAR) = ? OR sat.ref_no = ?)";
     try {
       return this.jdbcTemplate.queryForObject(sql, String.class, accountId, txnId, txnId);
     } catch (org.springframework.dao.EmptyResultDataAccessException e) {
@@ -221,35 +255,72 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   // =====================================================================
   //  HELPER HOMOLOGACIÓN DE RESPUESTA
   // =====================================================================
-  private Map<String, Object> homologateResponseData(Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency) {
+  private Map<String, Object> homologateResponseData(
+      Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency) {
     if (rawData == null) rawData = new HashMap<>();
     Map<String, Object> data = new HashMap<>(rawData);
 
-    String operationId = data.containsKey("operationId") && data.get("operationId") != null ? data.get("operationId").toString() : "";
-    String internalRef = data.get("internalRefNumber") != null ? data.get("internalRefNumber").toString() : (data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString() : "");
-    String channelRef = data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString() : (data.get("internalRefNumber") != null ? data.get("internalRefNumber").toString() : "");
-    String sinpeRef = data.get("sinpeRefNumber") != null ? data.get("sinpeRefNumber").toString() : "";
+    String operationId =
+        data.containsKey("operationId") && data.get("operationId") != null
+            ? data.get("operationId").toString()
+            : "";
+    String internalRef =
+        data.get("internalRefNumber") != null
+            ? data.get("internalRefNumber").toString()
+            : (data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString() : "");
+    String channelRef =
+        data.get("channelRefNumber") != null
+            ? data.get("channelRefNumber").toString()
+            : (data.get("internalRefNumber") != null
+                ? data.get("internalRefNumber").toString()
+                : "");
+    String sinpeRef =
+        data.get("sinpeRefNumber") != null ? data.get("sinpeRefNumber").toString() : "";
 
-    Object rawDebited = data.get("debitedAmount") != null ? data.get("debitedAmount") : data.get("amount");
-    BigDecimal debitedAmount = rawDebited != null ? new BigDecimal(rawDebited.toString()) : fallbackAmount;
-    String debitCurrencyCode = data.get("debitCurrencyCode") != null ? data.get("debitCurrencyCode").toString() : (data.get("currency") != null ? data.get("currency").toString() : fallbackCurrency);
+    Object rawDebited =
+        data.get("debitedAmount") != null ? data.get("debitedAmount") : data.get("amount");
+    BigDecimal debitedAmount =
+        rawDebited != null ? new BigDecimal(rawDebited.toString()) : fallbackAmount;
+    String debitCurrencyCode =
+        data.get("debitCurrencyCode") != null
+            ? data.get("debitCurrencyCode").toString()
+            : (data.get("currency") != null ? data.get("currency").toString() : fallbackCurrency);
 
-    BigDecimal commissionAmount = data.get("commissionAmount") != null ? new BigDecimal(data.get("commissionAmount").toString()) : BigDecimal.ZERO;
-    String commissionCurrency = data.get("commissionCurrency") != null ? data.get("commissionCurrency").toString() : debitCurrencyCode;
-    BigDecimal exchangeRate = data.get("exchangeRate") != null ? new BigDecimal(data.get("exchangeRate").toString()) : BigDecimal.ZERO;
+    BigDecimal commissionAmount =
+        data.get("commissionAmount") != null
+            ? new BigDecimal(data.get("commissionAmount").toString())
+            : BigDecimal.ZERO;
+    String commissionCurrency =
+        data.get("commissionCurrency") != null
+            ? data.get("commissionCurrency").toString()
+            : debitCurrencyCode;
+    BigDecimal exchangeRate =
+        data.get("exchangeRate") != null
+            ? new BigDecimal(data.get("exchangeRate").toString())
+            : BigDecimal.ZERO;
 
-    String registrationDate = data.get("registrationDate") != null ? data.get("registrationDate").toString() : "";
-    String processingDate = data.get("processingDate") != null ? data.get("processingDate").toString() : "";
+    String registrationDate =
+        data.get("registrationDate") != null ? data.get("registrationDate").toString() : "";
+    String processingDate =
+        data.get("processingDate") != null ? data.get("processingDate").toString() : "";
 
     Integer stateCode = 32;
     Object rawState = data.containsKey("stateCode") ? data.get("stateCode") : data.get("state");
     if (rawState != null) {
-      try { stateCode = Double.valueOf(rawState.toString()).intValue(); } catch (Exception ignored) {}
+      try {
+        stateCode = Double.valueOf(rawState.toString()).intValue();
+      } catch (Exception ignored) {
+      }
     }
 
-    String stateDescription = stateCode == 32 ? "Completed" : (stateCode == 128 ? "Rejected" : "Pending");
-    Integer rejectCode = data.get("rejectCode") != null ? Double.valueOf(data.get("rejectCode").toString()).intValue() : (stateCode == 128 ? 128 : 0);
-    String rejectDescription = data.get("rejectDescription") != null ? data.get("rejectDescription").toString() : "";
+    String stateDescription =
+        stateCode == 32 ? "Completed" : (stateCode == 128 ? "Rejected" : "Pending");
+    Integer rejectCode =
+        data.get("rejectCode") != null
+            ? Double.valueOf(data.get("rejectCode").toString()).intValue()
+            : (stateCode == 128 ? 128 : 0);
+    String rejectDescription =
+        data.get("rejectDescription") != null ? data.get("rejectDescription").toString() : "";
 
     data.remove("amount");
     data.remove("currency");
@@ -276,9 +347,11 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return data;
   }
 
-  private static final class SelfAccountTemplateMapper implements RowMapper<SelfAccountTemplateData> {
+  private static final class SelfAccountTemplateMapper
+      implements RowMapper<SelfAccountTemplateData> {
     @Override
-    public SelfAccountTemplateData mapRow(final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+    public SelfAccountTemplateData mapRow(
+        final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
       final Long accountId = rs.getLong("accountId");
       final String accountNo = rs.getString("accountNo");
       final Integer accountType = rs.getInt("accountType");
@@ -287,7 +360,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       final Long officeId = rs.getLong("officeId");
       final String officeName = rs.getString("officeName");
 
-      return new SelfAccountTemplateData(accountId, accountNo, accountType, clientId, clientName, officeId, officeName);
+      return new SelfAccountTemplateData(
+          accountId, accountNo, accountType, clientId, clientName, officeId, officeName);
     }
   }
 }

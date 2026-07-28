@@ -25,12 +25,13 @@ public interface SelfServiceRegistrationRepository
           + "request.authenticationToken = :authenticationToken";
 
   String FIND_BY_REQUEST_TYPE_AND_AUTHENTICATION_TOKEN =
-      "select request from SelfServiceRegistration request where request.id = :id and "
-          + "request.authenticationToken = :authenticationToken and request.requestType = :requestType";
+      "select request from SelfServiceRegistration request where request.id = :id and"
+          + " request.authenticationToken = :authenticationToken and request.requestType ="
+          + " :requestType";
 
   String FIND_BY_EXTERNAL_AUTHORIZATION_TOKEN =
-      "select request from SelfServiceRegistration request where request.externalAuthorizationToken = :externalAuthorizationToken and "
-          + "request.requestType = :requestType";
+      "select request from SelfServiceRegistration request where request.externalAuthorizationToken"
+          + " = :externalAuthorizationToken and request.requestType = :requestType";
 
   /**
    * Finds a self-service request by its identifier and authentication token.
@@ -82,7 +83,8 @@ public interface SelfServiceRegistrationRepository
   @Modifying
   @Transactional
   @Query(
-      "DELETE FROM SelfServiceRegistration r WHERE r.expiresAt IS NOT NULL AND r.expiresAt < :cutoff")
+      "DELETE FROM SelfServiceRegistration r WHERE r.expiresAt IS NOT NULL AND r.expiresAt <"
+          + " :cutoff")
   int deleteExpiredRequests(@Param("cutoff") LocalDateTime cutoff);
 
   /**
@@ -98,7 +100,8 @@ public interface SelfServiceRegistrationRepository
    * @return the most recent matching request, or empty if none matches
    */
   @Query(
-      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.authenticationToken = :authenticationToken ORDER BY r.id DESC")
+      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType ="
+          + " :requestType AND r.authenticationToken = :authenticationToken ORDER BY r.id DESC")
   Optional<SelfServiceRegistration>
       findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
           @Param("clientId") Long clientId,
@@ -106,7 +109,8 @@ public interface SelfServiceRegistrationRepository
           @Param("authenticationToken") String authenticationToken);
 
   @Query(
-      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType = :requestType AND r.consumed = false ORDER BY r.id DESC")
+      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.requestType ="
+          + " :requestType AND r.consumed = false ORDER BY r.id DESC")
   Optional<SelfServiceRegistration> findTopByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
       @Param("clientId") Long clientId, @Param("requestType") SelfServiceRequestType requestType);
 

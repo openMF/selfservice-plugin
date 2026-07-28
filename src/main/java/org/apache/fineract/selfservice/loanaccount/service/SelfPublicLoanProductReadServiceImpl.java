@@ -57,45 +57,46 @@ public class SelfPublicLoanProductReadServiceImpl implements SelfPublicLoanProdu
       implements RowMapper<SelfPublicLoanProductData> {
 
     public String schema() {
-      return """
-          lp.id as id,
-          lp.name as name,
-          lp.short_name as shortName,
-          lp.description as description,
-          lp.currency_code as currencyCode,
-          lp.currency_digits as currencyDigits,
-          lp.currency_multiplesof as inMultiplesOf,
-          curr.name as currencyName,
-          curr.internationalized_name_code as currencyNameCode,
-          curr.display_symbol as currencyDisplaySymbol,
-          lp.principal_amount as principal,
-          lp.min_principal_amount as minPrincipal,
-          lp.max_principal_amount as maxPrincipal,
-          lp.nominal_interest_rate_per_period as interestRatePerPeriod,
-          lp.min_nominal_interest_rate_per_period as minInterestRatePerPeriod,
-          lp.max_nominal_interest_rate_per_period as maxInterestRatePerPeriod,
-          lp.annual_nominal_interest_rate as annualInterestRate,
-          lp.interest_period_frequency_enum as interestRatePerPeriodFreq,
-          lp.interest_method_enum as interestMethod,
-          lp.interest_calculated_in_period_enum as interestCalculationInPeriodMethod,
-          lp.repay_every as repaidEvery,
-          lp.repayment_period_frequency_enum as repaymentPeriodFrequency,
-          lp.number_of_repayments as numberOfRepayments,
-          lp.min_number_of_repayments as minNumberOfRepayments,
-          lp.max_number_of_repayments as maxNumberOfRepayments,
-          lp.amortization_method_enum as amortizationMethod,
-          lp.arrearstolerance_amount as tolerance,
-          lp.accounting_type as accountingType,
-          lp.loan_transaction_strategy_code as transactionStrategyCode,
-          lp.loan_transaction_strategy_name as transactionStrategyName,
-          lp.days_in_month_enum as daysInMonth,
-          lp.days_in_year_enum as daysInYear,
-          lp.allow_multiple_disbursals as multiDisburseLoan,
-          lp.start_date as startDate,
-          lp.close_date as closeDate
-          FROM m_product_loan lp
-          JOIN m_currency curr ON curr.code = lp.currency_code
-          """;
+      return
+      """
+      lp.id as id,
+      lp.name as name,
+      lp.short_name as shortName,
+      lp.description as description,
+      lp.currency_code as currencyCode,
+      lp.currency_digits as currencyDigits,
+      lp.currency_multiplesof as inMultiplesOf,
+      curr.name as currencyName,
+      curr.internationalized_name_code as currencyNameCode,
+      curr.display_symbol as currencyDisplaySymbol,
+      lp.principal_amount as principal,
+      lp.min_principal_amount as minPrincipal,
+      lp.max_principal_amount as maxPrincipal,
+      lp.nominal_interest_rate_per_period as interestRatePerPeriod,
+      lp.min_nominal_interest_rate_per_period as minInterestRatePerPeriod,
+      lp.max_nominal_interest_rate_per_period as maxInterestRatePerPeriod,
+      lp.annual_nominal_interest_rate as annualInterestRate,
+      lp.interest_period_frequency_enum as interestRatePerPeriodFreq,
+      lp.interest_method_enum as interestMethod,
+      lp.interest_calculated_in_period_enum as interestCalculationInPeriodMethod,
+      lp.repay_every as repaidEvery,
+      lp.repayment_period_frequency_enum as repaymentPeriodFrequency,
+      lp.number_of_repayments as numberOfRepayments,
+      lp.min_number_of_repayments as minNumberOfRepayments,
+      lp.max_number_of_repayments as maxNumberOfRepayments,
+      lp.amortization_method_enum as amortizationMethod,
+      lp.arrearstolerance_amount as tolerance,
+      lp.accounting_type as accountingType,
+      lp.loan_transaction_strategy_code as transactionStrategyCode,
+      lp.loan_transaction_strategy_name as transactionStrategyName,
+      lp.days_in_month_enum as daysInMonth,
+      lp.days_in_year_enum as daysInYear,
+      lp.allow_multiple_disbursals as multiDisburseLoan,
+      lp.start_date as startDate,
+      lp.close_date as closeDate
+      FROM m_product_loan lp
+      JOIN m_currency curr ON curr.code = lp.currency_code
+      """;
     }
 
     @Override

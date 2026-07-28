@@ -228,8 +228,10 @@ public class SelfClientsApiResource {
   @Operation(
       summary = "Retrieve client accounts overview",
       description =
-          "An example of how a loan portfolio summary can be provided. This is requested in a specific use case of the community application.\n"
-              + "It is quite reasonable to add resources like this to simplify User Interface development.\n"
+          "An example of how a loan portfolio summary can be provided. This is requested in a"
+              + " specific use case of the community application.\n"
+              + "It is quite reasonable to add resources like this to simplify User Interface"
+              + " development.\n"
               + "\n"
               + "Example Requests:\n"
               + "\n"
@@ -269,7 +271,8 @@ public class SelfClientsApiResource {
   @Operation(
       summary = "Retrieve Client Image",
       description =
-          "Optional arguments are identical to those of Get Image associated with an Entity (Binary file)\n"
+          "Optional arguments are identical to those of Get Image associated with an Entity (Binary"
+              + " file)\n"
               + "\n"
               + "Example Requests:\n"
               + "\n"

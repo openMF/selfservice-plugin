@@ -22,7 +22,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
 import java.util.Map;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
@@ -55,7 +54,8 @@ import org.springframework.stereotype.Component;
 @Tag(
     name = "Self Account transfer",
     description =
-        "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) and legacy account transfers")
+        "Endpoints for 3-step account transfers (Prepare, Quote, Confirm) and legacy account"
+            + " transfers")
 @RequiredArgsConstructor
 @Slf4j
 public class SelfAccountTransferApiResource {
@@ -130,7 +130,9 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Retrieve Account Transfer Template",
       description =
-          "Returns list of loan/savings accounts that can be used for account transfer\n\nExample Requests:\n\nself/accounttransfers/template\n")
+          "Returns list of loan/savings accounts that can be used for account transfer\n\n"
+              + "Example Requests:\n\n"
+              + "self/accounttransfers/template\n")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -174,7 +176,8 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Resend OTP for Transfer Confirmation",
       description =
-          "Resends OTP for pending transfer confirmation. Regenerates new OTP and expires previous if remaining time < 50% of total expiry.")
+          "Resends OTP for pending transfer confirmation. Regenerates new OTP and expires previous"
+              + " if remaining time < 50% of total expiry.")
   public String resendOtp(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
@@ -189,7 +192,9 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Create new Transfer",
       description =
-          "Ability to create new transfer of monetary funds from one account to another.\n\nExample Requests:\n\nself/accounttransfers/\n")
+          "Ability to create new transfer of monetary funds from one account to another.\n\n"
+              + "Example Requests:\n\n"
+              + "self/accounttransfers/\n")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -224,32 +229,37 @@ public class SelfAccountTransferApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
-          summary = "Retrieve Transaction Details",
-          description = "Queries details of a specific transaction by account ID and transaction/reference ID")
+      summary = "Retrieve Transaction Details",
+      description =
+          "Queries details of a specific transaction by account ID and transaction/reference ID")
   @ApiResponses({
-          @ApiResponse(
-                  responseCode = "200",
-                  description = "OK",
-                  content = @Content(schema = @Schema(implementation = String.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class)))
   })
   public String retrieveTransactionDetails(
-          @PathParam("accountId") final Long accountId,
-          final String apiRequestBodyAsJson) {
+      @PathParam("accountId") final Long accountId, final String apiRequestBodyAsJson) {
 
     com.google.gson.JsonObject jsonObject =
-            new Gson().fromJson(apiRequestBodyAsJson, com.google.gson.JsonObject.class);
+        new Gson().fromJson(apiRequestBodyAsJson, com.google.gson.JsonObject.class);
 
-    String txnId = jsonObject.has("txnId") && !jsonObject.get("txnId").isJsonNull()
-            ? jsonObject.get("txnId").getAsString() : null;
-    String transferType = jsonObject.has("transferType") && !jsonObject.get("transferType").isJsonNull()
-            ? jsonObject.get("transferType").getAsString() : "SAME_BANK";
+    String txnId =
+        jsonObject.has("txnId") && !jsonObject.get("txnId").isJsonNull()
+            ? jsonObject.get("txnId").getAsString()
+            : null;
+    String transferType =
+        jsonObject.has("transferType") && !jsonObject.get("transferType").isJsonNull()
+            ? jsonObject.get("transferType").getAsString()
+            : "SAME_BANK";
 
     if (txnId == null || txnId.isBlank()) {
       throw new IllegalArgumentException("The 'txnId' parameter is required.");
     }
 
     Map<String, Object> details =
-            this.selfAccountTransferReadService.retrieveTransactionDetails(accountId, txnId, transferType);
+        this.selfAccountTransferReadService.retrieveTransactionDetails(
+            accountId, txnId, transferType);
 
     return this.toApiJsonSerializer.serialize(details);
   }
@@ -259,28 +269,29 @@ public class SelfAccountTransferApiResource {
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
-          summary = "Retrieve Transaction Details via GET",
-          description = "Queries details of a specific transaction passing account ID, transaction ID, and transferType as query param")
+      summary = "Retrieve Transaction Details via GET",
+      description =
+          "Queries details of a specific transaction passing account ID, transaction ID, and"
+              + " transferType as query param")
   @ApiResponses({
-          @ApiResponse(
-                  responseCode = "200",
-                  description = "OK",
-                  content = @Content(schema = @Schema(implementation = String.class)))
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class)))
   })
   public String retrieveTransactionDetailsGet(
-          @PathParam("accountId") final Long accountId,
-          @PathParam("txnId") final String txnId,
-          @DefaultValue("SAME_BANK") @QueryParam("transferType") final String transferType) {
+      @PathParam("accountId") final Long accountId,
+      @PathParam("txnId") final String txnId,
+      @DefaultValue("SAME_BANK") @QueryParam("transferType") final String transferType) {
 
     if (txnId == null || txnId.isBlank()) {
       throw new IllegalArgumentException("The 'txnId' path parameter is required.");
     }
 
     Map<String, Object> details =
-            this.selfAccountTransferReadService.retrieveTransactionDetails(accountId, txnId, transferType);
+        this.selfAccountTransferReadService.retrieveTransactionDetails(
+            accountId, txnId, transferType);
 
     return this.toApiJsonSerializer.serialize(details);
   }
-
-
 }

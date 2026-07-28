@@ -156,7 +156,8 @@ public class ExternalApiRestServicesPropertiesReadPlatformServiceImpl
     final ResultSetExtractor<NationalIdCredentialsData> resultSetExtractor =
         new NationalIdCredentialsDataExtractor();
     final String sql =
-        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join c_external_service es on esp.external_service_id = es.id where es.name = '"
+        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join"
+            + " c_external_service es on esp.external_service_id = es.id where es.name = '"
             + ExternalApiRestServicesConstants.NATIONAL_ID_SERVICE_NAME
             + "'";
     final NationalIdCredentialsData NationalIdCredentialsData =
@@ -170,7 +171,8 @@ public class ExternalApiRestServicesPropertiesReadPlatformServiceImpl
     final ResultSetExtractor<NotificationCredentialsData> resultSetExtractor =
         new NotificationCredentialsDataExtractor();
     final String sql =
-        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join c_external_service es on esp.external_service_id = es.id where es.name = '"
+        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join"
+            + " c_external_service es on esp.external_service_id = es.id where es.name = '"
             + ExternalApiRestServicesConstants.NOTIFICATION_SERVICE_NAME
             + "'";
     final NotificationCredentialsData smtpCredentialsData =
@@ -195,7 +197,8 @@ public class ExternalApiRestServicesPropertiesReadPlatformServiceImpl
     }
     final ExternalServiceMapper mapper = new ExternalServiceMapper();
     final String sql =
-        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join c_external_service es on esp.external_service_id = es.id where es.name = '"
+        "SELECT esp.name, esp.value FROM c_external_service_properties esp inner join"
+            + " c_external_service es on esp.external_service_id = es.id where es.name = '"
             + serviceNameToUse
             + "'";
     return this.jdbcTemplate.query(sql, mapper); // NOSONAR

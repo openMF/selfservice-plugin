@@ -60,7 +60,8 @@ class SelfServiceSecurityFilterChainIntegrationTest {
           int status = result.getResponse().getStatus();
           if (status == 401 || status == 403 || status == 404 || (status >= 500 && status < 600)) {
             throw new AssertionError(
-                "Expected forgot-password endpoint to be reachable and not blocked by auth, but was "
+                "Expected forgot-password endpoint to be reachable and not blocked by auth, but was"
+                    + " "
                     + status);
           }
         };

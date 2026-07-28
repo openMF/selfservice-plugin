@@ -73,7 +73,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" s.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
-          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
+          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
+              + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
+              + " entityName ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -90,7 +92,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" l.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
-          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS integer) as holderIdType, null as currencyCode, null as entityCode, null as entityName ");
+          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
+              + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
+              + " entityName ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");

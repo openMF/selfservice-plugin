@@ -83,7 +83,7 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
 
     // Step 1: Enroll
     String payload =
-        """
+            """
             {
               "username": "%s",
               "password": "%s",
@@ -119,7 +119,7 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     { "externalAuthenticationToken": "%s" }
                     """
                     .formatted(token))
@@ -162,7 +162,7 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
 
     // Enroll + confirm
     String payload =
-        """
+            """
             {
               "username": "%s",
               "password": "%s",
@@ -190,7 +190,7 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                """
+                    """
                     { "externalAuthenticationToken": "%s" }
                     """
                     .formatted(token))

@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ExternalServiceConfigurationServiceImpl implements ExternalServiceConfigurationService {
+public class ExternalServiceConfigurationServiceImpl
+    implements ExternalServiceConfigurationService {
 
   private final ExternalServicePropertiesRepository repository;
 

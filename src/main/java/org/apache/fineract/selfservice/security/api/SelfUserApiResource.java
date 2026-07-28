@@ -55,7 +55,8 @@ public class SelfUserApiResource {
   @Operation(
       summary = "Update User",
       description =
-          "This API can be used by Self Service user to update their own user information. Currently, \"password\" and \"repeatPassword\" are the only parameters accepted.")
+          "This API can be used by Self Service user to update their own user information."
+              + " Currently, \"password\" and \"repeatPassword\" are the only parameters accepted.")
   @RequestBody(
       required = true,
       content =

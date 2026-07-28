@@ -68,7 +68,8 @@ public class PocketAccountMappingReadPlatformServiceImpl
   public boolean validatePocketAndAccountMapping(
       Long pocketId, Long accountId, Integer accountType) {
     final String sql =
-        "select count(id) from m_pocket_accounts_mapping mapping where pocket_id = ? and account_id = ? and account_type = ?";
+        "select count(id) from m_pocket_accounts_mapping mapping where pocket_id = ? and account_id"
+            + " = ? and account_type = ?";
     Integer count =
         this.jdbcTemplate.queryForObject(sql, Integer.class, pocketId, accountId, accountType);
     return count != null && count > 0;

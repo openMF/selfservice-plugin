@@ -49,7 +49,8 @@ public class ExternalNotificationSystemClient {
 
     if (credentials == null || !credentials.isEnabled()) {
       log.debug(
-          "External notification system is disabled or credentials are missing. Skipping external send.");
+          "External notification system is disabled or credentials are missing. Skipping external"
+              + " send.");
       return;
     }
 
@@ -93,7 +94,8 @@ public class ExternalNotificationSystemClient {
       return credentials != null ? credentials : new NotificationCredentialsData();
     } catch (DataAccessException dae) {
       log.warn(
-          "Notification Service configuration unavailable in database, falling back to legacy notifications. Error: {}",
+          "Notification Service configuration unavailable in database, falling back to legacy"
+              + " notifications. Error: {}",
           dae.getMessage());
       return new NotificationCredentialsData();
     } catch (Exception e) {

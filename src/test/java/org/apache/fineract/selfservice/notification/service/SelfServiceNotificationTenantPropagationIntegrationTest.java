@@ -158,7 +158,8 @@ class SelfServiceNotificationTenantPropagationIntegrationTest {
       assertEquals(
           "default",
           workerTenantId.get(),
-          "Worker thread should see the tenant from the event, not from TaskDecorator (which captured null)");
+          "Worker thread should see the tenant from the event, not from TaskDecorator (which"
+              + " captured null)");
       assertEquals(
           LocalDate.of(2026, 4, 15),
           workerBusinessDate.get(),

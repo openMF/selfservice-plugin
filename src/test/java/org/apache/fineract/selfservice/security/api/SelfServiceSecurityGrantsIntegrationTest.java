@@ -17,7 +17,8 @@ class SelfServiceSecurityGrantsIntegrationTest extends SelfServiceIntegrationTes
 
   @Test
   @DisplayName(
-      "Verify that the application startup executes the liquibase scripts fixing the missing Fineract permission grants")
+      "Verify that the application startup executes the liquibase scripts fixing the missing"
+          + " Fineract permission grants")
   void verifySelfServicePermissionsAreSeeded() {
     // If the DB migration failed or the permissions were not granted, the user wouldn't even be
     // able to login and perform basic tasks.

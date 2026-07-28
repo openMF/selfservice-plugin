@@ -258,7 +258,9 @@ public class SelfLoansApiResource {
       summary = "Retrieve Loan Details Template",
       description =
           "Retrieves Loan Details Template\n\n"
-              + "This is a convenience resource. It can be useful when building maintenance user interface screens for client applications. The template data returned consists of any or all of:\n"
+              + "This is a convenience resource. It can be useful when building maintenance user"
+              + " interface screens for client applications. The template data returned consists of"
+              + " any or all of:\n"
               + "\n"
               + "Field Defaults\n"
               + "Allowed description Lists\n\n"
@@ -313,13 +315,29 @@ public class SelfLoansApiResource {
       description =
           "Calculate Loan Repayment Schedule:\n\n"
               + "Calculates Loan Repayment Schedule\n\n"
-              + "Mandatory Fields: productId, principal, loanTermFrequency, loanTermFrequencyType, numberOfRepayments, repaymentEvery, repaymentFrequencyType, interestRatePerPeriod, amortizationType, interestType, interestCalculationPeriodType, expectedDisbursementDate, transactionProcessingStrategyCode\n\n"
+              + "Mandatory Fields: productId, principal, loanTermFrequency, loanTermFrequencyType,"
+              + " numberOfRepayments, repaymentEvery, repaymentFrequencyType,"
+              + " interestRatePerPeriod, amortizationType, interestType,"
+              + " interestCalculationPeriodType, expectedDisbursementDate,"
+              + " transactionProcessingStrategyCode\n\n"
               + "Submit a new Loan Application:\n\n"
-              + "Mandatory Fields: clientId, productId, principal, loanTermFrequency, loanTermFrequencyType, loanType, numberOfRepayments, repaymentEvery, repaymentFrequencyType, interestRatePerPeriod, amortizationType, interestType, interestCalculationPeriodType, transactionProcessingStrategyCode, expectedDisbursementDate, submittedOnDate, loanType\n\n"
-              + "Additional Mandatory Fields if interest recalculation is enabled for product and Rest frequency not same as repayment period: recalculationRestFrequencyDate\n\n"
-              + "Additional Mandatory Fields if interest recalculation with interest/fee compounding is enabled for product and compounding frequency not same as repayment period: recalculationCompoundingFrequencyDate\n\n"
-              + "Additional Mandatory Field if Entity-Datatable Check is enabled for the entity of type loan: datatables\n\n"
-              + "Optional Fields: graceOnPrincipalPayment, graceOnInterestPayment, graceOnInterestCharged, linkAccountId, allowPartialPeriodInterestCalculation, fixedEmiAmount, maxOutstandingLoanBalance, disbursementData, graceOnArrearsAgeing, createStandingInstructionAtDisbursement (requires linkedAccountId if set to true)\n\n"
+              + "Mandatory Fields: clientId, productId, principal, loanTermFrequency,"
+              + " loanTermFrequencyType, loanType, numberOfRepayments, repaymentEvery,"
+              + " repaymentFrequencyType, interestRatePerPeriod, amortizationType, interestType,"
+              + " interestCalculationPeriodType, transactionProcessingStrategyCode,"
+              + " expectedDisbursementDate, submittedOnDate, loanType\n\n"
+              + "Additional Mandatory Fields if interest recalculation is enabled for product and"
+              + " Rest frequency not same as repayment period: recalculationRestFrequencyDate\n\n"
+              + "Additional Mandatory Fields if interest recalculation with interest/fee"
+              + " compounding is enabled for product and compounding frequency not same as"
+              + " repayment period: recalculationCompoundingFrequencyDate\n\n"
+              + "Additional Mandatory Field if Entity-Datatable Check is enabled for the entity of"
+              + " type loan: datatables\n\n"
+              + "Optional Fields: graceOnPrincipalPayment, graceOnInterestPayment,"
+              + " graceOnInterestCharged, linkAccountId, allowPartialPeriodInterestCalculation,"
+              + " fixedEmiAmount, maxOutstandingLoanBalance, disbursementData,"
+              + " graceOnArrearsAgeing, createStandingInstructionAtDisbursement (requires"
+              + " linkedAccountId if set to true)\n\n"
               + "Showing request/response for 'Submit a new Loan Application'")
   @RequestBody(
       required = true,
@@ -384,7 +402,9 @@ public class SelfLoansApiResource {
   @Operation(
       summary = "Update a Loan Application",
       description =
-          "Loan application can only be modified when in 'Submitted and pending approval' state. Once the application is approved, the details cannot be changed using this method.")
+          "Loan application can only be modified when in 'Submitted and pending approval' state."
+              + " Once the application is approved, the details cannot be changed using this"
+              + " method.")
   @RequestBody(
       required = true,
       content =

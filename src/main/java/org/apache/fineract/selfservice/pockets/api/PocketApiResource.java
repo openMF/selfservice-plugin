@@ -54,7 +54,8 @@ import org.springframework.stereotype.Component;
 @Tag(
     name = "Pocket",
     description =
-        "Pockets behave as favourites. A self-service user can link their Loan, Savings and Share accounts to a pocket for faster access, and delink them later.")
+        "Pockets behave as favourites. A self-service user can link their Loan, Savings and Share"
+            + " accounts to a pocket for faster access, and delink them later.")
 @RequiredArgsConstructor
 public class PocketApiResource {
 
@@ -68,7 +69,9 @@ public class PocketApiResource {
   @Operation(
       summary = "Link/delink accounts to/from pocket",
       description =
-          "Pockets behave as favourites. A user can link his/her Loan, Savings and Share accounts to a pocket for faster access. In a similar way linked accounts can be delinked from the pocket.\n"
+          "Pockets behave as favourites. A user can link his/her Loan, Savings and Share accounts"
+              + " to a pocket for faster access. In a similar way linked accounts can be delinked"
+              + " from the pocket.\n"
               + "\n"
               + "Example Requests:\n"
               + "\n"
@@ -132,7 +135,8 @@ public class PocketApiResource {
   @Operation(
       summary = "Retrieve accounts linked to pocket",
       description =
-          "Returns the loan, savings and share accounts linked to the authenticated user's pocket.\n"
+          "Returns the loan, savings and share accounts linked to the authenticated user's"
+              + " pocket.\n"
               + "\n"
               + "Example Requests:\n"
               + "\n"

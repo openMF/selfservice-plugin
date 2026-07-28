@@ -75,7 +75,8 @@ import org.springframework.stereotype.Component;
 @Tag(
     name = "Authentication HTTP Basic",
     description =
-        "An API capability that allows client applications to verify authentication details using HTTP Basic Authentication.")
+        "An API capability that allows client applications to verify authentication details using"
+            + " HTTP Basic Authentication.")
 @RequiredArgsConstructor
 public class SelfAuthenticationApiResource {
 
@@ -87,8 +88,7 @@ public class SelfAuthenticationApiResource {
     public String password;
   }
 
-  @Qualifier("selfServiceAuthenticationProvider")
-  private final DaoAuthenticationProvider customAuthenticationProvider;
+  @Qualifier("selfServiceAuthenticationProvider") private final DaoAuthenticationProvider customAuthenticationProvider;
 
   private final ToApiJsonSerializer<AppSelfServiceUserData> apiJsonSerializerService;
   private final PlatformSelfServiceSecurityContext springSecurityPlatformSecurityContext;
@@ -108,7 +108,8 @@ public class SelfAuthenticationApiResource {
   @Operation(
       summary = "Verify authentication",
       description =
-          "Authenticates the credentials provided and returns the set roles and permissions allowed.")
+          "Authenticates the credentials provided and returns the set roles and permissions"
+              + " allowed.")
   @RequestBody(
       required = true,
       content =
@@ -139,7 +140,8 @@ public class SelfAuthenticationApiResource {
         new Gson().fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
     if (request == null) {
       throw new IllegalArgumentException(
-          "Invalid JSON in BODY (no longer URL param; see FINERACT-726) of POST to /authentication: "
+          "Invalid JSON in BODY (no longer URL param; see FINERACT-726) of POST to /authentication:"
+              + " "
               + apiRequestBodyAsJson);
     }
     if (StringUtils.isBlank(request.username) || StringUtils.isBlank(request.password)) {
@@ -391,8 +393,9 @@ public class SelfAuthenticationApiResource {
   @Operation(
       summary = "Logout user",
       description =
-          "Invalidates the current authentication token, effectively logging the user out. "
-              + "A notification is sent to the user through all enabled channels (Email, SMS, WhatsApp, In-App).")
+          "Invalidates the current authentication token, effectively logging the user out. A"
+              + " notification is sent to the user through all enabled channels (Email, SMS,"
+              + " WhatsApp, In-App).")
   @ApiResponse(responseCode = "200", description = "OK - User logged out successfully")
   public String logout(@Context HttpServletRequest httpRequest) {
     String token = extractTokenFromRequest(httpRequest);

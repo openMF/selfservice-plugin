@@ -708,11 +708,13 @@
             <configuration>
                 <java>
                     <googleJavaFormat>
-                        <version>1.17.0</version>
-                        <style>GOOGLE</style>
+                      <version>1.21.0</version>   <!-- pin a recent version -->
+                      <style>GOOGLE</style>       <!-- or AOSP for 4-space indent -->
+                      <reflowLongStrings>true</reflowLongStrings>
                     </googleJavaFormat>
-                    <importOrder />
-                    <removeUnusedImports />
+                    <importOrder/>                <!-- optional but common -->
+                    <removeUnusedImports/>
+                    <formatAnnotations/>
                 </java>
             </configuration>
             <executions>

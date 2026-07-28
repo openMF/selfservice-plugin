@@ -549,49 +549,49 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
 
     executeSqlInPostgres(
         """
-        SELECT setval(
-            pg_get_serial_sequence('m_appuser', 'id'),
-            GREATEST(
-                COALESCE((SELECT MAX(id) FROM m_appuser), 0),
-                COALESCE((SELECT MAX(id) FROM m_appselfservice_user), 0)
-            )
-        );
+SELECT setval(
+    pg_get_serial_sequence('m_appuser', 'id'),
+    GREATEST(
+        COALESCE((SELECT MAX(id) FROM m_appuser), 0),
+        COALESCE((SELECT MAX(id) FROM m_appselfservice_user), 0)
+    )
+);
 
-        WITH new_appuser AS (
-            INSERT INTO m_appuser(
-                office_id, username, password, email, firstname, lastname, is_deleted,
-                nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining
-            )
-            VALUES (
-                %s, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
-                'SS', 'TPT', false, true, true, true, true, false
-            )
-            RETURNING id
-        ), appuser_role AS (
-            INSERT INTO m_appuser_role(appuser_id, role_id)
-            SELECT id, %s FROM new_appuser
-        ), new_self_user AS (
-            INSERT INTO m_appselfservice_user(
-                id, office_id, username, password, email, firstname, lastname, is_deleted,
-                nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
-                password_never_expires, is_self_service_user, password_reset_required
-            )
-            SELECT id, %s, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
-                'SS', 'TPT', false, true, true, true, true, false, true, true, false
-            FROM new_appuser
-            RETURNING id
-        ), self_user_role AS (
-            INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
-            SELECT id, %s FROM new_self_user
-        )
-        INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
-        SELECT id, %s FROM new_self_user;
+WITH new_appuser AS (
+    INSERT INTO m_appuser(
+        office_id, username, password, email, firstname, lastname, is_deleted,
+        nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining
+    )
+    VALUES (
+        %s, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
+        'SS', 'TPT', false, true, true, true, true, false
+    )
+    RETURNING id
+), appuser_role AS (
+    INSERT INTO m_appuser_role(appuser_id, role_id)
+    SELECT id, %s FROM new_appuser
+), new_self_user AS (
+    INSERT INTO m_appselfservice_user(
+        id, office_id, username, password, email, firstname, lastname, is_deleted,
+        nonexpired, nonlocked, nonexpired_credentials, enabled, firsttime_login_remaining,
+        password_never_expires, is_self_service_user, password_reset_required
+    )
+    SELECT id, %s, %s, (SELECT password FROM m_appuser WHERE username = 'mifos' LIMIT 1), %s,
+        'SS', 'TPT', false, true, true, true, true, false, true, true, false
+    FROM new_appuser
+    RETURNING id
+), self_user_role AS (
+    INSERT INTO m_appselfservice_user_role(appuser_id, role_id)
+    SELECT id, %s FROM new_self_user
+)
+INSERT INTO m_selfservice_user_client_mapping(appuser_id, client_id)
+SELECT id, %s FROM new_self_user;
 
-        SELECT setval(
-            pg_get_serial_sequence('m_appselfservice_user', 'id'),
-            (SELECT MAX(id) FROM m_appselfservice_user)
-        );
-        """,
+SELECT setval(
+    pg_get_serial_sequence('m_appselfservice_user', 'id'),
+    (SELECT MAX(id) FROM m_appselfservice_user)
+);
+""",
         officeId,
         username,
         username + "@fineract.org",

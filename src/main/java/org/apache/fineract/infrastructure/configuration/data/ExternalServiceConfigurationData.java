@@ -14,8 +14,8 @@ import lombok.Value;
 import org.apache.commons.lang3.StringUtils;
 
 /**
- * Aggregated configuration for one external service (e.g. PaymentLinkService).
- * Backed by tenant-local rows in c_external_service / c_external_service_properties.
+ * Aggregated configuration for one external service (e.g. PaymentLinkService). Backed by
+ * tenant-local rows in c_external_service / c_external_service_properties.
  */
 @Value
 @Builder
@@ -53,7 +53,7 @@ public class ExternalServiceConfigurationData implements Serializable {
   public String getHeaderValue() {
     return get("headerValue");
   }
-  
+
   public String getHttpMethod() {
     return get("httpMethod");
   }

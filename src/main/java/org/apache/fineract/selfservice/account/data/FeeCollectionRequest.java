@@ -1,9 +1,8 @@
 /**
  * Copyright since 2026 Mifos Initiative
  *
- * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a
- * copy of the MPL was not distributed with this file, You can obtain one at
- * http://mozilla.org/MPL/2.0/.
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 package org.apache.fineract.selfservice.account.data;
 
@@ -15,9 +14,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Immutable request object carrying every datum the fee-collection service needs.
- * Passed across the REQUIRES_NEW boundary so the callee never touches the
- * caller's JPA persistence context.
+ * Immutable request object carrying every datum the fee-collection service needs. Passed across the
+ * REQUIRES_NEW boundary so the callee never touches the caller's JPA persistence context.
  *
  * <p>Multi-tenant safe: tenant routing is thread-bound, not object-bound.
  */

@@ -400,7 +400,8 @@ public class SelfServiceNotificationService {
     releaseCooldown(event);
     if (smtpConfigWarningLogged.compareAndSet(false, true)) {
       log.warn(
-          "Legacy email notification skipped for event type {} — SMTP configuration unavailable: {}. Further config errors will be logged at DEBUG.",
+          "Legacy email notification skipped for event type {} — SMTP configuration unavailable:"
+              + " {}. Further config errors will be logged at DEBUG.",
           event.getType(),
           configEx.getMessage());
     } else {
@@ -446,7 +447,8 @@ public class SelfServiceNotificationService {
             Thread.currentThread().getName());
       } else {
         log.warn(
-            "No tenant context available for notification event {} on thread {} — database operations may fail",
+            "No tenant context available for notification event {} on thread {} — database"
+                + " operations may fail",
             event.getType(),
             Thread.currentThread().getName());
       }

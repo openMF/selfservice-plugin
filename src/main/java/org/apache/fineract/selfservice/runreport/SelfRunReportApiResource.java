@@ -53,16 +53,36 @@ import org.springframework.stereotype.Component;
 @Tag(
     name = "Self Run Report",
     description =
-        "This resource allows you to run and receive output from pre-defined Apache Fineract reports.\n"
+        "This resource allows you to run and receive output from pre-defined Apache Fineract"
+            + " reports.\n"
             + "\n"
-            + "The default output is a JSON formatted \"Generic Resultset\". The Generic Resultset contains Column Heading as well as Data information. However, you can export to CSV format by simply adding \"&exportCSV=true\" to the end of your URL.\n"
+            + "The default output is a JSON formatted \"Generic Resultset\". The Generic Resultset"
+            + " contains Column Heading as well as Data information. However, you can export to CSV"
+            + " format by simply adding \"&exportCSV=true\" to the end of your URL.\n"
             + "\n"
-            + "If Pentaho reports have been pre-defined, they can also be run through this resource. Pentaho reports can return HTML, PDF or CSV formats.\n"
+            + "If Pentaho reports have been pre-defined, they can also be run through this"
+            + " resource. Pentaho reports can return HTML, PDF or CSV formats.\n"
             + "\n"
-            + "The Apache Fineract reference application uses a JQuery plugin called stretchyreporting which, itself, uses this reports resource to provide a pretty flexible reporting User Interface (UI).\n"
+            + "The Apache Fineract reference application uses a JQuery plugin called"
+            + " stretchyreporting which, itself, uses this reports resource to provide a pretty"
+            + " flexible reporting User Interface (UI).\n"
             + "\n"
             + "ARGUMENTS\n"
-            + "R_'parameter names' ... optional, No defaults The number and names of the parameters depend on the specific report and how it has been configured. R_officeId is an example parameter name.Note: the prefix R_ stands for ReportinggenericResultSetoptional, defaults to true If 'true' an optimised JSON format is returned suitable for tabular display of data. If 'false' a simple JSON format is returned. parameterType optional, The only valid value is 'true'. If any other value is provided the argument will be ignored Determines whether the request looks in the list of reports or the list of parameters for its data. Doesn't apply to Pentaho reports.exportCSV optional, The only valid value is 'true'. If any other value is provided the argument will be ignored Output will be delivered as a CSV file instead of JSON. Doesn't apply to Pentaho reports.output-type optional, Defaults to HTML. Valid Values are HTML, XLS, XSLX, CSV and PDF for html, Excel, Excel 2007+, CSV and PDF formats respectively.Only applies to Pentaho reports.locale optional Any valid locale Ex: en_US, en_IN, fr_FR etcOnly applies to Pentaho reports.")
+            + "R_'parameter names' ... optional, No defaults The number and names of the parameters"
+            + " depend on the specific report and how it has been configured. R_officeId is an"
+            + " example parameter name.Note: the prefix R_ stands for"
+            + " ReportinggenericResultSetoptional, defaults to true If 'true' an optimised JSON"
+            + " format is returned suitable for tabular display of data. If 'false' a simple JSON"
+            + " format is returned. parameterType optional, The only valid value is 'true'. If any"
+            + " other value is provided the argument will be ignored Determines whether the request"
+            + " looks in the list of reports or the list of parameters for its data. Doesn't apply"
+            + " to Pentaho reports.exportCSV optional, The only valid value is 'true'. If any other"
+            + " value is provided the argument will be ignored Output will be delivered as a CSV"
+            + " file instead of JSON. Doesn't apply to Pentaho reports.output-type optional,"
+            + " Defaults to HTML. Valid Values are HTML, XLS, XSLX, CSV and PDF for html, Excel,"
+            + " Excel 2007+, CSV and PDF formats respectively.Only applies to Pentaho"
+            + " reports.locale optional Any valid locale Ex: en_US, en_IN, fr_FR etcOnly applies to"
+            + " Pentaho reports.")
 @RequiredArgsConstructor
 public class SelfRunReportApiResource {
 

@@ -27,7 +27,8 @@ public interface AppSelfServiceUserRepository
         PlatformSelfServiceUserRepository {
 
   @Query(
-      "Select appSelfServiceUser from AppSelfServiceUser appSelfServiceUser where appSelfServiceUser.username = :username")
+      "Select appSelfServiceUser from AppSelfServiceUser appSelfServiceUser where"
+          + " appSelfServiceUser.username = :username")
   AppSelfServiceUser findAppSelfServiceUserByName(@Param("username") String username);
 
   Collection<AppSelfServiceUser> findByOfficeId(Long officeId);

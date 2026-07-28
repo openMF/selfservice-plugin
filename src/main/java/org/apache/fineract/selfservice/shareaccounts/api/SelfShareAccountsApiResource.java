@@ -84,7 +84,9 @@ public class SelfShareAccountsApiResource {
   @Operation(
       summary = "Retrieve Share Account Template",
       description =
-          "This is a convenience resource. It can be useful when building maintenance user interface screens for client applications. The template data returned consists of any or all of:\n"
+          "This is a convenience resource. It can be useful when building maintenance user"
+              + " interface screens for client applications. The template data returned consists of"
+              + " any or all of:\n"
               + "Field Defaults\n"
               + "\n"
               + "Allowed Value Lists\n"
@@ -93,7 +95,8 @@ public class SelfShareAccountsApiResource {
               + "Arguments\n"
               + "\n"
               + "clientId:Integer mandatory\n"
-              + "productId:Integer optionalIf entered, productId, productName and selectedProduct fields are returned.\n"
+              + "productId:Integer optionalIf entered, productId, productName and selectedProduct"
+              + " fields are returned.\n"
               + "Example Requests:\n"
               + "\n"
               + "self/shareaccounts/template?clientId=14\n"
@@ -146,7 +149,8 @@ public class SelfShareAccountsApiResource {
       description =
           "Mandatory fields:\n"
               + "\n"
-              + "clientId, productId, submittedDate, savingsAccountId, requestedShares, applicationDate\n"
+              + "clientId, productId, submittedDate, savingsAccountId, requestedShares,"
+              + " applicationDate\n"
               + "\n"
               + "\n"
               + "Optional Fields\n"
@@ -156,7 +160,8 @@ public class SelfShareAccountsApiResource {
               + "\n"
               + "Inherited from Product (if not provided)\n"
               + "\n"
-              + "minimumActivePeriod, minimumActivePeriodFrequencyType, lockinPeriodFrequency, lockinPeriodFrequencyType.")
+              + "minimumActivePeriod, minimumActivePeriodFrequencyType, lockinPeriodFrequency,"
+              + " lockinPeriodFrequencyType.")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
