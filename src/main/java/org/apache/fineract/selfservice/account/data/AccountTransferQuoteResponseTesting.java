@@ -14,9 +14,10 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccountTransferQuoteResponse {
+public class AccountTransferQuoteResponseTesting {
   private BigDecimal feeAmount;
   private BigDecimal totalAmount;
   private String currencyCode;
   private String feeDescription;
+  private String otp;
 }

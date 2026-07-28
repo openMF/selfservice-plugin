@@ -51,6 +51,7 @@ import org.apache.fineract.selfservice.account.data.AccountTransferConfirmReques
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmResponse;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
+import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponseTesting;
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
 import org.apache.fineract.selfservice.account.data.FeeCollectionResult;
 import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
@@ -234,10 +235,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     cleanupOldOtpRegistrations(currentUser);
     releaseOtpCooldown(currentUser);
+    
+    //TESTING ONLY REMOVE
     String otp = generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
-    quote.setOtp(otp);
-
-    return this.gson.toJson(quote);
+    AccountTransferQuoteResponseTesting quoteTesting = new AccountTransferQuoteResponseTesting();
+    quoteTesting.setCurrencyCode(quote.getCurrencyCode());
+    quoteTesting.setFeeAmount(quote.getFeeAmount());
+    quoteTesting.setFeeDescription(quote.getFeeDescription());
+    quoteTesting.setTotalAmount(quote.getTotalAmount());
+    quoteTesting.setOtp(otp);
+    //return this.gson.toJson(quote);
+    return this.gson.toJson(quoteTesting);
   }
 
   private void cleanupOldOtpRegistrations(AppSelfServiceUser user) {
