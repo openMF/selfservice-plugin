@@ -19,4 +19,5 @@ public class AccountTransferQuoteResponse {
   private BigDecimal totalAmount;
   private String currencyCode;
   private String feeDescription;
+  private String otp;
 }

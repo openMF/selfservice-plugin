@@ -22,7 +22,7 @@ import org.apache.fineract.selfservice.account.service.PaymentLinkExternalServic
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.stereotype.Component;
 
-@Path("/v1/self/paymentrequests")
+@Path("/v1/self/paymentrequests/paymentlink")
 @Component
 @Tag(
     name = "Self Payment Request",
@@ -36,7 +36,7 @@ public class SelfPaymentLinkApiResource {
   private final Gson gson = new Gson();
 
   @POST
-  @Path("/paymentlink")
+  @Path("/confirm")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(

@@ -234,7 +234,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     cleanupOldOtpRegistrations(currentUser);
     releaseOtpCooldown(currentUser);
-    generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
+    String otp = generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
+    quote.setOtp(otp);
 
     return this.gson.toJson(quote);
   }
@@ -1600,7 +1601,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return false;
   }
 
-  private void generateAndSendOtpForQuote(
+  private String generateAndSendOtpForQuote(
       AppSelfServiceUser user, String destinationTarget, BigDecimal transferAmount) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
     LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
@@ -1646,6 +1647,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             contextData));
 
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
+    return otp;
   }
 
   /**
