@@ -33,7 +33,7 @@ public class FeeCollectionRequest implements Serializable {
   /** ISO-4217 code of the transfer (USD, CRC …) */
   private String currencyCode;
 
-  /** INMEDIATA | DIFERIDA (used to look up the fee row) */
+  /** INSTANT | T_PLUS_1 (used to look up the fee row) */
   private String transferMode;
 
   /** Principal amount of the original transfer */

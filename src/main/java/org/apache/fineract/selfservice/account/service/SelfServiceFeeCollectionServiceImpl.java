@@ -116,7 +116,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       String currency =
           StringUtils.isNotBlank(req.getCurrencyCode()) ? req.getCurrencyCode() : "CRC";
       String transferMode =
-          StringUtils.isNotBlank(req.getTransferMode()) ? req.getTransferMode() : "INMEDIATA";
+          StringUtils.isNotBlank(req.getTransferMode()) ? req.getTransferMode() : "INSTANT";
 
       Optional<SelfServiceTransferFee> feeOpt =
           feeRepository.findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(

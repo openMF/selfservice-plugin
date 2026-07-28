@@ -56,7 +56,7 @@ public class AccountTransferQuoteService {
     String currency =
         StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
     String transferMode =
-        StringUtils.isNotBlank(request.getTransferMode()) ? request.getTransferMode() : "INMEDIATA";
+        StringUtils.isNotBlank(request.getTransferMode()) ? request.getTransferMode() : "INSTANT";
 
     log.debug(
         "Calculating fee for transfer: type={}, currency={}, mode={}, amount={}",
