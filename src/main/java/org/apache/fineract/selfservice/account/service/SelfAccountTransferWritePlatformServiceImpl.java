@@ -154,8 +154,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final String toAccount = request.getToAccount();
     final BigDecimal transferAmount = request.getTransferAmount();
     final String transferType = request.getTransferType();
-    final String currencyCode = request.getCurrencyCode();
-    final String transferDescription = (request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode();
+    final String currencyCode = request.getCurrencyCode();    
+    final String transferDescription = (request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode();
     final String reference = request.getReference();
 
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -474,7 +474,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract); // Full datetime string
-    commandData.put("transferDescription", (request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode());
+    commandData.put("transferDescription", (request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode());
     commandData.put("locale", localeForFineract);
     commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
 
@@ -536,7 +536,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     SameBankTransferCustomData customData =
         SameBankTransferCustomData.builder()
             .totalAmount(totalAmount.toPlainString())
-            .transferDescription((request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode())
+            .transferDescription((request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode())
             .feeAmount(feeAmount.toPlainString())
             .debitAmount(transferAmount.toPlainString())
             .exchangeRateAmount("1")
@@ -573,7 +573,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
         operationId,
         internalRefNumber,
         result.getResourceId(),
-        (request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode(),
+        (request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode(),
         request.getReference(),
         description,
         true,
@@ -801,7 +801,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           new org.apache.fineract.selfservice.account.data.PinTransferRequest();
       pinRequest.setAmount(request.getTransferAmount());
       pinRequest.setCurrency(dynamicCurrencyCode);
-      pinRequest.setDescription((request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode());
+      pinRequest.setDescription((request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode());
       pinRequest.setOriginCustomerName(originName);
       pinRequest.setOriginIban(request.getFromAccount().replaceAll("\\s+", ""));
       pinRequest.setOriginCustomerId(
@@ -879,7 +879,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
             .destinationPhone(request.getToAccount())
             .amount(request.getTransferAmount())
             .currencyCode("CRC")
-            .description((request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode())
+            .description((request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode())
             .debitIBAN(true)
             .customData(List.of(new SinpeTransferRequest.CustomData("Source", "SelfServiceApp")))
             .build();
@@ -938,7 +938,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put("transferDescription", (request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode());
+      contextData.put("transferDescription", (request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode());
       contextData.put("fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
@@ -1006,7 +1006,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put("transferDescription",(request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode());
+      contextData.put("transferDescription",(request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode());
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1084,7 +1084,7 @@ private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put(
-          "transferDescription",(request.getTransferMode() != null && !request.getTransferMode().isBlank() && request.getTransferMode().length() > 15 ) ? request.getTransferMode() : "Transfer via " + request.getTransferMode());
+          "transferDescription",(request.getTransferDescription() != null && !request.getTransferDescription().isBlank() && request.getTransferDescription().length() >= 15 && request.getTransferMode().equalsIgnoreCase("PIN") && request.getTransferMode().equalsIgnoreCase("SINPE") ) ? request.getTransferDescription() : "Transfer via " + request.getTransferMode());
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
