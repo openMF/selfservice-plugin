@@ -121,7 +121,7 @@ public class PinExternalTransferService {
       return "{\"status\": \"disabled\", \"message\": \"PIN service is disabled\"}";
     }
 
-    String url = getHost(props) + "/api/v1/transfers/transaction/" + referenceNumber;
+    String url = getHost(props) + "/api/v1/transfers/bySinpeReffNumber/" + referenceNumber;
     return executeGetRequest(url, buildHeaders(props));
   }
 
