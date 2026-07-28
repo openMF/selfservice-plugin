@@ -72,12 +72,17 @@ public interface SelfServiceSameBankTransferAuditRepository
    * operationId, internalRefNumber, or fineractTransferId.
    */
   @Query(
-      "SELECT a FROM SelfServiceSameBankTransferAudit a WHERE a.clientId = :clientId AND"
-          + " (a.fromAccountId = :accountId OR a.toAccountId = :accountId) AND (a.operationId ="
-          + " :txnId OR a.internalRefNumber = :txnId OR CAST(a.fineractTransferId AS string) ="
-          + " :txnId)")
+          "SELECT a FROM SelfServiceSameBankTransferAudit a "
+                  + "WHERE a.clientId = :clientId "
+                  + "AND (a.fromAccountId = :accountId OR a.toAccountId = :accountId) "
+                  + "AND ("
+                  + "   CONCAT(a.id, '') = :txnId "
+                  + "   OR a.operationId = :txnId "
+                  + "   OR a.internalRefNumber = :txnId "
+                  + "   OR CONCAT(a.fineractTransferId, '') = :txnId"
+                  + ")")
   Optional<SelfServiceSameBankTransferAudit> findAuditDetail(
-      @Param("clientId") Long clientId,
-      @Param("accountId") Long accountId,
-      @Param("txnId") String txnId);
+          @Param("clientId") Long clientId,
+          @Param("accountId") Long accountId,
+          @Param("txnId") String txnId);
 }
