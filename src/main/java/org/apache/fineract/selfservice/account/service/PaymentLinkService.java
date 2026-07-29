@@ -70,7 +70,7 @@ public class PaymentLinkService {
             } else if ("PERCENTAGE".equalsIgnoreCase(fee.getFeeType())) {
                 feeAmount = request.getAmount()
                         .multiply(fee.getFeeValue())
-                        .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
                 log.info("Applied PERCENTAGE fee: {}% of {} = {}", fee.getFeeValue(), request.getAmount(), feeAmount);
             } else {
                 log.warn("Unknown feeType '{}' for fee id={}. Treating as zero fee.", fee.getFeeType(), fee.getId());
