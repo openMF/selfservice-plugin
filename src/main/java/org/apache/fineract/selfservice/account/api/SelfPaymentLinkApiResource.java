@@ -16,9 +16,11 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
-import org.apache.fineract.selfservice.account.data.PaymentLinkRequest;
+import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
+import org.apache.fineract.selfservice.account.data.PaymentLinkConfirmRequest;
+import org.apache.fineract.selfservice.account.data.PaymentLinkPrepareRequest;
 import org.apache.fineract.selfservice.account.data.PaymentLinkResponse;
-import org.apache.fineract.selfservice.account.service.PaymentLinkExternalService;
+import org.apache.fineract.selfservice.account.service.PaymentLinkService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.stereotype.Component;
 
@@ -31,25 +33,37 @@ import org.springframework.stereotype.Component;
 public class SelfPaymentLinkApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
-  private final PaymentLinkExternalService paymentLinkService;
+  private final PaymentLinkService paymentLinkService;
   private final DefaultToApiJsonSerializer<PaymentLinkResponse> toApiJsonSerializer;
   private final Gson gson = new Gson();
 
   @POST
-  @Path("/confirm")
-  @Consumes({MediaType.APPLICATION_JSON})
-  @Produces({MediaType.APPLICATION_JSON})
-  @Operation(
-      summary = "Create a payment checkout link",
-      description =
-          "Calls the configured external PaymentLinkService and returns checkoutId + paymentUrl.")
-  public String createCheckoutLink(final String apiRequestBodyAsJson) {
-    // Re-use an existing transfer-related permission (or create a dedicated one via Liquibase if
-    // preferred)
-    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    @Path("/prepare")
+    @Consumes({MediaType.APPLICATION_JSON})
+    @Produces({MediaType.APPLICATION_JSON})
+    @Operation(
+        summary = "Prepare Payment Link",
+        description = "Calculates and responds with the fee charged for the PAYMENT_LINK transfer method. OTP is not required."
+    )
+    public String prepare(final String apiRequestBodyAsJson) {
+        context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+        PaymentLinkPrepareRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkPrepareRequest.class);
+        AccountTransferQuoteResponse response = paymentLinkService.preparePaymentLink(request);
+        return toApiJsonSerializer.serialize(response);
+    }
 
-    PaymentLinkRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkRequest.class);
-    PaymentLinkResponse response = paymentLinkService.createPaymentLink(request);
-    return toApiJsonSerializer.serialize(response);
-  }
+    @POST
+    @Path("/confirm")
+    @Consumes({MediaType.APPLICATION_JSON})
+    @Produces({MediaType.APPLICATION_JSON})
+    @Operation(
+        summary = "Confirm Payment Link",
+        description = "Confirms the payment link transfer. The request must include the transferMethod to calculate the fee. OTP is not required."
+    )
+    public String confirm(final String apiRequestBodyAsJson) {
+        context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+        PaymentLinkConfirmRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkConfirmRequest.class);
+        PaymentLinkResponse response = paymentLinkService.confirmPaymentLink(request);
+        return toApiJsonSerializer.serialize(response);
+    }
 }
