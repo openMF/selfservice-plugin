@@ -99,7 +99,7 @@ public class SinpeExternalApiClient {
       return;
     }
 
-    String url = getHost(props) + "/sinpe/subscription";
+    String url = getHost(props) + "/subscription";
     HttpEntity<SinpeSubscriptionRequest> entity = new HttpEntity<>(request, buildHeaders(props));
 
     try {
@@ -121,7 +121,7 @@ public class SinpeExternalApiClient {
       return;
     }
 
-    String url = getHost(props) + "/sinpe/subscription/edit";
+    String url = getHost(props) + "/subscription/edit";
     HttpEntity<SinpeSubscriptionEditRequest> entity =
         new HttpEntity<>(request, buildHeaders(props));
 
@@ -145,7 +145,7 @@ public class SinpeExternalApiClient {
       return;
     }
 
-    String url = getHost(props) + "/sinpe/subscription/" + phoneNumber;
+    String url = getHost(props) + "/subscription/" + phoneNumber;
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
 
     try {
@@ -200,7 +200,7 @@ public class SinpeExternalApiClient {
       return null;
     }
 
-    String url = getHost(props) + "/sinpe/transaction/" + referenceNumber;
+    String url = getHost(props) + "/transaction/" + referenceNumber;
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
 
     try {
