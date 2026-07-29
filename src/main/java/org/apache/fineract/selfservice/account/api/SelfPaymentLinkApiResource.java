@@ -24,7 +24,7 @@ import org.apache.fineract.selfservice.account.service.PaymentLinkService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.springframework.stereotype.Component;
 
-@Path("/v1/self/paymentrequests/paymentlink")
+@Path("/v1/self/paymentlink")
 @Component
 @Tag(
     name = "Self Payment Request",
