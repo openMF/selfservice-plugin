@@ -39,7 +39,7 @@ public class PaymentLinkService {
 
         String transferType = request.getTransferType() != null ? request.getTransferType() : "PAYMENT_LINK";
         String transferMode = request.getTransferMode() != null ? request.getTransferMode() : "INSTANT";
-        String currency = request.getCurrency() != null ? request.getCurrency() : "USD";
+        String currencyCode = request.getCurrency() != null ? request.getCurrency() : "USD";
 
         if (request.getTransferType() == null || request.getTransferType().isBlank()) {
             log.warn("Payment link prepare rejected: transferType is required. clientAccount={}", request.getClientAccount());
@@ -49,11 +49,11 @@ public class PaymentLinkService {
             );
         }
 
-        log.debug("Looking up active fee config for transferType={}, transferMode={}, currency={}",
-                transferType, transferMode, currency);
+        log.info("Looking up active fee config for transferType={}, transferMode={}, currency={}",
+                transferType, transferMode, currencyCode);
 
         Optional<SelfServiceTransferFee> feeOpt = transferFeeRepository
-                .findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(transferType, transferMode, currency);
+                .findByTransferTypeAndCurrencyCodeAndTransferModeAndIsActiveTrue(transferType, currencyCode, transferMode);
 
         BigDecimal feeAmount = BigDecimal.ZERO;
         String feeDescription = "No fee applied for " + transferType;
@@ -90,7 +90,7 @@ public class PaymentLinkService {
             feeDescription = fee.getDescription() != null ? fee.getDescription() : transferType + " processing fee";
         } else {
             log.info("No active fee configuration found for transferType={}, transferMode={}, currency={}. Applying zero fee.",
-                    transferType, transferMode, currency);
+                    transferType, transferMode, currencyCode);
         }
 
         BigDecimal totalAmount = request.getAmount().add(feeAmount);
