@@ -19,6 +19,8 @@ public class ExternalPaymentLinkRequest {
   private String customerPhone;
   private Long customerAccount; // savings account id
   private BigDecimal amount;
+  private BigDecimal feeAmount;
   private String currency;
+  private String currencyFee;
   private String description;
 }

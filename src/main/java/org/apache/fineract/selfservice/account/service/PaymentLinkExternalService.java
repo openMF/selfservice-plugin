@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.account.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import java.util.Objects;
@@ -97,10 +98,12 @@ public class PaymentLinkExternalService {
     externalPaymentLinkRequest.setCustomerName(request.getPayerName());
     externalPaymentLinkRequest.setCustomerEmail(request.getPayerEmail());
     externalPaymentLinkRequest.setCustomerPhone(request.getPayerPhone());
-    externalPaymentLinkRequest.setAmount(request.getAmount());
+    externalPaymentLinkRequest.setAmount(request.getAmount());    
     externalPaymentLinkRequest.setDescription(request.getDescription());
     externalPaymentLinkRequest.setCurrency(savingsAccount.getCurrency().getCode());
     externalPaymentLinkRequest.setCustomerAccount(savingsAccount.getId());
+    externalPaymentLinkRequest.setCurrencyFee(request.getCurrencyFee());
+    externalPaymentLinkRequest.setFeeAmount(request.getFeeAmount());
 
     ExternalServiceConfigurationData config =
         externalServiceConfigurationService.getConfiguration(SERVICE_NAME);
@@ -171,6 +174,8 @@ public class PaymentLinkExternalService {
       entityToSave.setDescription(externalPaymentLinkRequest.getDescription());
       entityToSave.setSuccess(result.isSuccess());
       entityToSave.setExternalResponse(body);
+      entityToSave.setCurrencyFee(externalPaymentLinkRequest.getCurrencyFee());
+      entityToSave.setFeeAmount(externalPaymentLinkRequest.getFeeAmount());
 
       paymentLinkRepository.save(entityToSave);
 

@@ -128,10 +128,11 @@ public class PaymentLinkService {
         prepareRequest.setTransferType(request.getTransferType());
         prepareRequest.setTransferMode(request.getTransferMode());
         prepareRequest.setDescription(request.getDescription());
+        
 
-        log.debug("Recalculating fee quote before external payment link creation");
+        log.info("Recalculating fee quote before external payment link creation");
         AccountTransferQuoteResponse quote = preparePaymentLink(prepareRequest);
-        log.debug("Recalculated quote - fee: {}, totalAmount: {}", quote.getFeeAmount(), quote.getTotalAmount());
+        log.info("Recalculated quote - fee: {}, totalAmount: {}", quote.getFeeAmount(), quote.getTotalAmount());
 
         // 2. Build external request with the total amount (principal + fee)
         // Note: currently the external request still carries the original principal amount.
@@ -144,6 +145,8 @@ public class PaymentLinkService {
         externalRequest.setAmount(request.getAmount());
         externalRequest.setCurrency(request.getCurrency());
         externalRequest.setDescription(request.getDescription());
+        externalRequest.setFeeAmount(quote.getFeeAmount());
+        externalRequest.setCurrencyFee(quote.getCurrencyCode());
 
         log.info("Delegating payment link creation to external service for clientAccount={}, amount={}",
                 request.getClientAccount(), request.getAmount());

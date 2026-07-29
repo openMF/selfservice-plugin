@@ -11,10 +11,10 @@ import lombok.Data;
 
 @Data
 public class PaymentLinkPrepareRequest {
-    private String clientAccount;      // Savings account external ID or internal ID
+    private String clientAccount;    // Savings account external ID or internal ID
     private BigDecimal amount;
-    private String currency;           // e.g., "CRC", "USD"
-    private String transferType;       // e.g., "PAYMENT_LINK"
+    private String currency;         // e.g., "CRC", "USD"
+    private String transferType;     // e.g., "PAYMENT_LINK"
     private String transferMode;     // e.g., "INSTANT"
     private String description;
 }
