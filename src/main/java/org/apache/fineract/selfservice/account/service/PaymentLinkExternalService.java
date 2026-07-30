@@ -104,6 +104,7 @@ public class PaymentLinkExternalService {
     externalPaymentLinkRequest.setCustomerAccount(savingsAccount.getId());
     externalPaymentLinkRequest.setCurrencyFee(request.getCurrencyFee());
     externalPaymentLinkRequest.setFeeAmount(request.getFeeAmount());
+    externalPaymentLinkRequest.setCustomerId(clientId.toString());
 
     ExternalServiceConfigurationData config =
         externalServiceConfigurationService.getConfiguration(SERVICE_NAME);

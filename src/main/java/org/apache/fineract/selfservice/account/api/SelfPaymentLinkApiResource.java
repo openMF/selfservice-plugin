@@ -22,6 +22,7 @@ import org.apache.fineract.selfservice.account.data.PaymentLinkPrepareRequest;
 import org.apache.fineract.selfservice.account.data.PaymentLinkResponse;
 import org.apache.fineract.selfservice.account.service.PaymentLinkService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/paymentlink")
@@ -62,6 +63,7 @@ public class SelfPaymentLinkApiResource {
     )
     public String confirm(final String apiRequestBodyAsJson) {
         context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+        AppSelfServiceUser appSelfServiceUser = context.authenticatedSelfServiceUser();
         PaymentLinkConfirmRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkConfirmRequest.class);
         PaymentLinkResponse response = paymentLinkService.confirmPaymentLink(request);
         return toApiJsonSerializer.serialize(response);

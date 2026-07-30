@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Optional;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 
 @Service
 @RequiredArgsConstructor
@@ -138,6 +139,7 @@ public class PaymentLinkService {
         // Note: currently the external request still carries the original principal amount.
         // If the external service is expected to receive the total (principal + fee), adjust here.
         PaymentLinkRequest externalRequest = new PaymentLinkRequest();
+        
         externalRequest.setPayerName(request.getPayerName());
         externalRequest.setPayerEmail(request.getPayerEmail());
         externalRequest.setPayerPhone(request.getPayerPhone());
@@ -147,7 +149,7 @@ public class PaymentLinkService {
         externalRequest.setDescription(request.getDescription());
         externalRequest.setFeeAmount(quote.getFeeAmount());
         externalRequest.setCurrencyFee(quote.getCurrencyCode());
-
+        
         log.info("Delegating payment link creation to external service for clientAccount={}, amount={}",
                 request.getClientAccount(), request.getAmount());
 
