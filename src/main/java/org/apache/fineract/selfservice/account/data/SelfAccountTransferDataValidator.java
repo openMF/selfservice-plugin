@@ -210,7 +210,7 @@ public class SelfAccountTransferDataValidator {
         this.selfAccountTransferReadService.retrieveSelfAccountTemplateData(user);
 
     Collection<SelfAccountTemplateData> validToAccounts = validFromAccounts;
-    if (type.equals("tpt")) {
+    if ("tpt".equals(type)) {
       validToAccounts =
           this.tptBeneficiaryReadPlatformService.retrieveTPTSelfAccountTemplateData(user);
     }

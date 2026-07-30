@@ -22,8 +22,6 @@ import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,16 +41,17 @@ public class AccountTransferQuoteService {
   private final SelfServiceTransferFeeRepository feeRepository;
   private final BccrExchangeRateService exchangeRateService;
   private final SelfServiceTransferAuditRepository transferAuditRepository;
-  private final PlatformSelfServiceSecurityContext context;
 
   /**
-   * Calculates the transfer fee for the given request based on configured business rules.
+   * Calculates the transfer fee for the given request and validated transfer source client.
    *
    * @param request the transfer preparation request containing amount, type, currency, and mode
+   * @param sourceClient the client that owns the already-validated transfer source account
    * @return the calculated fee response with fee amount, total amount, currency, and description
    */
   @Transactional(readOnly = true)
-  public AccountTransferQuoteResponse calculateFee(AccountTransferPrepareRequest request) {
+  public AccountTransferQuoteResponse calculateFee(
+      AccountTransferPrepareRequest request, Client sourceClient) {
     String currency =
         StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
     String transferMode =
@@ -130,12 +129,13 @@ public class AccountTransferQuoteService {
         && config.getThresholdAmount() != null
         && config.getThresholdAmount().compareTo(BigDecimal.ZERO) > 0) {
 
-      AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      Client client = user.getAppUserClientMappings().iterator().next().getClient();
+      if (sourceClient == null) {
+        throw new IllegalArgumentException("Source client is required for daily fee calculation.");
+      }
       LocalDate today = DateUtils.getLocalDateOfTenant();
 
       BigDecimal alreadyTransferredToday =
-          transferAuditRepository.getDailySinpeMovilTotal(client.getId(), today);
+          transferAuditRepository.getDailySinpeMovilTotal(sourceClient.getId(), today);
       if (alreadyTransferredToday == null) {
         alreadyTransferredToday = BigDecimal.ZERO;
       }

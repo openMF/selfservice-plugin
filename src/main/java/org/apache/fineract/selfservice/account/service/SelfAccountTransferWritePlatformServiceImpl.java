@@ -21,7 +21,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -30,6 +32,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.exception.AbstractPlatformResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -51,7 +54,6 @@ import org.apache.fineract.selfservice.account.data.AccountTransferConfirmReques
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmResponse;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
-import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponseTesting;
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
 import org.apache.fineract.selfservice.account.data.FeeCollectionResult;
 import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
@@ -166,13 +168,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
       throw new IllegalArgumentException("The source account (fromAccount) is required.");
     }
 
+    SavingsAccount sourceSavingsAccount =
+        validateSourceAccountOwnership(currentUser, fromAccount, request.getFromAccountType());
+
     validateDestinationAccount(currentUser.getId(), toAccount, transferType);
 
     log.info("PREPARE: Validating status and funds of the local source account: {}", fromAccount);
 
     BigDecimal feeAmount = BigDecimal.ZERO;
     try {
-      AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
+      AccountTransferQuoteResponse quote =
+          this.quoteService.calculateFee(request, sourceSavingsAccount.getClient());
       if (quote != null && quote.getFeeAmount() != null) {
         feeAmount = quote.getFeeAmount();
       }
@@ -183,11 +189,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     BigDecimal totalAmount = transferAmount.add(feeAmount);
 
     // Safeguard: transfer + fee must fit in source savings
-    validateSufficientFunds(
-        fromAccount,
-        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
-        transferAmount,
-        feeAmount);
+    validateSufficientFunds(sourceSavingsAccount, transferAmount, feeAmount);
 
     Map<String, Object> prepareResponse = new HashMap<>();
     prepareResponse.put("status", "PREPARED");
@@ -217,14 +219,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
     log.info("QUOTE: Starting quote for channel: {}", request.getTransferType());
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
+    SavingsAccount sourceSavingsAccount =
+        validateSourceAccountOwnership(
+            currentUser, request.getFromAccount(), request.getFromAccountType());
 
-    final AccountTransferQuoteResponse quote = this.quoteService.calculateFee(request);
+    Client sourceClient = sourceSavingsAccount.getClient();
+
+    final AccountTransferQuoteResponse quote =
+        this.quoteService.calculateFee(request, sourceClient);
 
     validateSufficientFunds(
-        request.getFromAccount(),
-        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
-        request.getTransferAmount(),
-        quote.getFeeAmount());
+        sourceSavingsAccount, request.getTransferAmount(), quote.getFeeAmount());
 
     log.info("QUOTE: Quote calculated. Triggering new security OTP dispatch.");
 
@@ -233,23 +238,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
             ? request.getToPhoneNumber()
             : request.getToAccount();
 
-    cleanupOldOtpRegistrations(currentUser);
+    cleanupOldOtpRegistrations(sourceClient);
     releaseOtpCooldown(currentUser);
-    
-    //TESTING ONLY REMOVE
-    String otp = generateAndSendOtpForQuote(currentUser, destinationTarget, request.getTransferAmount());
-    AccountTransferQuoteResponseTesting quoteTesting = new AccountTransferQuoteResponseTesting();
-    quoteTesting.setCurrencyCode(quote.getCurrencyCode());
-    quoteTesting.setFeeAmount(quote.getFeeAmount());
-    quoteTesting.setFeeDescription(quote.getFeeDescription());
-    quoteTesting.setTotalAmount(quote.getTotalAmount());
-    quoteTesting.setOtp(otp);
-    //return this.gson.toJson(quote);
-    return this.gson.toJson(quoteTesting);
+
+    generateAndSendOtpForQuote(
+        currentUser, sourceClient, destinationTarget, request.getTransferAmount());
+    return this.gson.toJson(quote);
   }
 
-  private void cleanupOldOtpRegistrations(AppSelfServiceUser user) {
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+  private void cleanupOldOtpRegistrations(Client client) {
     try {
       LocalDateTime cutoff = DateUtils.getLocalDateTimeOfSystem().minusMinutes(10);
       int updated =
@@ -319,7 +316,12 @@ public class SelfAccountTransferWritePlatformServiceImpl
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     user.validateHasCreatePermission("ACCOUNTTRANSFER");
 
-    validateOtp(request, user);
+    SavingsAccount sourceSavingsAccount =
+        validateSourceAccountOwnership(
+            user, request.getFromAccount(), request.getFromAccountType());
+
+    Client sourceClient = sourceSavingsAccount.getClient();
+    validateOtp(request, sourceClient);
 
     BigDecimal feeAmountFromClient =
         request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
@@ -335,7 +337,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         quoteReq.setTransferMode(request.getTransferMode());
         quoteReq.setTransferAmount(request.getTransferAmount());
         // map any other fields your PrepareRequest needs
-        AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq);
+        AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, sourceClient);
         if (quote != null && quote.getFeeAmount() != null) {
           feeForBalanceCheck = quote.getFeeAmount();
         }
@@ -345,11 +347,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
 
     // Safeguard: transfer + fee must fit before any external/internal debit
-    validateSufficientFunds(
-        request.getFromAccount(),
-        request.getFromAccountType() != null ? request.getFromAccountType() : 2,
-        request.getTransferAmount(),
-        feeForBalanceCheck);
+    validateSufficientFunds(sourceSavingsAccount, request.getTransferAmount(), feeForBalanceCheck);
 
     log.info(
         "CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
@@ -362,17 +360,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
     // Route to the correct execution strategy
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");
-      return executePinTransfer(request, user, httpRequest);
+      return executePinTransfer(request, user, sourceSavingsAccount, httpRequest);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> SINPE_MOVIL account detected. Executing SINPE_MOVIL transfer.");
-      return executeSinpeTransfer(request, user, httpRequest);
+      return executeSinpeTransfer(request, user, sourceSavingsAccount, httpRequest);
     } else if (isSameBankIbanAccount(cleanDestination)
         || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
-      return executeInternalTransfer(request, user, httpRequest);
+      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest);
     } else {
       log.info("CONFIRM -> Fallback to internal transfer.");
-      return executeInternalTransfer(request, user, httpRequest);
+      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest);
     }
   }
 
@@ -384,7 +382,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
   public CommandProcessingResult createTransfer(
       String type, String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     Map<String, Object> params = dataValidator.validateCreate(type, apiRequestBodyAsJson);
-    if (type.equals("tpt")) {
+    if ("tpt".equals(type)) {
       checkForLimits(params);
     }
 
@@ -431,17 +429,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private Object executeInternalTransfer(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      SavingsAccount sourceSavingsAccount,
       HttpServletRequest httpRequest) {
 
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Client client = sourceSavingsAccount.getClient();
     Long fromClientId = client.getId();
     Long fromOfficeId = client.getOffice().getId();
 
-    Long fromAccountId = resolveAccountId(request.getFromAccount(), request.getFromAccountType());
+    Long fromAccountId = sourceSavingsAccount.getId();
     Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
 
-    SavingsAccount fromSavingsAccount =
-        savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
+    SavingsAccount fromSavingsAccount = sourceSavingsAccount;
     SavingsAccount toSavingsAccount =
         savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
 
@@ -581,7 +579,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         processingDate);
 
     // Execute Commission Charge for SAME_BANK
-    executeFeeTransaction(request);
+    executeFeeTransaction(request, sourceSavingsAccount);
 
     log.info("Homologating SAME_BANK response structure");
     Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
@@ -595,7 +593,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .data(homologatedData)
             .build();
     releaseTransferSuccessCooldown(user);
-    publishFastPaymentTransferEvent(result, request, httpRequest);
+    publishFastPaymentTransferEvent(result, request, user, client, httpRequest);
 
     log.info(
         "CONFIRM SAME_BANK: Transfer completed. operationId={}, internalRefNumber={},"
@@ -722,12 +720,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private Object executePinTransfer(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      SavingsAccount sourceSavingsAccount,
       HttpServletRequest httpRequest) {
     log.info(
         "CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
 
     try {
-      Client client = user.getAppUserClientMappings().iterator().next().getClient();
+      Client client = sourceSavingsAccount.getClient();
 
       boolean yaEsBeneficiario =
           this.isAlreadyRegisteredAsBeneficiary(user.getId(), request.getToAccount());
@@ -847,7 +846,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
 
       // Execute Commission Charge for SAME_BANK
-      executeFeeTransaction(request);
+      executeFeeTransaction(request, sourceSavingsAccount);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
 
@@ -858,7 +857,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       response.put("transferType", "PIN");
       response.put("data", homologatedData);
       releaseTransferSuccessCooldown(user);
-      publishPinTransferEvent(request, user, httpRequest, externalData);
+      publishPinTransferEvent(request, user, client, httpRequest, externalData);
 
       return response;
 
@@ -876,8 +875,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private Object executeSinpeTransfer(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      SavingsAccount sourceSavingsAccount,
       HttpServletRequest httpRequest) {
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Client client = sourceSavingsAccount.getClient();
 
     SinpeTransferRequest sinpeRequest =
         SinpeTransferRequest.builder()
@@ -914,7 +914,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
 
     // Execute Commission Charge for SAME_BANK
-    executeFeeTransaction(request);
+    executeFeeTransaction(request, sourceSavingsAccount);
 
     Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
 
@@ -925,7 +925,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     response.put("transferType", "SINPE_MOVIL");
     response.put("data", homologatedData);
     releaseTransferSuccessCooldown(user);
-    publishSinpeTransferEvent(request, user, httpRequest, externalData);
+    publishSinpeTransferEvent(request, user, client, httpRequest, externalData);
 
     return response;
   }
@@ -936,13 +936,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private void publishFastPaymentTransferEvent(
       CommandProcessingResult result,
       AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      Client sourceClient,
       HttpServletRequest httpRequest) {
     try {
-      AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-
       releaseTransferSuccessCooldown(user);
 
-      String mobileNumber = extractMobile(user);
+      String mobileNumber = extractMobile(user, sourceClient);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
@@ -971,14 +971,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      try {
-        Client client = user.getAppUserClientMappings().iterator().next().getClient();
-        contextData.put(
-            "fromClientName",
-            StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
-      } catch (Exception e) {
-        contextData.put("fromClientName", "N/A");
-      }
+      contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
@@ -1006,12 +999,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private void publishSinpeTransferEvent(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      Client sourceClient,
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
       releaseTransferSuccessCooldown(user);
 
-      String mobileNumber = extractMobile(user);
+      String mobileNumber = extractMobile(user, sourceClient);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
@@ -1019,9 +1013,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put(
-          "transferDescription",
-          buildTransferDescription(request));
+      contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1045,14 +1037,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      try {
-        Client client = user.getAppUserClientMappings().iterator().next().getClient();
-        contextData.put(
-            "fromClientName",
-            StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
-      } catch (Exception e) {
-        contextData.put("fromClientName", "N/A");
-      }
+      contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
@@ -1084,13 +1069,14 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private void publishPinTransferEvent(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      Client sourceClient,
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
       // Invalidate any prior cooldown so a successful PIN confirm always notifies
       releaseTransferSuccessCooldown(user);
 
-      String mobileNumber = extractMobile(user);
+      String mobileNumber = extractMobile(user, sourceClient);
       boolean emailMode = determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
@@ -1098,9 +1084,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put(
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-      contextData.put(
-          "transferDescription",
-          buildTransferDescription(request));
+      contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
           "fromAccountNumber",
           StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
@@ -1124,14 +1108,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
           StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
-      try {
-        Client client = user.getAppUserClientMappings().iterator().next().getClient();
-        contextData.put(
-            "fromClientName",
-            StringUtils.isNotBlank(client.getDisplayName()) ? client.getDisplayName() : "N/A");
-      } catch (Exception e) {
-        contextData.put("fromClientName", "N/A");
-      }
+      contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
@@ -1156,6 +1133,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     } catch (Exception e) {
       log.warn("Failed to publish PIN transfer notification event", e);
     }
+  }
+
+  private String displayNameOrUnknown(Client client) {
+    if (client == null || StringUtils.isBlank(client.getDisplayName())) {
+      return "N/A";
+    }
+    return client.getDisplayName();
   }
 
   private void publishTransferEvent(
@@ -1243,19 +1227,18 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private String generateAndSendOtp(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
+      Client sourceClient,
       HttpServletRequest httpRequest) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
     LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
 
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
-
     SelfServiceRegistration registration =
         SelfServiceRegistration.instance(
-            client,
-            client.getAccountNumber(),
-            client.getFirstname(),
-            client.getMiddlename(),
-            client.getLastname(),
+            sourceClient,
+            sourceClient.getAccountNumber(),
+            sourceClient.getFirstname(),
+            sourceClient.getMiddlename(),
+            sourceClient.getLastname(),
             request.getFromAccount() != null ? request.getFromAccount() : "N/A",
             user.getEmail(),
             otp,
@@ -1270,11 +1253,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
     registrationRepository.saveAndFlush(registration);
 
     log.info(
-        "OTP GENERATED: registrationId={}, clientId={}, expiresAt={}, token={}",
+        "OTP GENERATED: registrationId={}, clientId={}, expiresAt={}",
         registration.getId(),
-        client.getId(),
-        expiry,
-        otp);
+        sourceClient.getId(),
+        expiry);
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
@@ -1293,8 +1275,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getLastname(),
             user.getUsername(),
             user.getEmail(),
-            extractMobile(user),
-            determineMode(user.getEmail(), extractMobile(user)),
+            extractMobile(user, sourceClient),
+            determineMode(user.getEmail(), extractMobile(user, sourceClient)),
             extractClientIp(httpRequest),
             LocaleContextHolder.getLocale(),
             contextData));
@@ -1307,18 +1289,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> response = new HashMap<>();
     response.put("status", "AWAITING_OTP");
     response.put("message", "OTP sent successfully. Please check your SMS or Email.");
-    response.put("expiresAt", expiry);
+    response.put("expiresAt", expiry.toString());
     response.put("otpId", registration.getId());
     return gson.toJson(response);
   }
 
-  private void validateOtp(AccountTransferConfirmRequest request, AppSelfServiceUser user) {
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
-
+  private void validateOtp(AccountTransferConfirmRequest request, Client sourceClient) {
     SelfServiceRegistration registration =
         registrationRepository
             .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
+                sourceClient.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
             .orElse(null);
 
     if (registration == null
@@ -1497,6 +1477,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
         .orElse(null);
   }
 
+  private String extractMobile(AppSelfServiceUser user, Client sourceClient) {
+    if (sourceClient != null && StringUtils.isNotBlank(sourceClient.getMobileNo())) {
+      return sourceClient.getMobileNo();
+    }
+    return extractMobile(user);
+  }
+
   private boolean determineMode(String email, String mobileNumber) {
     boolean hasEmail = StringUtils.isNotBlank(email);
     boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
@@ -1609,20 +1596,21 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return false;
   }
 
-  private String generateAndSendOtpForQuote(
-      AppSelfServiceUser user, String destinationTarget, BigDecimal transferAmount) {
+  private void generateAndSendOtpForQuote(
+      AppSelfServiceUser user,
+      Client sourceClient,
+      String destinationTarget,
+      BigDecimal transferAmount) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
     LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
 
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
-
     SelfServiceRegistration registration =
         SelfServiceRegistration.instance(
-            client,
-            client.getAccountNumber(),
-            client.getFirstname(),
-            client.getMiddlename(),
-            client.getLastname(),
+            sourceClient,
+            sourceClient.getAccountNumber(),
+            sourceClient.getFirstname(),
+            sourceClient.getMiddlename(),
+            sourceClient.getLastname(),
             destinationTarget,
             user.getEmail(),
             otp,
@@ -1648,14 +1636,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getLastname(),
             user.getUsername(),
             user.getEmail(),
-            extractMobile(user),
-            determineMode(user.getEmail(), extractMobile(user)),
+            extractMobile(user, sourceClient),
+            determineMode(user.getEmail(), extractMobile(user, sourceClient)),
             "Unknown IP (Quote Phase)",
             LocaleContextHolder.getLocale(),
             contextData));
 
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
-    return otp;
   }
 
   /**
@@ -1666,15 +1653,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
    *
    * <p>Failure here is <b>non-fatal</b>: the original transfer is never rolled back.
    */
-  private void executeFeeTransaction(AccountTransferConfirmRequest request) {
+  private void executeFeeTransaction(
+      AccountTransferConfirmRequest request, SavingsAccount sourceSavingsAccount) {
     log.info(
         "ACCOUNTING CONFIRM: Delegating fee collection for type={}, currency={}, amount={}",
         request.getTransferType(),
         request.getCurrencyCode(),
         request.getTransferAmount());
 
-    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Client client = sourceSavingsAccount.getClient();
 
     try {
       FeeCollectionRequest feeReq =
@@ -1815,15 +1802,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
   @Transactional
   public Object resendTransferOtp(ResendOtpRequest resendRequest, HttpServletRequest httpRequest) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    SavingsAccount sourceSavingsAccount =
+        validateSourceAccountOwnership(user, resendRequest.getFromAccount(), null);
+    Client sourceClient = sourceSavingsAccount.getClient();
 
     LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
 
-    log.info("RESEND OTP: Starting for userId={}, clientId={}", user.getId(), client.getId());
+    log.info("RESEND OTP: Starting for userId={}, clientId={}", user.getId(), sourceClient.getId());
     // 1. Expire ALL existing non-consumed OTPs for this client + request type
     List<SelfServiceRegistration> activeOtps =
         registrationRepository.findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
+            sourceClient.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
 
     if (!activeOtps.isEmpty()) {
       log.info(
@@ -1833,21 +1822,24 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
     } else if (activeOtps.isEmpty()) {
       log.info("RESEND OTP: No active OTP found → generating fresh one.");
-      return generateNewOtpForResend(user, resendRequest, httpRequest);
+      return generateNewOtpForResend(user, sourceClient, resendRequest, httpRequest);
     }
 
     // 2. Force-release the notification cooldown (same key used by quote)
     releaseOtpCooldown(user);
 
     // 3. Always generate a brand-new OTP and publish the notification event
-    Object result = generateNewOtpForResend(user, resendRequest, httpRequest);
+    Object result = generateNewOtpForResend(user, sourceClient, resendRequest, httpRequest);
 
     log.info("RESEND OTP: Completed for userId={}", user.getId());
     return result;
   }
 
   private Object generateNewOtpForResend(
-      AppSelfServiceUser user, ResendOtpRequest resendRequest, HttpServletRequest httpRequest) {
+      AppSelfServiceUser user,
+      Client sourceClient,
+      ResendOtpRequest resendRequest,
+      HttpServletRequest httpRequest) {
     AccountTransferConfirmRequest dummy = new AccountTransferConfirmRequest();
     dummy.setFromAccount(resendRequest.getFromAccount());
     dummy.setToAccount(resendRequest.getToAccount());
@@ -1855,7 +1847,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     dummy.setTransferDescription(resendRequest.getTransferDescription());
     dummy.setTransferAmount(BigDecimal.ZERO);
     // Re-use the proven path that already works for /quote
-    return generateAndSendOtp(dummy, user, httpRequest);
+    return generateAndSendOtp(dummy, user, sourceClient, httpRequest);
   }
 
   private void markAsExpired(SelfServiceRegistration reg) {
@@ -2032,6 +2024,20 @@ public class SelfAccountTransferWritePlatformServiceImpl
     SavingsAccount fromSavings =
         savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
 
+    validateSufficientFunds(fromSavings, transferAmount, feeAmount);
+  }
+
+  private void validateSufficientFunds(
+      SavingsAccount fromSavings, BigDecimal transferAmount, BigDecimal feeAmount) {
+
+    BigDecimal transfer = transferAmount != null ? transferAmount : BigDecimal.ZERO;
+    BigDecimal fee = feeAmount != null ? feeAmount : BigDecimal.ZERO;
+    BigDecimal totalRequired = transfer.add(fee);
+
+    if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
+      return; // nothing to debit
+    }
+
     // Prefer withdrawable balance (respects min balance, holds, overdraft rules)
     BigDecimal available;
     try {
@@ -2070,19 +2076,74 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     log.info(
         "FUNDS CHECK OK: accountId={}, available={}, transfer={}, fee={}, totalRequired={}",
-        fromAccountId,
+        fromSavings.getId(),
         available,
         transfer,
         fee,
         totalRequired);
   }
-  
+
+  private SavingsAccount validateSourceAccountOwnership(
+      AppSelfServiceUser user, String fromAccountIdentifier, Integer fromAccountType) {
+    SavingsAccount sourceSavingsAccount =
+        resolveSourceSavingsAccountForOwnership(fromAccountIdentifier, fromAccountType);
+    Long sourceClientId =
+        sourceSavingsAccount.getClient() != null ? sourceSavingsAccount.getClient().getId() : null;
+
+    if (sourceClientId == null || !mappedClientIds(user).contains(sourceClientId)) {
+      throw invalidSourceAccountException();
+    }
+
+    return sourceSavingsAccount;
+  }
+
+  private SavingsAccount resolveSourceSavingsAccountForOwnership(
+      String fromAccountIdentifier, Integer fromAccountType) {
+    try {
+      PortfolioAccountType type =
+          PortfolioAccountType.fromInt(fromAccountType != null ? fromAccountType : 2);
+      if (type != PortfolioAccountType.SAVINGS) {
+        throw invalidSourceAccountException();
+      }
+
+      Long fromAccountId = resolveAccountId(fromAccountIdentifier, type.getValue());
+      return savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(fromAccountId);
+    } catch (PlatformApiDataValidationException
+        | AbstractPlatformResourceNotFoundException
+        | IllegalArgumentException e) {
+      log.debug("Source account ownership validation failed.", e);
+      throw invalidSourceAccountException();
+    }
+  }
+
+  private Set<Long> mappedClientIds(AppSelfServiceUser user) {
+    if (user == null || user.getAppUserClientMappings() == null) {
+      return Set.of();
+    }
+
+    return user.getAppUserClientMappings().stream()
+        .map(AppSelfServiceUserClientMapping::getClient)
+        .filter(Objects::nonNull)
+        .map(Client::getId)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toSet());
+  }
+
+  private PlatformApiDataValidationException invalidSourceAccountException() {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    final DataValidatorBuilder base = new DataValidatorBuilder(errors).resource("accounttransfer");
+    base.reset()
+        .parameter("fromAccount")
+        .failWithCode("invalid.source.account", "Source account is invalid or unavailable.");
+    return new PlatformApiDataValidationException(errors);
+  }
+
   private String buildTransferDescription(AccountTransferPrepareRequest request) {
     String description = request.getTransferDescription();
     String mode = request.getTransferMode();
 
     boolean useOriginal =
-            description != null
+        description != null
             && !description.isBlank()
             && description.length() >= 15
             && mode != null
@@ -2090,12 +2151,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
                 || mode.equalsIgnoreCase("SINPE")
                 || mode.equalsIgnoreCase("SAME_BANK"));
 
-    String result = useOriginal
+    String result =
+        useOriginal
             ? description
             : (description != null && !description.isBlank() ? description : "Transfer")
-              + " via "
-              + (mode != null ? mode : "");
-    
-    return String.format("%-15s", result);   // right-pad with spaces
-}
+                + " via "
+                + (mode != null ? mode : "");
+
+    return String.format("%-15s", result); // right-pad with spaces
+  }
 }
