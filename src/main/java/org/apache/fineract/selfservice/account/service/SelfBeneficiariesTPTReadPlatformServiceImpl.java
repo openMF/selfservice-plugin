@@ -46,7 +46,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
   @Override
   public Collection<SelfBeneficiariesTPTData> retrieveAll() {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    // Parámetro inyectado 3 veces para cubrir los 3 bloques del UNION ALL
+    // Parameter injected 3 times to cover the 3 blocks of the UNION ALL
     return this.jdbcTemplate.query(
         this.mapper.schema(), this.mapper, new Object[] {user.getId(), user.getId(), user.getId()});
   }
@@ -75,7 +75,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(
           " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
               + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName ");
+              + " entityName, ");
+      // FIXED: Added missing columns for UNION ALL compatibility
+      sqlBuilder.append(" null as paymentType, null as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -94,7 +96,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(
           " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
               + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName ");
+              + " entityName, ");
+      // FIXED: Added missing columns for UNION ALL compatibility
+      sqlBuilder.append(" null as paymentType, null as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -116,9 +120,11 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.holder_id_type as holderIdType, ");
       sqlBuilder.append(" b.currency_code as currencyCode, ");
       sqlBuilder.append(" b.entity_code as entityCode, ");
-      sqlBuilder.append(" b.entity_name as entityName ");
+      // FIXED: Added missing comma after entityName
+      sqlBuilder.append(" b.entity_name as entityName, ");
       sqlBuilder.append(" b.payment_type as paymentType, ");
-      sqlBuilder.append(" b.currency as currency, ");
+      // FIXED: Removed trailing comma before FROM clause
+      sqlBuilder.append(" b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type in (3,4) ");
@@ -154,8 +160,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
       EnumOptionData accountType = null;
       if (customAccountNumber != null) {
-        // Es un beneficiario externo de Costa Rica
-        if (accountTypeId == 2) {
+        // It's an external beneficiary (Costa Rica)
+        if (accountTypeId == 4) {
           accountType =
               new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
         } else {
@@ -164,7 +170,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
                   (long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
         }
       } else {
-        // Es un beneficiario interno nativo de Fineract
+        // It's an internal native Fineract beneficiary
         accountType =
             AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
       }
@@ -267,7 +273,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       return false;
     }
 
-    // Limpiamos la cuenta para la consulta
+    // Clean the account for the query
     final String cleanAccount = accountNumber.replaceAll("\\s+", "");
 
     final StringBuilder sqlBuilder = new StringBuilder();
