@@ -51,7 +51,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @RequiredArgsConstructor
 @Slf4j
-public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBeneficiariesTPTWritePlatformService {
+public class SelfBeneficiariesTPTWritePlatformServiceImpl
+        implements SelfBeneficiariesTPTWritePlatformService {
 
     private final PlatformSelfServiceSecurityContext context;
     private final SelfBeneficiariesTPTRepository repository;
@@ -79,6 +80,18 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
         String paymentType = (String) params.get(PAYMENT_TYPE_PARAM_NAME);
         String currency = (String) params.get(CURRENCY_PARAM_NAME);
 
+        log.info(
+                "Creating TPT beneficiary: name={}, paymentType={}, currency={}, accountType={}, transferLimit={}",
+                name,
+                paymentType,
+                currency,
+                accountType,
+                transferLimit);
+        log.info(
+                "Beneficiary create request details: officeName={}, accountNumberLength={}",
+                officeName,
+                accountNumber != null ? accountNumber.length() : 0);
+
         Long accountId = null;
         Long clientId = null;
         Long officeId = null;
@@ -86,48 +99,91 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
 
         // Route logic based on explicit paymentType rather than magic numbers
         if ("SAME_BANK".equals(paymentType)) {
+            log.info("Resolving SAME_BANK beneficiary against internal Fineract accounts");
             if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
                 Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
-                if (loan != null && loan.getClientId() != null && loan.getOffice().getName().equals(officeName)) {
+                if (loan != null
+                        && loan.getClientId() != null
+                        && loan.getOffice().getName().equals(officeName)) {
                     accountId = loan.getId();
                     officeId = loan.getOfficeId();
                     clientId = loan.getClientId();
+                    log.info(
+                            "Resolved loan beneficiary: loanId={}, clientId={}, officeId={}",
+                            accountId,
+                            clientId,
+                            officeId);
                 } else {
                     validAccountDetails = false;
+                    log.warn(
+                            "SAME_BANK loan lookup failed for accountNumber (len={}), officeName={}",
+                            accountNumber != null ? accountNumber.length() : 0,
+                            officeName);
                 }
             } else {
-                SavingsAccount savings = this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
-                if (savings != null && savings.getClient() != null && savings.getClient().getOffice().getName().equals(officeName)) {
+                SavingsAccount savings =
+                        this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
+                if (savings != null
+                        && savings.getClient() != null
+                        && savings.getClient().getOffice().getName().equals(officeName)) {
                     accountId = savings.getId();
                     clientId = savings.getClient().getId();
                     officeId = savings.getClient().getOffice().getId();
+                    log.info(
+                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}",
+                            accountId,
+                            clientId,
+                            officeId);
                 } else {
                     validAccountDetails = false;
+                    log.warn(
+                            "SAME_BANK savings lookup failed for accountNumber (len={}), officeName={}",
+                            accountNumber != null ? accountNumber.length() : 0,
+                            officeName);
                 }
             }
         } else if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
             // External beneficiaries: length/format validation is already guaranteed by SelfBeneficiariesTPTDataValidator
             validAccountDetails = (accountNumber != null && !accountNumber.trim().isEmpty());
-            
+            log.info(
+                    "Processing external {} beneficiary, accountNumber present={}",
+                    paymentType,
+                    validAccountDetails);
+
             // Use 0L for internal IDs to satisfy legacy NOT NULL constraints on external beneficiaries
             officeId = 0L;
             clientId = 0L;
             accountId = 0L;
         } else {
             validAccountDetails = false;
+            log.warn("Unsupported paymentType received: {}", paymentType);
         }
 
         if (!validAccountDetails) {
+            log.warn(
+                    "Rejecting beneficiary create due to invalid account details: paymentType={}, officeName={}",
+                    paymentType,
+                    officeName);
             throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
         }
 
         try {
             AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
             Long appUserId = user.getId();
+            log.info("Authenticated self-service userId={} creating beneficiary", appUserId);
 
             // Constructor now includes paymentType and currency
-            SelfBeneficiariesTPT beneficiary = new SelfBeneficiariesTPT(
-                    appUserId, name, officeId, clientId, accountId, accountType, transferLimit, paymentType, currency);
+            SelfBeneficiariesTPT beneficiary =
+                    new SelfBeneficiariesTPT(
+                            appUserId,
+                            name,
+                            officeId,
+                            clientId,
+                            accountId,
+                            accountType,
+                            transferLimit,
+                            paymentType,
+                            currency);
 
             // Populate external-specific fields only when applicable
             if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
@@ -138,18 +194,39 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
                 beneficiary.setCurrencyCode((String) params.get("currencyCode"));
                 beneficiary.setEntityCode((String) params.get("entityCode"));
                 beneficiary.setEntityName((String) params.get("entityName"));
+                log.info(
+                        "Populated external fields for {}: entityCode={}, currencyCode={}",
+                        paymentType,
+                        params.get("entityCode"),
+                        params.get("currencyCode"));
             }
 
             beneficiary.setActive(true);
             this.repository.saveAndFlush(beneficiary);
-            
+
+            log.info(
+                    "Successfully created TPT beneficiary id={}, name={}, paymentType={}, userId={}",
+                    beneficiary.getId(),
+                    name,
+                    paymentType,
+                    appUserId);
+
             return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-            
+
         } catch (DataAccessException dae) {
+            log.error(
+                    "Data integrity failure while creating beneficiary name={}, paymentType={}",
+                    name,
+                    paymentType,
+                    dae);
             handleDataIntegrityIssues(command, dae);
         }
 
         // Fallback exception (should ideally not be reached due to prior checks)
+        log.error(
+                "Unexpected fallback path reached for beneficiary create: name={}, paymentType={}",
+                name,
+                paymentType);
         throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
     }
 
@@ -163,33 +240,61 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
     @Transactional
     @Override
     public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
+        log.info("Updating TPT beneficiary id={}", beneficiaryId);
+
         Map<String, Object> params = this.validator.validateForUpdate(command.json());
         AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-        
+
         // Java 21 idiomatic retrieval with immediate security validation
-        SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId)
-                .orElseThrow(() -> new InvalidBeneficiaryException(beneficiaryId));
+        SelfBeneficiariesTPT beneficiary =
+                this.repository
+                        .findById(beneficiaryId)
+                        .orElseThrow(
+                                () -> {
+                                    log.warn("Beneficiary not found for update: id={}", beneficiaryId);
+                                    return new InvalidBeneficiaryException(beneficiaryId);
+                                });
 
         if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+            log.warn(
+                    "User id={} attempted to update beneficiary id={} owned by userId={}",
+                    user.getId(),
+                    beneficiaryId,
+                    beneficiary.getAppSelfServiceUserId());
             throw new InvalidBeneficiaryException(beneficiaryId);
         }
 
         String name = (String) params.get(NAME_PARAM_NAME);
         Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+        log.info(
+                "Update payload for beneficiary id={}: name={}, transferLimit={}",
+                beneficiaryId,
+                name,
+                transferLimit);
 
         Map<String, Object> changes = beneficiary.update(name, transferLimit);
         if (!changes.isEmpty()) {
             try {
                 this.repository.saveAndFlush(beneficiary);
+                log.info(
+                        "Successfully updated TPT beneficiary id={}, changes={}",
+                        beneficiary.getId(),
+                        changes.keySet());
                 return new CommandProcessingResultBuilder()
                         .withEntityId(beneficiary.getId())
                         .with(changes)
                         .build();
             } catch (DataAccessException dae) {
+                log.error(
+                        "Data integrity failure while updating beneficiary id={}",
+                        beneficiaryId,
+                        dae);
                 handleDataIntegrityIssues(command, dae);
             }
+        } else {
+            log.info("No changes detected for beneficiary id={}", beneficiaryId);
         }
-        
+
         return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
     }
 
@@ -203,37 +308,57 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBenefic
     @Transactional
     @Override
     public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
+        log.info("Soft-deleting TPT beneficiary id={}", beneficiaryId);
+
         AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-        
-        SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId)
-                .orElseThrow(() -> new InvalidBeneficiaryException(beneficiaryId));
+
+        SelfBeneficiariesTPT beneficiary =
+                this.repository
+                        .findById(beneficiaryId)
+                        .orElseThrow(
+                                () -> {
+                                    log.warn("Beneficiary not found for delete: id={}", beneficiaryId);
+                                    return new InvalidBeneficiaryException(beneficiaryId);
+                                });
 
         if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+            log.warn(
+                    "User id={} attempted to delete beneficiary id={} owned by userId={}",
+                    user.getId(),
+                    beneficiaryId,
+                    beneficiary.getAppSelfServiceUserId());
             throw new InvalidBeneficiaryException(beneficiaryId);
         }
 
         beneficiary.setActive(false);
         this.repository.save(beneficiary);
 
-        return new CommandProcessingResultBuilder()
-                .withEntityId(beneficiary.getId())
-                .build();
+        log.info(
+                "Successfully soft-deleted TPT beneficiary id={}, previousName={}, userId={}",
+                beneficiary.getId(),
+                beneficiary.getName(),
+                user.getId());
+
+        return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
     }
 
     private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
         final Throwable realCause = dae.getMostSpecificCause();
         String message = realCause.getMessage();
-        
-        if (message != null && (message.contains("name") || message.contains("uk_m_selfservice_beneficiaries_tpt_name"))) {
+
+        if (message != null
+                && (message.contains("name")
+                        || message.contains("uk_m_selfservice_beneficiaries_tpt_name"))) {
             String name = "unknown";
             try {
                 if (command != null && command.json() != null) {
                     name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
                 }
             } catch (Exception e) {
-                log.debug("Could not extract name from JSON command", e);
+                log.info("Could not extract name from JSON command during integrity handling", e);
             }
 
+            log.warn("Duplicate beneficiary name detected: name={}", name);
             throw new PlatformDataIntegrityException(
                     "error.msg.beneficiary.duplicate.name",
                     "Beneficiary with name `" + name + "` already exists for this user.",
