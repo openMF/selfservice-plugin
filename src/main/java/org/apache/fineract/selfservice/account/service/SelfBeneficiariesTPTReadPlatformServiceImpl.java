@@ -117,6 +117,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.currency_code as currencyCode, ");
       sqlBuilder.append(" b.entity_code as entityCode, ");
       sqlBuilder.append(" b.entity_name as entityName ");
+      sqlBuilder.append(" b.payment_type as paymentType, ");
+      sqlBuilder.append(" b.currency as currency, ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type in (3,4) ");
@@ -147,6 +149,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String currencyCode = rs.getString("currencyCode");
       final String entityCode = rs.getString("entityCode");
       final String entityName = rs.getString("entityName");
+      final String paymentType = rs.getString("paymentType");
+      final String currency = rs.getString("currency");
 
       EnumOptionData accountType = null;
       if (customAccountNumber != null) {
@@ -179,7 +183,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
           holderIdType,
           currencyCode,
           entityCode,
-          entityName);
+          entityName,
+          paymentType, 
+          currency);
     }
   }
 

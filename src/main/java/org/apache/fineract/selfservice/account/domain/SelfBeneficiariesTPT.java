@@ -94,6 +94,12 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
 
   @Column(name = "entity_name", length = 150, nullable = true) // Nombre del banco / financiera
   private String entityName;
+  
+  @Column(name = "payment_type", length = 20, nullable = false)
+  private String paymentType;
+
+  @Column(name = "currency", length = 3, nullable = false)
+  private String currency;
 
   protected SelfBeneficiariesTPT() {
     //
@@ -106,7 +112,9 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
       Long clientId,
       Long accountId,
       Integer accountType,
-      Long transferLimit) {
+      Long transferLimit, 
+      String paymentType, 
+      String currency) {
     this.appSelfServiceUserId = appSelfServiceUserId;
     this.name = name;
     this.officeId = officeId;
@@ -114,6 +122,8 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
     this.accountId = accountId;
     this.accountType = accountType;
     this.transferLimit = transferLimit;
+    this.paymentType = paymentType;
+    this.currency = currency;
   }
 
   public String getName() {
@@ -215,6 +225,13 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
   public String getEntityName() {
     return this.entityName;
   }
+  
+  public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
+  public String getPaymentType() { return this.paymentType; }
+    
+  public void setCurrency(String currency) { this.currency = currency; }
+  public String getCurrency() { return this.currency; }
+
 
   public Map<String, Object> update(String newName, Long newTransferLimit) {
     Map<String, Object> changes = new HashMap<>();

@@ -16,13 +16,13 @@ package org.apache.fineract.selfservice.account.service;
 
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_NUMBER_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PAYMENT_TYPE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -42,7 +42,6 @@ import org.apache.fineract.selfservice.account.exception.InvalidAccountInformati
 import org.apache.fineract.selfservice.account.exception.InvalidBeneficiaryException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,230 +51,200 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @RequiredArgsConstructor
 @Slf4j
-public class SelfBeneficiariesTPTWritePlatformServiceImpl
-    implements SelfBeneficiariesTPTWritePlatformService {
+public class SelfBeneficiariesTPTWritePlatformServiceImpl implements SelfBeneficiariesTPTWritePlatformService {
 
-  private final PlatformSelfServiceSecurityContext context;
-  private final SelfBeneficiariesTPTRepository repository;
-  private final SelfBeneficiariesTPTDataValidator validator;
-  private final LoanRepositoryWrapper loanRepositoryWrapper;
-  private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
-  private final AppSelfServiceUserRepository
-      appUserRepository; // El repositorio correcto inyectado por Lombok
+    private final PlatformSelfServiceSecurityContext context;
+    private final SelfBeneficiariesTPTRepository repository;
+    private final SelfBeneficiariesTPTDataValidator validator;
+    private final LoanRepositoryWrapper loanRepositoryWrapper;
+    private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
 
-  /**
-   * Adds a new self-service beneficiary.
-   *
-   * @param command the JSON command containing beneficiary details
-   * @return the result containing the generated entity ID
-   */
-  @Transactional
-  @Override
-  public CommandProcessingResult add(JsonCommand command) {
-    HashMap<String, Object> params = this.validator.validateForCreate(command.json());
+    /**
+     * Adds a new self-service beneficiary.
+     *
+     * @param command the JSON command containing beneficiary details
+     * @return the result containing the generated entity ID
+     */
+    @Transactional
+    @Override
+    public CommandProcessingResult add(JsonCommand command) {
+        // Validator ensures paymentType is "SAME_BANK", "SINPE", or "PIN" and validates lengths/formats
+        Map<String, Object> params = this.validator.validateForCreate(command.json());
 
-    String name = (String) params.get(NAME_PARAM_NAME);
-    Integer accountType = (Integer) params.get(ACCOUNT_TYPE_PARAM_NAME);
-    String accountNumber = (String) params.get(ACCOUNT_NUMBER_PARAM_NAME);
-    String officeName = (String) params.get(OFFICE_NAME_PARAM_NAME);
-    Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+        String name = (String) params.get(NAME_PARAM_NAME);
+        Integer accountType = (Integer) params.get(ACCOUNT_TYPE_PARAM_NAME);
+        String accountNumber = (String) params.get(ACCOUNT_NUMBER_PARAM_NAME);
+        String officeName = (String) params.get(OFFICE_NAME_PARAM_NAME);
+        Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+        String paymentType = (String) params.get(PAYMENT_TYPE_PARAM_NAME);
+        String currency = (String) params.get(CURRENCY_PARAM_NAME);
 
-    Long accountId = null;
-    Long clientId = null;
-    Long officeId = null;
+        Long accountId = null;
+        Long clientId = null;
+        Long officeId = null;
+        boolean validAccountDetails = true;
 
-    boolean validAccountDetails = true;
-
-    // 1. Identificamos si es un flujo externo de Costa Rica (3 = SINPE Móvil, 4 = PIN/IBAN)
-    boolean isExternal = (accountType.equals(4) || accountType.equals(3));
-
-    if (isExternal) {
-      validAccountDetails = true;
-
-      // 2. VALIDACIÓN SENCILLA POR LONGITUD DE CARACTERES
-      if (accountNumber == null) {
-        validAccountDetails = false;
-      } else {
-        String cleanAccount = accountNumber.trim();
-
-        if (accountType.equals(3) && cleanAccount.length() != 8) {
-          log.error("Validacion fallida: SINPE Movil (Tipo 3) requiere exactamente 8 digitos.");
-          validAccountDetails = false;
-        } else if (accountType.equals(4) && cleanAccount.length() != 22) {
-          log.error("Validacion fallida: PIN/IBAN (Tipo 4) requiere exactamente 22 caracteres.");
-          validAccountDetails = false;
+        // Route logic based on explicit paymentType rather than magic numbers
+        if ("SAME_BANK".equals(paymentType)) {
+            if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
+                Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
+                if (loan != null && loan.getClientId() != null && loan.getOffice().getName().equals(officeName)) {
+                    accountId = loan.getId();
+                    officeId = loan.getOfficeId();
+                    clientId = loan.getClientId();
+                } else {
+                    validAccountDetails = false;
+                }
+            } else {
+                SavingsAccount savings = this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
+                if (savings != null && savings.getClient() != null && savings.getClient().getOffice().getName().equals(officeName)) {
+                    accountId = savings.getId();
+                    clientId = savings.getClient().getId();
+                    officeId = savings.getClient().getOffice().getId();
+                } else {
+                    validAccountDetails = false;
+                }
+            }
+        } else if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
+            // External beneficiaries: length/format validation is already guaranteed by SelfBeneficiariesTPTDataValidator
+            validAccountDetails = (accountNumber != null && !accountNumber.trim().isEmpty());
+            
+            // Use 0L for internal IDs to satisfy legacy NOT NULL constraints on external beneficiaries
+            officeId = 0L;
+            clientId = 0L;
+            accountId = 0L;
+        } else {
+            validAccountDetails = false;
         }
-      }
 
-    } else if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
-      Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
-      if (loan != null
-          && loan.getClientId() != null
-          && loan.getOffice().getName().equals(officeName)) {
-        accountId = loan.getId();
-        officeId = loan.getOfficeId();
-        clientId = loan.getClientId();
-      } else {
-        validAccountDetails = false;
-      }
-    } else {
-      SavingsAccount savings =
-          this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
-      if (savings != null
-          && savings.getClient() != null
-          && savings.getClient().getOffice().getName().equals(officeName)) {
-        accountId = savings.getId();
-        clientId = savings.getClient().getId();
-        officeId = savings.getClient().getOffice().getId();
-      } else {
-        validAccountDetails = false;
-      }
-    }
+        if (!validAccountDetails) {
+            throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
+        }
 
-    // Candado condicional para cuentas internas de Fineract
-    if (!isExternal && (accountId == null || clientId == null || officeId == null)) {
-      validAccountDetails = false;
-    }
-
-    // 3. Si no pasó la validación de tamaño o de Mifos, arrojamos la excepción
-    if (!validAccountDetails) {
-      throw new InvalidAccountInformationException(
-          officeName,
-          accountNumber,
-          isExternal
-              ? "Longitud invalida para Tipo " + accountType
-              : PortfolioAccountType.fromInt(accountType).getCode());
-    }
-
-    try {
-      AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-
-      Optional<AppSelfServiceUser> ssUser = this.appUserRepository.findById(user.getId());
-
-      Long ssID = ssUser.get().getId();
-
-      log.error("ID USUARIO ssID " + ssID);
-
-      final Long appUserIdPlano = user.getId();
-
-      log.error("ID USUARIO user.getId() " + user.getId());
-
-      SelfBeneficiariesTPT beneficiary =
-          new SelfBeneficiariesTPT(
-              appUserIdPlano, name, officeId, clientId, accountId, accountType, transferLimit);
-
-      if (isExternal) {
-        log.error("IS EXTERNAL");
-        beneficiary.setCustomAccountNumber(accountNumber);
-        beneficiary.setHolderName((String) params.get("holder"));
-        beneficiary.setHolderId((String) params.get("holderId"));
-        beneficiary.setHolderIdType((Integer) params.get("holderIdType"));
-        beneficiary.setCurrencyCode((String) params.get("currencyCode"));
-        beneficiary.setEntityCode((String) params.get("entityCode"));
-        beneficiary.setEntityName((String) params.get("entityName"));
-      }
-
-      beneficiary.setActive(true);
-      log.error("IS ACTIVE");
-
-      this.repository.saveAndFlush(beneficiary);
-      log.error("SAVE AND FLUSH");
-      return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-    } catch (DataAccessException dae) {
-      handleDataIntegrityIssues(command, dae);
-      dae.printStackTrace();
-    }
-
-    throw new InvalidAccountInformationException(
-        officeName,
-        accountNumber,
-        isExternal
-            ? String.valueOf(accountType)
-            : PortfolioAccountType.fromInt(accountType).getCode());
-  }
-
-  /**
-   * Updates an existing self-service beneficiary.
-   *
-   * @param command the JSON command containing the fields to update
-   * @return the result containing the entity ID and the changes made
-   */
-  @Transactional
-  @Override
-  public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
-    HashMap<String, Object> params = this.validator.validateForUpdate(command.json());
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
-    if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
-      String name = (String) params.get(NAME_PARAM_NAME);
-      Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
-
-      Map<String, Object> changes = beneficiary.update(name, transferLimit);
-      if (!changes.isEmpty()) {
         try {
-          this.repository.saveAndFlush(beneficiary);
+            AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+            Long appUserId = user.getId();
 
-          return new CommandProcessingResultBuilder() //
-              .withEntityId(beneficiary.getId()) //
-              .with(changes)
-              .build();
+            // Constructor now includes paymentType and currency
+            SelfBeneficiariesTPT beneficiary = new SelfBeneficiariesTPT(
+                    appUserId, name, officeId, clientId, accountId, accountType, transferLimit, paymentType, currency);
+
+            // Populate external-specific fields only when applicable
+            if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
+                beneficiary.setCustomAccountNumber(accountNumber);
+                beneficiary.setHolderName((String) params.get("holderName"));
+                beneficiary.setHolderId((String) params.get("holderId"));
+                beneficiary.setHolderIdType((Integer) params.get("holderIdType"));
+                beneficiary.setCurrencyCode((String) params.get("currencyCode"));
+                beneficiary.setEntityCode((String) params.get("entityCode"));
+                beneficiary.setEntityName((String) params.get("entityName"));
+            }
+
+            beneficiary.setActive(true);
+            this.repository.saveAndFlush(beneficiary);
+            
+            return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+            
         } catch (DataAccessException dae) {
-          handleDataIntegrityIssues(command, dae);
+            handleDataIntegrityIssues(command, dae);
         }
-      }
+
+        // Fallback exception (should ideally not be reached due to prior checks)
+        throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
     }
-    throw new InvalidBeneficiaryException(beneficiaryId);
-  }
 
-  /**
-   * Deallocates or softly deletes a self-service beneficiary.
-   *
-   * @param command the JSON command requesting deletion
-   * @return the result containing the deleted entity ID
-   */
-  @Transactional
-  @Override
-  public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId).orElse(null);
-    if (beneficiary != null && beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+    /**
+     * Updates an existing self-service beneficiary.
+     *
+     * @param beneficiaryId the ID of the beneficiary to update
+     * @param command the JSON command containing the fields to update
+     * @return the result containing the entity ID and the changes made
+     */
+    @Transactional
+    @Override
+    public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
+        Map<String, Object> params = this.validator.validateForUpdate(command.json());
+        AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+        
+        // Java 21 idiomatic retrieval with immediate security validation
+        SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId)
+                .orElseThrow(() -> new InvalidBeneficiaryException(beneficiaryId));
 
-      beneficiary.setActive(false);
-      this.repository.save(beneficiary);
-
-      return new CommandProcessingResultBuilder() //
-          .withEntityId(beneficiary.getId()) //
-          .build();
-    }
-    throw new InvalidBeneficiaryException(beneficiaryId);
-  }
-
-  private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
-    final Throwable realCause = dae.getMostSpecificCause();
-    if (realCause.getMessage().contains("name")
-        || realCause.getMessage().contains("uk_m_selfservice_beneficiaries_tpt_name")) {
-
-      String name = "unknown";
-      try {
-        if (command != null && command.json() != null) {
-          // Safe extraction
-          name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
+        if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+            throw new InvalidBeneficiaryException(beneficiaryId);
         }
-      } catch (Exception e) {
-        log.debug("Could not extract name from JSON command", e);
-      }
 
-      throw new PlatformDataIntegrityException(
-          "error.msg.beneficiary.duplicate.name",
-          "Beneficiary with name `" + name + "` already exists for this user.",
-          NAME_PARAM_NAME,
-          name);
+        String name = (String) params.get(NAME_PARAM_NAME);
+        Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+
+        Map<String, Object> changes = beneficiary.update(name, transferLimit);
+        if (!changes.isEmpty()) {
+            try {
+                this.repository.saveAndFlush(beneficiary);
+                return new CommandProcessingResultBuilder()
+                        .withEntityId(beneficiary.getId())
+                        .with(changes)
+                        .build();
+            } catch (DataAccessException dae) {
+                handleDataIntegrityIssues(command, dae);
+            }
+        }
+        
+        return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
     }
 
-    log.error("Unexpected data integrity issue with beneficiary", dae);
-    throw ErrorHandler.getMappable(
-        dae,
-        "error.msg.beneficiary.unknown.data.integrity.issue",
-        "Unknown data integrity issue with beneficiary resource.");
-  }
+    /**
+     * Deallocates or softly deletes a self-service beneficiary.
+     *
+     * @param beneficiaryId the ID of the beneficiary to delete
+     * @param command the JSON command requesting deletion
+     * @return the result containing the deleted entity ID
+     */
+    @Transactional
+    @Override
+    public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
+        AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+        
+        SelfBeneficiariesTPT beneficiary = this.repository.findById(beneficiaryId)
+                .orElseThrow(() -> new InvalidBeneficiaryException(beneficiaryId));
+
+        if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+            throw new InvalidBeneficiaryException(beneficiaryId);
+        }
+
+        beneficiary.setActive(false);
+        this.repository.save(beneficiary);
+
+        return new CommandProcessingResultBuilder()
+                .withEntityId(beneficiary.getId())
+                .build();
+    }
+
+    private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
+        final Throwable realCause = dae.getMostSpecificCause();
+        String message = realCause.getMessage();
+        
+        if (message != null && (message.contains("name") || message.contains("uk_m_selfservice_beneficiaries_tpt_name"))) {
+            String name = "unknown";
+            try {
+                if (command != null && command.json() != null) {
+                    name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
+                }
+            } catch (Exception e) {
+                log.debug("Could not extract name from JSON command", e);
+            }
+
+            throw new PlatformDataIntegrityException(
+                    "error.msg.beneficiary.duplicate.name",
+                    "Beneficiary with name `" + name + "` already exists for this user.",
+                    NAME_PARAM_NAME,
+                    name);
+        }
+
+        log.error("Unexpected data integrity issue with beneficiary", dae);
+        throw ErrorHandler.getMappable(
+                dae,
+                "error.msg.beneficiary.unknown.data.integrity.issue",
+                "Unknown data integrity issue with beneficiary resource.");
+    }
 }

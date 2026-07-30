@@ -50,6 +50,8 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PAYMENT_TYPE_PARAM_NAME;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -77,7 +79,9 @@ public class SelfBeneficiariesTPTDataValidator {
               DESTINATION_ID_TYPE_PARAM_NAME,
               CURRENCY_CODE_PARAM_NAME,
               ENTITY_CODE_PARAM_NAME,
-              ENTITY_NAME_PARAM_NAME));
+              ENTITY_NAME_PARAM_NAME,
+              PAYMENT_TYPE_PARAM_NAME, 
+              CURRENCY_PARAM_NAME));
 
   private static final Set<String> UPDATE_REQUEST_DATA_PARAMETERS =
       new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
@@ -100,6 +104,12 @@ public class SelfBeneficiariesTPTDataValidator {
     final DataValidatorBuilder baseDataValidator =
         new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
     final JsonElement element = this.fromApiJsonHelper.parse(json);
+    
+    final String paymentType = this.fromApiJsonHelper.extractStringNamed(PAYMENT_TYPE_PARAM_NAME, element);
+    baseDataValidator.reset().parameter(PAYMENT_TYPE_PARAM_NAME).value(paymentType).notBlank().isOneOfTheseValues("SAME_BANK", "SINPE", "PIN");
+    
+    final String currency = this.fromApiJsonHelper.extractStringNamed(CURRENCY_PARAM_NAME, element);
+    baseDataValidator.reset().parameter(CURRENCY_PARAM_NAME).value(currency).notBlank().notExceedingLengthOf(3);
 
     final String name = this.fromApiJsonHelper.extractStringNamed(NAME_PARAM_NAME, element);
     baseDataValidator
@@ -234,6 +244,8 @@ public class SelfBeneficiariesTPTDataValidator {
     ret.put(ACCOUNT_NUMBER_PARAM_NAME, accountNo);
     ret.put(ACCOUNT_TYPE_PARAM_NAME, accountType);
     ret.put(TRANSFER_LIMIT_PARAM_NAME, transferLimit);
+    ret.put(PAYMENT_TYPE_PARAM_NAME, paymentType);
+    ret.put(CURRENCY_PARAM_NAME, currency);
     ret.put("customAccountNumber", customAccountNumber);
     ret.put("holderName", holderName);
     ret.put("holderId", holderId);

@@ -69,4 +69,5 @@
   <include file="parts/057-add-fee-config.xml" relativeToChangelogFile="true"/>
   <include file="parts/058-add-fee-payment-link.xml" relativeToChangelogFile="true"/>  
   <include file="parts/059-add-fee-to-paymentlink-audit-table.xml" relativeToChangelogFile="true"/>
+  <include file="parts/060-add-extended-features-to-beneficiaries.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>

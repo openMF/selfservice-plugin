@@ -42,4 +42,7 @@ public interface SelfBeneficiariesTPTApiConstants {
   String CURRENCY_CODE_PARAM_NAME = "currencyCode";
   String ENTITY_CODE_PARAM_NAME = "entityCode";
   String ENTITY_NAME_PARAM_NAME = "entityName";
+  
+  String PAYMENT_TYPE_PARAM_NAME = "paymentType";
+  String CURRENCY_PARAM_NAME = "currency";
 }

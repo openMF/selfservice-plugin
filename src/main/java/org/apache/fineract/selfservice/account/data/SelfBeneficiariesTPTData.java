@@ -19,127 +19,138 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 
 public class SelfBeneficiariesTPTData {
 
-  @SuppressWarnings("unused")
-  private final Long id;
+    private final Long id;
+    private final String name;
+    private final String officeName;
+    private final String clientName;
+    private final EnumOptionData accountType;
+    private final String accountNumber;
+    private final Long transferLimit;
+    private final Collection<EnumOptionData> accountTypeOptions;
+    
+    private final String customAccountNumber;
+    private final String holderName;
+    private final String holderId;
+    private final Integer holderIdType;
+    private final String currencyCode;
+    private final String entityCode;
+    private final String entityName;
+    
+    // New fields for explicit payment routing and currency handling
+    private final String paymentType;
+    private final String currency;
 
-  @SuppressWarnings("unused")
-  private final String name;
+    /**
+     * Constructor for template response (returns available account type options).
+     */
+    public SelfBeneficiariesTPTData(final Collection<EnumOptionData> accountTypeOptions) {
+        this.accountTypeOptions = accountTypeOptions;
+        this.id = null;
+        this.name = null;
+        this.officeName = null;
+        this.clientName = null;
+        this.accountType = null;
+        this.accountNumber = null;
+        this.transferLimit = null;
+        this.customAccountNumber = null;
+        this.holderName = null;
+        this.holderId = null;
+        this.holderIdType = null;
+        this.currencyCode = null;
+        this.entityCode = null;
+        this.entityName = null;
+        this.paymentType = null;
+        this.currency = null;
+    }
 
-  @SuppressWarnings("unused")
-  private final String officeName;
+    /**
+     * Constructor for basic list response (internal accounts without extended external details).
+     */
+    public SelfBeneficiariesTPTData(
+            final Long id,
+            final String name,
+            final String officeName,
+            final String clientName,
+            final EnumOptionData accountType,
+            final String accountNumber,
+            final Long transferLimit) {
+        this.accountTypeOptions = null;
+        this.id = id;
+        this.name = name;
+        this.officeName = officeName;
+        this.clientName = clientName;
+        this.accountType = accountType;
+        this.accountNumber = accountNumber;
+        this.transferLimit = transferLimit;
+        this.customAccountNumber = null;
+        this.holderName = null;
+        this.holderId = null;
+        this.holderIdType = null;
+        this.currencyCode = null;
+        this.entityCode = null;
+        this.entityName = null;
+        this.paymentType = null;   // FIXED: Added missing initialization
+        this.currency = null;      // FIXED: Added missing initialization
+    }
 
-  @SuppressWarnings("unused")
-  private final String clientName;
+    /**
+     * Constructor for full detail response (includes external beneficiary details like SINPE/PIN).
+     */
+    public SelfBeneficiariesTPTData(
+            final Long id,
+            final String name,
+            final String officeName,
+            final String clientName,
+            final EnumOptionData accountType,
+            final String accountNumber,
+            final Long transferLimit,
+            final String customAccountNumber,
+            final String holderName,
+            final String holderId,
+            final Integer holderIdType,
+            final String currencyCode,
+            final String entityCode,
+            final String entityName,
+            final String paymentType,
+            final String currency) {
+        this.accountTypeOptions = null;
+        this.id = id;
+        this.name = name;
+        this.officeName = officeName;
+        this.clientName = clientName;
+        this.accountType = accountType;
+        this.accountNumber = accountNumber;
+        this.transferLimit = transferLimit;
+        this.customAccountNumber = customAccountNumber;
+        this.holderName = holderName;
+        this.holderId = holderId;
+        this.holderIdType = holderIdType;
+        this.currencyCode = currencyCode;
+        this.entityCode = entityCode;
+        this.entityName = entityName;
+        this.paymentType = paymentType;
+        this.currency = currency;
+    }
 
-  @SuppressWarnings("unused")
-  private final EnumOptionData accountType;
+    // --- Getters ---
 
-  @SuppressWarnings("unused")
-  private final String accountNumber;
-
-  @SuppressWarnings("unused")
-  private final Long transferLimit;
-
-  @SuppressWarnings("unused")
-  private final Collection<EnumOptionData> accountTypeOptions;
-
-  @SuppressWarnings("unused")
-  private final String customAccountNumber;
-
-  @SuppressWarnings("unused")
-  private final String holderName;
-
-  @SuppressWarnings("unused")
-  private final String holderId;
-
-  @SuppressWarnings("unused")
-  private final Integer holderIdType;
-
-  @SuppressWarnings("unused")
-  private final String currencyCode;
-
-  @SuppressWarnings("unused")
-  private final String entityCode;
-
-  @SuppressWarnings("unused")
-  private final String entityName;
-
-  public SelfBeneficiariesTPTData(final Collection<EnumOptionData> accountTypeOptions) {
-    this.accountTypeOptions = accountTypeOptions;
-    this.id = null;
-    this.name = null;
-    this.officeName = null;
-    this.clientName = null;
-    this.accountType = null;
-    this.accountNumber = null;
-    this.transferLimit = null;
-
-    this.customAccountNumber = null;
-    this.holderName = null;
-    this.holderId = null;
-    this.holderIdType = null;
-    this.currencyCode = null;
-    this.entityCode = null;
-    this.entityName = null;
-  }
-
-  public SelfBeneficiariesTPTData(
-      final Long id,
-      final String name,
-      final String officeName,
-      final String clientName,
-      final EnumOptionData accountType,
-      final String accountNumber,
-      final Long transferLimit) {
-    this.accountTypeOptions = null;
-    this.id = id;
-    this.name = name;
-    this.officeName = officeName;
-    this.clientName = clientName;
-    this.accountType = accountType;
-    this.accountNumber = accountNumber;
-    this.transferLimit = transferLimit;
-
-    this.customAccountNumber = null;
-    this.holderName = null;
-    this.holderId = null;
-    this.holderIdType = null;
-    this.currencyCode = null;
-    this.entityCode = null;
-    this.entityName = null;
-  }
-
-  public SelfBeneficiariesTPTData(
-      final Long id,
-      final String name,
-      final String officeName,
-      final String clientName,
-      final EnumOptionData accountType,
-      final String accountNumber,
-      final Long transferLimit,
-      final String customAccountNumber,
-      final String holderName,
-      final String holderId,
-      final Integer holderIdType,
-      final String currencyCode,
-      final String entityCode,
-      final String entityName) {
-    this.accountTypeOptions = null;
-    this.id = id;
-    this.name = name;
-    this.officeName = officeName;
-    this.clientName = clientName;
-    this.accountType = accountType;
-    this.accountNumber = accountNumber;
-    this.transferLimit = transferLimit;
-
-    // Asignación de los campos nuevos
-    this.customAccountNumber = customAccountNumber;
-    this.holderName = holderName;
-    this.holderId = holderId;
-    this.holderIdType = holderIdType;
-    this.currencyCode = currencyCode;
-    this.entityCode = entityCode;
-    this.entityName = entityName;
-  }
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getOfficeName() { return officeName; }
+    public String getClientName() { return clientName; }
+    public EnumOptionData getAccountType() { return accountType; }
+    public String getAccountNumber() { return accountNumber; }
+    public Long getTransferLimit() { return transferLimit; }
+    public Collection<EnumOptionData> getAccountTypeOptions() { return accountTypeOptions; }
+    
+    public String getCustomAccountNumber() { return customAccountNumber; }
+    public String getHolderName() { return holderName; }
+    public String getHolderId() { return holderId; }
+    public Integer getHolderIdType() { return holderIdType; }
+    public String getCurrencyCode() { return currencyCode; }
+    public String getEntityCode() { return entityCode; }
+    public String getEntityName() { return entityName; }
+    
+    public String getPaymentType() { return paymentType; }
+    public String getCurrency() { return currency; }
 }

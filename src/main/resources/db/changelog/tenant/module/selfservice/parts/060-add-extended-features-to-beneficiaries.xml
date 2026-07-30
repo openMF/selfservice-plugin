@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0060-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="m_selfservice_beneficiaries_tpt" columnName="payment_type"/>
+            </not>
+        </preConditions>
+        
+        <addColumn tableName="m_selfservice_beneficiaries_tpt">
+            <column name="payment_type" type="VARCHAR(20)">
+                <constraints nullable="true" />
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+        
+        <!-- Migrate existing data based on legacy account_type -->
+        <sql>
+            UPDATE m_selfservice_beneficiaries_tpt 
+            SET payment_type = 'SAME_BANK', currency = COALESCE(currency_code, 'CRC') 
+            WHERE account_type IN (1, 2);
+            
+            UPDATE m_selfservice_beneficiaries_tpt 
+            SET payment_type = 'SINPE', currency = COALESCE(currency_code, 'CRC') 
+            WHERE account_type = 3;
+            
+            UPDATE m_selfservice_beneficiaries_tpt 
+            SET payment_type = 'PIN', currency = COALESCE(currency_code, 'CRC') 
+            WHERE account_type = 4;
+        </sql>
+        
+        <addNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="payment_type" columnDataType="VARCHAR(20)"/>
+        <addNotNullConstraint tableName="m_selfservice_beneficiaries_tpt" columnName="currency" columnDataType="VARCHAR(3)"/>
+    </changeSet>
+</databaseChangeLog>
