@@ -221,6 +221,8 @@ SELECT setval(
     body.put("accountNumber", seed.accountNumber());
     body.put("accountType", 2);
     body.put("transferLimit", 500);
+    body.put("paymentType", "SAME_BANK");
+    body.put("currency", "USD");
 
     Response response =
         given(
@@ -253,6 +255,8 @@ SELECT setval(
     addBody.put("accountNumber", seed.accountNumber());
     addBody.put("accountType", 2);
     addBody.put("transferLimit", 500);
+    addBody.put("paymentType", "SAME_BANK");
+    addBody.put("currency", "USD");
 
     Integer beneficiaryId =
         given(
@@ -312,6 +316,8 @@ SELECT setval(
     addBody.put("accountNumber", seed.accountNumber());
     addBody.put("accountType", 2);
     addBody.put("transferLimit", 500);
+    addBody.put("paymentType", "SAME_BANK");
+    addBody.put("currency", "USD");
 
     Integer beneficiaryId =
         given(

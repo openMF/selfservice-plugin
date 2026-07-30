@@ -79,6 +79,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
       beneficiaryBody.put("accountNumber", receiverAccountNumber);
       beneficiaryBody.put("accountType", 2);
       beneficiaryBody.put("transferLimit", 10000);
+      beneficiaryBody.put("paymentType", "SAME_BANK");
+      beneficiaryBody.put("currency", "USD");
 
       Integer beneficiaryId =
           given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), ssUsername, "password"))
@@ -205,6 +207,8 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
       beneficiaryBody.put("accountNumber", receiverAccountNumber);
       beneficiaryBody.put("accountType", 2);
       beneficiaryBody.put("transferLimit", 100); // 100 limit!
+      beneficiaryBody.put("paymentType", "SAME_BANK");
+      beneficiaryBody.put("currency", "USD");
 
       given(SelfServiceTestUtils.requestSpecWithAuth(getFineractPort(), ssUsername, "password"))
           .body(beneficiaryBody)
