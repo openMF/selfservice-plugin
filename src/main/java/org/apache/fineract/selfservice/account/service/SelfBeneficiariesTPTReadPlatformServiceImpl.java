@@ -72,12 +72,11 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" s.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
+      // FIXED: Retrieve paymentType and currency from DB for internal accounts as well
       sqlBuilder.append(
           " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
               + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName, ");
-      // FIXED: Added missing columns for UNION ALL compatibility
-      sqlBuilder.append(" null as paymentType, null as currency ");
+              + " entityName, b.payment_type as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -85,7 +84,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 2 ");
       sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
+      
       sqlBuilder.append(" union all ");
+      
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
       sqlBuilder.append(" o.name as officeName, ");
@@ -93,12 +94,11 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" l.account_no as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
+      // FIXED: Retrieve paymentType and currency from DB for internal accounts as well
       sqlBuilder.append(
           " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
               + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName, ");
-      // FIXED: Added missing columns for UNION ALL compatibility
-      sqlBuilder.append(" null as paymentType, null as currency ");
+              + " entityName, b.payment_type as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -106,7 +106,9 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 1 ");
       sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
+      
       sqlBuilder.append(" union all ");
+      
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
       sqlBuilder.append(" 'External Office' as officeName, ");
@@ -120,10 +122,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" b.holder_id_type as holderIdType, ");
       sqlBuilder.append(" b.currency_code as currencyCode, ");
       sqlBuilder.append(" b.entity_code as entityCode, ");
-      // FIXED: Added missing comma after entityName
       sqlBuilder.append(" b.entity_name as entityName, ");
       sqlBuilder.append(" b.payment_type as paymentType, ");
-      // FIXED: Removed trailing comma before FROM clause
       sqlBuilder.append(" b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" where b.is_active = true ");
@@ -158,21 +158,16 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String paymentType = rs.getString("paymentType");
       final String currency = rs.getString("currency");
 
-      EnumOptionData accountType = null;
-      if (customAccountNumber != null) {
-        // It's an external beneficiary (Costa Rica)
-        if (accountTypeId == 4) {
-          accountType =
-              new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
-        } else {
-          accountType =
-              new EnumOptionData(
-                  (long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
-        }
+      EnumOptionData accountType;
+      
+      // Explicit paymentType routing for external accounts
+      if ("PIN".equals(paymentType)) {
+        accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
+      } else if ("SINPE".equals(paymentType)) {
+        accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
       } else {
-        // It's an internal native Fineract beneficiary
-        accountType =
-            AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
+        // Fallback to native Fineract account type enumeration for SAME_BANK
+        accountType = AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
       }
 
       return new SelfBeneficiariesTPTData(
@@ -261,7 +256,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     sqlBuilder.append(" where b.app_selfservice_user_id = ? ");
     sqlBuilder.append(" and b.account_id = ? ");
     sqlBuilder.append(" and b.account_type = ? ");
-    sqlBuilder.append(" and b.is_active = true; ");
+    sqlBuilder.append(" and b.is_active = true ");
 
     return this.jdbcTemplate.queryForObject(
         sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
@@ -273,7 +268,6 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       return false;
     }
 
-    // Clean the account for the query
     final String cleanAccount = accountNumber.replaceAll("\\s+", "");
 
     final StringBuilder sqlBuilder = new StringBuilder();
