@@ -97,9 +97,6 @@ public class SelfBeneficiariesTPTData {
         this.currency = null;
     }
 
-    /**
-     * Constructor for full detail response (INTACTO - Sin modificar para no romper otros llamados).
-     */
     public SelfBeneficiariesTPTData(
             final Long id,
             final String name,
@@ -125,7 +122,7 @@ public class SelfBeneficiariesTPTData {
         this.clientName = clientName;
         this.accountType = accountType;
         this.accountNumber = accountNumber;
-        this.iban = customAccountNumber; // Para externos usa customAccountNumber como IBAN
+        this.iban = customAccountNumber;
         this.transferLimit = transferLimit;
         this.customAccountNumber = customAccountNumber;
         this.holderName = holderName;
