@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 public class SelfBeneficiariesTPTReadPlatformServiceImpl
-    implements SelfBeneficiariesTPTReadPlatformService {
+        implements SelfBeneficiariesTPTReadPlatformService {
 
   private final PlatformSelfServiceSecurityContext context;
   private final JdbcTemplate jdbcTemplate;
@@ -36,7 +36,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
   private final AccountTemplateMapper accountTemplateMapper;
 
   public SelfBeneficiariesTPTReadPlatformServiceImpl(
-      final PlatformSelfServiceSecurityContext context, final JdbcTemplate jdbcTemplate) {
+          final PlatformSelfServiceSecurityContext context, final JdbcTemplate jdbcTemplate) {
     this.context = context;
     this.jdbcTemplate = jdbcTemplate;
     this.mapper = new BeneficiaryMapper();
@@ -46,18 +46,17 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
   @Override
   public Collection<SelfBeneficiariesTPTData> retrieveAll() {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    // Parameter injected 3 times to cover the 3 blocks of the UNION ALL
     return this.jdbcTemplate.query(
-        this.mapper.schema(), this.mapper, new Object[] {user.getId(), user.getId(), user.getId()});
+            this.mapper.schema(), this.mapper, new Object[] {user.getId(), user.getId(), user.getId()});
   }
 
   @Override
   public Collection<SelfAccountTemplateData> retrieveTPTSelfAccountTemplateData(
-      AppSelfServiceUser user) {
+          AppSelfServiceUser user) {
     return this.jdbcTemplate.query(
-        this.accountTemplateMapper.schema(),
-        this.accountTemplateMapper,
-        new Object[] {user.getId(), user.getId()});
+            this.accountTemplateMapper.schema(),
+            this.accountTemplateMapper,
+            new Object[] {user.getId(), user.getId()});
   }
 
   private static final class BeneficiaryMapper implements RowMapper<SelfBeneficiariesTPTData> {
@@ -71,12 +70,12 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" s.account_no as accountNumber, ");
+      sqlBuilder.append(" s.external_id as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
-      // FIXED: Retrieve paymentType and currency from DB for internal accounts as well
       sqlBuilder.append(
-          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
-              + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName, b.payment_type as paymentType, b.currency as currency ");
+              " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
+                      + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
+                      + " entityName, b.payment_type as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -84,21 +83,21 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 2 ");
       sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
-      
+
       sqlBuilder.append(" union all ");
-      
+
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
       sqlBuilder.append(" o.name as officeName, ");
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" l.account_no as accountNumber, ");
+      sqlBuilder.append(" l.external_id as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
-      // FIXED: Retrieve paymentType and currency from DB for internal accounts as well
       sqlBuilder.append(
-          " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
-              + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-              + " entityName, b.payment_type as paymentType, b.currency as currency ");
+              " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
+                      + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
+                      + " entityName, b.payment_type as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -106,15 +105,16 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" where b.is_active = true ");
       sqlBuilder.append(" and b.account_type = 1 ");
       sqlBuilder.append(" and b.app_selfservice_user_id = ?) ");
-      
+
       sqlBuilder.append(" union all ");
-      
+
       sqlBuilder.append(" (select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
       sqlBuilder.append(" 'External Office' as officeName, ");
       sqlBuilder.append(" 'External Client' as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" b.custom_account_number as accountNumber, ");
+      sqlBuilder.append(" b.custom_account_number as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(" b.custom_account_number as customAccountNumber, ");
       sqlBuilder.append(" b.holder_name as holderName, ");
@@ -139,7 +139,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
     @Override
     public SelfBeneficiariesTPTData mapRow(
-        final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+            final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
 
       final Long id = rs.getLong("id");
       final String name = rs.getString("name");
@@ -147,6 +147,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String clientName = rs.getString("clientName");
       final Integer accountTypeId = rs.getInt("accountType");
       final String accountNumber = rs.getString("accountNumber");
+      final String iban = rs.getString("iban");
       final Long transferLimit = rs.getLong("transferLimit");
       final String customAccountNumber = rs.getString("customAccountNumber");
       final String holderName = rs.getString("holderName");
@@ -159,34 +160,33 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String currency = rs.getString("currency");
 
       EnumOptionData accountType;
-      
-      // Explicit paymentType routing for external accounts
+
       if ("PIN".equals(paymentType)) {
         accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
       } else if ("SINPE".equals(paymentType)) {
         accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
       } else {
-        // Fallback to native Fineract account type enumeration for SAME_BANK
         accountType = AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
       }
 
       return new SelfBeneficiariesTPTData(
-          id,
-          name,
-          officeName,
-          clientName,
-          accountType,
-          accountNumber,
-          transferLimit,
-          customAccountNumber,
-          holderName,
-          holderId,
-          holderIdType,
-          currencyCode,
-          entityCode,
-          entityName,
-          paymentType, 
-          currency);
+              id,
+              name,
+              officeName,
+              clientName,
+              accountType,
+              accountNumber,
+              iban,
+              transferLimit,
+              customAccountNumber,
+              holderName,
+              holderId,
+              holderIdType,
+              currencyCode,
+              entityCode,
+              entityName,
+              paymentType,
+              currency);
     }
   }
 
@@ -234,7 +234,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
     @Override
     public SelfAccountTemplateData mapRow(
-        final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+            final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
 
       final String officeName = rs.getString("officeName");
       final Long officeId = rs.getLong("officeId");
@@ -245,7 +245,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final Long accountId = rs.getLong("accountId");
 
       return new SelfAccountTemplateData(
-          accountId, accountNumber, accountTypeId, clientId, clientName, officeId, officeName);
+              accountId, accountNumber, accountTypeId, clientId, clientName, officeId, officeName);
     }
   }
 
@@ -259,7 +259,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     sqlBuilder.append(" and b.is_active = true ");
 
     return this.jdbcTemplate.queryForObject(
-        sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
+            sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
   }
 
   @Override
@@ -273,19 +273,19 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     final StringBuilder sqlBuilder = new StringBuilder();
     sqlBuilder.append("SELECT COUNT(*) FROM m_selfservice_beneficiaries_tpt b ");
     sqlBuilder.append(
-        "LEFT JOIN m_savings_account s ON b.account_id = s.id AND b.account_type = 2 ");
+            "LEFT JOIN m_savings_account s ON b.account_id = s.id AND b.account_type = 2 ");
     sqlBuilder.append("LEFT JOIN m_loan l ON b.account_id = l.id AND b.account_type = 1 ");
     sqlBuilder.append("WHERE b.app_selfservice_user_id = ? AND b.is_active = true ");
     sqlBuilder.append("AND (s.account_no = ? OR l.account_no = ? OR b.custom_account_number = ?)");
 
     Integer count =
-        this.jdbcTemplate.queryForObject(
-            sqlBuilder.toString(),
-            Integer.class,
-            appUserId,
-            cleanAccount,
-            cleanAccount,
-            cleanAccount);
+            this.jdbcTemplate.queryForObject(
+                    sqlBuilder.toString(),
+                    Integer.class,
+                    appUserId,
+                    cleanAccount,
+                    cleanAccount,
+                    cleanAccount);
 
     return count != null && count > 0;
   }

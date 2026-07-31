@@ -25,9 +25,10 @@ public class SelfBeneficiariesTPTData {
     private final String clientName;
     private final EnumOptionData accountType;
     private final String accountNumber;
+    private final String iban;
     private final Long transferLimit;
     private final Collection<EnumOptionData> accountTypeOptions;
-    
+
     private final String customAccountNumber;
     private final String holderName;
     private final String holderId;
@@ -35,7 +36,7 @@ public class SelfBeneficiariesTPTData {
     private final String currencyCode;
     private final String entityCode;
     private final String entityName;
-    
+
     // New fields for explicit payment routing and currency handling
     private final String paymentType;
     private final String currency;
@@ -51,6 +52,7 @@ public class SelfBeneficiariesTPTData {
         this.clientName = null;
         this.accountType = null;
         this.accountNumber = null;
+        this.iban = null;
         this.transferLimit = null;
         this.customAccountNumber = null;
         this.holderName = null;
@@ -64,7 +66,7 @@ public class SelfBeneficiariesTPTData {
     }
 
     /**
-     * Constructor for basic list response (internal accounts without extended external details).
+     * 🟢 Constructor for basic list response (internal accounts with IBAN added).
      */
     public SelfBeneficiariesTPTData(
             final Long id,
@@ -73,6 +75,7 @@ public class SelfBeneficiariesTPTData {
             final String clientName,
             final EnumOptionData accountType,
             final String accountNumber,
+            final String iban,
             final Long transferLimit) {
         this.accountTypeOptions = null;
         this.id = id;
@@ -81,6 +84,7 @@ public class SelfBeneficiariesTPTData {
         this.clientName = clientName;
         this.accountType = accountType;
         this.accountNumber = accountNumber;
+        this.iban = iban;
         this.transferLimit = transferLimit;
         this.customAccountNumber = null;
         this.holderName = null;
@@ -89,12 +93,12 @@ public class SelfBeneficiariesTPTData {
         this.currencyCode = null;
         this.entityCode = null;
         this.entityName = null;
-        this.paymentType = null;   // FIXED: Added missing initialization
-        this.currency = null;      // FIXED: Added missing initialization
+        this.paymentType = null;
+        this.currency = null;
     }
 
     /**
-     * Constructor for full detail response (includes external beneficiary details like SINPE/PIN).
+     * Constructor for full detail response (INTACTO - Sin modificar para no romper otros llamados).
      */
     public SelfBeneficiariesTPTData(
             final Long id,
@@ -103,6 +107,7 @@ public class SelfBeneficiariesTPTData {
             final String clientName,
             final EnumOptionData accountType,
             final String accountNumber,
+            final String iban,
             final Long transferLimit,
             final String customAccountNumber,
             final String holderName,
@@ -120,6 +125,7 @@ public class SelfBeneficiariesTPTData {
         this.clientName = clientName;
         this.accountType = accountType;
         this.accountNumber = accountNumber;
+        this.iban = customAccountNumber; // Para externos usa customAccountNumber como IBAN
         this.transferLimit = transferLimit;
         this.customAccountNumber = customAccountNumber;
         this.holderName = holderName;
@@ -140,9 +146,10 @@ public class SelfBeneficiariesTPTData {
     public String getClientName() { return clientName; }
     public EnumOptionData getAccountType() { return accountType; }
     public String getAccountNumber() { return accountNumber; }
+    public String getIban() { return iban; }
     public Long getTransferLimit() { return transferLimit; }
     public Collection<EnumOptionData> getAccountTypeOptions() { return accountTypeOptions; }
-    
+
     public String getCustomAccountNumber() { return customAccountNumber; }
     public String getHolderName() { return holderName; }
     public String getHolderId() { return holderId; }
@@ -150,7 +157,7 @@ public class SelfBeneficiariesTPTData {
     public String getCurrencyCode() { return currencyCode; }
     public String getEntityCode() { return entityCode; }
     public String getEntityName() { return entityName; }
-    
+
     public String getPaymentType() { return paymentType; }
     public String getCurrency() { return currency; }
 }
