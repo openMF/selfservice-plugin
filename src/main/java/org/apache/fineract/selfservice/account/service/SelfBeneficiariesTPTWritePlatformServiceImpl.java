@@ -23,7 +23,6 @@ import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTAp
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
 
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -58,15 +57,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SelfBeneficiariesTPTWritePlatformServiceImpl
         implements SelfBeneficiariesTPTWritePlatformService {
-
-    /** Non-closed savings statuses used by findNonClosedAccountByAccountNumber */
-    private static final Set<Integer> NON_CLOSED_SAVINGS_STATUSES = Set.of(
-            SavingsAccountStatusType.SUBMITTED_AND_PENDING_APPROVAL.getValue(), // 100
-            SavingsAccountStatusType.APPROVED.getValue(),                       // 200
-            SavingsAccountStatusType.ACTIVE.getValue(),                         // 300
-            SavingsAccountStatusType.TRANSFER_IN_PROGRESS.getValue(),           // 303
-            SavingsAccountStatusType.TRANSFER_ON_HOLD.getValue()                // 304
-    );
 
     private final PlatformSelfServiceSecurityContext context;
     private final SelfBeneficiariesTPTRepository repository;
@@ -148,6 +138,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                 // 1. Try standard account number lookup
                 SavingsAccount savings =
                         this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
+
                 // 2. Fallback to externalId lookup if not found by accountNumber
                 if (savings == null) {
                     log.info(
@@ -155,37 +146,50 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                             accountNumber);
                     savings = this.savingsAccountRepository.findByExternalId(
                             ExternalIdFactory.produce(accountNumber));
-                    // Mirror non-closed semantics of findNonClosedAccountByAccountNumber
-                    if (savings != null
-                            && !NON_CLOSED_SAVINGS_STATUSES.contains(savings.getStatus())) {
+
+                    // getStatus() returns SavingsAccountStatusType (enum), NOT Integer.
+                    // Use domain helpers to mirror non-closed semantics of findNonClosedAccountByAccountNumber.
+                    if (savings != null && !isNonClosedSavings(savings)) {
                         log.warn(
-                                "SAME_BANK savings found by externalId but status is closed/invalid: status={}",
+                                "SAME_BANK savings found by externalId but status is closed/invalid: savingsId={}, status={}",
+                                savings.getId(),
                                 savings.getStatus());
                         savings = null;
                     }
                 }
+
                 if (savings != null
                         && savings.getClient() != null
-                        && savings.getClient().getOffice().getName().equals(officeName)) {
+                        && savings.getClient().getOffice() != null
+                        && officeName != null
+                        && officeName.equals(savings.getClient().getOffice().getName())) {
                     accountId = savings.getId();
                     clientId = savings.getClient().getId();
                     officeId = savings.getClient().getOffice().getId();
                     log.info(
-                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}, via={}",
+                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}, status={}",
                             accountId,
                             clientId,
                             officeId,
-                            // diagnostic only
-                            (this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber)
-                                            != null
-                                    ? "accountNumber"
-                                    : "externalId"));
+                            savings.getStatus());
                 } else {
                     validAccountDetails = false;
-                    log.warn(
-                            "SAME_BANK savings lookup failed for accountNumber (len={}), officeName={}",
-                            accountNumber != null ? accountNumber.length() : 0,
-                            officeName);
+                    if (savings != null) {
+                        String actualOffice =
+                                savings.getClient() != null && savings.getClient().getOffice() != null
+                                        ? savings.getClient().getOffice().getName()
+                                        : null;
+                        log.warn(
+                                "SAME_BANK savings resolved but office mismatch: expectedOfficeName={}, actualOfficeName={}, savingsId={}",
+                                officeName,
+                                actualOffice,
+                                savings.getId());
+                    } else {
+                        log.warn(
+                                "SAME_BANK savings lookup failed for accountNumber (len={}), officeName={}",
+                                accountNumber != null ? accountNumber.length() : 0,
+                                officeName);
+                    }
                 }
             }
         } else if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
@@ -386,6 +390,32 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                 user.getId());
 
         return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+    }
+
+    /**
+     * Returns true when the savings account is in a non-closed status, matching the statuses used by
+     * {@code SavingsAccountRepository.findNonClosedAccountByAccountNumber}:
+     * SUBMITTED_AND_PENDING_APPROVAL (100), APPROVED (200), ACTIVE (300),
+     * TRANSFER_IN_PROGRESS (303), TRANSFER_ON_HOLD (304).
+     *
+     * <p>{@link SavingsAccount#getStatus()} returns {@link SavingsAccountStatusType} (enum), not Integer.
+     */
+    private boolean isNonClosedSavings(SavingsAccount savings) {
+        if (savings == null) {
+            return false;
+        }
+        if (savings.isClosed()) {
+            return false;
+        }
+        SavingsAccountStatusType status = savings.getStatus();
+        if (status == null) {
+            return false;
+        }
+        return status.isSubmittedAndPendingApproval()
+                || status.isApproved()
+                || status.isActive()
+                || status.isTransferInProgress()
+                || status.isTransferOnHold();
     }
 
     private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
