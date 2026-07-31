@@ -64,18 +64,20 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     private final String schemaSql;
 
     BeneficiaryMapper() {
+      // 🟢 1. Se usa COALESCE(NULLIF(s.external_id, ''), s.account_no) para garantizar que el IBAN nunca vaya nulo
       final StringBuilder sqlBuilder = new StringBuilder("(select b.id as id, ");
       sqlBuilder.append(" b.name as name, ");
       sqlBuilder.append(" o.name as officeName, ");
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" s.account_no as accountNumber, ");
-      sqlBuilder.append(" s.external_id as iban, ");
+      sqlBuilder.append(" COALESCE(NULLIF(s.external_id, ''), s.account_no) as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
-              " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
-                      + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-                      + " entityName, b.payment_type as paymentType, b.currency as currency ");
+              " COALESCE(NULLIF(s.external_id, ''), s.account_no) as customAccountNumber, "
+                      + " null as holderName, null as holderId, CAST(null AS integer) as holderIdType, "
+                      + " null as currencyCode, null as entityCode, null as entityName, "
+                      + " COALESCE(b.payment_type, 'SAME_BANK') as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -92,12 +94,13 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
       sqlBuilder.append(" l.account_no as accountNumber, ");
-      sqlBuilder.append(" l.external_id as iban, ");
+      sqlBuilder.append(" COALESCE(NULLIF(l.external_id, ''), l.account_no) as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
-              " null as customAccountNumber, null as holderName, null as holderId, CAST(null AS"
-                      + " integer) as holderIdType, null as currencyCode, null as entityCode, null as"
-                      + " entityName, b.payment_type as paymentType, b.currency as currency ");
+              " COALESCE(NULLIF(l.external_id, ''), l.account_no) as customAccountNumber, "
+                      + " null as holderName, null as holderId, CAST(null AS integer) as holderIdType, "
+                      + " null as currencyCode, null as entityCode, null as entityName, "
+                      + " COALESCE(b.payment_type, 'SAME_BANK') as paymentType, b.currency as currency ");
       sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
       sqlBuilder.append(" inner join m_office as o on b.office_id = o.id ");
       sqlBuilder.append(" inner join m_client as c on b.client_id = c.id ");
@@ -169,6 +172,19 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
         accountType = AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
       }
 
+      if ("SAME_BANK".equalsIgnoreCase(paymentType) || paymentType == null) {
+        return new SelfBeneficiariesTPTData(
+                id,
+                name,
+                officeName,
+                clientName,
+                accountType,
+                accountNumber,
+                iban,
+                transferLimit);
+      }
+
+      // Para externos (PIN / SINPE)
       return new SelfBeneficiariesTPTData(
               id,
               name,
