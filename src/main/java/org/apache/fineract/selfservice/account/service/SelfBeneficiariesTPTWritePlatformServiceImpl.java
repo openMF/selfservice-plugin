@@ -23,6 +23,7 @@ import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTAp
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
 
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -38,6 +39,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPT;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPTRepository;
@@ -56,6 +58,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SelfBeneficiariesTPTWritePlatformServiceImpl
         implements SelfBeneficiariesTPTWritePlatformService {
+
+    /** Non-closed savings statuses used by findNonClosedAccountByAccountNumber */
+    private static final Set<Integer> NON_CLOSED_SAVINGS_STATUSES = Set.of(
+            SavingsAccountStatusType.SUBMITTED_AND_PENDING_APPROVAL.getValue(), // 100
+            SavingsAccountStatusType.APPROVED.getValue(),                       // 200
+            SavingsAccountStatusType.ACTIVE.getValue(),                         // 300
+            SavingsAccountStatusType.TRANSFER_IN_PROGRESS.getValue(),           // 303
+            SavingsAccountStatusType.TRANSFER_ON_HOLD.getValue()                // 304
+    );
 
     private final PlatformSelfServiceSecurityContext context;
     private final SelfBeneficiariesTPTRepository repository;
@@ -110,7 +121,9 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                 Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
                 // 2. Fallback to externalId lookup if not found
                 if (loan == null) {
-                    loan = this.loanRepository.findByExternalId(ExternalIdFactory.produce(accountNumber)).orElse(null);
+                    loan = this.loanRepository
+                            .findByExternalId(ExternalIdFactory.produce(accountNumber))
+                            .orElse(null);
                 }
                 if (loan != null
                         && loan.getClientId() != null
@@ -131,8 +144,26 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                             officeName);
                 }
             } else {
+                // Savings (and any non-loan SAME_BANK account type)
+                // 1. Try standard account number lookup
                 SavingsAccount savings =
                         this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
+                // 2. Fallback to externalId lookup if not found by accountNumber
+                if (savings == null) {
+                    log.info(
+                            "SAME_BANK savings accountNumber lookup missed; trying externalId={}",
+                            accountNumber);
+                    savings = this.savingsAccountRepository.findByExternalId(
+                            ExternalIdFactory.produce(accountNumber));
+                    // Mirror non-closed semantics of findNonClosedAccountByAccountNumber
+                    if (savings != null
+                            && !NON_CLOSED_SAVINGS_STATUSES.contains(savings.getStatus())) {
+                        log.warn(
+                                "SAME_BANK savings found by externalId but status is closed/invalid: status={}",
+                                savings.getStatus());
+                        savings = null;
+                    }
+                }
                 if (savings != null
                         && savings.getClient() != null
                         && savings.getClient().getOffice().getName().equals(officeName)) {
@@ -140,10 +171,15 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                     clientId = savings.getClient().getId();
                     officeId = savings.getClient().getOffice().getId();
                     log.info(
-                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}",
+                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}, via={}",
                             accountId,
                             clientId,
-                            officeId);
+                            officeId,
+                            // diagnostic only
+                            (this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber)
+                                            != null
+                                    ? "accountNumber"
+                                    : "externalId"));
                 } else {
                     validAccountDetails = false;
                     log.warn(
