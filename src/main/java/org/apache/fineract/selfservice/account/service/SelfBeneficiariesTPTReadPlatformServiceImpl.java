@@ -181,7 +181,16 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
                 accountType,
                 accountNumber,
                 iban,
-                transferLimit);
+                transferLimit,
+                customAccountNumber,
+                holderName,
+                holderId,
+                holderIdType,
+                currencyCode,
+                entityCode,
+                entityName,
+                paymentType,
+                currency);
       }
 
       // Para externos (PIN / SINPE)
