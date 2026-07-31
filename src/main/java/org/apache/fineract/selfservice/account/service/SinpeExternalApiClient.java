@@ -223,7 +223,7 @@ public class SinpeExternalApiClient {
           referenceNumber);
       return null;
     }
-    String url = getHost(props) + "/transaction/" + referenceNumber;
+    String url = getHost(props) + "/transfer/data/" + referenceNumber;
     log.info("getTransactionDetail calling GET url={}", url);
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
     try {
