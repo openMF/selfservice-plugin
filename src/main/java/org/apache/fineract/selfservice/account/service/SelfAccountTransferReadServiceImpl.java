@@ -371,7 +371,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       customData.put("transferDescription", data.get("description"));
     }
 
-    if (!customData.containsKey("destinationCustomer")) {
+    // Si destinationCustomer NO está presente en customData (o viene nulo), se homologa o crea.
+    // Si ya existe en customData (como en SAME_BANK), se respeta intacto para no perder el IBAN.
+    if (!customData.containsKey("destinationCustomer") || customData.get("destinationCustomer") == null) {
       Map<String, Object> destCustomer = new HashMap<>();
       if (data.get("destinationCustomer") instanceof Map) {
         destCustomer = new HashMap<>((Map<String, Object>) data.get("destinationCustomer"));
@@ -429,11 +431,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   private Map<String, Object> getDestinationCustomerInfoByAccount(String accountIdentifier) {
     Map<String, Object> destinationCustomer = new HashMap<>();
+
     String sql =
             "SELECT "
                     + "c.display_name AS name, "
-                    + "c.email_address AS email, "
-                    + "sa.account_no AS iban, "
+                    + "COALESCE(c.email_address, '') AS email, "
+                    + "COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS iban, "
                     + "COALESCE(ci.document_key, '') AS id, "
                     + "COALESCE(CAST(cv.order_position AS VARCHAR), '0') AS idType, "
                     + "COALESCE(cv.code_value, 'Persona Física Nacional (Cédula)') AS idTypeDescription "
@@ -441,14 +444,14 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "INNER JOIN m_client c ON sa.client_id = c.id "
                     + "LEFT JOIN m_client_identifier ci ON c.id = ci.client_id "
                     + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
-                    + "WHERE (sa.external_id = ? OR sa.account_no = ?) "
+                    + "WHERE (sa.external_id = ? OR sa.account_no = ? OR CAST(sa.id AS VARCHAR) = ?) "
                     + "LIMIT 1";
 
     try {
-      Map<String, Object> result = this.jdbcTemplate.queryForMap(sql, accountIdentifier, accountIdentifier);
+      Map<String, Object> result = this.jdbcTemplate.queryForMap(sql, accountIdentifier, accountIdentifier, accountIdentifier);
       destinationCustomer.put("name", result.getOrDefault("name", ""));
       destinationCustomer.put("email", result.getOrDefault("email", ""));
-      destinationCustomer.put("iban", accountIdentifier);
+      destinationCustomer.put("iban", result.getOrDefault("iban", accountIdentifier));
       destinationCustomer.put("id", result.getOrDefault("id", ""));
       destinationCustomer.put("idType", result.getOrDefault("idType", "0"));
       destinationCustomer.put("idTypeDescription", result.getOrDefault("idTypeDescription", "Persona Física Nacional (Cédula)"));
