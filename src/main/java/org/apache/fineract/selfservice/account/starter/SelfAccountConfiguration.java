@@ -14,7 +14,9 @@
  */
 package org.apache.fineract.selfservice.account.starter;
 
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPTRepository;
@@ -69,13 +71,17 @@ public class SelfAccountConfiguration {
             SelfBeneficiariesTPTRepository repository,
             SelfBeneficiariesTPTDataValidator validator,
             LoanRepositoryWrapper loanRepositoryWrapper,
-            SavingsAccountRepositoryWrapper savingRepositoryWrapper) {
+            SavingsAccountRepositoryWrapper savingRepositoryWrapper,
+            LoanRepository loanRepository,               
+            SavingsAccountRepository savingsAccountRepository) { 
         
         return new SelfBeneficiariesTPTWritePlatformServiceImpl(
                 context,
                 repository,
                 validator,
                 loanRepositoryWrapper,
-                savingRepositoryWrapper);
+                savingRepositoryWrapper,
+                loanRepository,
+                savingsAccountRepository);
     }
 }

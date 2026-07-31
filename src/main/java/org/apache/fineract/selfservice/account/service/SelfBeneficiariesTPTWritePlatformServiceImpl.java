@@ -30,10 +30,13 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPT;
@@ -59,6 +62,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
     private final SelfBeneficiariesTPTDataValidator validator;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
+    private final LoanRepository loanRepository;
+    private final SavingsAccountRepository savingsAccountRepository;
 
     /**
      * Adds a new self-service beneficiary.
@@ -101,7 +106,12 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
         if ("SAME_BANK".equals(paymentType)) {
             log.info("Resolving SAME_BANK beneficiary against internal Fineract accounts");
             if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
+                // 1. Try standard account number lookup
                 Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
+                // 2. Fallback to externalId lookup if not found
+                if (loan == null) {
+                    loan = this.loanRepository.findByExternalId(ExternalIdFactory.produce(accountNumber)).orElse(null);
+                }
                 if (loan != null
                         && loan.getClientId() != null
                         && loan.getOffice().getName().equals(officeName)) {
