@@ -31,7 +31,9 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
@@ -45,6 +47,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.apache.fineract.useradministration.domain.PasswordValidationPolicy;
 import org.apache.fineract.useradministration.domain.PasswordValidationPolicyRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,7 +75,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   @Mock private Environment env;
 
   private SelfServiceForgotPasswordWritePlatformServiceImpl service;
-  
+
   @Mock private TransactionDateUtil transactionDateUtil;
 
   @BeforeEach
@@ -86,8 +89,15 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             platformPasswordEncoder,
             selfServiceAuthorizationTokenService,
             applicationEventPublisher,
-            env, 
+            env,
             transactionDateUtil);
+    ThreadLocalContextUtil.setTenant(
+        new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
+  }
+
+  @AfterEach
+  void tearDown() {
+    ThreadLocalContextUtil.reset();
   }
 
   @Test
@@ -97,7 +107,9 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             eq(SelfServiceApiConstants.usernameParamName), any(JsonElement.class)))
         .thenReturn("jdoe");
     when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
+    LocalDateTime createdAt = LocalDateTime.of(2026, 4, 13, 12, 0, 0);
     LocalDateTime expectedExpiry = LocalDateTime.of(2026, 4, 13, 12, 0, 30);
+    when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
     when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
 
     AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);

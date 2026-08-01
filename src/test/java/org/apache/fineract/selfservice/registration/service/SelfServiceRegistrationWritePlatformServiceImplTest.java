@@ -17,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
@@ -125,6 +126,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     businessDates.put(BusinessDateType.BUSINESS_DATE, businessDate);
     businessDates.put(BusinessDateType.COB_DATE, businessDate.minusDays(1));
     ThreadLocalContextUtil.setBusinessDates(businessDates);
+    ThreadLocalContextUtil.setTenant(
+        new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }
 
   @AfterEach
@@ -224,9 +227,10 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     Client client = mock(Client.class);
     when(clientRepository.getClientByAccountNumber("12345")).thenReturn(client);
     when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
-    when(selfServiceAuthorizationTokenService.calculateExpiry(any()))
-        .thenAnswer(
-            invocation -> ((java.time.LocalDateTime) invocation.getArgument(0)).plusSeconds(30));
+    LocalDateTime createdAt = LocalDateTime.of(2026, 1, 2, 10, 0, 0);
+    LocalDateTime expectedExpiry = LocalDateTime.of(2026, 1, 2, 10, 0, 30);
+    when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
+    when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
     when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
 
     SelfServiceRegistration result = service.createRegistrationRequest("{}");

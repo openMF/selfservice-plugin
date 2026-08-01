@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -31,9 +32,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
@@ -65,6 +70,7 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -90,6 +96,8 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   private static final Long SAVINGS_ID = 11L;
   private static final String OTP = "123456";
   private static final String IBAN = "CR05015202001026284066";
+  private static final LocalDateTime TEST_NOW = LocalDateTime.of(2026, 1, 2, 10, 0, 0);
+  private static final String TEST_FINERACT_DATE = "02 January 2026";
 
   @Mock private PlatformSelfServiceSecurityContext context;
   @Mock private AccountTransferQuoteService quoteService;
@@ -118,6 +126,8 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   @Mock private SelfServiceAccountTransferRepository selfServiceAccountTransferRepository;
   @Mock private SelfServiceTransferAuditRepository transferAuditRepository;
   @Mock private SelfServiceFeeCollectionService feeCollectionService;
+  @Mock private TransactionDateUtil transactionDateUtil;
+  @Mock private TransactionDateManagementService transactionDateManagementService;
   @Mock private HttpServletRequest httpRequest;
 
   @InjectMocks private SelfAccountTransferWritePlatformServiceImpl service;
@@ -143,6 +153,17 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     Set<AppSelfServiceUserClientMapping> defaultMappings = mappings(ownClient);
     lenient().when(user.getAppUserClientMappings()).thenReturn(defaultMappings);
     lenient().when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+    lenient().when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(TEST_NOW);
+    lenient()
+        .when(transactionDateUtil.getCurrentDateForFineract(anyString(), anyString()))
+        .thenReturn(TEST_FINERACT_DATE);
+    ThreadLocalContextUtil.setTenant(
+        new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
+  }
+
+  @AfterEach
+  void tearDown() {
+    ThreadLocalContextUtil.reset();
   }
 
   @Test
