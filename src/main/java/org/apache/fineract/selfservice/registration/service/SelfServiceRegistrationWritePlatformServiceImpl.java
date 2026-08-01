@@ -37,8 +37,8 @@ import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.domain.BasicPasswordEncodablePlatformUser;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
@@ -105,6 +105,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   private final AppSelfServiceUserRepository appSelfServiceUserRepository;
   private final SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   private final ApplicationEventPublisher applicationEventPublisher;
+  // Centralized Date/Time Utility injected via @RequiredArgsConstructor
+  private final TransactionDateUtil transactionDateUtil;
 
   // REMOVED: selfServicePluginEmailService, smsMessageRepository, smsMessageScheduledJobService,
   // smsCampaignDropdownReadPlatformService, registrationTemplateEngine, registrationMessageSource,
@@ -236,8 +238,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         mobileNumber,
         isEmailAuthenticationMode);
 
-    String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
-    LocalDateTime createdAt = DateUtils.getLocalDateTimeOfSystem();
+    String authenticationToken = selfServiceAuthorizationTokenService.generateToken();    
+    // Use tenant-aware date utility instead of DateUtils.getLocalDateTimeOfSystem()
+    LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
+  
     Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
 
     SelfServiceRegistration selfServiceRegistration =
@@ -552,7 +556,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
 
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
-      LocalDateTime createdAt = DateUtils.getLocalDateTimeOfSystem();
+      //Use tenant-aware date utility instead of DateUtils.getLocalDateTimeOfSystem()
+      LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
+    
       SelfServiceRegistration registration =
           SelfServiceRegistration.instance(
               client,
@@ -571,7 +577,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
       this.selfServiceRegistrationRepository.saveAndFlush(registration);
 
-      // REPLACED: sendAuthorizationToken(...) with event publishing
       publishEnrollmentTokenEvent(registration, isEmailAuthenticationMode);
 
       log.info(
@@ -1045,7 +1050,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
             env.getProperty("fineract.selfservice.enrollment.default-active", "false"));
     sanitizedJson.addProperty(SelfServiceApiConstants.activeParamName, isActive);
 
-    String today = java.time.LocalDate.now(java.time.ZoneId.of("UTC")).toString();
+    String today = transactionDateUtil.getCurrentDateForFineract(dateFormat, locale);
+    
     sanitizedJson.addProperty(
         SelfServiceApiConstants.submittedOnDateParamName,
         StringUtils.defaultIfBlank(submittedOnDate, today));
@@ -1128,7 +1134,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   private void validateRequestState(SelfServiceRegistration request, String externalToken) {
     if (request == null) throw new SelfServiceRegistrationNotFoundException(externalToken);
-    if (request.isConsumed() || request.isExpired(DateUtils.getLocalDateTimeOfSystem()))
+    if (request.isConsumed() || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
       throw new PlatformDataIntegrityException(
           "error.msg.self.service.request.token.invalid",
           "The supplied self-service token is expired or already used.",
@@ -1140,7 +1146,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       SelfServiceRegistration request, Long requestId, String authenticationToken) {
     if (request == null)
       throw new SelfServiceRegistrationNotFoundException(requestId, authenticationToken);
-    if (request.isConsumed() || request.isExpired(DateUtils.getLocalDateTimeOfSystem()))
+    if (request.isConsumed() || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
       throw new PlatformDataIntegrityException(
           "error.msg.self.service.request.token.invalid",
           "The supplied self-service token is expired or already used.",
