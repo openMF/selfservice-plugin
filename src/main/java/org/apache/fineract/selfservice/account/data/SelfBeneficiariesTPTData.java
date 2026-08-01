@@ -25,7 +25,6 @@ public class SelfBeneficiariesTPTData {
     private final String clientName;
     private final EnumOptionData accountType;
     private final String accountNumber;
-    private final String iban;
     private final Long transferLimit;
     private final Collection<EnumOptionData> accountTypeOptions;
 
@@ -52,7 +51,6 @@ public class SelfBeneficiariesTPTData {
         this.clientName = null;
         this.accountType = null;
         this.accountNumber = null;
-        this.iban = null;
         this.transferLimit = null;
         this.customAccountNumber = null;
         this.holderName = null;
@@ -84,7 +82,6 @@ public class SelfBeneficiariesTPTData {
         this.clientName = clientName;
         this.accountType = accountType;
         this.accountNumber = accountNumber;
-        this.iban = iban;
         this.transferLimit = transferLimit;
         this.customAccountNumber = null;
         this.holderName = null;
@@ -122,7 +119,6 @@ public class SelfBeneficiariesTPTData {
         this.clientName = clientName;
         this.accountType = accountType;
         this.accountNumber = accountNumber;
-        this.iban = customAccountNumber;
         this.transferLimit = transferLimit;
         this.customAccountNumber = customAccountNumber;
         this.holderName = holderName;
@@ -135,6 +131,44 @@ public class SelfBeneficiariesTPTData {
         this.currency = currency;
     }
 
+    public SelfBeneficiariesTPTData(
+            final Long id,
+            final String name,
+            final String officeName,
+            final String clientName,
+            final EnumOptionData accountType,
+            final String accountNumber,
+            final Long transferLimit,
+            final String customAccountNumber,
+            final String holderName,
+            final String holderId,
+            final Integer holderIdType,
+            final String currencyCode,
+            final String entityCode,
+            final String entityName,
+            final String paymentType,
+            final String currency) {
+        this.accountTypeOptions = null;
+        this.id = id;
+        this.name = name;
+        this.officeName = officeName;
+        this.clientName = clientName;
+        this.accountType = accountType;
+        this.accountNumber = accountNumber;
+        this.transferLimit = transferLimit;
+        this.customAccountNumber = customAccountNumber;
+        this.holderName = holderName;
+        this.holderId = holderId;
+        this.holderIdType = holderIdType;
+        this.currencyCode = currencyCode;
+        this.entityCode = entityCode;
+        this.entityName = entityName;
+        this.paymentType = paymentType;
+        this.currency = currency;
+    }
+
+
+
     // --- Getters ---
 
     public Long getId() { return id; }
@@ -143,7 +177,6 @@ public class SelfBeneficiariesTPTData {
     public String getClientName() { return clientName; }
     public EnumOptionData getAccountType() { return accountType; }
     public String getAccountNumber() { return accountNumber; }
-    public String getIban() { return iban; }
     public Long getTransferLimit() { return transferLimit; }
     public Collection<EnumOptionData> getAccountTypeOptions() { return accountTypeOptions; }
 
