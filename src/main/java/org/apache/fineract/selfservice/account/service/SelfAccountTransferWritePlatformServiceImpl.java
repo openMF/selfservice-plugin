@@ -63,7 +63,6 @@ import org.apache.fineract.selfservice.account.data.SameBankTransferResponseData
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
 import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
-import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
@@ -267,18 +266,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
       log.info("QUOTE: Released OTP cooldown for user {}", user.getId());
     } catch (Exception e) {
       log.warn("Failed to release OTP cooldown (non-fatal)", e);
-    }
-  }
-
-  private void releaseTransferSuccessCooldown(AppSelfServiceUser user, String transferType) {
-    try {
-      String type = StringUtils.isNotBlank(transferType) ? transferType.toUpperCase() : "UNKNOWN";
-      String cacheKey = "TRANSFER_SUCCESS:" + user.getId() + ":" + type;
-      notificationCooldownCache.release(cacheKey);
-      log.info(
-          "CONFIRM: Released TRANSFER_SUCCESS cooldown for user {} channel {}", user.getId(), type);
-    } catch (Exception e) {
-      log.warn("Failed to release TRANSFER_SUCCESS cooldown (non-fatal)", e);
     }
   }
 
