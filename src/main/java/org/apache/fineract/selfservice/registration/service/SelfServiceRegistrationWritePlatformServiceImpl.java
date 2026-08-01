@@ -15,12 +15,15 @@ import jakarta.persistence.PersistenceException;
 import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.domain.BasicPasswordEncodablePlatformUser;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
@@ -45,6 +49,7 @@ import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
+import org.apache.fineract.selfservice.api.data.TransactionDateRequest;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
@@ -105,12 +110,16 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   private final AppSelfServiceUserRepository appSelfServiceUserRepository;
   private final SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   private final ApplicationEventPublisher applicationEventPublisher;
-  // Centralized Date/Time Utility injected via @RequiredArgsConstructor
+
+  /** Centralized multi-tenant date/time helpers (LocalDate / LocalDateTime / format). */
   private final TransactionDateUtil transactionDateUtil;
 
-  // REMOVED: selfServicePluginEmailService, smsMessageRepository, smsMessageScheduledJobService,
-  // smsCampaignDropdownReadPlatformService, registrationTemplateEngine, registrationMessageSource,
-  // externalNotificationSystemClient, notificationCredentialsData
+  /**
+   * Higher-level date processing for API payloads (validates + formats via TransactionDateUtil).
+   * Ensures any client-supplied transaction/submitted dates are normalized tenant-safely before
+   * being overridden by policy where required.
+   */
+  private final TransactionDateManagementService transactionDateManagementService;
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -212,8 +221,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
     boolean isEmailAuthenticationMode =
         authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
-    boolean isAnyAuthenticationMode =
-        authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.anyModeParamName);
 
     String mobileNumber = null;
     if (!isEmailAuthenticationMode) {
@@ -238,10 +245,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         mobileNumber,
         isEmailAuthenticationMode);
 
-    String authenticationToken = selfServiceAuthorizationTokenService.generateToken();    
-    // Use tenant-aware date utility instead of DateUtils.getLocalDateTimeOfSystem()
+    String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
+    // Tenant-aware clock — never system LocalDateTime.now()
     LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
-  
+
     Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
 
     SelfServiceRegistration selfServiceRegistration =
@@ -262,7 +269,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
     this.selfServiceRegistrationRepository.saveAndFlush(selfServiceRegistration);
 
-    // REPLACED: sendAuthorizationToken(...) with event publishing
     publishEnrollmentTokenEvent(selfServiceRegistration, isEmailAuthenticationMode);
 
     return selfServiceRegistration;
@@ -280,8 +286,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           username);
     }
   }
-
-  // REMOVED: sendAuthorizationToken, sendAuthorizationMessage, sendAuthorizationMail
 
   private void throwExceptionIfValidationError(
       final List<ApiParameterError> dataValidationErrors,
@@ -369,7 +373,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       this.selfServiceRegistrationRepository.saveAndFlush(selfServiceRegistration);
       this.appSelfServiceUserRepository.saveAndFlush(appUser);
       this.appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
-      // Publish notification event after successful user creation
       publishUserCreatedEvent(appUser, selfServiceRegistration);
       return appUser;
 
@@ -464,9 +467,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     boolean isEmailAuthenticationMode =
         authenticationMode != null
             && authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
-    boolean isAnyAuthenticationMode =
-        authenticationMode != null
-            && authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.anyModeParamName);
     if (isEmailAuthenticationMode) {
       baseDataValidator
           .reset()
@@ -500,6 +500,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     validateForDuplicateUsernameForEnrollment(username);
 
     JsonObject originalJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+    // CRITICAL: normalize + force tenant dates (override any client-submitted submittedOnDate /
+    // activationDate)
     JsonObject sanitizedJson = normalizeSelfEnrollmentClientPayload(originalJson);
     JsonElement parsedSanitizedElement = sanitizedJson;
 
@@ -556,9 +558,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
 
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
-      //Use tenant-aware date utility instead of DateUtils.getLocalDateTimeOfSystem()
       LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
-    
+
       SelfServiceRegistration registration =
           SelfServiceRegistration.instance(
               client,
@@ -597,8 +598,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   @Transactional(rollbackFor = Exception.class)
   @Override
   public AppSelfServiceUser confirmEnrollment(String apiRequestBodyAsJson) {
-    // ... (confirmEnrollment remains exactly the same as your original code) ...
-    // It already publishes USER_ACTIVATED correctly.
     Gson gson = new Gson();
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
@@ -687,7 +686,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return appUser;
   }
 
-  // NEW METHOD: Publishes the user created event after the transaction commits
   private void publishUserCreatedEvent(
       AppSelfServiceUser appUser, SelfServiceRegistration registration) {
     FineractPlatformTenant capturedTenant = null;
@@ -743,34 +741,20 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-  // Publishes the enrollment token event after the transaction commits
   private void publishEnrollmentTokenEvent(
       SelfServiceRegistration registration, boolean isEmailMode) {
-    org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant capturedTenant = null;
+    FineractPlatformTenant capturedTenant = null;
     try {
-      capturedTenant =
-          org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil.getTenant();
+      capturedTenant = ThreadLocalContextUtil.getTenant();
     } catch (IllegalStateException ignored) {
     }
-    final org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant tenantSnapshot =
-        capturedTenant;
+    final FineractPlatformTenant tenantSnapshot = capturedTenant;
 
-    final java.util.HashMap<
-            org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType,
-            java.time.LocalDate>
-        businessDatesSnapshot;
-    java.util.HashMap<
-            org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType,
-            java.time.LocalDate>
-        tempDates = null;
+    final HashMap<BusinessDateType, LocalDate> businessDatesSnapshot;
+    HashMap<BusinessDateType, LocalDate> tempDates = null;
     try {
-      java.util.HashMap<
-              org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType,
-              java.time.LocalDate>
-          dates =
-              org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil
-                  .getBusinessDates();
-      tempDates = dates != null ? new java.util.HashMap<>(dates) : null;
+      HashMap<BusinessDateType, LocalDate> dates = ThreadLocalContextUtil.getBusinessDates();
+      tempDates = dates != null ? new HashMap<>(dates) : null;
     } catch (IllegalArgumentException e) {
     }
     businessDatesSnapshot = tempDates;
@@ -779,16 +763,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     contextData.put("requestId", String.valueOf(registration.getId()));
     contextData.put("authCode", registration.getAuthenticationToken());
 
-    // Encapsulate the publishing logic in a Runnable so we can execute it either
-    // after the transaction commits or immediately if no transaction is active.
     Runnable publishTask =
         () -> {
           try {
             applicationEventPublisher.publishEvent(
-                new org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent(
+                new SelfServiceNotificationEvent(
                     SelfServiceRegistrationWritePlatformServiceImpl.this,
-                    org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent.Type
-                        .ENROLLMENT_TOKEN,
+                    SelfServiceNotificationEvent.Type.ENROLLMENT_TOKEN,
                     registration.getId(),
                     registration.getFirstName(),
                     registration.getLastName(),
@@ -797,7 +778,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
                     registration.getMobileNumber(),
                     isEmailMode,
                     null,
-                    org.springframework.context.i18n.LocaleContextHolder.getLocale(),
+                    LocaleContextHolder.getLocale(),
                     tenantSnapshot,
                     businessDatesSnapshot,
                     contextData));
@@ -809,21 +790,15 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           }
         };
 
-    // Check if a transaction is actually active
-    if (org.springframework.transaction.support.TransactionSynchronizationManager
-        .isSynchronizationActive()) {
-      org.springframework.transaction.support.TransactionSynchronizationManager
-          .registerSynchronization(
-              new org.springframework.transaction.support.TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                  publishTask.run();
-                }
-              });
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              publishTask.run();
+            }
+          });
     } else {
-      // Fallback: If no transaction is active (e.g., in createRegistrationRequest which uses
-      // saveAndFlush,
-      // or in unit tests), publish the event immediately since the data is already committed.
       publishTask.run();
     }
   }
@@ -949,6 +924,18 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         exception, "error.msg.unknown.data.integrity.issue", "Unknown data integrity issue");
   }
 
+  /**
+   * Builds the Fineract client-create payload for self-enrollment.
+   *
+   * <p><b>Date policy (centralized, multi-tenant):</b>
+   *
+   * <ul>
+   *   <li>{@code submittedOnDate} and {@code activationDate} are <em>always</em> set from the
+   *       tenant clock via {@link TransactionDateUtil} / {@link TransactionDateManagementService}.
+   *       Any value submitted by the REST client for those fields is discarded.
+   *   <li>Personal attributes such as {@code dateOfBirth} remain client-supplied (not overridden).
+   * </ul>
+   */
   private JsonObject normalizeSelfEnrollmentClientPayload(JsonObject originalJson) {
     JsonObject sanitizedJson = new JsonObject();
     copyFirstPresent(
@@ -983,6 +970,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         sanitizedJson,
         SelfServiceApiConstants.clientClassificationIdParamName,
         SelfServiceApiConstants.clientClassificationIdParamName);
+    // dateOfBirth is a personal attribute — do NOT override with tenant business date
     copyIfPresent(
         originalJson,
         sanitizedJson,
@@ -1026,17 +1014,20 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
                 env.getProperty("fineract.selfservice.enrollment.default-legal-form-id", "1"));
     sanitizedJson.addProperty(SelfServiceApiConstants.legalFormIdParamName, legalFormId);
 
-    String submittedOnDate =
-        stringValueOrDefault(originalJson, SelfServiceApiConstants.submittedOnDateParamName, null);
-    String dateFormat =
+    String clientDateFormat =
         stringValueOrDefault(originalJson, SelfServiceApiConstants.dateFormatParamName, null);
-    if (StringUtils.isBlank(dateFormat)) {
-      if (looksIsoDate(submittedOnDate)) dateFormat = "yyyy-MM-dd";
-      else
-        dateFormat =
+    String clientSubmittedOnDate =
+        stringValueOrDefault(originalJson, SelfServiceApiConstants.submittedOnDateParamName, null);
+
+    if (StringUtils.isBlank(clientDateFormat)) {
+      if (looksIsoDate(clientSubmittedOnDate)) {
+        clientDateFormat = "yyyy-MM-dd";
+      } else {
+        clientDateFormat =
             env.getProperty("fineract.selfservice.enrollment.default-date-format", "yyyy-MM-dd");
+      }
     }
-    sanitizedJson.addProperty(SelfServiceApiConstants.dateFormatParamName, dateFormat);
+    sanitizedJson.addProperty(SelfServiceApiConstants.dateFormatParamName, clientDateFormat);
 
     String locale =
         stringValueOrDefault(
@@ -1050,12 +1041,34 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
             env.getProperty("fineract.selfservice.enrollment.default-active", "false"));
     sanitizedJson.addProperty(SelfServiceApiConstants.activeParamName, isActive);
 
-    String today = transactionDateUtil.getCurrentDateForFineract(dateFormat, locale);
-    
-    sanitizedJson.addProperty(
-        SelfServiceApiConstants.submittedOnDateParamName,
-        StringUtils.defaultIfBlank(submittedOnDate, today));
-    if (isActive) sanitizedJson.addProperty(SelfServiceApiConstants.activationDateParamName, today);
+    // --- Centralized date override (ignore any date submitted by the REST API) ---
+    // 1) Process optional client date through TransactionDateManagementService for logging /
+    //    validation path consistency (multi-tenant OffsetDateTime).
+    // 2) Force submittedOnDate / activationDate to tenant "today" formatted for Fineract.
+    if (StringUtils.isNotBlank(clientSubmittedOnDate)) {
+      log.info(
+          "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant date",
+          clientSubmittedOnDate);
+      TransactionDateRequest dateRequest =
+          new TransactionDateRequest(clientSubmittedOnDate, clientDateFormat, locale);
+      OffsetDateTime processed =
+          transactionDateManagementService.processAndValidateTransactionDate(dateRequest);
+      log.debug("Client date processed via TransactionDateManagementService → {}", processed);
+    }
+
+    final String tenantToday =
+        transactionDateUtil.getCurrentDateForFineract(clientDateFormat, locale);
+
+    sanitizedJson.addProperty(SelfServiceApiConstants.submittedOnDateParamName, tenantToday);
+    if (isActive) {
+      sanitizedJson.addProperty(SelfServiceApiConstants.activationDateParamName, tenantToday);
+    }
+
+    log.info(
+        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}')",
+        tenantToday,
+        clientDateFormat,
+        locale);
 
     return sanitizedJson;
   }
@@ -1134,7 +1147,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   private void validateRequestState(SelfServiceRegistration request, String externalToken) {
     if (request == null) throw new SelfServiceRegistrationNotFoundException(externalToken);
-    if (request.isConsumed() || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
+    if (request.isConsumed()
+        || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
       throw new PlatformDataIntegrityException(
           "error.msg.self.service.request.token.invalid",
           "The supplied self-service token is expired or already used.",
@@ -1146,7 +1160,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       SelfServiceRegistration request, Long requestId, String authenticationToken) {
     if (request == null)
       throw new SelfServiceRegistrationNotFoundException(requestId, authenticationToken);
-    if (request.isConsumed() || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
+    if (request.isConsumed()
+        || request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime()))
       throw new PlatformDataIntegrityException(
           "error.msg.self.service.request.token.invalid",
           "The supplied self-service token is expired or already used.",
