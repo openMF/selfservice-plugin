@@ -18,7 +18,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -37,6 +37,14 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Self-service forgot-password / renew-password flows.
+ *
+ * <p><b>Date/time policy (multi-tenant):</b> token creation and expiry checks use {@link
+ * TransactionDateUtil#getCurrentTenantLocalDateTime()}, aligned with registration, transfer, SINPE,
+ * and token-purge services. System {@link LocalDateTime#now()} and {@code
+ * DateUtils#getLocalDateTimeOfSystem()} must not be used here.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -45,8 +53,6 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
   private final SelfServiceRegistrationRepository selfServiceRegistrationRepository;
   private final FromJsonHelper fromApiJsonHelper;
-  private final SelfServiceRegistrationReadPlatformService
-      selfServiceRegistrationReadPlatformService;
   private final AppSelfServiceUserRepository appSelfServiceUserRepository;
   private final PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   private final PlatformPasswordEncoder platformPasswordEncoder;
@@ -54,10 +60,12 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
 
+  /** Centralized multi-tenant date/time utility for token expiry and validation. */
+  private final TransactionDateUtil transactionDateUtil;
+
   @Override
   @Transactional
   public SelfServiceRegistration createForgotPasswordRequest(String apiRequestBodyAsJson) {
-    // CORRECCIÓN 1: Parsear JSON primero, luego extraer el username
     JsonElement jsonElement = JsonParser.parseString(apiRequestBodyAsJson);
     String username =
         fromApiJsonHelper.extractStringNamed(
@@ -86,21 +94,21 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     }
 
     String token = selfServiceAuthorizationTokenService.generateToken();
-    LocalDateTime expiry =
-        selfServiceAuthorizationTokenService.calculateExpiry(LocalDateTime.now());
+    // Tenant-aware clock — never LocalDateTime.now() or system DateUtils
+    LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
+    LocalDateTime expiry = selfServiceAuthorizationTokenService.calculateExpiry(createdAt);
 
     Client client =
         user.getAppUserClientMappings() != null && !user.getAppUserClientMappings().isEmpty()
             ? user.getAppUserClientMappings().iterator().next().getClient()
             : null;
 
-    // CORRECCIÓN 2: Usar null para middlename (AppSelfServiceUser no tiene getMiddlename())
     SelfServiceRegistration request =
         SelfServiceRegistration.instance(
             client,
             client != null ? client.getAccountNumber() : null,
             user.getFirstname(),
-            null, // middlename no disponible en AppSelfServiceUser
+            null, // middlename not available on AppSelfServiceUser
             user.getLastname(),
             mobileNumber,
             email,
@@ -109,7 +117,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
             username,
             "PASSWORD_RESET",
             SelfServiceRequestType.PASSWORD_RESET,
-            expiry);
+            expiry,
+            createdAt);
 
     selfServiceRegistrationRepository.saveAndFlush(request);
 
@@ -137,8 +146,10 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     log.info(
         "Password reset token generated for user '{}'. Token will be delivered through enabled"
-            + " channels.",
-        username);
+            + " channels. createdAt={}, expiresAt={}",
+        username,
+        createdAt,
+        expiry);
 
     return request;
   }
@@ -146,7 +157,6 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   @Override
   @Transactional
   public CommandProcessingResult renewPassword(String apiRequestBodyAsJson) {
-    // CORRECCIÓN 3: Parsear JSON primero, luego extraer los campos
     JsonElement jsonElement = JsonParser.parseString(apiRequestBodyAsJson);
 
     String password =
@@ -191,7 +201,7 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
       throw new IllegalArgumentException("Reset token has already been used.");
     }
 
-    if (request.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+    if (request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime())) {
       throw new IllegalArgumentException("Reset token has expired. Please request a new one.");
     }
 
@@ -201,12 +211,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
       throw new IllegalArgumentException("User not found for this reset token.");
     }
 
-    // CORRECCIÓN 4: encode() solo acepta PlatformUser, no (user, password)
-    // Primero actualizamos la contraseña en el objeto user
     user.updatePassword(password);
-    // Luego codificamos usando el encoder
     String encodedPassword = platformPasswordEncoder.encode(user);
-    // Actualizamos con la contraseña codificada
     user.updatePassword(encodedPassword);
     user.updatePasswordResetRequired(false);
     appSelfServiceUserRepository.saveAndFlush(user);
@@ -253,14 +259,12 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   private boolean determinePreferredMode(String email, String mobileNumber) {
     boolean hasEmail = StringUtils.isNotBlank(email);
     boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-
     if (hasEmail && !hasMobile) {
       return true;
     }
     if (hasMobile && !hasEmail) {
       return false;
     }
-
     String pref =
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);

@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.registration.starter;
 
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsService;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.service.ExpiredTokenPurgeScheduler;
 import org.apache.fineract.selfservice.registration.service.ExpiredTokenPurgeService;
@@ -38,8 +39,9 @@ public class ExpiredTokenPurgeConfiguration {
   @Bean
   @ConditionalOnMissingBean(ExpiredTokenPurgeService.class)
   public ExpiredTokenPurgeService expiredTokenPurgeService(
-      SelfServiceRegistrationRepository repository, JdbcTemplate jdbcTemplate) {
-    return new ExpiredTokenPurgeService(repository, jdbcTemplate);
+      SelfServiceRegistrationRepository repository, JdbcTemplate jdbcTemplate,
+      TransactionDateUtil transactionDateUtil) {
+    return new ExpiredTokenPurgeService(repository, jdbcTemplate, transactionDateUtil);
   }
 
   @Bean

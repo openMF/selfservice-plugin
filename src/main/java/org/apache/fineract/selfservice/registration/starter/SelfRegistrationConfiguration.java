@@ -100,23 +100,23 @@ public class SelfRegistrationConfiguration {
   public SelfServiceForgotPasswordWritePlatformService selfServiceForgotPassworWritePlatformService(
       SelfServiceRegistrationRepository selfServiceRegistrationRepository,
       FromJsonHelper fromApiJsonHelper,
-      SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       PasswordValidationPolicyRepository passwordValidationPolicy,
       PlatformPasswordEncoder platformPasswordEncoder,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
       ApplicationEventPublisher applicationEventPublisher,
-      Environment env) {
+      Environment env,
+      TransactionDateUtil transactionDateUtil) {
 
     return new SelfServiceForgotPasswordWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
         fromApiJsonHelper,
-        selfServiceRegistrationReadPlatformService,
         appSelfServiceUserRepository,
         passwordValidationPolicy,
         platformPasswordEncoder,
         selfServiceAuthorizationTokenService,
         applicationEventPublisher,
-        env);
+        env,
+        transactionDateUtil);
   }
 }

@@ -21,6 +21,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,10 +41,12 @@ class ExpiredTokenPurgeServiceTest {
   @Captor private ArgumentCaptor<String> sqlCaptor;
 
   private ExpiredTokenPurgeService service;
+  
+  private TransactionDateUtil transactionDateUtil;
 
   @BeforeEach
   void setUp() {
-    service = new ExpiredTokenPurgeService(selfServiceRegistrationRepository, jdbcTemplate);
+    service = new ExpiredTokenPurgeService(selfServiceRegistrationRepository, jdbcTemplate, transactionDateUtil);
   }
 
   // ── Self-service token purge ──────────────────────────────────────────────

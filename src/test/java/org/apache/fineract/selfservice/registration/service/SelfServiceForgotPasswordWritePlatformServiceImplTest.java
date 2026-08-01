@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -71,6 +72,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   @Mock private Environment env;
 
   private SelfServiceForgotPasswordWritePlatformServiceImpl service;
+  
+  @Mock private TransactionDateUtil transactionDateUtil;
 
   @BeforeEach
   void setUp() {
@@ -78,13 +81,13 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         new SelfServiceForgotPasswordWritePlatformServiceImpl(
             selfServiceRegistrationRepository,
             fromApiJsonHelper,
-            selfServiceRegistrationReadPlatformService,
             appSelfServiceUserRepository,
             passwordValidationPolicyRepository,
             platformPasswordEncoder,
             selfServiceAuthorizationTokenService,
             applicationEventPublisher,
-            env);
+            env, 
+            transactionDateUtil);
   }
 
   @Test

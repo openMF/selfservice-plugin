@@ -9,7 +9,7 @@ package org.apache.fineract.selfservice.registration.service;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The injected {@link JdbcTemplate} <strong>must</strong> be backed by Fineract's {@code
  * AbstractRoutingDataSource} (the routing datasource) so that {@code
  * ThreadLocalContextUtil.setTenant()} routes SQL to the correct tenant schema.
+ *
+ * <p><strong>Date/time policy (multi-tenant):</strong> self-service token purge cutoff uses {@link
+ * TransactionDateUtil#getCurrentTenantLocalDateTime()}, the same tenant clock used when creating
+ * and validating tokens in registration, transfer, and SINPE flows. This keeps create / validate /
+ * purge aligned and avoids system-clock drift across tenants.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -40,24 +45,34 @@ public class ExpiredTokenPurgeService {
   private final JdbcTemplate jdbcTemplate;
 
   /**
+   * Centralized multi-tenant date/time utility. Replaces {@code
+   * DateUtils#getLocalDateTimeOfSystem()} so the purge cutoff matches token creation and {@code
+   * SelfServiceRegistration#isExpired(LocalDateTime)}.
+   */
+  private final TransactionDateUtil transactionDateUtil;
+
+  /**
    * Deletes all rows from {@code request_audit_table} where {@code expires_at < cutoff}.
    *
-   * <p>Uses {@link DateUtils#getLocalDateTimeOfSystem()} as the cutoff — the same clock source used
-   * by {@link
-   * org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration#isExpired(LocalDateTime)}
-   * and throughout the registration service when creating tokens. This eliminates timezone
-   * divergence between token creation and purge evaluation.
+   * <p>Uses {@link TransactionDateUtil#getCurrentTenantLocalDateTime()} as the cutoff — the same
+   * clock source used when creating tokens ({@code expiresAt}) and when validating them via {@link
+   * org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration#isExpired(LocalDateTime)}.
+   * This eliminates timezone / system-vs-tenant divergence between token creation and purge
+   * evaluation.
    *
    * @return number of rows deleted
    */
   @Transactional
   public int purgeExpiredSelfServiceTokens() {
-    LocalDateTime cutoff = DateUtils.getLocalDateTimeOfSystem();
+    LocalDateTime cutoff = transactionDateUtil.getCurrentTenantLocalDateTime();
     int deleted = selfServiceRegistrationRepository.deleteExpiredRequests(cutoff);
     if (deleted > 0) {
-      log.info("Purged {} expired self-service token(s) from request_audit_table", deleted);
+      log.info(
+          "Purged {} expired self-service token(s) from request_audit_table (tenant cutoff={})",
+          deleted,
+          cutoff);
     } else {
-      log.debug("No expired self-service tokens to purge");
+      log.debug("No expired self-service tokens to purge (tenant cutoff={})", cutoff);
     }
     return deleted;
   }
@@ -66,8 +81,11 @@ public class ExpiredTokenPurgeService {
    * Deletes all rows from {@code twofactor_access_token} where {@code valid_to < NOW()}.
    *
    * <p>Uses database-side {@code NOW()} to match Fineract core's {@code TFAccessToken.isValid()}
-   * which delegates to the database server's clock via {@code
-   * DateUtils.getLocalDateTimeOfTenant()}. This avoids Java-to-DB clock skew.
+   * which relies on the database server's clock. This avoids Java-to-DB clock skew for core-owned
+   * 2FA tokens (not managed by the plugin's {@link TransactionDateUtil}).
+   *
+   * <p>Must run with tenant context set so {@link JdbcTemplate} hits the correct tenant schema via
+   * the routing datasource.
    *
    * @return number of rows deleted
    */

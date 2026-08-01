@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionEditRequest;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
@@ -46,6 +46,12 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
   private final Environment env;
   private final SinpeExternalApiClient sinpeExternalApiClient;
 
+  /**
+   * Centralized multi-tenant date/time utility. Replaces {@code DateUtils.getLocalDateTimeOfSystem()}
+   * so OTP expiry and validation use the tenant clock (aligned with registration & transfer flows).
+   */
+  private final TransactionDateUtil transactionDateUtil;
+
   @Override
   @Transactional
   public CommandProcessingResult requestEnrollment(String mobileNumber) {
@@ -67,25 +73,27 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
         sinpeRepository
             .findByAppSelfServiceUserIdAndMobileNumber(user.getId(), mobileNumber)
             .filter(SelfServiceSinpeEnrollment::isVerified);
+
     if (existingVerified.isPresent()) {
       log.info(
-          "requestEnrollment: already verified enrollment exists for userId={}, mobileNumber={}, enrollmentId={}. Returning early.",
+          "requestEnrollment: already verified enrollment exists for userId={}, mobileNumber={},"
+              + " enrollmentId={}. Returning early.",
           user.getId(),
           mobileNumber,
           existingVerified.get().getId());
       return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
     }
+
     log.info(
         "requestEnrollment: no verified enrollment found for userId={}, mobileNumber={}",
         user.getId(),
         mobileNumber);
 
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
-    LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
-    log.info(
-        "requestEnrollment: generated OTP (len={}), expiry={}",
-        otp.length(),
-        expiry);
+    // Tenant-aware clock — never DateUtils.getLocalDateTimeOfSystem()
+    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
+
+    log.info("requestEnrollment: generated OTP (len={}), expiry={}", otp.length(), expiry);
 
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     log.info(
@@ -108,9 +116,11 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             "SINPE_OTP",
             SelfServiceRequestType.SINPE_ENROLLMENT,
             expiry);
+
     registrationRepository.saveAndFlush(request);
     log.info(
-        "requestEnrollment: SelfServiceRegistration saved id={}, requestType={}, mobileNumber={}, expiry={}",
+        "requestEnrollment: SelfServiceRegistration saved id={}, requestType={}, mobileNumber={},"
+            + " expiry={}",
         request.getId(),
         SelfServiceRequestType.SINPE_ENROLLMENT,
         mobileNumber,
@@ -119,9 +129,11 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
+
     boolean emailMode = determineMode(user.getEmail(), mobileNumber);
     log.info(
-        "requestEnrollment: publishing SINPE_ENROLLMENT_OTP notification emailMode={}, hasEmail={}, hasMobile={}",
+        "requestEnrollment: publishing SINPE_ENROLLMENT_OTP notification emailMode={}, hasEmail={},"
+            + " hasMobile={}",
         emailMode,
         StringUtils.isNotBlank(user.getEmail()),
         StringUtils.isNotBlank(mobileNumber));
@@ -158,23 +170,25 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
         otp != null ? otp.length() : 0);
 
     Long clientId = user.getAppUserClientMappings().iterator().next().getClient().getId();
-    log.info("confirmEnrollment: looking up registration for clientId={}, requestType=SINPE_ENROLLMENT", clientId);
+    log.info(
+        "confirmEnrollment: looking up registration for clientId={}, requestType=SINPE_ENROLLMENT",
+        clientId);
 
     SelfServiceRegistration request =
         registrationRepository
             .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                clientId,
-                SelfServiceRequestType.SINPE_ENROLLMENT,
-                otp)
+                clientId, SelfServiceRequestType.SINPE_ENROLLMENT, otp)
             .orElse(null);
 
     if (request == null) {
-      log.info("confirmEnrollment: no SelfServiceRegistration found for clientId={} and provided OTP", clientId);
+      log.info(
+          "confirmEnrollment: no SelfServiceRegistration found for clientId={} and provided OTP",
+          clientId);
       throw new IllegalArgumentException("Invalid or expired OTP.");
     }
 
     boolean consumed = request.isConsumed();
-    boolean expired = request.isExpired(DateUtils.getLocalDateTimeOfSystem());
+    boolean expired = request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime());
     log.info(
         "confirmEnrollment: found registration id={}, consumed={}, expired={}, registrationMobile={}",
         request.getId(),
@@ -214,7 +228,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     enrollment.markAsVerified();
     sinpeRepository.saveAndFlush(enrollment);
     log.info(
-        "confirmEnrollment: enrollment {} id={}, userId={}, clientId={}, mobileNumber={}, verified=true",
+        "confirmEnrollment: enrollment {} id={}, userId={}, clientId={}, mobileNumber={},"
+            + " verified=true",
         wasNew ? "created" : "updated",
         enrollment.getId(),
         user.getId(),
@@ -223,6 +238,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("mobileNumber", mobileNumber);
+
     boolean emailMode = determineMode(user.getEmail(), mobileNumber);
     log.info(
         "confirmEnrollment: publishing SINPE_ENROLLMENT_SUCCESS notification emailMode={}",
@@ -256,7 +272,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
   public CommandProcessingResult createSubscription(SinpeSubscriptionRequest request, String otp) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     log.info(
-        "createSubscription START userId={}, phoneNumber={}, customerName={}, ibanPresent={}, otpPresent={}, otpLen={}",
+        "createSubscription START userId={}, phoneNumber={}, customerName={}, ibanPresent={},"
+            + " otpPresent={}, otpLen={}",
         user.getId(),
         request != null ? request.getPhoneNumber() : null,
         request != null ? request.getCustomerName() : null,
@@ -268,14 +285,16 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info("createSubscription: OTP validated, calling external API createSubscription");
 
     sinpeExternalApiClient.createSubscription(request);
-    log.info("createSubscription: external API createSubscription completed for phone={}", request.getPhoneNumber());
+    log.info(
+        "createSubscription: external API createSubscription completed for phone={}",
+        request.getPhoneNumber());
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("phoneNumber", request.getPhoneNumber());
     contextData.put("customerName", request.getCustomerName());
     contextData.put("iban", request.getIban());
-    log.info("createSubscription: publishing SINPE_SUBSCRIPTION_CREATED notification");
 
+    log.info("createSubscription: publishing SINPE_SUBSCRIPTION_CREATED notification");
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -291,7 +310,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             LocaleContextHolder.getLocale(),
             contextData));
 
-    log.info("createSubscription END userId={}, phoneNumber={}", user.getId(), request.getPhoneNumber());
+    log.info(
+        "createSubscription END userId={}, phoneNumber={}", user.getId(), request.getPhoneNumber());
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
@@ -311,12 +331,14 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info("editSubscription: OTP validated, calling external API editSubscription");
 
     sinpeExternalApiClient.editSubscription(request);
-    log.info("editSubscription: external API editSubscription completed for phone={}", request.getPhoneNumber());
+    log.info(
+        "editSubscription: external API editSubscription completed for phone={}",
+        request.getPhoneNumber());
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("phoneNumber", request.getPhoneNumber());
-    log.info("editSubscription: publishing SINPE_SUBSCRIPTION_UPDATED notification");
 
+    log.info("editSubscription: publishing SINPE_SUBSCRIPTION_UPDATED notification");
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -332,7 +354,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             LocaleContextHolder.getLocale(),
             contextData));
 
-    log.info("editSubscription END userId={}, phoneNumber={}", user.getId(), request.getPhoneNumber());
+    log.info(
+        "editSubscription END userId={}, phoneNumber={}", user.getId(), request.getPhoneNumber());
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
@@ -351,12 +374,13 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info("deleteSubscription: OTP validated, calling external API deleteSubscription");
 
     sinpeExternalApiClient.deleteSubscription(phoneNumber);
-    log.info("deleteSubscription: external API deleteSubscription completed for phone={}", phoneNumber);
+    log.info(
+        "deleteSubscription: external API deleteSubscription completed for phone={}", phoneNumber);
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("phoneNumber", phoneNumber);
-    log.info("deleteSubscription: publishing SINPE_SUBSCRIPTION_DELETED notification");
 
+    log.info("deleteSubscription: publishing SINPE_SUBSCRIPTION_DELETED notification");
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -380,6 +404,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
    * Validates that the provided OTP is valid, not expired, and matches the target phone number.
    * Note: We do not consume the OTP here to allow it to be reused for subsequent edit/delete
    * operations within its validity period.
+   *
+   * <p>Expiry is evaluated against the tenant clock via {@link TransactionDateUtil}.
    */
   private void validateOtp(String mobileNumber, String otp) {
     log.info(
@@ -396,8 +422,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     Long clientId = user.getAppUserClientMappings().iterator().next().getClient().getId();
     log.info(
-        "validateOtp: looking up registration clientId={}, requestType=SINPE_ENROLLMENT",
-        clientId);
+        "validateOtp: looking up registration clientId={}, requestType=SINPE_ENROLLMENT", clientId);
 
     SelfServiceRegistration request =
         registrationRepository
@@ -410,7 +435,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       throw new IllegalArgumentException("Invalid or expired OTP.");
     }
 
-    boolean expired = request.isExpired(DateUtils.getLocalDateTimeOfSystem());
+    boolean expired = request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime());
     log.info(
         "validateOtp: found registration id={}, expired={}, registrationMobile={}, consumed={}",
         request.getId(),
@@ -431,7 +456,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
     }
 
-    log.info("validateOtp END OK registrationId={}, mobileNumber={}", request.getId(), mobileNumber);
+    log.info(
+        "validateOtp END OK registrationId={}, mobileNumber={}", request.getId(), mobileNumber);
   }
 
   private boolean determineMode(String email, String mobileNumber) {
@@ -448,10 +474,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     String pref =
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     boolean emailMode = "email".equalsIgnoreCase(pref);
-    log.info(
-        "determineMode: both present, preference='{}' -> emailMode={}",
-        pref,
-        emailMode);
+    log.info("determineMode: both present, preference='{}' -> emailMode={}", pref, emailMode);
     return emailMode;
   }
 }
