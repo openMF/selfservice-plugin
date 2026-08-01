@@ -14,11 +14,11 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -35,8 +35,9 @@ import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.AbstractPlatformResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
+import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
@@ -70,6 +71,7 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
 import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
+import org.apache.fineract.selfservice.api.data.TransactionDateRequest;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
@@ -109,34 +111,33 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final ClientReadPlatformService clientReadPlatformService;
   private final OfficeReadPlatformService officeReadPlatformService;
   private final PinExternalTransferService pinExternalTransferService;
-  private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final JdbcTemplate jdbcTemplate;
   private final Gson gson = new Gson();
 
-  // Injected for external ID resolution
   private final SavingsAccountAssembler savingsAccountAssembler;
   private final LoanAssembler loanAssembler;
   private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
 
-  // DAO for SAME_BANK transfer audit persistence
   private final SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository;
 
-  // Date formatter used for internalRefNumber generation
   private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-  // Fineract expected full datetime format for internal transfers (prevents future-date validation
-  // errors)
-  private static final DateTimeFormatter FINERACT_DATETIME_FMT =
-      DateTimeFormatter.ofPattern("dd MMMM yyyy");
+  private static final String FINERACT_TRANSFER_DATE_FORMAT = "dd MMMM yyyy";
+  private static final String FINERACT_TRANSFER_LOCALE = "en";
 
-  private final SavingsAccountTransactionRepository
-      savingsAccountTransactionRepository; // inject via constructor
-
+  private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
   private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository;
-
   private final SelfServiceTransferAuditRepository transferAuditRepository;
-
   private final SelfServiceFeeCollectionService feeCollectionService;
+
+  /** Centralized multi-tenant LocalDate / LocalDateTime / format helpers. */
+  private final TransactionDateUtil transactionDateUtil;
+
+  /**
+   * Higher-level API date processing (validates + formats via {@link TransactionDateUtil}). Used so
+   * any client-supplied transfer date is normalized tenant-safely before policy overrides it.
+   */
+  private final TransactionDateManagementService transactionDateManagementService;
 
   // =====================================================================
   //  PREPARE
@@ -188,7 +189,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     BigDecimal totalAmount = transferAmount.add(feeAmount);
 
-    // Safeguard: transfer + fee must fit in source savings
     validateSufficientFunds(sourceSavingsAccount, transferAmount, feeAmount);
 
     Map<String, Object> prepareResponse = new HashMap<>();
@@ -248,7 +248,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
   private void cleanupOldOtpRegistrations(Client client) {
     try {
-      LocalDateTime cutoff = DateUtils.getLocalDateTimeOfSystem().minusMinutes(10);
+      LocalDateTime cutoff = transactionDateUtil.getCurrentTenantLocalDateTime().minusMinutes(10);
       int updated =
           registrationRepository.markOldOtpsAsConsumed(
               client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, cutoff);
@@ -270,12 +270,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
   }
 
-  /**
-   * Releases the TRANSFER_SUCCESS notification cooldown for the given user and channel. Called on
-   * successful confirm so a legitimate completed transfer always notifies, even if a previous
-   * attempt still holds the cooldown entry. Multi-tenant safe: key is scoped by self-service user
-   * id (tenant-bound).
-   */
   private void releaseTransferSuccessCooldown(AppSelfServiceUser user, String transferType) {
     try {
       String type = StringUtils.isNotBlank(transferType) ? transferType.toUpperCase() : "UNKNOWN";
@@ -288,12 +282,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
   }
 
-  /**
-   * Releases the cooldown key used by {@link
-   * org.apache.fineract.selfservice.notification.service.SelfServiceNotificationService}. Key
-   * format MUST match the listener: {@code TRANSFER_SUCCESS:{userId}} (no channel suffix).
-   * Multi-tenant safe: userId is tenant-scoped.
-   */
   private void releaseTransferSuccessCooldown(AppSelfServiceUser user) {
     try {
       String cacheKey =
@@ -326,8 +314,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     BigDecimal feeAmountFromClient =
         request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
 
-    // Re-calculate fee server-side when client did not send one (or sent 0)
-    // so the balance check always uses the real total.
     BigDecimal feeForBalanceCheck = feeAmountFromClient;
     if (feeForBalanceCheck.compareTo(BigDecimal.ZERO) <= 0) {
       try {
@@ -336,7 +322,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
         quoteReq.setCurrencyCode(request.getCurrencyCode());
         quoteReq.setTransferMode(request.getTransferMode());
         quoteReq.setTransferAmount(request.getTransferAmount());
-        // map any other fields your PrepareRequest needs
         AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, sourceClient);
         if (quote != null && quote.getFeeAmount() != null) {
           feeForBalanceCheck = quote.getFeeAmount();
@@ -346,7 +331,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
     }
 
-    // Safeguard: transfer + fee must fit before any external/internal debit
     validateSufficientFunds(sourceSavingsAccount, request.getTransferAmount(), feeForBalanceCheck);
 
     log.info(
@@ -357,7 +341,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String cleanDestination =
         request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
-    // Route to the correct execution strategy
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");
       return executePinTransfer(request, user, sourceSavingsAccount, httpRequest);
@@ -393,38 +376,57 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return result;
   }
 
+  /**
+   * Builds the transfer date string for Apache Fineract account-transfer commands.
+   *
+   * <p><b>Date policy (centralized, multi-tenant):</b> any {@code transferDate} submitted by the
+   * REST client is discarded. The value is always the current tenant date formatted as {@code dd
+   * MMMM yyyy} (locale {@code en}) so Fineract never rejects it as a future date.
+   */
   private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request) {
-    // Build Fineract-compatible date
-    String transferDateForFineract;
-    String localeForFineract = "en";
-
-    if (StringUtils.isNotBlank(request.getTransferDate())) {
-      // Parse client date and append current time to avoid "future date" issues
+    if (request != null && StringUtils.isNotBlank(request.getTransferDate())) {
+      log.info(
+          "CONFIRM: discarding client-submitted transferDate='{}' (format='{}') in favour of tenant date",
+          request.getTransferDate(),
+          request.getDateFormat());
+      // Optional: run through management service for consistent logging / validation path
       try {
-        LocalDate clientDate =
-            LocalDate.parse(
+        TransactionDateRequest dateRequest =
+            new TransactionDateRequest(
                 request.getTransferDate(),
-                DateTimeFormatter.ofPattern(
-                    request.getDateFormat() != null ? request.getDateFormat() : "dd-MM-yyyy"));
-        LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
-        LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
-        transferDateForFineract = transferDateTime.format(FINERACT_DATETIME_FMT);
-        Locale defaultLocale = Locale.getDefault();
-        localeForFineract = defaultLocale.getLanguage();
+                StringUtils.defaultIfBlank(request.getDateFormat(), "dd-MM-yyyy"),
+                FINERACT_TRANSFER_LOCALE);
+        OffsetDateTime processed =
+            transactionDateManagementService.processAndValidateTransactionDate(dateRequest);
+        log.debug("Client transferDate processed via TransactionDateManagementService → {}", processed);
       } catch (Exception e) {
-        log.warn("Failed to parse client transferDate, falling back to now", e);
-        transferDateForFineract =
-            DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
+        log.debug("Client transferDate could not be processed (non-fatal): {}", e.getMessage());
       }
-    } else {
-      transferDateForFineract = DateUtils.getLocalDateTimeOfSystem().format(FINERACT_DATETIME_FMT);
     }
-    return transferDateForFineract;
+
+    // Force tenant "today" in the format Fineract expects for transferDate
+    final String tenantToday =
+        transactionDateUtil.getCurrentDateForFineract(
+            FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE);
+
+    log.info(
+        "CONFIRM: transferDate forced to tenant date='{}' (format='{}', locale='{}')",
+        tenantToday,
+        FINERACT_TRANSFER_DATE_FORMAT,
+        FINERACT_TRANSFER_LOCALE);
+    return tenantToday;
+  }
+
+  /** Tenant-aware "now" as OffsetDateTime for audit / response timestamps. */
+  private OffsetDateTime currentTenantOffsetDateTime() {
+    LocalDateTime tenantLdt = transactionDateUtil.getCurrentTenantLocalDateTime();
+    // Align with TransactionDateUtil zone resolution by formatting then parsing when needed;
+    // at minimum use system default zone of the tenant LocalDateTime clock alignment.
+    return tenantLdt.atZone(ZoneId.systemDefault()).toOffsetDateTime();
   }
 
   // =====================================================================
-  //  Builds a fully-structured SameBankTransferResponseData instead of
-  //  returning the raw CommandProcessingResult.
+  //  SAME_BANK / internal
   // =====================================================================
   private Object executeInternalTransfer(
       AccountTransferConfirmRequest request,
@@ -451,16 +453,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
           "Could not determine destination client for internal transfer.");
     }
 
-    // Resolve the currency from the source savings account; fall back to the request
     String resolvedCurrencyCode =
         resolveCurrencyCode(fromSavingsAccount, request.getCurrencyCode());
 
-    // Build Fineract-compatible date
     String transferDateForFineract = this.getTransferDateForApacheFineract(request);
-    String localeForFineract = "en";
-    String dateFormatForFineract = "dd MMMM yyyy";
+    String localeForFineract = FINERACT_TRANSFER_LOCALE;
+    String dateFormatForFineract = FINERACT_TRANSFER_DATE_FORMAT;
 
-    // Build the Fineract internal-transfer command
     Map<String, Object> commandData = new HashMap<>();
     commandData.put("fromOfficeId", fromOfficeId);
     commandData.put("fromClientId", fromClientId);
@@ -471,10 +470,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
     commandData.put("toAccountType", 2);
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
-    commandData.put("transferDate", transferDateForFineract); // Full datetime string
+    commandData.put("transferDate", transferDateForFineract);
     commandData.put("transferDescription", buildTransferDescription(request));
     commandData.put("locale", localeForFineract);
-    commandData.put("dateFormat", dateFormatForFineract); // Fineract expected format
+    commandData.put("dateFormat", dateFormatForFineract);
 
     String jsonRequestBody = gson.toJson(commandData);
 
@@ -488,17 +487,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     JsonCommand command = createJsonCommand(jsonRequestBody);
 
-    // Capture timestamps before and after the Fineract call
-    OffsetDateTime registrationDate = OffsetDateTime.now();
+    OffsetDateTime registrationDate = currentTenantOffsetDateTime();
 
     CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
     log.info("JSON Response Body for Internal Transfer: {}", result.toString());
 
-    OffsetDateTime processingDate = OffsetDateTime.now();
+    OffsetDateTime processingDate = currentTenantOffsetDateTime();
 
     SavingsAccountTransaction transferTransaction = null;
-    OffsetDateTime instant = OffsetDateTime.now();
+    OffsetDateTime instant = currentTenantOffsetDateTime();
     String operationId = UUID.randomUUID().toString();
     String description = "Rejected";
     Integer stateCode = 128;
@@ -510,12 +508,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
       instant =
           selfServiceAccountTransferRepository.findCreatedOnUtcByTransferId(result.getResourceId());
       log.info("Fetching created_on_utc: {} ", instant);
-      processingDate = instant;
+      if (instant != null) {
+        processingDate = instant;
+      }
       log.info("Fetching created_on_tz: {} ", processingDate);
-      String refNo = transferTransaction.getRefNo();
-      log.info("Fetching RefNo: {} ", operationId);
-      if (refNo != null) {
-        operationId = refNo;
+      if (transferTransaction != null) {
+        String refNo = transferTransaction.getRefNo();
+        log.info("Fetching RefNo: {} ", operationId);
+        if (refNo != null) {
+          operationId = refNo;
+        }
       }
       description = "Completed";
       stateCode = 32;
@@ -578,7 +580,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
         registrationDate,
         processingDate);
 
-    // Execute Commission Charge for SAME_BANK
     executeFeeTransaction(request, sourceSavingsAccount);
 
     log.info("Homologating SAME_BANK response structure");
@@ -586,7 +587,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> homologatedData =
         homologateResponseData(rawInternalMap, request.getTransferAmount(), resolvedCurrencyCode);
 
-    log.info("Wrap in the generic confirm-response envelope");
     AccountTransferConfirmResponse wrappedResponse =
         AccountTransferConfirmResponse.builder()
             .transferType("SAME_BANK")
@@ -605,9 +605,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return wrappedResponse;
   }
 
-  // =====================================================================
-  // Helper: resolve currency code from SavingsAccount
-  // =====================================================================
   private String resolveCurrencyCode(SavingsAccount savingsAccount, String fallbackCurrencyCode) {
     try {
       if (savingsAccount != null
@@ -621,11 +618,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return StringUtils.isNotBlank(fallbackCurrencyCode) ? fallbackCurrencyCode : "CRC";
   }
 
-  // =====================================================================
-  //  Helper: generate the internal reference number
-  //  Format: YYYYMMDD + officeId (5 digits, zero-padded) + resourceId (12 digits, zero-padded)
-  //  Example: 2026072237383000000001040
-  // =====================================================================
   private String generateInternalRefNumber(
       OffsetDateTime dateTime, Long officeId, Long resourceId) {
     String datePart = dateTime.format(REF_DATE_FMT);
@@ -649,7 +641,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
               .currencyCode(currencyCode)
               .transferAmount(transferAmount)
               .feeAmount(feeAmount)
-              .processingDate(OffsetDateTime.now())
+              .processingDate(currentTenantOffsetDateTime())
               .status(status)
               .build();
       transferAuditRepository.saveAndFlush(audit);
@@ -658,9 +650,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
   }
 
-  // =====================================================================
-  // Helper: persist the SAME_BANK audit record
-  // =====================================================================
   private void persistSameBankTransferAudit(
       Long clientId,
       Long fromAccountId,
@@ -708,14 +697,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
           operationId,
           internalRefNumber);
     } catch (Exception e) {
-      // Audit failure must NOT roll back the actual transfer
       log.error(
           "Failed to persist SAME_BANK transfer audit (non-fatal): operationId={}", operationId, e);
     }
   }
 
   // =====================================================================
-  //  PIN TRANSFER
+  //  PIN / SINPE — unchanged logic; fee path uses centralized transfer date
   // =====================================================================
   private Object executePinTransfer(
       AccountTransferConfirmRequest request,
@@ -845,7 +833,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
 
-      // Execute Commission Charge for SAME_BANK
       executeFeeTransaction(request, sourceSavingsAccount);
 
       Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
@@ -869,9 +856,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
   }
 
-  // =====================================================================
-  //  SINPE TRANSFER
-  // =====================================================================
   private Object executeSinpeTransfer(
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
@@ -913,7 +897,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
 
-    // Execute Commission Charge for SAME_BANK
     executeFeeTransaction(request, sourceSavingsAccount);
 
     Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
@@ -966,9 +949,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
           result != null && result.getResourceId() != null
               ? result.getResourceId().toString()
               : "N/A");
+      // Prefer tenant date for notification context (not client-submitted transferDate)
       contextData.put(
           "transactionDate",
-          StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1034,7 +1019,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("transferId", transferId);
       contextData.put(
           "transactionDate",
-          StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1073,7 +1059,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
       HttpServletRequest httpRequest,
       Map<String, Object> externalData) {
     try {
-      // Invalidate any prior cooldown so a successful PIN confirm always notifies
       releaseTransferSuccessCooldown(user);
 
       String mobileNumber = extractMobile(user, sourceClient);
@@ -1105,7 +1090,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("transferId", transferId);
       contextData.put(
           "transactionDate",
-          StringUtils.isNotBlank(request.getTransferDate()) ? request.getTransferDate() : "N/A");
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1162,7 +1148,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
           getFieldValue(params, originalParams, "transferDescription", "description"));
       contextData.put(
           "transactionDate",
-          getFieldValue(params, originalParams, "transactionDate", "transferDate"));
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put(
           "fromAccountNumber",
           getFieldValue(params, originalParams, "fromAccountNumber", "fromAccountId"));
@@ -1230,7 +1217,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       Client sourceClient,
       HttpServletRequest httpRequest) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
-    LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
+    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
 
     SelfServiceRegistration registration =
         SelfServiceRegistration.instance(
@@ -1249,7 +1236,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             expiry);
 
     registrationRepository.saveAndFlush(registration);
-    registration.markDispatched(); // <-- ensure dispatch metadata is set
+    registration.markDispatched();
     registrationRepository.saveAndFlush(registration);
 
     log.info(
@@ -1264,7 +1251,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     contextData.put(
         "transferAmount",
         request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
-    contextData.put("resend", true); // marker for templates if needed
+    contextData.put("resend", true);
 
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
@@ -1303,7 +1290,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     if (registration == null
         || registration.isConsumed()
-        || registration.isExpired(DateUtils.getLocalDateTimeOfSystem())) {
+        || registration.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime())) {
       final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
       final DataValidatorBuilder baseDataValidator =
           new DataValidatorBuilder(dataValidationErrors).resource("otp");
@@ -1602,7 +1589,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String destinationTarget,
       BigDecimal transferAmount) {
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
-    LocalDateTime expiry = DateUtils.getLocalDateTimeOfSystem().plusMinutes(10);
+    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
 
     SelfServiceRegistration registration =
         SelfServiceRegistration.instance(
@@ -1645,14 +1632,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     log.info("QUOTE: OTP successfully registered and event published for destination target.");
   }
 
-  /**
-   * Delegates fee collection to {@link SelfServiceFeeCollectionService} which runs in a {@code
-   * REQUIRES_NEW} transaction. This prevents the EclipseLink-5006 OptimisticLockException that
-   * occurred when the same {@code SavingsAccount} entity (already loaded during balance validation)
-   * was modified again inside the same persistence context.
-   *
-   * <p>Failure here is <b>non-fatal</b>: the original transfer is never rolled back.
-   */
   private void executeFeeTransaction(
       AccountTransferConfirmRequest request, SavingsAccount sourceSavingsAccount) {
     log.info(
@@ -1676,8 +1655,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
               .clientId(client.getId())
               .fromOfficeId(client.getOffice().getId())
               .transferDateForFineract(getTransferDateForApacheFineract(request))
-              .dateFormat("dd MMMM yyyy")
-              .locale("en")
+              .dateFormat(FINERACT_TRANSFER_DATE_FORMAT)
+              .locale(FINERACT_TRANSFER_LOCALE)
               .clientFeeAmount(request.getFeeAmount())
               .build();
 
@@ -1691,8 +1670,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
           result.getCurrency());
 
     } catch (Exception e) {
-      // NEVER roll back the original payment because of a commission failure.
-      // The REQUIRES_NEW TX already rolled back independently.
       log.error(
           "ACCOUNTING CONFIRM: Commission collection failed (non-fatal). "
               + "Original transfer remains intact.",
@@ -1806,10 +1783,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
         validateSourceAccountOwnership(user, resendRequest.getFromAccount(), null);
     Client sourceClient = sourceSavingsAccount.getClient();
 
-    LocalDateTime now = DateUtils.getLocalDateTimeOfSystem();
-
     log.info("RESEND OTP: Starting for userId={}, clientId={}", user.getId(), sourceClient.getId());
-    // 1. Expire ALL existing non-consumed OTPs for this client + request type
+
     List<SelfServiceRegistration> activeOtps =
         registrationRepository.findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
             sourceClient.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
@@ -1820,15 +1795,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
       for (SelfServiceRegistration reg : activeOtps) {
         markAsExpired(reg);
       }
-    } else if (activeOtps.isEmpty()) {
+    } else {
       log.info("RESEND OTP: No active OTP found → generating fresh one.");
       return generateNewOtpForResend(user, sourceClient, resendRequest, httpRequest);
     }
 
-    // 2. Force-release the notification cooldown (same key used by quote)
     releaseOtpCooldown(user);
 
-    // 3. Always generate a brand-new OTP and publish the notification event
     Object result = generateNewOtpForResend(user, sourceClient, resendRequest, httpRequest);
 
     log.info("RESEND OTP: Completed for userId={}", user.getId());
@@ -1846,12 +1819,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
     dummy.setTransferType(resendRequest.getTransferType());
     dummy.setTransferDescription(resendRequest.getTransferDescription());
     dummy.setTransferAmount(BigDecimal.ZERO);
-    // Re-use the proven path that already works for /quote
     return generateAndSendOtp(dummy, user, sourceClient, httpRequest);
   }
 
   private void markAsExpired(SelfServiceRegistration reg) {
-    reg.setExpiresAt(DateUtils.getLocalDateTimeOfSystem().minusSeconds(1));
+    reg.setExpiresAt(transactionDateUtil.getCurrentTenantLocalDateTime().minusSeconds(1));
     reg.markConsumed();
     registrationRepository.saveAndFlush(reg);
     log.info("Marked OTP registration {} as expired/consumed", reg.getId());
@@ -1915,7 +1887,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String processingDate =
         data.get("processingDate") != null ? data.get("processingDate").toString() : "";
 
-    // 4. Normalización de Estado (stateCode & stateDescription en Inglés)
     Integer stateCode = 32;
     Object rawState = data.containsKey("stateCode") ? data.get("stateCode") : data.get("state");
     if (rawState != null) {
@@ -1944,7 +1915,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
         break;
     }
 
-    // 5. Manejo de Rechazo (rejectCode & rejectDescription)
     Integer rejectCode = 0;
     if (data.get("rejectCode") != null) {
       try {
@@ -1968,12 +1938,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     Object customData = data.get("customData");
 
-    // Limpieza de campos viejos/no homologados que venían en el raw map
     data.remove("amount");
     data.remove("currency");
     data.remove("state");
 
-    // 6. Inyección de las llaves homologadas estandarizadas
     data.put("operationId", operationId);
     data.put("internalRefNumber", internalRef);
     data.put("channelRefNumber", channelRef);
@@ -1995,10 +1963,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return data;
   }
 
-  /**
-   * Ensures the source savings account has enough withdrawable balance to cover transferAmount +
-   * feeAmount. Throws a clear validation error before any debit.
-   */
   private void validateSufficientFunds(
       String fromAccountIdentifier,
       Integer fromAccountType,
@@ -2015,7 +1979,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     BigDecimal totalRequired = transfer.add(fee);
 
     if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
-      return; // nothing to debit
+      return;
     }
 
     Long fromAccountId =
@@ -2035,15 +1999,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     BigDecimal totalRequired = transfer.add(fee);
 
     if (totalRequired.compareTo(BigDecimal.ZERO) <= 0) {
-      return; // nothing to debit
+      return;
     }
 
-    // Prefer withdrawable balance (respects min balance, holds, overdraft rules)
     BigDecimal available;
     try {
       available = fromSavings.getWithdrawableBalance();
     } catch (Exception e) {
-      // Fallback if method signature differs in this Fineract version
       log.warn(
           "getWithdrawableBalance() unavailable, falling back to account balance. cause={}",
           e.getMessage());
@@ -2158,6 +2120,35 @@ public class SelfAccountTransferWritePlatformServiceImpl
                 + " via "
                 + (mode != null ? mode : "");
 
-    return String.format("%-15s", result); // right-pad with spaces
+    return String.format("%-15s", result);
+  }
+
+  private String buildTransferDescription(AccountTransferConfirmRequest request) {
+    if (request == null) {
+      return String.format("%-15s", "Transfer");
+    }
+    String description = request.getTransferDescription();
+    String mode = request.getTransferMode();
+    if (StringUtils.isBlank(mode)) {
+      mode = request.getTransferType();
+    }
+
+    boolean useOriginal =
+        description != null
+            && !description.isBlank()
+            && description.length() >= 15
+            && mode != null
+            && (mode.equalsIgnoreCase("PIN")
+                || mode.equalsIgnoreCase("SINPE")
+                || mode.equalsIgnoreCase("SAME_BANK"));
+
+    String result =
+        useOriginal
+            ? description
+            : (description != null && !description.isBlank() ? description : "Transfer")
+                + " via "
+                + (mode != null ? mode : "");
+
+    return String.format("%-15s", result);
   }
 }
