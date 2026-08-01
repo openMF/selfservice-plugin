@@ -70,8 +70,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" o.name as officeName, ");
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
-      sqlBuilder.append(" s.account_no as accountNumber, ");
-      sqlBuilder.append(" COALESCE(NULLIF(s.external_id, ''), s.account_no) as iban, ");
+      //sqlBuilder.append(" s.account_no as accountNumber, ");
+      sqlBuilder.append(" COALESCE(NULLIF(s.external_id, ''), s.account_no) as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
               " COALESCE(NULLIF(s.external_id, ''), s.account_no) as customAccountNumber, "
@@ -93,8 +93,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" o.name as officeName, ");
       sqlBuilder.append(" c.display_name as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
-      sqlBuilder.append(" l.account_no as accountNumber, ");
-      sqlBuilder.append(" COALESCE(NULLIF(l.external_id, ''), l.account_no) as iban, ");
+      //sqlBuilder.append(" l.account_no as accountNumber, ");
+      sqlBuilder.append(" COALESCE(NULLIF(l.external_id, ''), l.account_no) as accountNumber, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(
               " COALESCE(NULLIF(l.external_id, ''), l.account_no) as customAccountNumber, "
@@ -116,8 +116,8 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       sqlBuilder.append(" 'External Office' as officeName, ");
       sqlBuilder.append(" 'External Client' as clientName, ");
       sqlBuilder.append(" b.account_type as accountType, ");
+      //sqlBuilder.append(" b.custom_account_number as accountNumber, ");
       sqlBuilder.append(" b.custom_account_number as accountNumber, ");
-      sqlBuilder.append(" b.custom_account_number as iban, ");
       sqlBuilder.append(" b.transfer_limit as transferLimit, ");
       sqlBuilder.append(" b.custom_account_number as customAccountNumber, ");
       sqlBuilder.append(" b.holder_name as holderName, ");
@@ -150,7 +150,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
       final String clientName = rs.getString("clientName");
       final Integer accountTypeId = rs.getInt("accountType");
       final String accountNumber = rs.getString("accountNumber");
-      final String iban = rs.getString("iban");
+      //final String iban = rs.getString("iban");
       final Long transferLimit = rs.getLong("transferLimit");
       final String customAccountNumber = rs.getString("customAccountNumber");
       final String holderName = rs.getString("holderName");
@@ -180,7 +180,6 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
                 clientName,
                 accountType,
                 accountNumber,
-                iban,
                 transferLimit,
                 customAccountNumber,
                 holderName,
@@ -201,7 +200,6 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
               clientName,
               accountType,
               accountNumber,
-              iban,
               transferLimit,
               customAccountNumber,
               holderName,
