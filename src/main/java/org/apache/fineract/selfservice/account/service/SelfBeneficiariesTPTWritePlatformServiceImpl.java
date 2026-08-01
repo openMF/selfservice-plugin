@@ -380,13 +380,27 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
             throw new InvalidBeneficiaryException(beneficiaryId);
         }
 
+        // Early return if already soft-deleted to prevent redundant DB calls
+        if (!beneficiary.isActive()) {
+            log.info("Beneficiary id={} is already soft-deleted", beneficiaryId);
+            return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+        }
+
+        // Prevent unique constraint violation on (name, app_selfservice_user_id, is_active)
+        // by appending a unique suffix to the name upon soft deletion. 
+        // This allows users to delete and later recreate a beneficiary with the same original name.
+        String originalName = beneficiary.getName();
+        String uniqueDeletedName = originalName + "_deleted_" + beneficiary.getId() + "_" + System.currentTimeMillis();
+        
+        beneficiary.setName(uniqueDeletedName);
         beneficiary.setActive(false);
+        
         this.repository.save(beneficiary);
 
         log.info(
-                "Successfully soft-deleted TPT beneficiary id={}, previousName={}, userId={}",
+                "Successfully soft-deleted TPT beneficiary id={}, originalName={}, userId={}",
                 beneficiary.getId(),
-                beneficiary.getName(),
+                originalName,
                 user.getId());
 
         return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();

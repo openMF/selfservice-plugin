@@ -29,9 +29,9 @@ import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 @Table(
     name = "m_selfservice_beneficiaries_tpt",
     uniqueConstraints = {
-      @UniqueConstraint(
-          columnNames = {"name", "app_selfservice_user_id", "is_active"},
-          name = "name")
+        @UniqueConstraint(
+            columnNames = {"name", "app_selfservice_user_id", "is_active"},
+            name = "uk_m_selfservice_beneficiaries_tpt_name") 
     })
 public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
 

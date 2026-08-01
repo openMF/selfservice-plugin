@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+    
+    <!-- Step 1: Drop the poorly named unique constraint if it exists -->
+    <changeSet author="fineract" id="ss-062-1">
+        <preConditions onFail="MARK_RAN">
+            <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt" constraintName="name"/>
+        </preConditions>
+        <dropUniqueConstraint tableName="m_selfservice_beneficiaries_tpt" constraintName="name"/>
+    </changeSet>
+
+    <!-- Step 2: Ensure the correctly named unique constraint exists -->
+    <changeSet author="fineract" id="ss-062-2-add-correct-constraint">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt" constraintName="uk_m_selfservice_beneficiaries_tpt_name"/>
+            </not>
+        </preConditions>
+        <addUniqueConstraint tableName="m_selfservice_beneficiaries_tpt"
+                             columnNames="name, app_selfservice_user_id, is_active"
+                             constraintName="uk_m_selfservice_beneficiaries_tpt_name"/>
+    </changeSet>
+
+</databaseChangeLog>
