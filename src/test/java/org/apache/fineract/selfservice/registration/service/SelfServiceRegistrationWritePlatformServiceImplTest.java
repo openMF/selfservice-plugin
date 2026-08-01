@@ -23,6 +23,7 @@ import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.organisation.office.domain.Office;
@@ -90,6 +91,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private TransactionDateUtil transactionDateUtil;
+  @Mock private TransactionDateManagementService transactionDateManagementService;
 
   private SelfServiceRegistrationWritePlatformServiceImpl service;
 
@@ -115,7 +117,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             appSelfServiceUserRepository,
             selfServiceAuthorizationTokenService,
             applicationEventPublisher,
-            transactionDateUtil);
+            transactionDateUtil,
+            transactionDateManagementService);
 
     LocalDate businessDate = LocalDate.of(2026, 1, 2);
     HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();

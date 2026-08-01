@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.registration.starter;
 
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
@@ -69,7 +70,8 @@ public class SelfRegistrationConfiguration {
       PlatformPasswordEncoder platformPasswordEncoder,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
-      ApplicationEventPublisher applicationEventPublisher,TransactionDateUtil transactionDateUtil) {
+      ApplicationEventPublisher applicationEventPublisher,TransactionDateUtil transactionDateUtil,
+      TransactionDateManagementService transactionDateManagementService) {
 
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
@@ -89,7 +91,8 @@ public class SelfRegistrationConfiguration {
         appSelfServiceUserRepository,
         selfServiceAuthorizationTokenService,
         applicationEventPublisher,
-        transactionDateUtil);
+        transactionDateUtil,
+        transactionDateManagementService);
   }
 
   @Bean
