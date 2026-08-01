@@ -10,10 +10,25 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 import java.time.LocalDateTime;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SelfServiceRegistrationTest {
+
+  @BeforeEach
+  void setUp() {
+    ThreadLocalContextUtil.setTenant(
+        new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
+  }
+
+  @AfterEach
+  void tearDown() {
+    ThreadLocalContextUtil.reset();
+  }
 
   @Test
   void instance_shouldCreateRegistrationWithAllFields() {

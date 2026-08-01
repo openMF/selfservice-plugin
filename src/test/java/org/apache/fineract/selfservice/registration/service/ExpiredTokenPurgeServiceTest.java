@@ -16,6 +16,7 @@ package org.apache.fineract.selfservice.registration.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,12 +42,17 @@ class ExpiredTokenPurgeServiceTest {
   @Captor private ArgumentCaptor<String> sqlCaptor;
 
   private ExpiredTokenPurgeService service;
-  
-  private TransactionDateUtil transactionDateUtil;
+
+  @Mock private TransactionDateUtil transactionDateUtil;
 
   @BeforeEach
   void setUp() {
-    service = new ExpiredTokenPurgeService(selfServiceRegistrationRepository, jdbcTemplate, transactionDateUtil);
+    lenient()
+        .when(transactionDateUtil.getCurrentTenantLocalDateTime())
+        .thenAnswer(invocation -> LocalDateTime.now());
+    service =
+        new ExpiredTokenPurgeService(
+            selfServiceRegistrationRepository, jdbcTemplate, transactionDateUtil);
   }
 
   // ── Self-service token purge ──────────────────────────────────────────────
