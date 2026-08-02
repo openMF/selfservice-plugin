@@ -71,5 +71,6 @@
   <include file="parts/059-add-fee-to-paymentlink-audit-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/060-add-extended-features-to-beneficiaries.xml" relativeToChangelogFile="true"/>  
   <include file="parts/061-add-date-time-preferences.xml" relativeToChangelogFile="true"/>
-  <include file="parts/062-fix-beneficiary-unique-constraint.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/062-fix-beneficiary-unique-constraint.xml" relativeToChangelogFile="true"/>
+  <include file="parts/063-add-tenant-branding.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
