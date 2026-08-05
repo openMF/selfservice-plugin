@@ -96,7 +96,12 @@ public class SelfServiceSecurityConfiguration {
 
     http
         // Apply only to self-service endpoints
-        .securityMatcher("/api/v1/self/**", "/v1/self/**")
+        .securityMatcher(
+            "/api/v1/self/**", 
+            "/v1/self/**", 
+            "/api/v1/branding", 
+            "/v1/branding"
+        )
 
         // Disable CSRF for public self-service APIs
         .csrf(AbstractHttpConfigurer::disable)
