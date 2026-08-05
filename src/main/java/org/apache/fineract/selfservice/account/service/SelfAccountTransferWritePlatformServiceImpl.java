@@ -448,13 +448,14 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String dateFormatForFineract = FINERACT_TRANSFER_DATE_FORMAT;
 
     Map<String, Object> commandData = new HashMap<>();
+    commandData.put("paymentTypeId", 1);
     commandData.put("fromOfficeId", fromOfficeId);
     commandData.put("fromClientId", fromClientId);
     commandData.put("fromAccountType", 2);
     commandData.put("fromAccountId", fromAccountId);
     commandData.put("toOfficeId", toOfficeId);
     commandData.put("toClientId", toClientId);
-    commandData.put("toAccountType", 2);
+    commandData.put("toAccountType", 2);    
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract);
