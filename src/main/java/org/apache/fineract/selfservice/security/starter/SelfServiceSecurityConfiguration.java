@@ -175,7 +175,7 @@ public class SelfServiceSecurityConfiguration {
                     .requestMatchers(HttpMethod.POST, "/v1/self/loans/simulate")
                     .permitAll()
                     //Branding 
-                    .requestMatchers(HttpMethod.GET, "/v1/branding")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/branding")
                     .permitAll()
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
