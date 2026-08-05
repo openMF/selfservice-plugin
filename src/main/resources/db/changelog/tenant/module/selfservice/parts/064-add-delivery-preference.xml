@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.17.xsd">
+
+    <changeSet author="fineract" id="ss-0064-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM c_configuration WHERE name = 'selfservice-notification-delivery-preference'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <insert tableName="c_configuration">
+            <column name="name" value="selfservice-notification-delivery-preference"/>
+            <column name="value" value="email"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="description" value="Default delivery preference (email or sms) for self-service notifications when both email and mobile are available."/>
+        </insert>
+        <rollback>
+            <delete tableName="c_configuration">
+                <where>name = 'selfservice-notification-delivery-preference'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

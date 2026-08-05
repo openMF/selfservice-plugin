@@ -22,6 +22,7 @@ import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
@@ -62,6 +63,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
   /** Centralized multi-tenant date/time utility for token expiry and validation. */
   private final TransactionDateUtil transactionDateUtil;
+  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @Override
   @Transactional
@@ -127,7 +130,7 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     contextData.put("expirationMinutes", 10);
     contextData.put("username", username);
 
-    boolean emailMode = determinePreferredMode(email, mobileNumber);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
 
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
@@ -222,6 +225,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("username", user.getUsername());
+    
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobileNumber(user));
 
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
@@ -233,7 +238,7 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             extractMobileNumber(user),
-            determinePreferredMode(user.getEmail(), extractMobileNumber(user)),
+            emailMode,
             null,
             LocaleContextHolder.getLocale(),
             contextData));
@@ -255,18 +260,5 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
         .findFirst()
         .orElse(null);
   }
-
-  private boolean determinePreferredMode(String email, String mobileNumber) {
-    boolean hasEmail = StringUtils.isNotBlank(email);
-    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-    if (hasEmail && !hasMobile) {
-      return true;
-    }
-    if (hasMobile && !hasEmail) {
-      return false;
-    }
-    String pref =
-        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
-    return "email".equalsIgnoreCase(pref);
-  }
+  
 }

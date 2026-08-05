@@ -73,4 +73,5 @@
   <include file="parts/061-add-date-time-preferences.xml" relativeToChangelogFile="true"/>
   <include file="parts/062-fix-beneficiary-unique-constraint.xml" relativeToChangelogFile="true"/>
   <include file="parts/063-add-tenant-branding.xml" relativeToChangelogFile="true"/>
+  <include file="parts/064-add-delivery-preference.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>
