@@ -177,6 +177,8 @@ public class SelfServiceSecurityConfiguration {
                     //Branding 
                     .requestMatchers(HttpMethod.GET, "/api/v1/branding")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/v1/branding")
+                    .permitAll()    
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
                     // traffic).
