@@ -62,13 +62,13 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
   
-  /** Cache manager to bypass notification rate-limits for critical security alerts. */
-  private final NotificationCooldownCache notificationCooldownCache;
-
   /** Centralized multi-tenant date/time utility for token expiry and validation. */
   private final TransactionDateUtil transactionDateUtil;
   
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  
+  /** Cache manager to bypass notification rate-limits for critical security alerts. */
+  private final NotificationCooldownCache notificationCooldownCache;
 
   @Override
   @Transactional

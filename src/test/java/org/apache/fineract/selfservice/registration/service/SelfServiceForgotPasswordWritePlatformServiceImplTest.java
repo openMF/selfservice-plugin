@@ -37,6 +37,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
@@ -80,6 +81,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   @Mock private TransactionDateUtil transactionDateUtil;
   
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  
+  @Mock private NotificationCooldownCache notificationCooldownCache;
 
   @BeforeEach
   void setUp() {
@@ -94,7 +97,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             applicationEventPublisher,
             env,
             transactionDateUtil,
-            notificationDeliveryModeUtil);
+            notificationDeliveryModeUtil,
+            notificationCooldownCache);
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }

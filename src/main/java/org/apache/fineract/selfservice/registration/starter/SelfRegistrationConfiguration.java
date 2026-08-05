@@ -12,6 +12,7 @@ import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
+import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.service.SelfServiceAuthorizationTokenService;
@@ -108,7 +109,8 @@ public class SelfRegistrationConfiguration {
       ApplicationEventPublisher applicationEventPublisher,
       Environment env,
       TransactionDateUtil transactionDateUtil,
-      NotificationDeliveryModeUtil notificationDeliveryModeUtil) {
+      NotificationDeliveryModeUtil notificationDeliveryModeUtil,
+      NotificationCooldownCache notificationCooldownCache) {
 
     return new SelfServiceForgotPasswordWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
@@ -120,6 +122,7 @@ public class SelfRegistrationConfiguration {
         applicationEventPublisher,
         env,
         transactionDateUtil,
-        notificationDeliveryModeUtil);
+        notificationDeliveryModeUtil,
+        notificationCooldownCache);
   }
 }
