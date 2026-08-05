@@ -134,7 +134,9 @@ public final class SelfServiceApiConstants {
                   dateFormatParamName,
                   localeParamName,
                   activeParamName,
-                  submittedOnDateParamName)));
+                  submittedOnDateParamName,
+                  documentTypeIdParamName,
+                  documentKeyParamName)));
 
   public static final List<Object> SUPPORTED_AUTHENTICATION_MODE_PARAMETERS =
       List.copyOf(Arrays.asList(emailModeParamName, mobileModeParamName));
