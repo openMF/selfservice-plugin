@@ -46,6 +46,7 @@ import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncod
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
+import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.api.data.TransactionDateRequest;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -118,6 +119,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
    * being overridden by policy where required.
    */
   private final TransactionDateManagementService transactionDateManagementService;
+  
+  private final ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -525,8 +528,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     try {
       JsonCommand command =
           JsonCommand.fromJsonElement(null, parsedSanitizedElement, this.fromApiJsonHelper);
-      CommandProcessingResult result = clientWritePlatformService.createClient(command);
+      CommandProcessingResult result = clientWritePlatformService.createClient(command);      
       Long newClientId = result.getResourceId();
+      createClientIdentifierFromEnrollment(newClientId, originalJson);
 
       Client client = clientRepository.findOneWithNotFoundDetection(newClientId);
       Role ssRole = roleRepository.getRoleByName(SelfServiceApiConstants.SELF_SERVICE_USER_ROLE);
@@ -1181,4 +1185,100 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
+  
+  /**
+    * Creates a client identifier from self-enrollment payload.
+    *
+    * <p>Mapping (required by product):
+    * <ul>
+    *   <li>{@code documentTypeId} → identifier document type
+    *   <li>{@code externalID} / {@code externalId} → {@code documentKey}
+    *   <li>optional explicit {@code documentKey} overrides external id for the key
+    * </ul>
+    *
+    * <p>Runs in the same multi-tenant transaction / security context as client create.
+    * Failures are non-fatal for enrollment (logged); raise if you prefer hard fail.
+    */
+   private void createClientIdentifierFromEnrollment(Long clientId, JsonObject originalJson) {
+     if (clientId == null || originalJson == null) {
+       return;
+     }
+
+     Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
+     String documentKey = resolveDocumentKey(originalJson);
+
+     if (documentTypeId == null || StringUtils.isBlank(documentKey)) {
+       log.debug(
+           "Self-enrollment: skipping client identifier (clientId={}): documentTypeId={}, documentKey present={}",
+           clientId,
+           documentTypeId,
+           StringUtils.isNotBlank(documentKey));
+       return;
+     }
+
+     try {
+       JsonObject identifierJson = new JsonObject();
+       identifierJson.addProperty("documentTypeId", documentTypeId);
+       identifierJson.addProperty("documentKey", documentKey);
+       identifierJson.addProperty("status", "Active");
+       identifierJson.addProperty("description", "");
+
+       JsonCommand identifierCommand =
+           JsonCommand.fromJsonElement(
+               clientId, identifierJson, this.fromApiJsonHelper);
+
+       CommandProcessingResult identifierResult =
+           clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
+
+       log.info(
+           "Self-enrollment: client identifier created clientId={}, documentTypeId={}, documentKey={}, resourceId={}",
+           clientId,
+           documentTypeId,
+           documentKey,
+           identifierResult != null ? identifierResult.getResourceId() : null);
+     } catch (Exception e) {
+       // Prefer non-fatal so user/client still exist; switch to rethrow if identifier is mandatory
+       log.error(
+           "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={}, documentKey={}",
+           clientId,
+           documentTypeId,
+           documentKey,
+           e);
+     }
+   }
+
+   private String resolveDocumentKey(JsonObject originalJson) {
+     // Explicit documentKey wins if clients send both
+     String explicitKey =
+         stringValueOrDefault(originalJson, SelfServiceApiConstants.documentKeyParamName, null);
+     if (StringUtils.isNotBlank(explicitKey)) {
+       return explicitKey.trim();
+     }
+     String externalId =
+         stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIdParamName, null);
+     if (StringUtils.isBlank(externalId)) {
+       externalId =
+           stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIDParamName, null);
+     }
+     return StringUtils.isNotBlank(externalId) ? externalId.trim() : null;
+   }
+
+   private Long extractLong(JsonObject json, String key) {
+     if (json == null || !json.has(key) || json.get(key).isJsonNull()) {
+       return null;
+     }
+     try {
+       if (json.get(key).isJsonPrimitive() && json.get(key).getAsJsonPrimitive().isNumber()) {
+         return json.get(key).getAsLong();
+       }
+       String asString = json.get(key).getAsString();
+       if (StringUtils.isBlank(asString)) {
+         return null;
+       }
+       return Long.valueOf(asString.trim());
+     } catch (Exception e) {
+       log.warn("Could not parse long for key '{}': {}", key, e.getMessage());
+       return null;
+     }
+   }
 }

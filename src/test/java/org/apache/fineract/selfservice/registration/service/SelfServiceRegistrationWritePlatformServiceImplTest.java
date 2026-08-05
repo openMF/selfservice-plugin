@@ -31,6 +31,7 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
+import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
@@ -93,6 +94,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private TransactionDateManagementService transactionDateManagementService;
+  @Mock private ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
 
   private SelfServiceRegistrationWritePlatformServiceImpl service;
 
@@ -119,7 +121,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             selfServiceAuthorizationTokenService,
             applicationEventPublisher,
             transactionDateUtil,
-            transactionDateManagementService);
+            transactionDateManagementService,
+            clientIdentifierWritePlatformService);
 
     LocalDate businessDate = LocalDate.of(2026, 1, 2);
     HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();

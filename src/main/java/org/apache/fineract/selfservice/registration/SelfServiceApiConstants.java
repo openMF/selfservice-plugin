@@ -62,6 +62,8 @@ public final class SelfServiceApiConstants {
   public static final String createRequestSuccessMessage = "Self service request created.";
   public static final String createForgotPasswordRequestSuccessMessage =
       "Self service forgot password request created.";
+  public static final String documentTypeIdParamName = "documentTypeId";
+  public static final String documentKeyParamName = "documentKey";
 
   public static final Set<String> REGISTRATION_REQUEST_DATA_PARAMETERS =
       Collections.unmodifiableSet(

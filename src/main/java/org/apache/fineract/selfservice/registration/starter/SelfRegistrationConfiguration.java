@@ -11,6 +11,7 @@ import org.apache.fineract.infrastructure.core.service.TransactionDateManagement
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
+import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
@@ -73,7 +74,8 @@ public class SelfRegistrationConfiguration {
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
       ApplicationEventPublisher applicationEventPublisher,TransactionDateUtil transactionDateUtil,
-      TransactionDateManagementService transactionDateManagementService) {
+      TransactionDateManagementService transactionDateManagementService,
+      ClientIdentifierWritePlatformService clientIdentifierWritePlatformService) {
 
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
@@ -94,7 +96,8 @@ public class SelfRegistrationConfiguration {
         selfServiceAuthorizationTokenService,
         applicationEventPublisher,
         transactionDateUtil,
-        transactionDateManagementService);
+        transactionDateManagementService,
+        clientIdentifierWritePlatformService);
   }
 
   @Bean
