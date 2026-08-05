@@ -61,6 +61,7 @@ import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMa
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -85,9 +86,10 @@ public class SelfLoansApiResource {
   private final SelfLoansDataValidator dataValidator;
   private final GuarantorsApiResource guarantorsApiResource;
 
-  // NEW DEPENDENCIES for notifications
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @GET
   @Path("{loanId}")
@@ -547,7 +549,7 @@ public class SelfLoansApiResource {
     try {
       AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
-      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
 
       contextData.put("loanId", loanId != null ? loanId : "");
 
@@ -579,16 +581,6 @@ public class SelfLoansApiResource {
         .filter(StringUtils::isNotBlank)
         .findFirst()
         .orElse(null);
-  }
-
-  private boolean determineMode(String email, String mobileNumber) {
-    boolean hasEmail = StringUtils.isNotBlank(email);
-    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-    if (hasEmail && !hasMobile) return true;
-    if (hasMobile && !hasEmail) return false;
-    String pref =
-        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
-    return "email".equalsIgnoreCase(pref);
   }
 
   private String extractClientIp(HttpServletRequest httpRequest) {

@@ -35,6 +35,7 @@ import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,6 +64,7 @@ class SelfLoansApiResourceTest {
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private Environment env;
   @Mock private HttpServletRequest httpRequest;
+  @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   private SelfLoansApiResource resource;
 
@@ -82,8 +84,9 @@ class SelfLoansApiResourceTest {
             appUserClientMapperReadService,
             dataValidator,
             guarantorsApiResource,
-            applicationEventPublisher, // NEW
-            env); // NEW
+            applicationEventPublisher, 
+            env,
+            notificationDeliveryModeUtil); 
   }
 
   private void mockAuthenticatedUser() {

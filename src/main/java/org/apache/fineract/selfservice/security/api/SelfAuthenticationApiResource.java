@@ -43,6 +43,7 @@ import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatf
 import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
 import org.apache.fineract.selfservice.notification.NotificationContext;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUserData;
 import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUserKycData;
 import org.apache.fineract.selfservice.security.exception.SelfServiceDisabledException;
@@ -101,6 +102,8 @@ public class SelfAuthenticationApiResource {
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
   private final SelfServiceAuthenticationTokenService tokenService;
+  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -286,7 +289,7 @@ public class SelfAuthenticationApiResource {
       String username,
       HttpServletRequest httpRequest) {
     String mobileNumber = extractMobile(user);
-    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
       applicationEventPublisher.publishEvent(
@@ -341,15 +344,6 @@ public class SelfAuthenticationApiResource {
         .orElse(null);
   }
 
-  private boolean determineMode(String email, String mobileNumber) {
-    boolean hasEmail = StringUtils.isNotBlank(email);
-    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-    if (hasEmail && !hasMobile) return true;
-    if (hasMobile && !hasEmail) return false;
-    String pref =
-        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
-    return "email".equalsIgnoreCase(pref);
-  }
 
   public static class RefreshTokenRequest {
     public String refreshToken;
@@ -442,7 +436,7 @@ public class SelfAuthenticationApiResource {
   private void publishLogoutNotificationEvent(
       AppSelfServiceUser user, String username, HttpServletRequest httpRequest) {
     String mobileNumber = extractMobile(user);
-    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
 
     try (NotificationContext.Scope ignored =
         NotificationContext.bind(SelfServiceNotificationEvent.Type.LOGOUT.name())) {

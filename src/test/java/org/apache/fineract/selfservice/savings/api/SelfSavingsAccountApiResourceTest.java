@@ -29,6 +29,7 @@ import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
 import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
@@ -59,6 +60,7 @@ class SelfSavingsAccountApiResourceTest {
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private Environment env;
   @Mock private HttpServletRequest httpRequest;
+  @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   private SelfSavingsAccountApiResource resource;
 
@@ -101,8 +103,9 @@ class SelfSavingsAccountApiResourceTest {
             appuserSavingsMapperReadService,
             dataValidator,
             appUserClientMapperReadService,
-            applicationEventPublisher, // NEW
-            env); // NEW
+            applicationEventPublisher, 
+            env,
+            notificationDeliveryModeUtil); 
   }
 
   private void mockAuthenticatedUser() {

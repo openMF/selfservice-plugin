@@ -22,6 +22,7 @@ import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSinpeEnrollment;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSinpeEnrollmentRepository;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
@@ -51,6 +52,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
    * so OTP expiry and validation use the tenant clock (aligned with registration & transfer flows).
    */
   private final TransactionDateUtil transactionDateUtil;
+  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @Override
   @Transactional
@@ -130,7 +133,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
 
-    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
     log.info(
         "requestEnrollment: publishing SINPE_ENROLLMENT_OTP notification emailMode={}, hasEmail={},"
             + " hasMobile={}",
@@ -239,7 +242,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("mobileNumber", mobileNumber);
 
-    boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
     log.info(
         "confirmEnrollment: publishing SINPE_ENROLLMENT_SUCCESS notification emailMode={}",
         emailMode);
@@ -459,22 +462,5 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info(
         "validateOtp END OK registrationId={}, mobileNumber={}", request.getId(), mobileNumber);
   }
-
-  private boolean determineMode(String email, String mobileNumber) {
-    boolean hasEmail = StringUtils.isNotBlank(email);
-    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-    if (hasEmail && !hasMobile) {
-      log.info("determineMode: email only -> emailMode=true");
-      return true;
-    }
-    if (hasMobile && !hasEmail) {
-      log.info("determineMode: mobile only -> emailMode=false");
-      return false;
-    }
-    String pref =
-        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
-    boolean emailMode = "email".equalsIgnoreCase(pref);
-    log.info("determineMode: both present, preference='{}' -> emailMode={}", pref, emailMode);
-    return emailMode;
-  }
+  
 }

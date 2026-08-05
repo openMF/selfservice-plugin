@@ -73,6 +73,7 @@ import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmou
 import org.apache.fineract.selfservice.api.data.TransactionDateRequest;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
@@ -137,6 +138,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
    * any client-supplied transfer date is normalized tenant-safely before policy overrides it.
    */
   private final TransactionDateManagementService transactionDateManagementService;
+  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   // =====================================================================
   //  PREPARE
@@ -914,7 +917,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       releaseTransferSuccessCooldown(user);
 
       String mobileNumber = extractMobile(user, sourceClient);
-      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
@@ -979,7 +982,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       releaseTransferSuccessCooldown(user);
 
       String mobileNumber = extractMobile(user, sourceClient);
-      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
@@ -1050,7 +1053,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       releaseTransferSuccessCooldown(user);
 
       String mobileNumber = extractMobile(user, sourceClient);
-      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
@@ -1124,7 +1127,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     try {
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       String mobileNumber = extractMobile(user);
-      boolean emailMode = determineMode(user.getEmail(), mobileNumber);
+      boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
       Map<String, Object> contextData = new HashMap<>();
@@ -1251,7 +1254,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             extractMobile(user, sourceClient),
-            determineMode(user.getEmail(), extractMobile(user, sourceClient)),
+            notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobile(user, sourceClient)),
             extractClientIp(httpRequest),
             LocaleContextHolder.getLocale(),
             contextData));
@@ -1459,16 +1462,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return extractMobile(user);
   }
 
-  private boolean determineMode(String email, String mobileNumber) {
-    boolean hasEmail = StringUtils.isNotBlank(email);
-    boolean hasMobile = StringUtils.isNotBlank(mobileNumber);
-    if (hasEmail && !hasMobile) return true;
-    if (hasMobile && !hasEmail) return false;
-    String pref =
-        env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
-    return "email".equalsIgnoreCase(pref);
-  }
-
   private String extractClientIp(HttpServletRequest httpRequest) {
     if (httpRequest == null) return null;
     String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
@@ -1612,7 +1605,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             extractMobile(user, sourceClient),
-            determineMode(user.getEmail(), extractMobile(user, sourceClient)),
+            notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobile(user, sourceClient)),
             "Unknown IP (Quote Phase)",
             LocaleContextHolder.getLocale(),
             contextData));

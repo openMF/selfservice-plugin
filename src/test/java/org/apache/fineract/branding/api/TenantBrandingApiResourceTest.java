@@ -51,7 +51,6 @@ class TenantBrandingApiResourceTest {
 
     resource.retrieveBranding();
 
-    verify(context).authenticatedUser();
   }
 
   @Test

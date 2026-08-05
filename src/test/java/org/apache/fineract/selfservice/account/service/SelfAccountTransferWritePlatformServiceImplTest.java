@@ -64,6 +64,7 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransfe
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
@@ -129,6 +130,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private TransactionDateManagementService transactionDateManagementService;
   @Mock private HttpServletRequest httpRequest;
+  @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @InjectMocks private SelfAccountTransferWritePlatformServiceImpl service;
 
@@ -157,6 +159,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     lenient()
         .when(transactionDateUtil.getCurrentDateForFineract(anyString(), anyString()))
         .thenReturn(TEST_FINERACT_DATE);
+    lenient().when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }
