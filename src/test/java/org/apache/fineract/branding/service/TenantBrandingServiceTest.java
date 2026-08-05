@@ -101,6 +101,27 @@ class TenantBrandingServiceTest {
   }
 
   @Test
+  void retrieve_withoutATenantContext_isIndistinguishableFromAnUnconfiguredTenant() {
+    // Pins the failure mode that makes the filter chain wiring worth asserting
+    // (see TenantBrandingSecurityFilterChainIntegrationTest).
+    //
+    // The tenant is read off the request context, and that context is populated
+    // by TenantAwareAuthenticationFilter - a security filter. A request on a
+    // path no filter chain claims therefore arrives with no tenant at all, and
+    // this method answers "blue" rather than failing: exactly what it answers
+    // for a tenant that has never chosen a colour.
+    //
+    // So a server side misconfiguration reads as a legitimate default, and the
+    // client cannot tell either, because blue is also its fallback. Every
+    // tenant silently loses its branding with nothing anywhere reporting it.
+    ThreadLocalContextUtil.clearTenant();
+    when(repository.findByTenantId(null)).thenReturn(Optional.empty());
+
+    assertEquals("blue", service.retrieveCurrentTenantBranding().primaryColor());
+    verify(repository).findByTenantId(null);
+  }
+
+  @Test
   void update_createsTheRowOnFirstUse() {
     when(repository.findByTenantId("default")).thenReturn(Optional.empty());
 
