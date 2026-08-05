@@ -21,6 +21,7 @@ import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
@@ -60,6 +61,9 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   private final SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
+  
+  /** Cache manager to bypass notification rate-limits for critical security alerts. */
+  private final NotificationCooldownCache notificationCooldownCache;
 
   /** Centralized multi-tenant date/time utility for token expiry and validation. */
   private final TransactionDateUtil transactionDateUtil;
@@ -131,6 +135,9 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     contextData.put("username", username);
 
     boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
+
+    // Release cooldown to ensure the critical reset token is delivered immediately
+    releasePasswordResetRequestedCooldown(user);
 
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
@@ -228,6 +235,9 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     
     boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobileNumber(user));
 
+    // Release cooldown to ensure the security alert is delivered immediately
+    releasePasswordRenewedCooldown(user);
+
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
             this,
@@ -248,6 +258,26 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
+  private void releasePasswordResetRequestedCooldown(AppSelfServiceUser user) {
+    try {
+      String cacheKey = SelfServiceNotificationEvent.Type.PASSWORD_RESET_REQUESTED.name() + ":" + user.getId();
+      notificationCooldownCache.release(cacheKey);
+      log.info("FORGOT PASSWORD: Released PASSWORD_RESET_REQUESTED cooldown for user {}", user.getId());
+    } catch (Exception e) {
+      log.warn("Failed to release PASSWORD_RESET_REQUESTED cooldown (non-fatal)", e);
+    }
+  }
+
+  private void releasePasswordRenewedCooldown(AppSelfServiceUser user) {
+    try {
+      String cacheKey = SelfServiceNotificationEvent.Type.PASSWORD_RENEWED.name() + ":" + user.getId();
+      notificationCooldownCache.release(cacheKey);
+      log.info("FORGOT PASSWORD: Released PASSWORD_RENEWED cooldown for user {}", user.getId());
+    } catch (Exception e) {
+      log.warn("Failed to release PASSWORD_RENEWED cooldown (non-fatal)", e);
+    }
+  }
+
   private String extractMobileNumber(AppSelfServiceUser user) {
     if (user == null || user.getAppUserClientMappings() == null) {
       return null;
@@ -260,5 +290,4 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
         .findFirst()
         .orElse(null);
   }
-  
 }
