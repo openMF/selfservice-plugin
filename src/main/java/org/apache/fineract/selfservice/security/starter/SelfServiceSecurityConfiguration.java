@@ -97,11 +97,12 @@ public class SelfServiceSecurityConfiguration {
     http
         // Apply only to self-service endpoints
         .securityMatcher(
-            "/api/v1/self/**", 
-            "/v1/self/**", 
-            "/api/v1/branding", 
-            "/v1/branding"
-        )
+          "/api/v1/self/**",
+          "/v1/self/**",
+          "/api/v1/branding",
+          "/api/v1/branding/**",
+          "/v1/branding",
+          "/v1/branding/**")
 
         // Disable CSRF for public self-service APIs
         .csrf(AbstractHttpConfigurer::disable)
@@ -182,8 +183,12 @@ public class SelfServiceSecurityConfiguration {
                     //Branding 
                     .requestMatchers(HttpMethod.GET, "/api/v1/branding")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/branding/**")
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "/v1/branding")
-                    .permitAll()    
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/v1/branding/**")
+                    .permitAll()  
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
                     // traffic).
