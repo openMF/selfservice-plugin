@@ -68,7 +68,6 @@ public class TenantBrandingApiResource {
               + "branding")
   @ApiResponse(responseCode = "200", description = "OK")
   public String retrieveBranding() {
-    context.authenticatedUser();
     final TenantBrandingData branding = tenantBrandingService.retrieveCurrentTenantBranding();
     return toApiJsonSerializer.serialize(branding);
   }

@@ -256,7 +256,12 @@ public class SelfServiceSecurityConfiguration {
     // the /api prefix, so authentication filter must cover both patterns.
     filter.setRequestMatcher(
         new org.springframework.security.web.util.matcher.OrRequestMatcher(
-            API_MATCHER.matcher("/api/v1/self/**"), API_MATCHER.matcher("/v1/self/**")));
+            API_MATCHER.matcher("/api/v1/self/**"),
+            API_MATCHER.matcher("/v1/self/**"),
+            API_MATCHER.matcher("/api/v1/branding"),
+            API_MATCHER.matcher("/api/v1/branding/**"),
+            API_MATCHER.matcher("/v1/branding"),
+            API_MATCHER.matcher("/v1/branding/**")));
     return filter;
   }
 
