@@ -41,6 +41,8 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
+import org.apache.fineract.onboarding.domain.OnboardingProgressData;
+import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
@@ -112,6 +114,7 @@ public class SelfAuthenticationApiResource {
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   private final TransactionDateUtil transactionDateUtil;
   private final SelfServiceDeviceFingerprintService deviceFingerprintService;
+  private final SelfServiceOnboardingStepService onboardingStepService;
 
   private final Gson gson = new Gson();
 
@@ -121,9 +124,8 @@ public class SelfAuthenticationApiResource {
   @Operation(
       summary = "Verify authentication",
       description =
-          "Authenticates the credentials provided and returns the set roles and permissions"
-              + " allowed. On successful login from an unrecognized device (after a baseline"
-              + " device already exists), a LOGIN_UNKNOWN_DEVICE notification is published.")
+          "Authenticates the credentials provided and returns roles, permissions, device-aware"
+              + " login handling, and onboarding step progress (DB-driven enrollment steps).")
   @RequestBody(
       required = true,
       content =
@@ -253,7 +255,6 @@ public class SelfAuthenticationApiResource {
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         throw new SelfServicePasswordResetRequiredException(authenticatedUserData);
       } else {
-        // Device fingerprint: baseline for users with no prior devices; alert only if unknown after baseline
         processDeviceFingerprintOnLogin(principal, apiRequestBodyAsJson, httpRequest);
 
         publishNotificationEvent(
@@ -269,6 +270,9 @@ public class SelfAuthenticationApiResource {
                 : null;
         Long clientId = getClientId(clientList);
         String country = officeAddressReadPlatformService.retrieveOfficeCountryByClientId(clientId);
+
+        // DB-driven onboarding step progress (init/sync if needed for existing users)
+        OnboardingProgressData onboarding = resolveOnboardingProgress(principal.getId());
 
         authenticatedUserData =
             new SelfServiceAuthenticatedUserData()
@@ -291,7 +295,8 @@ public class SelfAuthenticationApiResource {
                         ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
                         : null)
                 .setKycValidations(getKycStatusForUser(clientId))
-                .setCountry(country);
+                .setCountry(country)
+                .setOnboarding(onboarding);
       }
     }
 
@@ -299,16 +304,18 @@ public class SelfAuthenticationApiResource {
   }
 
   /**
-   * Builds fingerprint from headers + body.
-   *
-   * <ul>
-   *   <li>No prior devices → baseline registration, no LOGIN_UNKNOWN_DEVICE (covers existing users)
-   *   <li>Prior devices + unknown hash → LOGIN_UNKNOWN_DEVICE, then register
-   *   <li>Known hash → touch last_seen only
-   * </ul>
-   *
-   * Failures are non-fatal so login always completes.
+   * Loads onboarding progress; failures are non-fatal so login still succeeds.
    */
+  private OnboardingProgressData resolveOnboardingProgress(Long userId) {
+    try {
+      return onboardingStepService.getOrInitProgress(userId);
+    } catch (Exception e) {
+      log.warn(
+          "LOGIN: Could not load onboarding progress for userId={} (non-fatal)", userId, e);
+      return null;
+    }
+  }
+
   private void processDeviceFingerprintOnLogin(
       AppSelfServiceUser user, String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     try {

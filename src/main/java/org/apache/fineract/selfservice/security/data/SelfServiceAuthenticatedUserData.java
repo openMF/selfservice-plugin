@@ -19,6 +19,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
+import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.useradministration.data.RoleData;
 
 /** Immutable data object for authentication. */
@@ -78,8 +79,11 @@ public class SelfServiceAuthenticatedUserData {
   @SuppressWarnings("unused")
   private SelfServiceAuthenticatedUserKycData kycValidations;
 
-  // Add the new field
+  @SuppressWarnings("unused")
   private String refreshToken;
+  
+  @SuppressWarnings("unused")
+  private OnboardingProgressData onboarding;
 
   // Add getter and setter (or rely on Lombok if applicable)
   public String getRefreshToken() {
@@ -90,4 +94,14 @@ public class SelfServiceAuthenticatedUserData {
     this.refreshToken = refreshToken;
     return this;
   }
+  
+  public SelfServiceAuthenticatedUserData setOnboarding(OnboardingProgressData onboarding) {
+    this.onboarding = onboarding;
+    return this; // must return this for chaining
+  }
+
+  public OnboardingProgressData getOnboarding() {
+    return onboarding;
+  }
+  
 }

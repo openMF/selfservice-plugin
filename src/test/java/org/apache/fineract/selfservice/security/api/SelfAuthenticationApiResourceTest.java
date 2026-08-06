@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
+import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
@@ -64,6 +65,7 @@ class SelfAuthenticationApiResourceTest {
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private SelfServiceDeviceFingerprintService deviceFingerprintService;
+  @Mock private SelfServiceOnboardingStepService onboardingStepService;
 
   private SelfAuthenticationApiResource resource;
 
@@ -96,7 +98,8 @@ class SelfAuthenticationApiResourceTest {
             selfServiceAuthenticationTokenService,
             notificationDeliveryModeUtil,
             transactionDateUtil,
-            deviceFingerprintService);
+            deviceFingerprintService,
+            onboardingStepService);
   }
 
   @Test

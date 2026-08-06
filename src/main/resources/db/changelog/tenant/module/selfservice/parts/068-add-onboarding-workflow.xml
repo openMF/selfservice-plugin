@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Catalog of onboarding steps (tenant-configurable) -->
+    <changeSet author="fineract" id="ss-0068-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_onboarding_step_def"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_onboarding_step_def">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="step_code" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="step_order" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(512)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_required" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="group_code" type="VARCHAR(64)"/>
+            <column name="metadata_json" type="TEXT"/>
+        </createTable>
+        <createIndex tableName="m_selfservice_onboarding_step_def" indexName="idx_ss_onb_def_order">
+            <column name="step_order"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Seed Apolo enrollment steps -->
+    <changeSet author="fineract" id="ss-0068-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_selfservice_onboarding_step_def
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="DOCUMENT_TYPE"/>
+            <column name="step_order" valueNumeric="1"/>
+            <column name="label" value="Seleccionar el tipo de Documento"/>
+            <column name="group_code" value="REGISTRATION"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="IDENTIFICATION_NUMBER"/>
+            <column name="step_order" valueNumeric="2"/>
+            <column name="label" value="Ingresar número de Identificación"/>
+            <column name="group_code" value="REGISTRATION"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="PERSONAL_INFO"/>
+            <column name="step_order" valueNumeric="3"/>
+            <column name="label" value="Información Personal"/>
+            <column name="group_code" value="REGISTRATION"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="PASSWORD_SETUP"/>
+            <column name="step_order" valueNumeric="4"/>
+            <column name="label" value="Configuración de Contraseña"/>
+            <column name="group_code" value="REGISTRATION"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="CONFIRMATION_CODE"/>
+            <column name="step_order" valueNumeric="5"/>
+            <column name="label" value="Código de Confirmación"/>
+            <column name="group_code" value="REGISTRATION"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="IDENTITY_VERIFICATION"/>
+            <column name="step_order" valueNumeric="6"/>
+            <column name="label" value="Verificación de Identidad"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="APOLO_VALIDATION"/>
+            <column name="step_order" valueNumeric="7"/>
+            <column name="label" value="Validación de Apolo"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="VERIFICATION_DOCUMENT"/>
+            <column name="step_order" valueNumeric="8"/>
+            <column name="label" value="Documento de Verificación"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="DOCUMENT_UPLOAD"/>
+            <column name="step_order" valueNumeric="9"/>
+            <column name="label" value="Carga de documento"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="LIVENESS_CHECK"/>
+            <column name="step_order" valueNumeric="10"/>
+            <column name="label" value="Prueba de Vida"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="ADDRESS_PROOF_TYPE"/>
+            <column name="step_order" valueNumeric="11"/>
+            <column name="label" value="Comprobante de Domicilio (tipo)"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="ADDRESS_PROOF_UPLOAD"/>
+            <column name="step_order" valueNumeric="12"/>
+            <column name="label" value="Comprobante de Domicilio (carga)"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="EMAIL_VALIDATION"/>
+            <column name="step_order" valueNumeric="13"/>
+            <column name="label" value="Validación de correo Electrónico"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="KYC_FORM"/>
+            <column name="step_order" valueNumeric="14"/>
+            <column name="label" value="Formulario KYC"/>
+            <column name="group_code" value="KYC"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+        <insert tableName="m_selfservice_onboarding_step_def">
+            <column name="step_code" value="REGISTRATION_COMPLETE"/>
+            <column name="step_order" valueNumeric="15"/>
+            <column name="label" value="Registro Exitoso"/>
+            <column name="group_code" value="COMPLETE"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="is_required" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <!-- Per-user progress -->
+    <changeSet author="fineract" id="ss-0068-3">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_onboarding_step"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_onboarding_step">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_def_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="failure_reason" type="VARCHAR(512)"/>
+            <column name="metadata_json" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="m_selfservice_onboarding_step"
+            baseColumnNames="step_def_id"
+            referencedTableName="m_selfservice_onboarding_step_def"
+            referencedColumnNames="id"
+            constraintName="fk_ss_onb_step_def"/>
+        <addUniqueConstraint
+            tableName="m_selfservice_onboarding_step"
+            columnNames="appuser_id, step_def_id"
+            constraintName="uk_ss_onboarding_user_step_def"/>
+        <createIndex tableName="m_selfservice_onboarding_step" indexName="idx_ss_onboarding_user">
+            <column name="appuser_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
