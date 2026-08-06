@@ -15,6 +15,7 @@
 package org.apache.fineract.selfservice.registration.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
@@ -27,6 +28,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +62,8 @@ public class SelfServiceRegistrationApiResource {
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  public String createSelfServiceRegistrationRequest(final String apiRequestBodyAsJson) {
+  public String createSelfServiceRegistrationRequest(
+      @Parameter(hidden = true) final String apiRequestBodyAsJson) {
     this.selfServiceRegistrationWritePlatformService.createRegistrationRequest(
         apiRequestBodyAsJson);
     return SelfServiceApiConstants.createRequestSuccessMessage;
@@ -69,14 +72,20 @@ public class SelfServiceRegistrationApiResource {
   /**
    * Creates a self-service user from a confirmed registration request.
    *
+   * <p>{@code httpRequest} is required so the service can build a device fingerprint from headers
+   * (+ body) and store it for later unknown-device login detection.
+   *
    * @param apiRequestBodyAsJson request payload as raw JSON
+   * @param httpRequest inbound HTTP request (headers used for device fingerprint)
    * @return serialized command result containing the created user identifier
    */
   @POST
   @Path("user")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  public String createSelfServiceUser(final String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+  public String createSelfServiceUser(
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context final HttpServletRequest httpRequest) {
     AppSelfServiceUser user =
         this.selfServiceRegistrationWritePlatformService.createSelfServiceUser(
             apiRequestBodyAsJson, httpRequest);
@@ -88,7 +97,11 @@ public class SelfServiceRegistrationApiResource {
    * token. The user must confirm the token via {@code POST /self/registration/client-user/confirm}
    * to activate.
    *
+   * <p>{@code httpRequest} is required so the service can build a device fingerprint from headers
+   * (+ body) and store it for later unknown-device login detection.
+   *
    * @param apiRequestBodyAsJson request payload as raw JSON
+   * @param httpRequest inbound HTTP request (headers used for device fingerprint)
    * @return success message indicating the enrollment request was created
    */
   @POST
@@ -108,7 +121,9 @@ public class SelfServiceRegistrationApiResource {
     @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "409", description = "Conflict (Duplicate Username, Email, etc)")
   })
-  public String selfEnroll(final String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+  public String selfEnroll(
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context final HttpServletRequest httpRequest) {
     this.selfServiceRegistrationWritePlatformService.selfEnroll(apiRequestBodyAsJson, httpRequest);
     return SelfServiceApiConstants.createRequestSuccessMessage;
   }
@@ -134,7 +149,7 @@ public class SelfServiceRegistrationApiResource {
     @ApiResponse(responseCode = "403", description = "Token expired or already consumed"),
     @ApiResponse(responseCode = "404", description = "Token not found")
   })
-  public String confirmEnrollment(final String apiRequestBodyAsJson) {
+  public String confirmEnrollment(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
     AppSelfServiceUser user =
         this.selfServiceRegistrationWritePlatformService.confirmEnrollment(apiRequestBodyAsJson);
     return this.toApiJsonSerializer.serialize(CommandProcessingResult.resourceResult(user.getId()));
