@@ -94,10 +94,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         sql.toString(), mapper, new Object[] {user.getId(), user.getId()});
   }
 
-  // =====================================================================
-  // CONSULTA DETALLE DE TRANSACCIÓN
-  // =====================================================================
-
   @Override
   @Transactional(readOnly = true)
   public Map<String, Object> retrieveTransactionDetails(
@@ -149,21 +145,34 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return response;
   }
 
-  // =====================================================================
-  // PROCESAR TRANSFERENCIAS INTERNAS (APOLO / SAME_BANK)
-  // =====================================================================
-
+  /**
+   * SAME_BANK / Apolo: prefer audit table, then fall back to savings ledger + payment detail
+   * (same source as GET /self/savingsaccounts/{id}?associations=transactions).
+   */
   private Map<String, Object> processApoloTransfer(
       Long clientId, Long accountId, String txnId, String transferType) {
 
     Optional<SelfServiceSameBankTransferAudit> auditOpt =
         this.sameBankTransferAuditRepository.findAuditDetail(clientId, accountId, txnId);
 
-    if (auditOpt.isEmpty()) {
-      throw new SelfAccountTransferTransactionNotFoundException(accountId, txnId, transferType);
+    if (auditOpt.isPresent()) {
+      return mapAuditToRawData(auditOpt.get());
     }
 
-    SelfServiceSameBankTransferAudit audit = auditOpt.get();
+    Map<String, Object> fromLedger = loadSameBankFromSavingsTransaction(accountId, txnId);
+    if (fromLedger != null) {
+      log.info(
+          "FETCH DETAILS: SAME_BANK resolved from savings transaction (no audit row)"
+              + " accountId={}, txnId={}",
+          accountId,
+          txnId);
+      return fromLedger;
+    }
+
+    throw new SelfAccountTransferTransactionNotFoundException(accountId, txnId, transferType);
+  }
+
+  private Map<String, Object> mapAuditToRawData(SelfServiceSameBankTransferAudit audit) {
     Map<String, Object> rawData = new HashMap<>();
     rawData.put("operationId", audit.getOperationId());
     rawData.put("internalRefNumber", audit.getInternalRefNumber());
@@ -199,13 +208,141 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put("reference", audit.getReference());
     customData.put("destinationCustomer", destinationCustomer);
     rawData.put("customData", customData);
-
     return rawData;
   }
 
-  // =====================================================================
-  // PROCESAR TRANSFERENCIAS EXTERNAS (PIN / SINPE)
-  // =====================================================================
+  /**
+   * Builds detail from m_savings_account_transaction + m_payment_detail.
+   * Matches txnId against sat.id, sat.ref_no, pd.id, pd.receipt_number, pd.routing_code.
+   */
+  private Map<String, Object> loadSameBankFromSavingsTransaction(Long accountId, String txnId) {
+    final String sql =
+        "SELECT "
+            + "  sat.id                    AS sat_id, "
+            + "  sat.amount                AS amount, "
+            + "  sat.transaction_date      AS transaction_date, "
+            + "  sat.created_date          AS created_date, "
+            + "  sat.is_reversed           AS is_reversed, "
+            + "  sat.ref_no                AS ref_no, "
+            + "  sa.currency_code          AS currency_code, "
+            + "  sa.account_no             AS from_account_no, "
+            + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS from_iban, "
+            + "  pd.id                     AS payment_detail_id, "
+            + "  pd.account_number         AS account_number, "
+            + "  pd.check_number           AS check_number, "
+            + "  pd.routing_code           AS routing_code, "
+            + "  pd.receipt_number         AS receipt_number, "
+            + "  pd.bank_number            AS bank_number, "
+            + "  pt.value                  AS payment_type_name "
+            + "FROM m_savings_account_transaction sat "
+            + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
+            + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
+            + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
+            + "WHERE sat.savings_account_id = ? "
+            + "  AND ( "
+            + "        CAST(sat.id AS VARCHAR) = ? "
+            + "     OR CAST(sat.id AS CHAR) = ? "
+            + "     OR sat.ref_no = ? "
+            + "     OR CAST(pd.id AS VARCHAR) = ? "
+            + "     OR pd.receipt_number = ? "
+            + "     OR pd.routing_code = ? "
+            + "  ) "
+            + "ORDER BY sat.id DESC "
+            + "LIMIT 1";
+
+    try {
+      List<Map<String, Object>> rows =
+          this.jdbcTemplate.query(
+              sql,
+              (rs, rowNum) -> mapLedgerRow(rs, accountId),
+              accountId,
+              txnId,
+              txnId,
+              txnId,
+              txnId,
+              txnId,
+              txnId);
+
+      if (rows == null || rows.isEmpty() || rows.get(0) == null) {
+        return null;
+      }
+      return rows.get(0);
+    } catch (Exception e) {
+      log.warn(
+          "SAME_BANK ledger fallback failed for accountId={}, txnId={}: {}",
+          accountId,
+          txnId,
+          e.getMessage());
+      return null;
+    }
+  }
+
+  private Map<String, Object> mapLedgerRow(ResultSet rs, Long accountId) throws SQLException {
+    boolean reversed = rs.getBoolean("is_reversed");
+    BigDecimal amount = rs.getBigDecimal("amount");
+    String currency = rs.getString("currency_code");
+    String routing = nullToEmpty(rs.getString("routing_code"));
+    String receipt = nullToEmpty(rs.getString("receipt_number"));
+    String checkNumber = nullToEmpty(rs.getString("check_number"));
+    String toAccountNumber = nullToEmpty(rs.getString("account_number"));
+    String refNo = nullToEmpty(rs.getString("ref_no"));
+    String fromIban = nullToEmpty(rs.getString("from_iban"));
+    String paymentType = nullToEmpty(rs.getString("payment_type_name"));
+    long satId = rs.getLong("sat_id");
+
+    String internalRef =
+        !receipt.isEmpty()
+            ? receipt
+            : (!routing.isEmpty() ? routing : (!refNo.isEmpty() ? refNo : String.valueOf(satId)));
+
+    java.sql.Timestamp created = rs.getTimestamp("created_date");
+    java.sql.Date txnDate = rs.getDate("transaction_date");
+    String registrationDate =
+        created != null
+            ? created.toInstant().toString()
+            : (txnDate != null ? txnDate.toLocalDate().toString() : "");
+    String processingDate =
+        txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
+
+    Map<String, Object> destinationCustomer =
+        getDestinationCustomerInfoByAccount(
+            !toAccountNumber.isEmpty() ? toAccountNumber : null);
+
+    Map<String, Object> customData = new HashMap<>();
+    customData.put("fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
+    customData.put("toAccountIdentifier", toAccountNumber);
+    customData.put(
+        "transferDescription", !paymentType.isEmpty() ? paymentType : "SAME_BANK");
+    customData.put("reference", !checkNumber.isEmpty() ? checkNumber : internalRef);
+    customData.put("destinationCustomer", destinationCustomer);
+    customData.put("savingsTransactionId", satId);
+    customData.put("paymentDetailId", rs.getObject("payment_detail_id"));
+    customData.put("routingCode", routing);
+    customData.put("receiptNumber", receipt);
+
+    Map<String, Object> rawData = new HashMap<>();
+    rawData.put("operationId", String.valueOf(satId));
+    rawData.put("internalRefNumber", internalRef);
+    rawData.put("channelRefNumber", internalRef);
+    rawData.put("sinpeRefNumber", "");
+    rawData.put("debitedAmount", amount != null ? amount : BigDecimal.ZERO);
+    rawData.put("debitCurrencyCode", currency != null ? currency : "CRC");
+    rawData.put("commissionAmount", BigDecimal.ZERO);
+    rawData.put("commissionCurrency", currency != null ? currency : "CRC");
+    rawData.put("exchangeRate", 0);
+    rawData.put("registrationDate", registrationDate);
+    rawData.put("processingDate", processingDate);
+    rawData.put("stateDescription", reversed ? "Reversed" : "Completed");
+    rawData.put("successful", !reversed);
+    rawData.put("stateCode", reversed ? 128 : 32);
+    rawData.put("rejectDescription", reversed ? "Transaction reversed" : "");
+    rawData.put("customData", customData);
+    return rawData;
+  }
+
+  private static String nullToEmpty(String v) {
+    return v == null ? "" : v.trim();
+  }
 
   private Map<String, Object> processExternalTransfer(
       Long accountId, String txnId, String transferType) {
@@ -464,6 +601,16 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   private Map<String, Object> getDestinationCustomerInfoByAccount(String accountIdentifier) {
     Map<String, Object> destinationCustomer = new HashMap<>();
+    if (accountIdentifier == null || accountIdentifier.isBlank()) {
+      destinationCustomer.put("name", "");
+      destinationCustomer.put("email", "");
+      destinationCustomer.put("iban", "");
+      destinationCustomer.put("id", "");
+      destinationCustomer.put("idType", "0");
+      destinationCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
+      return destinationCustomer;
+    }
+
     String sql =
         "SELECT "
             + "c.display_name AS name, "
@@ -503,10 +650,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
     return destinationCustomer;
   }
-
-  // =====================================================================
-  // Platform validation helpers (HTTP 400 with developer/user messages)
-  // =====================================================================
 
   private PlatformApiDataValidationException accountAccessValidationError(Long accountId) {
     final List<ApiParameterError> errors = new ArrayList<>();
