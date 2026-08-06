@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ============================================================
+         LOGIN_UNKNOWN_DEVICE — plantillas de notificación
+         Placeholders: ${firstname} ${lastname} ${username}
+                       ${ipAddress} ${userAgent} ${deviceLabel} ${loginTime}
+         ============================================================ -->
+
+    <!-- Asunto de Email -->
+    <changeSet author="fineract" id="ss-0066-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL_SUBJECT"/>
+            <column name="text" value="Alerta de seguridad: inicio de sesión desde un dispositivo nuevo"/>
+            <column name="entity" value="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- Cuerpo de Email (HTML) -->
+    <changeSet author="fineract" id="ss-0066-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL"/>
+            <column name="text" value="&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;Inicio de sesión desde un dispositivo desconocido&lt;/h2&gt;
+&lt;p&gt;Estimado/a ${firstname} ${lastname},&lt;/p&gt;
+&lt;p&gt;Detectamos un inicio de sesión en su cuenta &lt;strong&gt;${username}&lt;/strong&gt; desde un dispositivo que no reconocemos.&lt;/p&gt;
+&lt;table style='border-collapse: collapse; width: 100%;' border='1'&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Fecha y hora:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${loginTime}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Dirección IP:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${ipAddress}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Dispositivo:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${deviceLabel}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Navegador / Agente:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${userAgent}&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;p&gt;Si fue usted, puede ignorar este mensaje. Si no reconoce esta actividad, cambie su contraseña de inmediato y contacte a soporte.&lt;/p&gt;
+&lt;p&gt;Gracias por usar nuestros servicios.&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;"/>
+            <column name="entity" value="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- SMS -->
+    <changeSet author="fineract" id="ss-0066-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_SMS'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_SMS"/>
+            <column name="text" value="Alerta: inicio de sesion en ${username} desde un dispositivo nuevo. IP: ${ipAddress}. Fecha: ${loginTime}. Si no fue usted, cambie su contrasena."/>
+            <column name="entity" value="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- WhatsApp -->
+    <changeSet author="fineract" id="ss-login-unknown-device-004">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP"/>
+            <column name="text" value="⚠️ *Alerta de seguridad*\n\nEstimado/a ${firstname},\n\nDetectamos un inicio de sesión en *${username}* desde un dispositivo nuevo.\n\n📅 *Fecha:* ${loginTime}\n🌐 *IP:* ${ipAddress}\n📱 *Dispositivo:* ${deviceLabel}\n🖥️ *Agente:* ${userAgent}\n\nSi no fue usted, cambie su contraseña de inmediato."/>
+            <column name="entity" value="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- In-App -->
+    <changeSet author="fineract" id="ss-0066-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_IN_APP'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_IN_APP"/>
+            <column name="text" value="Inicio de sesión desde un dispositivo nuevo en ${username}. IP: ${ipAddress}. Dispositivo: ${deviceLabel}. Fecha: ${loginTime}."/>
+            <column name="entity" value="0"/>
+        </insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Idempotent updates (si las plantillas ya existían)
+         ============================================================ -->
+
+    <changeSet author="fineract" id="ss-0066-6">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Alerta de seguridad: inicio de sesión desde un dispositivo nuevo"/>
+            <where>name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL_SUBJECT'</where>
+        </update>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0066-7">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="&lt;html&gt;&lt;body&gt;
+&lt;h2&gt;Inicio de sesión desde un dispositivo desconocido&lt;/h2&gt;
+&lt;p&gt;Estimado/a ${firstname} ${lastname},&lt;/p&gt;
+&lt;p&gt;Detectamos un inicio de sesión en su cuenta &lt;strong&gt;${username}&lt;/strong&gt; desde un dispositivo que no reconocemos.&lt;/p&gt;
+&lt;table style='border-collapse: collapse; width: 100%;' border='1'&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Fecha y hora:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${loginTime}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Dirección IP:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${ipAddress}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Dispositivo:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${deviceLabel}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style='padding: 8px;'&gt;&lt;strong&gt;Navegador / Agente:&lt;/strong&gt;&lt;/td&gt;&lt;td style='padding: 8px;'&gt;${userAgent}&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;p&gt;Si fue usted, puede ignorar este mensaje. Si no reconoce esta actividad, cambie su contraseña de inmediato y contacte a soporte.&lt;/p&gt;
+&lt;p&gt;Gracias por usar nuestros servicios.&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;"/>
+            <where>name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL'</where>
+        </update>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0066-8">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_SMS'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Alerta: inicio de sesion en ${username} desde un dispositivo nuevo. IP: ${ipAddress}. Fecha: ${loginTime}. Si no fue usted, cambie su contrasena."/>
+            <where>name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_SMS'</where>
+        </update>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0066-9">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="⚠️ *Alerta de seguridad*\n\nEstimado/a ${firstname},\n\nDetectamos un inicio de sesión en *${username}* desde un dispositivo nuevo.\n\n📅 *Fecha:* ${loginTime}\n🌐 *IP:* ${ipAddress}\n📱 *Dispositivo:* ${deviceLabel}\n🖥️ *Agente:* ${userAgent}\n\nSi no fue usted, cambie su contraseña de inmediato."/>
+            <where>name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP'</where>
+        </update>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0066-10">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_IN_APP'
+            </sqlCheck>
+        </preConditions>
+        <update tableName="m_template">
+            <column name="text" value="Inicio de sesión desde un dispositivo nuevo en ${username}. IP: ${ipAddress}. Dispositivo: ${deviceLabel}. Fecha: ${loginTime}."/>
+            <where>name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_IN_APP'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

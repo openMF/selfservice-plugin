@@ -15,9 +15,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.kyc.service.KycFeatureStatusReadService;
@@ -27,6 +29,7 @@ import org.apache.fineract.selfservice.security.exception.SelfServicePasswordRes
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService.TokenPair;
+import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
 import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
@@ -58,24 +61,26 @@ class SelfAuthenticationApiResourceTest {
   @Mock private KycFeatureStatusReadService kycFeatureStatusReadService;
   @Mock private SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
   @Mock private SelfServiceAuthenticationTokenService selfServiceAuthenticationTokenService;
-  
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  @Mock private TransactionDateUtil transactionDateUtil;
+  @Mock private SelfServiceDeviceFingerprintService deviceFingerprintService;
 
   private SelfAuthenticationApiResource resource;
 
   @BeforeEach
   void setUp() {
-    // 1. Create a dummy TokenPair
     TokenPair mockTokens = new TokenPair("mock-access-token-123", "mock-refresh-token-456");
-
-    // 2. Stub the generateTokens method using lenient()
-    // FIX: Use any() instead of anyLong() because the parameter is a boxed Long, not primitive
-    // long.
-    // This ensures Mockito correctly matches the argument and returns the mockTokens instead of
-    // null.
     lenient()
         .when(selfServiceAuthenticationTokenService.generateTokens(any(), any()))
         .thenReturn(mockTokens);
+
+    lenient()
+        .when(transactionDateUtil.getCurrentTenantLocalDateTime())
+        .thenReturn(LocalDateTime.of(2026, 1, 2, 10, 0, 0));
+    lenient().when(deviceFingerprintService.isKnownDevice(any(), any())).thenReturn(true);
+    lenient()
+        .when(deviceFingerprintService.registerOrTouch(any(), any(), any(Boolean.class)))
+        .thenReturn(null);
 
     resource =
         new SelfAuthenticationApiResource(
@@ -89,7 +94,9 @@ class SelfAuthenticationApiResourceTest {
             kycFeatureStatusReadService,
             officeAddressReadPlatformService,
             selfServiceAuthenticationTokenService,
-            notificationDeliveryModeUtil);
+            notificationDeliveryModeUtil,
+            transactionDateUtil,
+            deviceFingerprintService);
   }
 
   @Test
@@ -117,8 +124,10 @@ class SelfAuthenticationApiResourceTest {
   @Test
   void authenticate_returnsUserDataOnSuccess() {
     String requestBody = "{\"username\":\"admin\", \"password\":\"pass\"}";
+
     Authentication auth = mock(Authentication.class);
     when(auth.isAuthenticated()).thenReturn(true);
+
     AppSelfServiceUser principal = mock(AppSelfServiceUser.class);
     Office office = mock(Office.class);
     when(principal.getOffice()).thenReturn(office);
@@ -133,15 +142,12 @@ class SelfAuthenticationApiResourceTest {
         .thenReturn(auth);
     when(securityContext.doesPasswordHasToBeRenewed(principal)).thenReturn(false);
     when(toApiJsonSerializer.serialize(any())).thenReturn("{}");
-
-    // FIX: Mock downstream service calls to prevent NullPointerExceptions after token generation
     when(clientReadPlatformService.retrieveSelfServiceUserClients(any()))
         .thenReturn(Collections.emptyList());
     when(officeAddressReadPlatformService.retrieveOfficeCountryByClientId(any())).thenReturn("US");
     when(kycFeatureStatusReadService.getKycFeatureStatus(any())).thenReturn(null);
 
     String result = resource.authenticate(requestBody, true, httpServletRequest);
-
     assertNotNull(result);
     org.mockito.Mockito.verify(applicationEventPublisher)
         .publishEvent(any(SelfServiceNotificationEvent.class));
@@ -150,8 +156,10 @@ class SelfAuthenticationApiResourceTest {
   @Test
   void authenticate_throwsPasswordResetExceptionWhenResetRequired() {
     String requestBody = "{\"username\":\"admin\", \"password\":\"pass\"}";
+
     Authentication auth = mock(Authentication.class);
     when(auth.isAuthenticated()).thenReturn(true);
+
     AppSelfServiceUser principal = mock(AppSelfServiceUser.class);
     Office office = mock(Office.class);
     when(principal.getOffice()).thenReturn(office);

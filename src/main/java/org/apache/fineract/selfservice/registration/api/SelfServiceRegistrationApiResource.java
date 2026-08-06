@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -75,10 +76,10 @@ public class SelfServiceRegistrationApiResource {
   @Path("user")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  public String createSelfServiceUser(final String apiRequestBodyAsJson) {
+  public String createSelfServiceUser(final String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     AppSelfServiceUser user =
         this.selfServiceRegistrationWritePlatformService.createSelfServiceUser(
-            apiRequestBodyAsJson);
+            apiRequestBodyAsJson, httpRequest);
     return this.toApiJsonSerializer.serialize(CommandProcessingResult.resourceResult(user.getId()));
   }
 
@@ -107,8 +108,8 @@ public class SelfServiceRegistrationApiResource {
     @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "409", description = "Conflict (Duplicate Username, Email, etc)")
   })
-  public String selfEnroll(final String apiRequestBodyAsJson) {
-    this.selfServiceRegistrationWritePlatformService.selfEnroll(apiRequestBodyAsJson);
+  public String selfEnroll(final String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+    this.selfServiceRegistrationWritePlatformService.selfEnroll(apiRequestBodyAsJson, httpRequest);
     return SelfServiceApiConstants.createRequestSuccessMessage;
   }
 

@@ -7,6 +7,8 @@
 package org.apache.fineract.selfservice.security.api;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
@@ -51,7 +54,10 @@ import org.apache.fineract.selfservice.security.exception.SelfServiceLockedExcep
 import org.apache.fineract.selfservice.security.exception.SelfServicePasswordResetRequiredException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
 import org.apache.fineract.selfservice.security.service.SelfServiceOfficeAddressReadService;
+import org.apache.fineract.selfservice.security.util.DeviceFingerprintUtil;
+import org.apache.fineract.selfservice.security.util.DeviceFingerprintUtil.DeviceSignals;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -89,7 +95,8 @@ public class SelfAuthenticationApiResource {
     public String password;
   }
 
-  @Qualifier("selfServiceAuthenticationProvider") private final DaoAuthenticationProvider customAuthenticationProvider;
+  @Qualifier("selfServiceAuthenticationProvider")
+  private final DaoAuthenticationProvider customAuthenticationProvider;
 
   private final ToApiJsonSerializer<AppSelfServiceUserData> apiJsonSerializerService;
   private final PlatformSelfServiceSecurityContext springSecurityPlatformSecurityContext;
@@ -102,8 +109,11 @@ public class SelfAuthenticationApiResource {
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
   private final SelfServiceAuthenticationTokenService tokenService;
-  
-  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;  
+  private final TransactionDateUtil transactionDateUtil;
+
+  private final Gson gson = new Gson();
+  private final SelfServiceDeviceFingerprintService deviceFingerprintService;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -112,7 +122,8 @@ public class SelfAuthenticationApiResource {
       summary = "Verify authentication",
       description =
           "Authenticates the credentials provided and returns the set roles and permissions"
-              + " allowed.")
+              + " allowed. On successful login from an unrecognized device (fingerprint built from"
+              + " request headers and body), a LOGIN_UNKNOWN_DEVICE notification is published.")
   @RequestBody(
       required = true,
       content =
@@ -140,7 +151,7 @@ public class SelfAuthenticationApiResource {
       @Context HttpServletRequest httpRequest) {
 
     AuthenticateRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
+        gson.fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
     if (request == null) {
       throw new IllegalArgumentException(
           "Invalid JSON in BODY (no longer URL param; see FINERACT-726) of POST to /authentication:"
@@ -164,7 +175,8 @@ public class SelfAuthenticationApiResource {
           SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
           failedUser,
           request.username,
-          httpRequest);
+          httpRequest,
+          null);
       throw ex;
     } catch (SelfServiceLockedException ex) {
       AppSelfServiceUser failedUser = ex.getUser();
@@ -172,7 +184,8 @@ public class SelfAuthenticationApiResource {
           SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
           failedUser,
           request.username,
-          httpRequest);
+          httpRequest,
+          null);
       throw ex;
     } catch (BadCredentialsException ex) {
       AppSelfServiceUser failedUser =
@@ -182,7 +195,8 @@ public class SelfAuthenticationApiResource {
             SelfServiceNotificationEvent.Type.LOGIN_FAILURE,
             failedUser,
             request.username,
-            httpRequest);
+            httpRequest,
+            null);
       }
       throw ex;
     }
@@ -240,12 +254,15 @@ public class SelfAuthenticationApiResource {
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         throw new SelfServicePasswordResetRequiredException(authenticatedUserData);
       } else {
-        // Publish Success Notification Event
+        // Device fingerprint: headers + body only; notify if unknown device
+        processDeviceFingerprintOnLogin(principal, apiRequestBodyAsJson, httpRequest);
+
         publishNotificationEvent(
             SelfServiceNotificationEvent.Type.LOGIN_SUCCESS,
             principal,
             request.username,
-            httpRequest);
+            httpRequest,
+            null);
 
         Collection<Long> clientList =
             returnClientList
@@ -282,14 +299,93 @@ public class SelfAuthenticationApiResource {
     return this.apiJsonSerializerService.serialize(authenticatedUserData);
   }
 
+  /**
+   * Builds fingerprint from headers + body, notifies on unknown device, then registers/touches the
+   * device as trusted (multi-tenant via tenant-scoped table + TransactionDateUtil).
+   */
+  private void processDeviceFingerprintOnLogin(
+      AppSelfServiceUser user, String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+    try {
+      JsonObject body = parseBodyObject(apiRequestBodyAsJson);
+      DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
+
+      boolean known =
+          deviceFingerprintService.isKnownDevice(user.getId(), signals.fingerprintHash());
+
+      if (!known) {
+        log.info(
+            "LOGIN: Unknown device for userId={}, hashPrefix={}, ip={}",
+            user.getId(),
+            signals.fingerprintHash() != null && signals.fingerprintHash().length() >= 12
+                ? signals.fingerprintHash().substring(0, 12)
+                : "n/a",
+            signals.ipAddress());
+
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put(
+            "ipAddress", StringUtils.defaultIfBlank(signals.ipAddress(), "Unknown"));
+        contextData.put(
+            "userAgent", StringUtils.defaultIfBlank(signals.userAgent(), "Unknown"));
+        contextData.put(
+            "deviceLabel", StringUtils.defaultIfBlank(signals.deviceLabel(), "Unknown"));
+        contextData.put(
+            "loginTime",
+            transactionDateUtil.getCurrentTenantLocalDateTime() != null
+                ? transactionDateUtil.getCurrentTenantLocalDateTime().toString()
+                : "");
+
+        publishNotificationEvent(
+            SelfServiceNotificationEvent.Type.LOGIN_UNKNOWN_DEVICE,
+            user,
+            user.getUsername(),
+            httpRequest,
+            contextData);
+      }
+
+      // Trust / refresh last_seen for this device after successful login
+      deviceFingerprintService.registerOrTouch(user.getId(), signals, true);
+    } catch (Exception e) {
+      log.warn(
+          "LOGIN: Device fingerprint processing failed for userId={} (non-fatal)",
+          user != null ? user.getId() : null,
+          e);
+    }
+  }
+
+  private JsonObject parseBodyObject(String apiRequestBodyAsJson) {
+    if (StringUtils.isBlank(apiRequestBodyAsJson)) {
+      return new JsonObject();
+    }
+    try {
+      return JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+    } catch (Exception e) {
+      log.debug("Could not parse login body as JsonObject for fingerprint signals");
+      return new JsonObject();
+    }
+  }
+
   /** Helper method to publish the notification event asynchronously. */
   private void publishNotificationEvent(
       SelfServiceNotificationEvent.Type type,
       AppSelfServiceUser user,
       String username,
-      HttpServletRequest httpRequest) {
+      HttpServletRequest httpRequest,
+      Map<String, Object> extraContext) {
+
+    if (user == null) {
+      return;
+    }
+
     String mobileNumber = extractMobile(user);
     boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
+    String ipAddress = extractClientIp(httpRequest);
+
+    Map<String, Object> contextData = new HashMap<>();
+    if (extraContext != null) {
+      contextData.putAll(extraContext);
+    }
+    contextData.putIfAbsent("ipAddress", StringUtils.defaultIfBlank(ipAddress, "Unknown"));
+    contextData.putIfAbsent("username", username);
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
       applicationEventPublisher.publishEvent(
@@ -303,10 +399,28 @@ public class SelfAuthenticationApiResource {
               user.getEmail(),
               mobileNumber,
               emailMode,
-              extractClientIp(httpRequest),
-              httpRequest.getLocale()));
+              ipAddress,
+              httpRequest != null ? httpRequest.getLocale() : null,
+              contextData));
     } catch (Exception e) {
-      log.warn("Failed to publish {} notification event", type, e);
+      // Fallback if withTenantContext overload without contextData is the only one available
+      try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
+        applicationEventPublisher.publishEvent(
+            SelfServiceNotificationEvent.withTenantContext(
+                this,
+                type,
+                user.getId(),
+                user.getFirstname(),
+                user.getLastname(),
+                username,
+                user.getEmail(),
+                mobileNumber,
+                emailMode,
+                ipAddress,
+                httpRequest != null ? httpRequest.getLocale() : null));
+      } catch (Exception e2) {
+        log.warn("Failed to publish {} notification event", type, e2);
+      }
     }
   }
 
@@ -315,7 +429,9 @@ public class SelfAuthenticationApiResource {
   }
 
   private Long getClientId(Collection<Long> clientList) {
-    if (clientList == null) return null;
+    if (clientList == null) {
+      return null;
+    }
     Iterator<Long> iterator = clientList.iterator();
     if (iterator.hasNext()) {
       return iterator.next();
@@ -324,17 +440,27 @@ public class SelfAuthenticationApiResource {
   }
 
   private String extractClientIp(HttpServletRequest httpRequest) {
-    if (httpRequest == null) return null;
+    if (httpRequest == null) {
+      return null;
+    }
     String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
     if (StringUtils.isNotBlank(xForwardedFor)) {
       String firstToken = xForwardedFor.split(",")[0].trim();
-      if (StringUtils.isNotBlank(firstToken)) return firstToken;
+      if (StringUtils.isNotBlank(firstToken)) {
+        return firstToken;
+      }
+    }
+    String realIp = httpRequest.getHeader("X-Real-Ip");
+    if (StringUtils.isNotBlank(realIp)) {
+      return realIp.trim();
     }
     return httpRequest.getRemoteAddr();
   }
 
   private String extractMobile(AppSelfServiceUser user) {
-    if (user == null || user.getAppUserClientMappings() == null) return null;
+    if (user == null || user.getAppUserClientMappings() == null) {
+      return null;
+    }
     return user.getAppUserClientMappings().stream()
         .map(AppSelfServiceUserClientMapping::getClient)
         .filter(Objects::nonNull)
@@ -343,7 +469,6 @@ public class SelfAuthenticationApiResource {
         .findFirst()
         .orElse(null);
   }
-
 
   public static class RefreshTokenRequest {
     public String refreshToken;
@@ -360,13 +485,14 @@ public class SelfAuthenticationApiResource {
   @ApiResponse(responseCode = "200", description = "OK")
   public String refreshToken(final String apiRequestBodyAsJson) {
     RefreshTokenRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, RefreshTokenRequest.class);
+        gson.fromJson(apiRequestBodyAsJson, RefreshTokenRequest.class);
     if (request == null || StringUtils.isBlank(request.refreshToken)) {
       throw new IllegalArgumentException("Refresh token is missing in the request body.");
     }
 
     SelfServiceAuthenticationTokenService.TokenPair newTokens =
         tokenService.refreshTokens(request.refreshToken);
+
     byte[] base64AccessKey =
         Base64.getEncoder().encode(newTokens.accessToken().getBytes(StandardCharsets.UTF_8));
     byte[] base64RefreshKey =
@@ -376,7 +502,6 @@ public class SelfAuthenticationApiResource {
     response.put(
         "base64EncodedAuthenticationKey", new String(base64AccessKey, StandardCharsets.UTF_8));
     response.put("refreshToken", new String(base64RefreshKey, StandardCharsets.UTF_8));
-
     return this.apiJsonSerializerService.serialize(response);
   }
 
@@ -394,10 +519,8 @@ public class SelfAuthenticationApiResource {
   public String logout(@Context HttpServletRequest httpRequest) {
     String token = extractTokenFromRequest(httpRequest);
 
-    // Extract user information BEFORE invalidating the token
     AppSelfServiceUser user = null;
     String username = null;
-
     if (token != null) {
       try {
         Long userId = tokenService.getUserIdFromToken(token);
@@ -410,12 +533,9 @@ public class SelfAuthenticationApiResource {
       } catch (Exception e) {
         log.warn("Failed to extract user information from token during logout", e);
       }
-
-      // Now invalidate the token
       tokenService.invalidateToken(token);
     }
 
-    // Publish logout notification if we could identify the user
     if (user != null) {
       publishLogoutNotificationEvent(user, username, httpRequest);
     } else {
@@ -428,11 +548,6 @@ public class SelfAuthenticationApiResource {
     return this.apiJsonSerializerService.serialize(response);
   }
 
-  /**
-   * Publishes a logout notification event to the user through all enabled channels. The
-   * notification service will automatically route the message to Email, SMS, WhatsApp, and In-App
-   * based on the system configuration in c_external_service_properties.
-   */
   private void publishLogoutNotificationEvent(
       AppSelfServiceUser user, String username, HttpServletRequest httpRequest) {
     String mobileNumber = extractMobile(user);
@@ -453,7 +568,6 @@ public class SelfAuthenticationApiResource {
               emailMode,
               extractClientIp(httpRequest),
               httpRequest != null ? httpRequest.getLocale() : null));
-
       log.info("Logout notification published for user: {}", username);
     } catch (Exception e) {
       log.warn("Failed to publish LOGOUT notification event for user: {}", username, e);
@@ -461,6 +575,9 @@ public class SelfAuthenticationApiResource {
   }
 
   private String extractTokenFromRequest(HttpServletRequest request) {
+    if (request == null) {
+      return null;
+    }
     String header = request.getHeader("Authorization");
     if (header != null && header.toLowerCase().startsWith("basic ")) {
       String base64Token = header.substring(6).trim();

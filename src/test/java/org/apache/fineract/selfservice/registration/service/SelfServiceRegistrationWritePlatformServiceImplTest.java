@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -38,6 +39,7 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrati
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceRegistrationNotFoundException;
+import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMappingRepository;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -64,23 +66,11 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
 
   @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
   @Mock private FromJsonHelper fromApiJsonHelper;
-
   @Mock
   private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
-
   @Mock private ClientRepositoryWrapper clientRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private SelfServiceUserDomainService userDomainService;
-
-  // REMOVED OBSOLETE MOCKS:
-  // - SelfServicePluginEmailService
-  // - SmsMessageRepository
-  // - SmsMessageScheduledJobService
-  // - SmsCampaignDropdownReadPlatformService
-  // - ITemplateEngine
-  // - MessageSource
-  // - ExternalNotificationSystemClient
-
   @Mock private AppSelfServiceUserReadPlatformService appUserReadPlatformService;
   @Mock private RoleRepository roleRepository;
   @Mock private AppSelfServiceUserClientMappingRepository appUserClientMappingRepository;
@@ -95,12 +85,13 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private TransactionDateManagementService transactionDateManagementService;
   @Mock private ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
+  @Mock private SelfServiceDeviceFingerprintService deviceFingerprintService;
+  @Mock private HttpServletRequest httpServletRequest;
 
   private SelfServiceRegistrationWritePlatformServiceImpl service;
 
   @BeforeEach
   void setUp() {
-    // Instantiate the service with the updated 17-argument constructor
     service =
         new SelfServiceRegistrationWritePlatformServiceImpl(
             selfServiceRegistrationRepository,
@@ -122,7 +113,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             applicationEventPublisher,
             transactionDateUtil,
             transactionDateManagementService,
-            clientIdentifierWritePlatformService);
+            clientIdentifierWritePlatformService,
+            deviceFingerprintService);
 
     LocalDate businessDate = LocalDate.of(2026, 1, 2);
     HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
@@ -140,7 +132,6 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
 
   @Test
   void createRegistrationRequest_throwsOnInvalidPayload() {
-    // Mock simple validation flow failing
     org.mockito.Mockito.lenient()
         .when(
             fromApiJsonHelper.extractStringNamed(
@@ -151,6 +142,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             fromApiJsonHelper.extractStringNamed(
                 eq(SelfServiceApiConstants.authenticationModeParamName), any()))
         .thenReturn("email");
+
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
@@ -186,7 +178,6 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(policy.getRegex()).thenReturn(".*");
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
-
     when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(false);
     when(selfServiceRegistrationReadPlatformService.isClientExist(
             anyString(), anyString(), any(), anyString(), any(), anyBoolean()))
@@ -222,14 +213,15 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(policy.getRegex()).thenReturn(".*");
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
-
     when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(false);
     when(selfServiceRegistrationReadPlatformService.isClientExist(
             anyString(), anyString(), any(), anyString(), any(), anyBoolean()))
         .thenReturn(true);
+
     Client client = mock(Client.class);
     when(clientRepository.getClientByAccountNumber("12345")).thenReturn(client);
     when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
+
     LocalDateTime createdAt = LocalDateTime.of(2026, 1, 2, 10, 0, 0);
     LocalDateTime expectedExpiry = LocalDateTime.of(2026, 1, 2, 10, 0, 30);
     when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
@@ -237,7 +229,6 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
 
     SelfServiceRegistration result = service.createRegistrationRequest("{}");
-
     assertNotNull(result);
     assertEquals("encoded-password", result.getPassword());
   }
@@ -246,8 +237,10 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   void createSelfServiceUser_throwsOnInvalidPayload() {
     when(fromApiJsonHelper.extractLongNamed(eq(SelfServiceApiConstants.requestIdParamName), any()))
         .thenReturn(null);
+
     assertThrows(
-        PlatformApiDataValidationException.class, () -> service.createSelfServiceUser("{}"));
+        PlatformApiDataValidationException.class,
+        () -> service.createSelfServiceUser("{}", httpServletRequest));
   }
 
   @Test
@@ -260,13 +253,13 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(fromApiJsonHelper.extractStringNamed(
             eq(SelfServiceApiConstants.authenticationTokenParamName), any()))
         .thenReturn("123456");
-
     when(selfServiceRegistrationRepository.getRequestByIdAndAuthenticationToken(
             1L, "123456", SelfServiceRequestType.REGISTRATION))
         .thenReturn(null);
 
     assertThrows(
-        SelfServiceRegistrationNotFoundException.class, () -> service.createSelfServiceUser("{}"));
+        SelfServiceRegistrationNotFoundException.class,
+        () -> service.createSelfServiceUser("{}", httpServletRequest));
   }
 
   @Test
@@ -284,10 +277,12 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(registration.getUsername()).thenReturn("jdoe");
     when(registration.getPassword()).thenReturn("pass");
     when(registration.getEmail()).thenReturn("test@test.com");
+
     Client client = mock(Client.class);
     when(client.getFirstname()).thenReturn("John");
     when(client.getLastname()).thenReturn("Doe");
     when(registration.getClient()).thenReturn(client);
+
     Office office = mock(Office.class);
     when(client.getOffice()).thenReturn(office);
 
@@ -302,9 +297,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     FineractPlatformTenant tenant =
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null);
     ThreadLocalContextUtil.setTenant(tenant);
-
     try {
-      AppSelfServiceUser result = service.createSelfServiceUser("{}");
+      AppSelfServiceUser result = service.createSelfServiceUser("{}", httpServletRequest);
       assertNotNull(result);
     } finally {
       ThreadLocalContextUtil.setTenant(null);
@@ -321,12 +315,14 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(registration.getUsername()).thenReturn("jdoe");
     when(registration.getPassword()).thenReturn("encoded-pass");
     when(registration.getEmail()).thenReturn("test@test.com");
+
     Client client = mock(Client.class);
     Office office = mock(Office.class);
     when(client.getOffice()).thenReturn(office);
     when(client.getFirstname()).thenReturn("John");
     when(client.getLastname()).thenReturn("Doe");
     when(registration.getClient()).thenReturn(client);
+
     when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
             "external-token", SelfServiceRequestType.REGISTRATION))
         .thenReturn(registration);
@@ -338,9 +334,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     FineractPlatformTenant tenant =
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null);
     ThreadLocalContextUtil.setTenant(tenant);
-
     try {
-      AppSelfServiceUser result = service.createSelfServiceUser("{}");
+      AppSelfServiceUser result = service.createSelfServiceUser("{}", httpServletRequest);
       assertNotNull(result);
     } finally {
       ThreadLocalContextUtil.setTenant(null);
@@ -352,14 +347,15 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(fromApiJsonHelper.extractStringNamed(
             eq(SelfServiceApiConstants.externalAuthenticationTokenParamName), any()))
         .thenReturn("external-token");
+
     SelfServiceRegistration registration = mock(SelfServiceRegistration.class);
-    when(registration.isExpired(any())).thenReturn(true); // Treat as expired
+    when(registration.isExpired(any())).thenReturn(true);
     when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
             "external-token", SelfServiceRequestType.REGISTRATION))
         .thenReturn(registration);
 
     assertThrows(
         org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException.class,
-        () -> service.createSelfServiceUser("{}"));
+        () -> service.createSelfServiceUser("{}", httpServletRequest));
   }
 }

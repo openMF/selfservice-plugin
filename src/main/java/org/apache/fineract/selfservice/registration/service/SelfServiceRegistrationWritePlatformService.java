@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.registration.service;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 
@@ -13,9 +14,9 @@ public interface SelfServiceRegistrationWritePlatformService {
 
   SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson);
 
-  AppSelfServiceUser createSelfServiceUser(String apiRequestBodyAsJson);
+  AppSelfServiceUser createSelfServiceUser(String apiRequestBodyAsJson, HttpServletRequest httpRequest);
 
-  AppSelfServiceUser createSelfServiceUserOrEnroll(String apiRequestBodyAsJson);
+  AppSelfServiceUser createSelfServiceUserOrEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest);
 
   /**
    * Creates a pending self-enrollment request from a JSON payload containing the registration
@@ -32,7 +33,7 @@ public interface SelfServiceRegistrationWritePlatformService {
    * @throws org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException on
    *     duplicate or persistence conflicts
    */
-  SelfServiceRegistration selfEnroll(String apiRequestBodyAsJson);
+  SelfServiceRegistration selfEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest);
 
   /**
    * Confirms a pending self-enrollment request and activates the associated self-service user.

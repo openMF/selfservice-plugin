@@ -50,7 +50,8 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     SINPE_SUBSCRIPTION_UPDATED("sinpe-subscription-updated"),
     SINPE_SUBSCRIPTION_DELETED("sinpe-subscription-deleted"),
     SAVINGS_DEPOSIT("savings-deposit"),
-    SAVINGS_WITHDRAWAL("savings-withdrawal");
+    LOGIN_UNKNOWN_DEVICE("login-unknown-device"),
+    SAVINGS_WITHDRAWAL("savings-withdrawal");    
 
     private final String templatePrefix;
 

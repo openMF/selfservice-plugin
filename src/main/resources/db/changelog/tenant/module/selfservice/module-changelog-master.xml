@@ -74,4 +74,7 @@
   <include file="parts/062-fix-beneficiary-unique-constraint.xml" relativeToChangelogFile="true"/>
   <include file="parts/063-add-tenant-branding.xml" relativeToChangelogFile="true"/>
   <include file="parts/064-add-delivery-preference.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/065-add-trusted-device.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/066-add-unknown-device-notification-message.xml" relativeToChangelogFile="true"/>  
+  
 </databaseChangeLog>

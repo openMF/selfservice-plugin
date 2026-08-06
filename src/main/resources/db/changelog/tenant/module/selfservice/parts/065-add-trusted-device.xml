@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet author="fineract" id="ss-0065-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_device_fingerprint"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_device_fingerprint">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fingerprint_hash" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_agent" type="VARCHAR(512)"/>
+            <column name="ip_address" type="VARCHAR(64)"/>
+            <column name="accept_language" type="VARCHAR(128)"/>
+            <column name="device_label" type="VARCHAR(255)"/>
+            <column name="first_seen_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trusted" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="m_selfservice_device_fingerprint"
+            columnNames="appuser_id, fingerprint_hash"
+            constraintName="uk_ss_device_fp_user_hash"/>
+        <createIndex tableName="m_selfservice_device_fingerprint"
+                     indexName="idx_ss_device_fp_user">
+            <column name="appuser_id"/>
+        </createIndex>
+        <addForeignKeyConstraint
+            baseTableName="m_selfservice_device_fingerprint"
+            baseColumnNames="appuser_id"
+            referencedTableName="m_appuser"
+            referencedColumnNames="id"
+            constraintName="fk_ss_device_fp_appuser"
+            onDelete="CASCADE"/>
+    </changeSet>
+</databaseChangeLog>

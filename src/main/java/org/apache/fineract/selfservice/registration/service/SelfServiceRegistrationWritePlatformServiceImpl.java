@@ -12,6 +12,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import jakarta.persistence.PersistenceException;
+import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +57,9 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrati
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceEnrollmentConflictException;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceRegistrationNotFoundException;
+import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
+import org.apache.fineract.selfservice.security.util.DeviceFingerprintUtil;
+import org.apache.fineract.selfservice.security.util.DeviceFingerprintUtil.DeviceSignals;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMappingRepository;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -121,6 +125,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   private final TransactionDateManagementService transactionDateManagementService;
   
   private final ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
+  
+  private final SelfServiceDeviceFingerprintService deviceFingerprintService;
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -314,7 +320,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public AppSelfServiceUser createSelfServiceUser(String apiRequestBodyAsJson) {
+  public AppSelfServiceUser createSelfServiceUser(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     JsonCommand command = null;
     String username = null;
     try {
@@ -374,6 +380,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       this.selfServiceRegistrationRepository.saveAndFlush(selfServiceRegistration);
       this.appSelfServiceUserRepository.saveAndFlush(appUser);
       this.appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
+      try {
+        JsonObject body = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+        DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
+        deviceFingerprintService.registerOrTouch(appUser.getId(), signals, true);
+      } catch (Exception e) {
+        log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
+      }
       publishUserCreatedEvent(appUser, selfServiceRegistration);
       return appUser;
 
@@ -389,8 +402,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public AppSelfServiceUser createSelfServiceUserOrEnroll(String apiRequestBodyAsJson) {
-    return createSelfServiceUser(apiRequestBodyAsJson);
+  public AppSelfServiceUser createSelfServiceUserOrEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+    return createSelfServiceUser(apiRequestBodyAsJson, httpRequest);
   }
 
   private void handleDataIntegrityIssues(
@@ -412,7 +425,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public SelfServiceRegistration selfEnroll(String apiRequestBodyAsJson) {
+  public SelfServiceRegistration selfEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     Gson gson = new Gson();
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
@@ -558,6 +571,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
       userDomainService.create(appUser, false);
       appUserClientMappingRepository.saveClientUserMapping(appUser.getId(), client.getId());
+      try {
+        JsonObject body = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+        DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
+        deviceFingerprintService.registerOrTouch(appUser.getId(), signals, true);
+      } catch (Exception e) {
+        log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
+      }
 
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
       LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
