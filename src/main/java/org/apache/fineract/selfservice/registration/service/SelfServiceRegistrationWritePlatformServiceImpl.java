@@ -127,6 +127,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   private final ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
   
   private final SelfServiceDeviceFingerprintService deviceFingerprintService;
+  
+  private static final long DEFAULT_DOCUMENT_TYPE_ID = 1L;
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -1220,52 +1222,74 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     * Failures are non-fatal for enrollment (logged); raise if you prefer hard fail.
     */
    private void createClientIdentifierFromEnrollment(Long clientId, JsonObject originalJson) {
-     if (clientId == null || originalJson == null) {
-       return;
-     }
+    if (clientId == null || originalJson == null) {
+      return;
+    }
 
-     Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
-     String documentKey = resolveDocumentKey(originalJson);
+    Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
+    if (documentTypeId == null) {
+      documentTypeId = DEFAULT_DOCUMENT_TYPE_ID;
+      log.info(
+          "Self-enrollment: documentTypeId missing, using fallback={}",
+          DEFAULT_DOCUMENT_TYPE_ID);
+    }
 
-     if (documentTypeId == null || StringUtils.isBlank(documentKey)) {
-       log.debug(
-           "Self-enrollment: skipping client identifier (clientId={}): documentTypeId={}, documentKey present={}",
-           clientId,
-           documentTypeId,
-           StringUtils.isNotBlank(documentKey));
-       return;
-     }
+    String documentKey = resolveDocumentKey(originalJson);
+    if (StringUtils.isBlank(documentKey)) {
+      log.debug(
+          "Self-enrollment: skipping client identifier (clientId={}): no documentKey/externalID",
+          clientId);
+      return;
+    }
 
-     try {
-       JsonObject identifierJson = new JsonObject();
-       identifierJson.addProperty("documentTypeId", documentTypeId);
-       identifierJson.addProperty("documentKey", documentKey);
-       identifierJson.addProperty("status", "Active");
-       identifierJson.addProperty("description", "");
+    if (tryAddClientIdentifier(clientId, documentTypeId, documentKey)) {
+      return;
+    }
 
-       JsonCommand identifierCommand =
-           JsonCommand.fromJsonElement(
-               clientId, identifierJson, this.fromApiJsonHelper);
+    // Invalid code value (e.g. 1648) → retry once with fallback 1
+    if (!Long.valueOf(DEFAULT_DOCUMENT_TYPE_ID).equals(documentTypeId)) {
+      log.warn(
+          "Self-enrollment: documentTypeId={} failed, retrying with fallback={}",
+          documentTypeId,
+          DEFAULT_DOCUMENT_TYPE_ID);
+      tryAddClientIdentifier(clientId, DEFAULT_DOCUMENT_TYPE_ID, documentKey);
+    }
+  }
 
-       CommandProcessingResult identifierResult =
-           clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
+  /**
+   * @return true if identifier was created successfully
+   */
+  private boolean tryAddClientIdentifier(Long clientId, Long documentTypeId, String documentKey) {
+    try {
+      JsonObject identifierJson = new JsonObject();
+      identifierJson.addProperty("documentTypeId", documentTypeId);
+      identifierJson.addProperty("documentKey", documentKey);
+      identifierJson.addProperty("status", "Active");
+      identifierJson.addProperty("description", "");
 
-       log.info(
-           "Self-enrollment: client identifier created clientId={}, documentTypeId={}, documentKey={}, resourceId={}",
-           clientId,
-           documentTypeId,
-           documentKey,
-           identifierResult != null ? identifierResult.getResourceId() : null);
-     } catch (Exception e) {
-       // Prefer non-fatal so user/client still exist; switch to rethrow if identifier is mandatory
-       log.error(
-           "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={}, documentKey={}",
-           clientId,
-           documentTypeId,
-           documentKey,
-           e);
-     }
-   }
+      JsonCommand identifierCommand =
+          JsonCommand.fromJsonElement(clientId, identifierJson, this.fromApiJsonHelper);
+
+      CommandProcessingResult identifierResult =
+          clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
+
+      log.info(
+          "Self-enrollment: client identifier created clientId={}, documentTypeId={}, documentKey={}, resourceId={}",
+          clientId,
+          documentTypeId,
+          documentKey,
+          identifierResult != null ? identifierResult.getResourceId() : null);
+      return true;
+    } catch (Exception e) {
+      log.error(
+          "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={}, documentKey={}",
+          clientId,
+          documentTypeId,
+          documentKey,
+          e);
+      return false;
+    }
+  }
 
    private String resolveDocumentKey(JsonObject originalJson) {
      // Explicit documentKey wins if clients send both

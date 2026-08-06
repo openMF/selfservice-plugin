@@ -109,11 +109,11 @@ public class SelfAuthenticationApiResource {
   private final KycFeatureStatusReadService kycFeatureStatusReadService;
   private final SelfServiceOfficeAddressReadService officeAddressReadPlatformService;
   private final SelfServiceAuthenticationTokenService tokenService;
-  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;  
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   private final TransactionDateUtil transactionDateUtil;
+  private final SelfServiceDeviceFingerprintService deviceFingerprintService;
 
   private final Gson gson = new Gson();
-  private final SelfServiceDeviceFingerprintService deviceFingerprintService;
 
   @POST
   @Consumes({MediaType.APPLICATION_JSON})
@@ -122,8 +122,8 @@ public class SelfAuthenticationApiResource {
       summary = "Verify authentication",
       description =
           "Authenticates the credentials provided and returns the set roles and permissions"
-              + " allowed. On successful login from an unrecognized device (fingerprint built from"
-              + " request headers and body), a LOGIN_UNKNOWN_DEVICE notification is published.")
+              + " allowed. On successful login from an unrecognized device (after a baseline"
+              + " device already exists), a LOGIN_UNKNOWN_DEVICE notification is published.")
   @RequestBody(
       required = true,
       content =
@@ -150,8 +150,7 @@ public class SelfAuthenticationApiResource {
       @QueryParam("returnClientList") @DefaultValue("true") boolean returnClientList,
       @Context HttpServletRequest httpRequest) {
 
-    AuthenticateRequest request =
-        gson.fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
+    AuthenticateRequest request = gson.fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
     if (request == null) {
       throw new IllegalArgumentException(
           "Invalid JSON in BODY (no longer URL param; see FINERACT-726) of POST to /authentication:"
@@ -254,7 +253,7 @@ public class SelfAuthenticationApiResource {
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         throw new SelfServicePasswordResetRequiredException(authenticatedUserData);
       } else {
-        // Device fingerprint: headers + body only; notify if unknown device
+        // Device fingerprint: baseline for users with no prior devices; alert only if unknown after baseline
         processDeviceFingerprintOnLogin(principal, apiRequestBodyAsJson, httpRequest);
 
         publishNotificationEvent(
@@ -300,8 +299,15 @@ public class SelfAuthenticationApiResource {
   }
 
   /**
-   * Builds fingerprint from headers + body, notifies on unknown device, then registers/touches the
-   * device as trusted (multi-tenant via tenant-scoped table + TransactionDateUtil).
+   * Builds fingerprint from headers + body.
+   *
+   * <ul>
+   *   <li>No prior devices → baseline registration, no LOGIN_UNKNOWN_DEVICE (covers existing users)
+   *   <li>Prior devices + unknown hash → LOGIN_UNKNOWN_DEVICE, then register
+   *   <li>Known hash → touch last_seen only
+   * </ul>
+   *
+   * Failures are non-fatal so login always completes.
    */
   private void processDeviceFingerprintOnLogin(
       AppSelfServiceUser user, String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
@@ -309,16 +315,15 @@ public class SelfAuthenticationApiResource {
       JsonObject body = parseBodyObject(apiRequestBodyAsJson);
       DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
 
+      boolean hasPriorDevices = deviceFingerprintService.hasAnyDevice(user.getId());
       boolean known =
           deviceFingerprintService.isKnownDevice(user.getId(), signals.fingerprintHash());
 
-      if (!known) {
+      if (hasPriorDevices && !known) {
         log.info(
             "LOGIN: Unknown device for userId={}, hashPrefix={}, ip={}",
             user.getId(),
-            signals.fingerprintHash() != null && signals.fingerprintHash().length() >= 12
-                ? signals.fingerprintHash().substring(0, 12)
-                : "n/a",
+            shortHash(signals.fingerprintHash()),
             signals.ipAddress());
 
         Map<String, Object> contextData = new HashMap<>();
@@ -340,9 +345,12 @@ public class SelfAuthenticationApiResource {
             user.getUsername(),
             httpRequest,
             contextData);
+      } else if (!hasPriorDevices) {
+        log.info(
+            "LOGIN: Baseline device registered for userId={} (no prior fingerprints)",
+            user.getId());
       }
 
-      // Trust / refresh last_seen for this device after successful login
       deviceFingerprintService.registerOrTouch(user.getId(), signals, true);
     } catch (Exception e) {
       log.warn(
@@ -350,6 +358,13 @@ public class SelfAuthenticationApiResource {
           user != null ? user.getId() : null,
           e);
     }
+  }
+
+  private static String shortHash(String hash) {
+    if (hash == null || hash.length() < 12) {
+      return hash != null ? hash : "n/a";
+    }
+    return hash.substring(0, 12);
   }
 
   private JsonObject parseBodyObject(String apiRequestBodyAsJson) {
@@ -364,7 +379,6 @@ public class SelfAuthenticationApiResource {
     }
   }
 
-  /** Helper method to publish the notification event asynchronously. */
   private void publishNotificationEvent(
       SelfServiceNotificationEvent.Type type,
       AppSelfServiceUser user,
@@ -403,7 +417,6 @@ public class SelfAuthenticationApiResource {
               httpRequest != null ? httpRequest.getLocale() : null,
               contextData));
     } catch (Exception e) {
-      // Fallback if withTenantContext overload without contextData is the only one available
       try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
         applicationEventPublisher.publishEvent(
             SelfServiceNotificationEvent.withTenantContext(
@@ -484,8 +497,7 @@ public class SelfAuthenticationApiResource {
           "Exchanges a valid refresh token for a new access token and refresh token pair.")
   @ApiResponse(responseCode = "200", description = "OK")
   public String refreshToken(final String apiRequestBodyAsJson) {
-    RefreshTokenRequest request =
-        gson.fromJson(apiRequestBodyAsJson, RefreshTokenRequest.class);
+    RefreshTokenRequest request = gson.fromJson(apiRequestBodyAsJson, RefreshTokenRequest.class);
     if (request == null || StringUtils.isBlank(request.refreshToken)) {
       throw new IllegalArgumentException("Refresh token is missing in the request body.");
     }

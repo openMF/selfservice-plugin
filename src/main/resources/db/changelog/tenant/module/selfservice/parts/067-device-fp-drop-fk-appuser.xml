@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0067-1">
+        <preConditions onFail="MARK_RAN">
+            <foreignKeyConstraintExists
+                foreignKeyTableName="m_selfservice_device_fingerprint"
+                foreignKeyName="fk_ss_device_fp_appuser"/>
+        </preConditions>
+        <dropForeignKeyConstraint
+            baseTableName="m_selfservice_device_fingerprint"
+            constraintName="fk_ss_device_fp_appuser"/>
+        <comment>
+            Self-service user ids may not exist in m_appuser; store appuser_id as a soft reference.
+        </comment>
+    </changeSet>
+</databaseChangeLog>
