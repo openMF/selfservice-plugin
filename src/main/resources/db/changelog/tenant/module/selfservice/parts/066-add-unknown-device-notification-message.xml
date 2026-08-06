@@ -25,6 +25,7 @@
             <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_EMAIL_SUBJECT"/>
             <column name="text" value="Alerta de seguridad: inicio de sesión desde un dispositivo nuevo"/>
             <column name="entity" value="0"/>
+            <column name="type" valueNumeric="1"/>
         </insert>
     </changeSet>
 
@@ -51,6 +52,7 @@
 &lt;p&gt;Gracias por usar nuestros servicios.&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;"/>
             <column name="entity" value="0"/>
+            <column name="type" valueNumeric="1"/>
         </insert>
     </changeSet>
 
@@ -65,11 +67,12 @@
             <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_SMS"/>
             <column name="text" value="Alerta: inicio de sesion en ${username} desde un dispositivo nuevo. IP: ${ipAddress}. Fecha: ${loginTime}. Si no fue usted, cambie su contrasena."/>
             <column name="entity" value="0"/>
+            <column name="type" valueNumeric="1"/>
         </insert>
     </changeSet>
 
     <!-- WhatsApp -->
-    <changeSet author="fineract" id="ss-login-unknown-device-004">
+    <changeSet author="fineract" id="ss-0066-4">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">
                 SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP'
@@ -79,6 +82,7 @@
             <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_WHATSAPP"/>
             <column name="text" value="⚠️ *Alerta de seguridad*\n\nEstimado/a ${firstname},\n\nDetectamos un inicio de sesión en *${username}* desde un dispositivo nuevo.\n\n📅 *Fecha:* ${loginTime}\n🌐 *IP:* ${ipAddress}\n📱 *Dispositivo:* ${deviceLabel}\n🖥️ *Agente:* ${userAgent}\n\nSi no fue usted, cambie su contraseña de inmediato."/>
             <column name="entity" value="0"/>
+            <column name="type" valueNumeric="1"/>
         </insert>
     </changeSet>
 
@@ -93,6 +97,7 @@
             <column name="name" value="SELF_SERVICE_LOGIN_UNKNOWN_DEVICE_IN_APP"/>
             <column name="text" value="Inicio de sesión desde un dispositivo nuevo en ${username}. IP: ${ipAddress}. Dispositivo: ${deviceLabel}. Fecha: ${loginTime}."/>
             <column name="entity" value="0"/>
+            <column name="type" valueNumeric="1"/>
         </insert>
     </changeSet>
 
