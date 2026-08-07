@@ -77,5 +77,5 @@
   <include file="parts/065-add-trusted-device.xml" relativeToChangelogFile="true"/>  
   <include file="parts/066-add-unknown-device-notification-message.xml" relativeToChangelogFile="true"/>  
   <include file="parts/067-device-fp-drop-fk-appuser.xml" relativeToChangelogFile="true"/>  
-  
+  <include file="parts/068-add-onboarding-workflow.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
