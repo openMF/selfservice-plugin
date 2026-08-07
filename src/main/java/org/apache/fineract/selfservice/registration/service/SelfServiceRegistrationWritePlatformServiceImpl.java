@@ -44,6 +44,7 @@ import org.apache.fineract.infrastructure.core.service.TransactionDateManagement
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.domain.BasicPasswordEncodablePlatformUser;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
+import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
@@ -128,7 +129,15 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   
   private final SelfServiceDeviceFingerprintService deviceFingerprintService;
   
+  private final SelfServiceOnboardingStepService onboardingStepService;
+  
   private static final long DEFAULT_DOCUMENT_TYPE_ID = 1L;
+  
+  /** Steps completed by a full self-enroll payload (doc type, id, personal, password). */
+  private static final String ONBOARDING_UP_TO_PASSWORD = "PASSWORD_SETUP";
+  
+  /** Steps completed after enrollment token confirmation. */
+  private static final String ONBOARDING_UP_TO_CONFIRMATION = "CONFIRMATION_CODE";
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -389,6 +398,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       } catch (Exception e) {
         log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
       }
+      
+      initOnboardingThroughPassword(appUser.getId());
+      
       publishUserCreatedEvent(appUser, selfServiceRegistration);
       return appUser;
 
@@ -580,6 +592,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       } catch (Exception e) {
         log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
       }
+      
+      initOnboardingThroughPassword(appUser.getId());
 
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
       LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
@@ -705,6 +719,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
             }
           }
         });
+    
+    initOnboardingThroughConfirmation(appUser.getId());
 
     log.info("Self-enrollment confirmed: userId={}", appUser.getId());
     return appUser;
@@ -1325,4 +1341,55 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
        return null;
      }
    }
+   
+   // =====================================================================
+  // Onboarding step progress (DB-driven definitions)
+  // =====================================================================
+
+  /**
+   * After self-enroll / create-user: create all step rows and mark DOCUMENT_TYPE through
+   * PASSWORD_SETUP as COMPLETED when those fields were collected in the API payload.
+   */
+  private void initOnboardingThroughPassword(Long appUserId) {
+    if (appUserId == null || onboardingStepService == null) {
+      return;
+    }
+    try {
+      onboardingStepService.initializeSteps(appUserId);
+      onboardingStepService.completeStepsUpTo(appUserId, ONBOARDING_UP_TO_PASSWORD);
+      log.info(
+          "Onboarding: steps through {} marked for userId={}",
+          ONBOARDING_UP_TO_PASSWORD,
+          appUserId);
+    } catch (Exception e) {
+      log.warn(
+          "Onboarding: failed to init/complete steps through {} for userId={} (non-fatal)",
+          ONBOARDING_UP_TO_PASSWORD,
+          appUserId,
+          e);
+    }
+  }
+
+  /**
+   * After confirm-enrollment: mark through CONFIRMATION_CODE (includes 1–5).
+   */
+  private void initOnboardingThroughConfirmation(Long appUserId) {
+    if (appUserId == null || onboardingStepService == null) {
+      return;
+    }
+    try {
+      onboardingStepService.initializeSteps(appUserId);
+      onboardingStepService.completeStepsUpTo(appUserId, ONBOARDING_UP_TO_CONFIRMATION);
+      log.info(
+          "Onboarding: steps through {} marked for userId={}",
+          ONBOARDING_UP_TO_CONFIRMATION,
+          appUserId);
+    } catch (Exception e) {
+      log.warn(
+          "Onboarding: failed to complete steps through {} for userId={} (non-fatal)",
+          ONBOARDING_UP_TO_CONFIRMATION,
+          appUserId,
+          e);
+    }
+  }
 }

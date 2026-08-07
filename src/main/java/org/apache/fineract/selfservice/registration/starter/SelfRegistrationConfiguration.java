@@ -10,6 +10,7 @@ import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
+import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
@@ -77,7 +78,8 @@ public class SelfRegistrationConfiguration {
       ApplicationEventPublisher applicationEventPublisher,TransactionDateUtil transactionDateUtil,
       TransactionDateManagementService transactionDateManagementService,
       ClientIdentifierWritePlatformService clientIdentifierWritePlatformService,
-      SelfServiceDeviceFingerprintService deviceFingerprintService) {
+      SelfServiceDeviceFingerprintService deviceFingerprintService,
+      SelfServiceOnboardingStepService onboardingStepService) {
 
     return new SelfServiceRegistrationWritePlatformServiceImpl(
         selfServiceRegistrationRepository,
@@ -100,7 +102,8 @@ public class SelfRegistrationConfiguration {
         transactionDateUtil,
         transactionDateManagementService,
         clientIdentifierWritePlatformService,
-        deviceFingerprintService);
+        deviceFingerprintService,
+        onboardingStepService);
   }
 
   @Bean

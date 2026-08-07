@@ -28,6 +28,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
+import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
@@ -86,6 +87,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private TransactionDateManagementService transactionDateManagementService;
   @Mock private ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
   @Mock private SelfServiceDeviceFingerprintService deviceFingerprintService;
+  @Mock private SelfServiceOnboardingStepService onboardingStepService;
   @Mock private HttpServletRequest httpServletRequest;
 
   private SelfServiceRegistrationWritePlatformServiceImpl service;
@@ -114,7 +116,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             transactionDateUtil,
             transactionDateManagementService,
             clientIdentifierWritePlatformService,
-            deviceFingerprintService);
+            deviceFingerprintService,
+            onboardingStepService);
 
     LocalDate businessDate = LocalDate.of(2026, 1, 2);
     HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
