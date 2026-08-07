@@ -409,6 +409,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           new User(
               selfServiceRegistration.getUsername(),
               selfServiceRegistration.getPassword(),
+              false, // Disabled by default until confirmEnrollment is called
+              true,  // accountNonExpired
+              true,  // credentialsNonExpired
+              true,  // accountNonLocked
               authorities);
       AppSelfServiceUser appUser =
           new AppSelfServiceUser(
