@@ -44,6 +44,7 @@ import org.apache.fineract.infrastructure.core.service.TransactionDateManagement
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.domain.BasicPasswordEncodablePlatformUser;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
+import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
@@ -293,16 +294,52 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   }
 
   public void validateForDuplicateUsername(String username) {
-    boolean isDuplicateUserName = this.appUserReadPlatformService.isUsernameExist(username);
-    if (isDuplicateUserName) {
-      final StringBuilder defaultMessageBuilder =
-          new StringBuilder("User with username ").append(username).append(" already exists.");
-      throw new PlatformDataIntegrityException(
-          "error.msg.user.duplicate.username",
-          defaultMessageBuilder.toString(),
-          SelfServiceApiConstants.usernameParamName,
-          username);
+    if (!this.appUserReadPlatformService.isUsernameExist(username)) {
+      return;
     }
+    throw buildDuplicateUsernameConflict(username);
+  }
+
+  /**
+   * Always throws. Loads existing self-service user + onboarding so the client can resume
+   * enrollment when the username is already taken.
+   */
+  private SelfServiceEnrollmentConflictException buildDuplicateUsernameConflict(String username) {
+    Long userId = null;
+    Boolean pendingConfirmation = null;
+    OnboardingProgressData onboarding = null;
+
+    try {
+      AppSelfServiceUser existing =
+          this.appSelfServiceUserRepository.findAppSelfServiceUserByName(username);
+      if (existing != null) {
+        userId = existing.getId();
+        pendingConfirmation = !existing.isEnabled();
+        if (onboardingStepService != null) {
+          try {
+            onboarding = onboardingStepService.getOrInitProgress(userId);
+          } catch (Exception e) {
+            log.warn(
+                "Duplicate username: could not load onboarding for userId={} (non-fatal)",
+                userId,
+                e);
+          }
+        }
+      }
+    } catch (Exception e) {
+      log.warn(
+          "Duplicate username: could not resolve existing user for username={} (non-fatal)",
+          username,
+          e);
+    }
+
+    return new SelfServiceEnrollmentConflictException(
+        "error.msg.user.duplicate.username",
+        "Username already exists",
+        SelfServiceApiConstants.usernameParamName,
+        userId,
+        pendingConfirmation,
+        onboarding);
   }
 
   private void throwExceptionIfValidationError(
@@ -420,16 +457,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return createSelfServiceUser(apiRequestBodyAsJson, httpRequest);
   }
 
-  private void handleDataIntegrityIssues(
-      final JsonCommand command, final Throwable realCause, final Exception dve, String username) {
-    if (realCause.getMessage().contains("'username_org'")) {
-      final StringBuilder defaultMessageBuilder =
-          new StringBuilder("User with username ").append(username).append(" already exists.");
-      throw new PlatformDataIntegrityException(
-          "error.msg.user.duplicate.username",
-          defaultMessageBuilder.toString(),
-          "username",
-          username);
+  private void handleDataIntegrityIssues(final JsonCommand command, final Throwable realCause, final Exception dve, String username) {
+    // Broaden the check to catch any DB constraint violation related to "username"
+    if (realCause != null && realCause.getMessage() != null) {
+      String normalizedMessage = realCause.getMessage().toLowerCase();
+      if (normalizedMessage.contains("username") || normalizedMessage.contains("username_org")) {
+        throw buildDuplicateUsernameConflict(username);
+      }
     }
     throw ErrorHandler.getMappable(
         dve,
@@ -624,12 +658,12 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           appUser.getId());
       return registration;
 
-    } catch (PlatformDataIntegrityException pde) {
-      throw translateEnrollmentConflict(pde);
+    } catch (PlatformDataIntegrityException pie) {
+      throw translateEnrollmentConflict(pie, username);
     } catch (DataIntegrityViolationException dve) {
-      throw translateEnrollmentFailure(dve);
+      throw translateEnrollmentFailure(dve, username);
     } catch (PersistenceException dve) {
-      throw translateEnrollmentFailure(dve);
+      throw translateEnrollmentFailure(dve, username);
     }
   }
 
@@ -923,8 +957,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   private void validateForDuplicateUsernameForEnrollment(String username) {
     boolean isDuplicateUserName = this.appUserReadPlatformService.isUsernameExist(username);
     if (isDuplicateUserName)
-      throw enrollmentConflict(
-          "error.msg.user.duplicate.username", "Username already exists", "username");
+      // Use buildDuplicateUsernameConflict to load userId, pendingConfirmation, and onboarding data
+      throw buildDuplicateUsernameConflict(username);
   }
 
   private SelfServiceEnrollmentConflictException enrollmentConflict(
@@ -932,34 +966,41 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return new SelfServiceEnrollmentConflictException(code, message, parameterName);
   }
 
-  private RuntimeException translateEnrollmentConflict(PlatformDataIntegrityException exception) {
+  private RuntimeException translateEnrollmentConflict(
+      PlatformDataIntegrityException exception, String username) {
     String code = exception.getGlobalisationMessageCode();
-    if ("error.msg.client.duplicate.mobileNo".equals(code))
+    if ("error.msg.client.duplicate.mobileNo".equals(code)) {
       return enrollmentConflict(code, exception.getDefaultUserMessage(), "mobileNo");
-    if ("error.msg.client.duplicate.email".equals(code))
+    }
+    if ("error.msg.client.duplicate.email".equals(code)) {
       return enrollmentConflict(code, exception.getDefaultUserMessage(), "email");
-    if ("error.msg.user.duplicate.username".equals(code))
-      return enrollmentConflict(code, exception.getDefaultUserMessage(), "username");
+    }
+    if ("error.msg.user.duplicate.username".equals(code)) {
+      return buildDuplicateUsernameConflict(username);
+    }
     return exception;
   }
 
-  private RuntimeException translateEnrollmentFailure(Exception exception) {
+  private RuntimeException translateEnrollmentFailure(Exception exception, String username) {
     Throwable rootCause = ExceptionUtils.getRootCause(exception);
     Throwable mostSpecificCause = rootCause != null ? rootCause : exception;
     String message = mostSpecificCause.getMessage();
-    if (message == null)
+    if (message == null) {
       return ErrorHandler.getMappable(
           exception, "error.msg.unknown.data.integrity.issue", "Unknown data integrity issue");
+    }
     String normalized = message.toLowerCase();
-    if (normalized.contains("username") || normalized.contains("username_org"))
-      return enrollmentConflict(
-          "error.msg.user.duplicate.username", "Username already exists", "username");
-    if (normalized.contains("mobile_no") || normalized.contains("mobileno"))
+    if (normalized.contains("username") || normalized.contains("username_org")) {
+      return buildDuplicateUsernameConflict(username);
+    }
+    if (normalized.contains("mobile_no") || normalized.contains("mobileno")) {
       return enrollmentConflict(
           "error.msg.client.duplicate.mobileNo", "Mobile number already exists", "mobileNo");
-    if (normalized.contains("email"))
+    }
+    if (normalized.contains("email")) {
       return enrollmentConflict(
           "error.msg.client.duplicate.email", "Email already exists", "email");
+    }
     return ErrorHandler.getMappable(
         exception, "error.msg.unknown.data.integrity.issue", "Unknown data integrity issue");
   }
