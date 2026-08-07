@@ -31,6 +31,7 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -125,7 +126,9 @@ public class SelfAuthenticationApiResource {
       summary = "Verify authentication",
       description =
           "Authenticates the credentials provided and returns roles, permissions, device-aware"
-              + " login handling, and onboarding step progress (DB-driven enrollment steps).")
+              + " login handling, and onboarding step progress (DB-driven enrollment steps)."
+              + " Onboarding is returned even when the account is disabled (pending confirmation)"
+              + " or no steps have been completed yet.")
   @RequestBody(
       required = true,
       content =
@@ -178,7 +181,8 @@ public class SelfAuthenticationApiResource {
           request.username,
           httpRequest,
           null);
-      throw ex;
+      // Pending confirmation / disabled: still return onboarding progress
+      return serializeWithOnboardingOnly(request.username, failedUser);
     } catch (SelfServiceLockedException ex) {
       AppSelfServiceUser failedUser = ex.getUser();
       publishNotificationEvent(
@@ -198,6 +202,10 @@ public class SelfAuthenticationApiResource {
             request.username,
             httpRequest,
             null);
+        // Pending confirmation: Spring often surfaces this as BadCredentials, not Disabled
+        if (!failedUser.isEnabled()) {
+          return serializeWithOnboardingOnly(request.username, failedUser);
+        }
       }
       throw ex;
     }
@@ -271,7 +279,6 @@ public class SelfAuthenticationApiResource {
         Long clientId = getClientId(clientList);
         String country = officeAddressReadPlatformService.retrieveOfficeCountryByClientId(clientId);
 
-        // DB-driven onboarding step progress (init/sync if needed for existing users)
         OnboardingProgressData onboarding = resolveOnboardingProgress(principal.getId());
 
         authenticatedUserData =
@@ -304,16 +311,57 @@ public class SelfAuthenticationApiResource {
   }
 
   /**
-   * Loads onboarding progress; failures are non-fatal so login still succeeds.
+   * Account disabled (e.g. enrollment code not confirmed): return authenticated=false with
+   * onboarding progress so the client can resume the enrollment flow.
+   */
+  private String serializeWithOnboardingOnly(String username, AppSelfServiceUser failedUser) {
+    OnboardingProgressData onboarding =
+        failedUser != null
+            ? resolveOnboardingProgress(failedUser.getId())
+            : emptyOnboardingProgress();
+
+    SelfServiceAuthenticatedUserData body =
+        new SelfServiceAuthenticatedUserData()
+            .setUsername(username)
+            .setUserId(failedUser != null ? failedUser.getId() : null)
+            .setAuthenticated(false)
+            .setOnboarding(onboarding);
+
+    log.info(
+        "LOGIN: account disabled/pending confirmation for username={}, returning onboarding",
+        username);
+    return this.apiJsonSerializerService.serialize(body);
+  }
+
+  /**
+   * Loads onboarding progress; never returns null. Initializes rows if missing. Failures fall back
+   * to an empty progress object so login still succeeds.
    */
   private OnboardingProgressData resolveOnboardingProgress(Long userId) {
+    if (userId == null) {
+      return emptyOnboardingProgress();
+    }
     try {
-      return onboardingStepService.getOrInitProgress(userId);
+      OnboardingProgressData progress = onboardingStepService.getOrInitProgress(userId);
+      if (progress != null) {
+        return progress;
+      }
     } catch (Exception e) {
       log.warn(
           "LOGIN: Could not load onboarding progress for userId={} (non-fatal)", userId, e);
-      return null;
     }
+    return emptyOnboardingProgress();
+  }
+
+  private OnboardingProgressData emptyOnboardingProgress() {
+    return OnboardingProgressData.builder()
+        .onboardingComplete(false)
+        .totalSteps(0)
+        .completedSteps(0)
+        .progressPercent(0)
+        .currentStep(null)
+        .steps(List.of())
+        .build();
   }
 
   private void processDeviceFingerprintOnLogin(
