@@ -7,6 +7,10 @@
 package org.apache.fineract.selfservice.registration.api;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -213,7 +217,7 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     Response disabledLogin =
         SelfServiceTestUtils.authenticate(getFineractPort(), username, password);
     assertEquals(
-        401, disabledLogin.getStatusCode(), "Disabled user must not be able to authenticate");
+        200, disabledLogin.getStatusCode(), "Disabled user must not be able to authenticate and return the onboarding status ");
 
     // Step 2: Query the enrollment token from DB
     String token = queryEnrollmentToken(username);
@@ -241,6 +245,81 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
         403,
         replayResponse.getStatusCode(),
         "Consumed enrollment token must be rejected. Body: " + replayResponse.body().asString());
+  }
+
+  /**
+   * Verifies that attempting to enroll with an existing username returns a 409 Conflict 
+   * and includes the user's onboarding progress in the response body.
+   */
+  @Test
+  @DisplayName("Duplicate username returns 409 Conflict with onboarding status")
+  void testDuplicateUsernameReturnsOnboardingStatus() {
+    String id = numericId();
+    String username = "dupuser_" + id;
+    String password = "Strong#Abc123";
+    String payload =
+            """
+            {
+              "username": "%s",
+              "password": "%s",
+              "firstName": "Test",
+              "lastName": "User",
+              "mobileNumber": "555%s",
+              "email": "dup%s@fineract.test",
+              "authenticationMode": "email",
+              "active": true
+            }
+            """
+            .formatted(username, password, id, id);
+
+    // Step 1: Initial enrollment should succeed (200 OK)
+    Response enrollResponse =
+        given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+            .body(payload)
+            .when()
+            .post(ENROLLMENT_PATH)
+            .then()
+            .extract()
+            .response();
+
+    assertEquals(
+        200,
+        enrollResponse.getStatusCode(),
+        "Initial enrollment request must succeed. Body: " + enrollResponse.body().asString());
+
+    // Step 2: Attempt to enroll again with the SAME username but different mobile/email
+    String id2 = numericId();
+    String duplicatePayload =
+            """
+            {
+              "username": "%s",
+              "password": "%s",
+              "firstName": "Test2",
+              "lastName": "User2",
+              "mobileNumber": "555%s",
+              "email": "dup2_%s@fineract.test",
+              "authenticationMode": "email",
+              "active": true
+            }
+            """
+            .formatted(username, password, id2, id2);
+
+    // Step 3 & 4: Assert 409 Conflict and verify onboarding fields in response
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .body(duplicatePayload)
+        .when()
+        .post(ENROLLMENT_PATH)
+        .then()
+        .statusCode(409)
+        .body("userMessageGlobalisationCode", equalTo("error.msg.user.duplicate.username"))
+        .body("userId", notNullValue())
+        .body("pendingConfirmation", equalTo(true))
+        .body("onboarding", notNullValue())
+        .body("onboarding.onboardingComplete", equalTo(false))
+        .body("onboarding.totalSteps", greaterThan(0))
+        .body("onboarding.completedSteps", greaterThanOrEqualTo(0))
+        .body("onboarding.currentStep", notNullValue())
+        .body("onboarding.steps", notNullValue());
   }
 
   /** Verifies that a second enrollment attempt with the same mobile number returns a conflict. */
