@@ -49,6 +49,7 @@ public class PaymentLinkService {
                     "Transfer Type is required to calculate the fee for confirmation"
             );
         }
+        
 
         log.info("Looking up active fee config for transferType={}, transferMode={}, currency={}",
                 transferType, transferMode, currencyCode);
@@ -101,7 +102,7 @@ public class PaymentLinkService {
 
         return new AccountTransferQuoteResponse(
                 feeAmount,
-                totalAmount,
+                totalAmount,                
                 request.getCurrency(),
                 feeDescription
         );

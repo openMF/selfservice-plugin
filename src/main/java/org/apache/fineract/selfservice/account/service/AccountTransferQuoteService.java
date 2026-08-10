@@ -57,7 +57,7 @@ public class AccountTransferQuoteService {
     String transferMode =
         StringUtils.isNotBlank(request.getTransferMode()) ? request.getTransferMode() : "INSTANT";
 
-    log.debug(
+    log.info(
         "Calculating fee for transfer: type={}, currency={}, mode={}, amount={}",
         request.getTransferType(),
         currency,
