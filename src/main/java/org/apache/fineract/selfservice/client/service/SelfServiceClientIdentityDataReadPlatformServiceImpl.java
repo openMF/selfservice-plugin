@@ -86,7 +86,7 @@ private void enrichWithLocalOnboarding(PersonIdentityData data, String externalI
         SELECT
           u.id AS user_id,
           u.username AS username,
-          u.is_enabled AS is_enabled
+          u.enabled AS is_enabled
         FROM m_client c
         INNER JOIN m_selfservice_user_client_mapping m ON m.client_id = c.id
         INNER JOIN m_appselfservice_user u ON u.id = m.appuser_id
