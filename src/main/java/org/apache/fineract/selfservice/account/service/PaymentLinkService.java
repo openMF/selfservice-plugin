@@ -94,7 +94,7 @@ public class PaymentLinkService {
                     transferType, transferMode, currencyCode);
         }
 
-        BigDecimal totalAmount = request.getAmount().add(feeAmount);
+        BigDecimal totalAmount = request.getAmount().subtract(feeAmount);
 
         log.info("Payment link quote prepared successfully - principal: {}, fee: {}, total: {}, currency: {}, description: {}",
                 request.getAmount(), feeAmount, totalAmount, request.getCurrency(), feeDescription);
