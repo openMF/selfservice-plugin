@@ -20,6 +20,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 
 /** Data object represent client identity data. */
 @Getter
@@ -49,4 +50,11 @@ public class PersonIdentityData {
   private String address;
   private String category;
   private ArrayList<LegalRepresentativeData> legalRepresentative;
+  /** Local Fineract self-service user id, if a user exists for this externalId. */
+  private Long userId;
+  private String username;
+  /** true when user exists but is not enabled (pending confirmation). */
+  private Boolean pendingConfirmation;
+  /** DB-driven onboarding progress; null if no local user. */
+  private OnboardingProgressData onboarding;
 }

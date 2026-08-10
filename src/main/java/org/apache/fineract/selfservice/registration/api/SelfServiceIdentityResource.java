@@ -29,23 +29,22 @@ import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientIdentityDataReadPlatformService;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.apache.fineract.selfservice.registration.data.PersonIdentityData;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** JAX-RS resource exposing self-service registration and enrollment endpoints. */
+/** JAX-RS resource exposing self-service identity retrieve (external system + local onboarding). */
 @Path("/v1/self/identity")
 @Component
 @Tag(name = "Person Identity", description = "")
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-    name = "mifos.self.service.external.identity.system.enabled", // property name
-    havingValue = "true", // enable when value is "true"
-    matchIfMissing = false // disabled by default if property is missing
-    )
+    name = "mifos.self.service.external.identity.system.enabled",
+    havingValue = "true",
+    matchIfMissing = false)
 public class SelfServiceIdentityResource {
 
-  private final DefaultToApiJsonSerializer<AppSelfServiceUser> toApiJsonSerializer;
+  private final DefaultToApiJsonSerializer<PersonIdentityData> toApiJsonSerializer;
   private final SelfServiceClientIdentityDataReadPlatformService
       selfServiceClientIdentityDataReadPlatformService;
 
@@ -55,7 +54,9 @@ public class SelfServiceIdentityResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
       summary = "Retrieve Identity Data",
-      description = "Retrieve Identity Information from Third Party System.")
+      description =
+          "Retrieve identity information from the third-party system and attach local"
+              + " onboarding step status when a self-service user exists for the externalId.")
   @RequestBody(
       required = true,
       content =
@@ -67,7 +68,6 @@ public class SelfServiceIdentityResource {
   public String retrieveIdentity(
       final SelfServiceRetrieveIdentityRequest selfServiceRetrieveIdentityRequest)
       throws Exception {
-
     return this.toApiJsonSerializer.serialize(
         this.selfServiceClientIdentityDataReadPlatformService.retrieveClientIdentityData(
             selfServiceRetrieveIdentityRequest));
