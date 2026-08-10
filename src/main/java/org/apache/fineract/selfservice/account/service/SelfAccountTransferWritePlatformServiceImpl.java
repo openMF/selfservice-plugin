@@ -138,7 +138,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
    * any client-supplied transfer date is normalized tenant-safely before policy overrides it.
    */
   private final TransactionDateManagementService transactionDateManagementService;
-  
+
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   // =====================================================================
@@ -379,7 +379,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
           "CONFIRM: discarding client-submitted transferDate='{}' (format='{}') in favour of tenant date",
           request.getTransferDate(),
           request.getDateFormat());
-      // Optional: run through management service for consistent logging / validation path
       try {
         TransactionDateRequest dateRequest =
             new TransactionDateRequest(
@@ -394,7 +393,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
     }
 
-    // Force tenant "today" in the format Fineract expects for transferDate
     final String tenantToday =
         transactionDateUtil.getCurrentDateForFineract(
             FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE);
@@ -410,8 +408,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
   /** Tenant-aware "now" as OffsetDateTime for audit / response timestamps. */
   private OffsetDateTime currentTenantOffsetDateTime() {
     LocalDateTime tenantLdt = transactionDateUtil.getCurrentTenantLocalDateTime();
-    // Align with TransactionDateUtil zone resolution by formatting then parsing when needed;
-    // at minimum use system default zone of the tenant LocalDateTime clock alignment.
     return tenantLdt.atZone(ZoneId.systemDefault()).toOffsetDateTime();
   }
 
@@ -458,7 +454,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     commandData.put("fromAccountId", fromAccountId);
     commandData.put("toOfficeId", toOfficeId);
     commandData.put("toClientId", toClientId);
-    commandData.put("toAccountType", 2);    
+    commandData.put("toAccountType", 2);
     commandData.put("toAccountId", toAccountId);
     commandData.put("transferAmount", request.getTransferAmount());
     commandData.put("transferDate", transferDateForFineract);
@@ -523,6 +519,19 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String internalRefNumber =
         generateInternalRefNumber(processingDate, fromOfficeId, result.getResourceId());
 
+    String fromAccountIdentifier =
+        StringUtils.isNotBlank(request.getFromAccount())
+            ? request.getFromAccount().replaceAll("\\s+", "")
+            : resolveAccountIdentifier(fromSavingsAccount);
+    String toAccountIdentifier =
+        StringUtils.isNotBlank(request.getToAccount())
+            ? request.getToAccount().replaceAll("\\s+", "")
+            : resolveAccountIdentifier(toSavingsAccount);
+
+    Map<String, Object> destinationCustomer =
+        buildDestinationCustomer(toSavingsAccount, toAccountIdentifier);
+
+    // PIN-parity customData: identifiers + destinationCustomer + legacy fee fields
     SameBankTransferCustomData customData =
         SameBankTransferCustomData.builder()
             .totalAmount(totalAmount.toPlainString())
@@ -530,6 +539,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .feeAmount(feeAmount.toPlainString())
             .debitAmount(transferAmount.toPlainString())
             .exchangeRateAmount("1")
+            .fromAccountIdentifier(fromAccountIdentifier)
+            .toAccountIdentifier(toAccountIdentifier)
+            .destinationCustomer(destinationCustomer)
+            .reference(StringUtils.defaultString(request.getReference()))
             .build();
 
     SameBankTransferResponseData responseData =
@@ -539,34 +552,48 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .customData(customData)
             .debitCurrencyCode(resolvedCurrencyCode)
             .debitedAmount(transferAmount)
-            .exchangeRate(BigDecimal.ZERO)
+            .exchangeRate(BigDecimal.ONE)
             .operationId(operationId)
             .processingDate(processingDate.toString())
             .registrationDate(registrationDate.toString())
             .rejectDescription("")
+            .channelRefNumber(internalRefNumber)
             .internalRefNumber(internalRefNumber)
             .stateDescription(description)
             .stateCode(stateCode)
-            .successful(true)
+            .successful(stateCode == 32)
             .build();
+
+    Long fromSavingsTxnId = null;
+    Long toSavingsTxnId = null;
+    SavingsTxnPair satPair = resolveSavingsTransactionIds(result.getResourceId());
+    if (satPair != null) {
+      fromSavingsTxnId = satPair.fromId();
+      toSavingsTxnId = satPair.toId();
+    } else if (result.getResourceId() != null) {
+      // Fallback: some Fineract builds return savings transaction id as resourceId
+      fromSavingsTxnId = result.getResourceId();
+    }
 
     log.info("Persist the audit trail");
     persistSameBankTransferAudit(
         client.getId(),
         fromAccountId,
         toAccountId,
-        request.getFromAccount(),
-        request.getToAccount(),
+        fromAccountIdentifier,
+        toAccountIdentifier,
         transferAmount,
         feeAmount,
         resolvedCurrencyCode,
         operationId,
         internalRefNumber,
         result.getResourceId(),
+        fromSavingsTxnId,
+        toSavingsTxnId,
         buildTransferDescription(request),
         request.getReference(),
         description,
-        true,
+        stateCode == 32,
         "",
         registrationDate,
         processingDate);
@@ -578,6 +605,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> homologatedData =
         homologateResponseData(rawInternalMap, request.getTransferAmount(), resolvedCurrencyCode);
 
+    // Ensure destinationCustomer survives homologation even if DTO JSON omits nested maps
+    ensureSameBankCustomData(
+        homologatedData, fromAccountIdentifier, toAccountIdentifier, destinationCustomer, request);
+
     AccountTransferConfirmResponse wrappedResponse =
         AccountTransferConfirmResponse.builder()
             .transferType("SAME_BANK")
@@ -588,12 +619,150 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     log.info(
         "CONFIRM SAME_BANK: Transfer completed. operationId={}, internalRefNumber={},"
-            + " fineractTransferId={}",
+            + " fineractTransferId={}, fromSat={}, toSat={}",
         operationId,
         internalRefNumber,
-        result.getResourceId());
+        result.getResourceId(),
+        fromSavingsTxnId,
+        toSavingsTxnId);
 
     return wrappedResponse;
+  }
+
+  private record SavingsTxnPair(Long fromId, Long toId) {}
+
+  /**
+   * Resolves from/to savings transaction ids via m_account_transfer_transaction when resourceId is
+   * the account-transfer id. Multi-tenant safe (tenant DataSource routing).
+   */
+  private SavingsTxnPair resolveSavingsTransactionIds(Long resourceId) {
+    if (resourceId == null) {
+      return null;
+    }
+    try {
+      final String sql =
+          "SELECT from_savings_transaction_id, to_savings_transaction_id "
+              + "FROM m_account_transfer_transaction WHERE id = ?";
+      Map<String, Object> row = jdbcTemplate.queryForMap(sql, resourceId);
+      Long fromId =
+          row.get("from_savings_transaction_id") != null
+              ? ((Number) row.get("from_savings_transaction_id")).longValue()
+              : null;
+      Long toId =
+          row.get("to_savings_transaction_id") != null
+              ? ((Number) row.get("to_savings_transaction_id")).longValue()
+              : null;
+      if (fromId != null || toId != null) {
+        return new SavingsTxnPair(fromId, toId);
+      }
+    } catch (Exception e) {
+      log.debug(
+          "Could not resolve savings txn ids from account_transfer_transaction id={}: {}",
+          resourceId,
+          e.getMessage());
+    }
+    return null;
+  }
+
+  private String resolveAccountIdentifier(SavingsAccount account) {
+    if (account == null) {
+      return "";
+    }
+    try {
+      if (account.getExternalId() != null
+          && StringUtils.isNotBlank(account.getExternalId().getValue())) {
+        return account.getExternalId().getValue();
+      }
+    } catch (Exception ignored) {
+      // fall through
+    }
+    return StringUtils.defaultString(account.getAccountNumber());
+  }
+
+  private Map<String, Object> buildDestinationCustomer(
+      SavingsAccount toSavingsAccount, String toAccountIdentifier) {
+    Map<String, Object> destinationCustomer = new HashMap<>();
+    Client toClient = toSavingsAccount != null ? toSavingsAccount.getClient() : null;
+
+    String name = "";
+    String email = "";
+    if (toClient != null) {
+      name = StringUtils.defaultString(toClient.getDisplayName());
+      if (StringUtils.isBlank(name)) {
+        name = StringUtils.defaultString(toClient.getFullname());
+      }
+      email = StringUtils.defaultString(toClient.getEmailAddress());
+    }
+
+    String documentKey = "";
+    String idType = "0";
+    String idTypeDescription = "Persona Física Nacional (Cédula)";
+    if (toClient != null && toClient.getId() != null) {
+      try {
+        final String sql =
+            "SELECT COALESCE(ci.document_key, '') AS document_key, "
+                + "COALESCE(CAST(cv.order_position AS VARCHAR), '0') AS id_type, "
+                + "COALESCE(cv.code_value, 'Persona Física Nacional (Cédula)') AS id_type_description "
+                + "FROM m_client_identifier ci "
+                + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
+                + "WHERE ci.client_id = ? "
+                + "ORDER BY ci.id ASC LIMIT 1";
+        Map<String, Object> row = jdbcTemplate.queryForMap(sql, toClient.getId());
+        documentKey = String.valueOf(row.getOrDefault("document_key", ""));
+        idType = String.valueOf(row.getOrDefault("id_type", "0"));
+        idTypeDescription =
+            String.valueOf(
+                row.getOrDefault("id_type_description", "Persona Física Nacional (Cédula)"));
+      } catch (Exception e) {
+        log.debug(
+            "Could not load destination client identifier for clientId={}: {}",
+            toClient.getId(),
+            e.getMessage());
+      }
+    }
+
+    destinationCustomer.put("name", name);
+    destinationCustomer.put("id", documentKey);
+    destinationCustomer.put("idType", StringUtils.isNotBlank(idType) ? idType : "0");
+    destinationCustomer.put("idTypeDescription", idTypeDescription);
+    destinationCustomer.put("email", email);
+    destinationCustomer.put(
+        "iban", StringUtils.isNotBlank(toAccountIdentifier) ? toAccountIdentifier : "");
+    return destinationCustomer;
+  }
+
+  @SuppressWarnings("unchecked")
+  private void ensureSameBankCustomData(
+      Map<String, Object> homologatedData,
+      String fromAccountIdentifier,
+      String toAccountIdentifier,
+      Map<String, Object> destinationCustomer,
+      AccountTransferConfirmRequest request) {
+
+    Map<String, Object> customData;
+    Object existing = homologatedData.get("customData");
+    if (existing instanceof Map) {
+      customData = new HashMap<>((Map<String, Object>) existing);
+    } else {
+      customData = new HashMap<>();
+    }
+
+    customData.putIfAbsent("fromAccountIdentifier", fromAccountIdentifier);
+    customData.putIfAbsent("toAccountIdentifier", toAccountIdentifier);
+    customData.putIfAbsent("destinationCustomer", destinationCustomer);
+    if (!customData.containsKey("transferDescription")
+        || customData.get("transferDescription") == null
+        || customData.get("transferDescription").toString().isBlank()) {
+      customData.put("transferDescription", buildTransferDescription(request));
+    }
+    if (!customData.containsKey("reference")) {
+      customData.put("reference", StringUtils.defaultString(request.getReference()));
+    }
+
+    homologatedData.put("customData", customData);
+    homologatedData.putIfAbsent("exchangeRate", BigDecimal.ONE);
+    homologatedData.putIfAbsent("rejectCode", 0);
+    homologatedData.putIfAbsent("sinpeRefNumber", "");
   }
 
   private String resolveCurrencyCode(SavingsAccount savingsAccount, String fallbackCurrencyCode) {
@@ -653,6 +822,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String operationId,
       String internalRefNumber,
       Long fineractTransferId,
+      Long fromSavingsTransactionId,
+      Long toSavingsTransactionId,
       String transferDescription,
       String reference,
       String stateDescription,
@@ -680,13 +851,21 @@ public class SelfAccountTransferWritePlatformServiceImpl
               successful,
               rejectDescription,
               registrationDate,
-              processingDate);
+              processingDate,
+              fromSavingsTransactionId, 
+              toSavingsTransactionId);
+
+      // Requires entity fields + Liquibase 069 (from_savings_transaction_id / to_savings_transaction_id)
+      audit.setFromSavingsTransactionId(fromSavingsTransactionId);
+      audit.setToSavingsTransactionId(toSavingsTransactionId);
 
       sameBankTransferAuditRepository.saveAndFlush(audit);
       log.info(
-          "SAME_BANK audit persisted: operationId={}, internalRefNumber={}",
+          "SAME_BANK audit persisted: operationId={}, internalRefNumber={}, fromSat={}, toSat={}",
           operationId,
-          internalRefNumber);
+          internalRefNumber,
+          fromSavingsTransactionId,
+          toSavingsTransactionId);
     } catch (Exception e) {
       log.error(
           "Failed to persist SAME_BANK transfer audit (non-fatal): operationId={}", operationId, e);
@@ -940,7 +1119,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
           result != null && result.getResourceId() != null
               ? result.getResourceId().toString()
               : "N/A");
-      // Prefer tenant date for notification context (not client-submitted transferDate)
       contextData.put(
           "transactionDate",
           transactionDateUtil.getCurrentDateForFineract(
@@ -1254,7 +1432,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             extractMobile(user, sourceClient),
-            notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobile(user, sourceClient)),
+            notificationDeliveryModeUtil.determineMode(
+                user.getEmail(), extractMobile(user, sourceClient)),
             extractClientIp(httpRequest),
             LocaleContextHolder.getLocale(),
             contextData));
@@ -1605,7 +1784,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user.getUsername(),
             user.getEmail(),
             extractMobile(user, sourceClient),
-            notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobile(user, sourceClient)),
+            notificationDeliveryModeUtil.determineMode(
+                user.getEmail(), extractMobile(user, sourceClient)),
             "Unknown IP (Quote Phase)",
             LocaleContextHolder.getLocale(),
             contextData));
@@ -1861,7 +2041,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     BigDecimal exchangeRate =
         data.get("exchangeRate") != null
             ? new BigDecimal(data.get("exchangeRate").toString())
-            : BigDecimal.ZERO;
+            : BigDecimal.ONE;
 
     String registrationDate =
         data.get("registrationDate") != null ? data.get("registrationDate").toString() : "";

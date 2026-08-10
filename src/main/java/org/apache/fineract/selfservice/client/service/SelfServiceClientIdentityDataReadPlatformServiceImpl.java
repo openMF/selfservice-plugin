@@ -114,7 +114,7 @@ private void enrichWithLocalOnboarding(PersonIdentityData data, String externalI
           e);
     }
   } catch (EmptyResultDataAccessException e) {
-    log.debug("Identity retrieve: no local self-service user for externalId={}", externalId);
+    log.info("Identity retrieve: no local self-service user for externalId={}", externalId);
   } catch (Exception e) {
     log.warn(
         "Identity retrieve: failed to resolve local user for externalId={} (non-fatal)",

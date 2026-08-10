@@ -84,6 +84,12 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
 
   @Column(name = "created_on_utc", nullable = false)
   private OffsetDateTime createdOnUtc;
+  
+  @Column(name = "from_savings_transaction_id")
+  private Long fromSavingsTransactionId;
+
+  @Column(name = "to_savings_transaction_id")
+  private Long toSavingsTransactionId;
 
   /** Static factory that builds a fully-populated audit instance ready for persistence. */
   public static SelfServiceSameBankTransferAudit instance(
@@ -104,7 +110,9 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
       final boolean successful,
       final String rejectDescription,
       final OffsetDateTime registrationDate,
-      final OffsetDateTime processingDate) {
+      final OffsetDateTime processingDate,
+      final Long fromSavingsTransactionId, 
+      final Long toSavingsTransactionId) {
 
     SelfServiceSameBankTransferAudit audit = new SelfServiceSameBankTransferAudit();
     audit.clientId = clientId;
@@ -126,6 +134,8 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
     audit.registrationDate = registrationDate;
     audit.processingDate = processingDate;
     audit.createdOnUtc = OffsetDateTime.now();
+    audit.fromSavingsTransactionId = fromSavingsTransactionId;
+    audit.toSavingsTransactionId = toSavingsTransactionId;
     return audit;
   }
 }

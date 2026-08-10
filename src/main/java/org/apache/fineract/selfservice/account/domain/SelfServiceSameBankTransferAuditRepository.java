@@ -70,19 +70,21 @@ public interface SelfServiceSameBankTransferAuditRepository
   /**
    * Retrieves an audit detail validating ownership for a given client and account. Matches against
    * operationId, internalRefNumber, or fineractTransferId.
-   */
+   */  
   @Query(
-          "SELECT a FROM SelfServiceSameBankTransferAudit a "
-                  + "WHERE a.clientId = :clientId "
-                  + "AND (a.fromAccountId = :accountId OR a.toAccountId = :accountId) "
-                  + "AND ("
-                  + "   CONCAT(a.id, '') = :txnId "
-                  + "   OR a.operationId = :txnId "
-                  + "   OR a.internalRefNumber = :txnId "
-                  + "   OR CONCAT(a.fineractTransferId, '') = :txnId"
-                  + ")")
+      "SELECT a FROM SelfServiceSameBankTransferAudit a "
+          + "WHERE a.clientId = :clientId "
+          + "AND (a.fromAccountId = :accountId OR a.toAccountId = :accountId) "
+          + "AND ("
+          + "   CONCAT(a.id, '') = :txnId "
+          + "   OR a.operationId = :txnId "
+          + "   OR a.internalRefNumber = :txnId "
+          + "   OR CONCAT(a.fineractTransferId, '') = :txnId "
+          + "   OR CONCAT(a.fromSavingsTransactionId, '') = :txnId "
+          + "   OR CONCAT(a.toSavingsTransactionId, '') = :txnId"
+          + ")")
   Optional<SelfServiceSameBankTransferAudit> findAuditDetail(
-          @Param("clientId") Long clientId,
-          @Param("accountId") Long accountId,
-          @Param("txnId") String txnId);
+      @Param("clientId") Long clientId,
+      @Param("accountId") Long accountId,
+      @Param("txnId") String txnId);
 }

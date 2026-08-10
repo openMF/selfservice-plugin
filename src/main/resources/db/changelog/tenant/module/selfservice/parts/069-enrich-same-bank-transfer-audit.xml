@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-069-1">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_same_bank_transfer_audit"/>
+            <not>
+                <columnExists tableName="m_selfservice_same_bank_transfer_audit"
+                              columnName="from_savings_transaction_id"/>
+            </not>
+        </preConditions>
+        <comment>
+            Store Fineract savings transaction ids on SAME_BANK audit so detail lookup by
+            savings txnId (as returned by savings transactions API) resolves audit rows
+            and can enrich destination customer like PIN detail.
+        </comment>
+        <addColumn tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="from_savings_transaction_id" type="BIGINT"/>
+            <column name="to_savings_transaction_id" type="BIGINT"/>
+        </addColumn>
+        <createIndex indexName="idx_ss_sbt_audit_from_sat"
+                     tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="from_savings_transaction_id"/>
+        </createIndex>
+        <createIndex indexName="idx_ss_sbt_audit_to_sat"
+                     tableName="m_selfservice_same_bank_transfer_audit">
+            <column name="to_savings_transaction_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

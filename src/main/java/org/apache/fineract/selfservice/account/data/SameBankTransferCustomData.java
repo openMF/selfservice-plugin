@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.account.data;
 
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,4 +37,9 @@ public class SameBankTransferCustomData {
 
   /** Exchange rate applied. Always "1" for same-bank, same-currency transfers. */
   private String exchangeRateAmount;
+  
+  private String fromAccountIdentifier;
+    private String toAccountIdentifier;
+    private String reference;
+    private Map<String, Object> destinationCustomer;
 }
