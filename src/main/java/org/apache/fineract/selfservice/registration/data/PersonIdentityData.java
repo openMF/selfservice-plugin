@@ -57,4 +57,6 @@ public class PersonIdentityData {
   private Boolean pendingConfirmation;
   /** DB-driven onboarding progress; null if no local user. */
   private OnboardingProgressData onboarding;
+  private String email;
+  private String mobileNo;
 }
