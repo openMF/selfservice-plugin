@@ -125,18 +125,25 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
    * being overridden by policy where required.
    */
   private final TransactionDateManagementService transactionDateManagementService;
-  
+
   private final ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
-  
+
   private final SelfServiceDeviceFingerprintService deviceFingerprintService;
-  
+
   private final SelfServiceOnboardingStepService onboardingStepService;
-  
-  private static final long DEFAULT_DOCUMENT_TYPE_ID = 1L;
-  
+
+  /**
+   * Numeric last-resort fallback only used when the tenant actually has an active code value with
+   * this id under "Customer Identifier". Prefer {@link #resolveDefaultDocumentTypeId()}.
+   */
+  private static final long FALLBACK_DOCUMENT_TYPE_ID = 1L;
+
+  /** Standard Fineract code name for client identity document types. */
+  private static final String CUSTOMER_IDENTIFIER_CODE_NAME = "Customer Identifier";
+
   /** Steps completed by a full self-enroll payload (doc type, id, personal, password). */
   private static final String ONBOARDING_UP_TO_PASSWORD = "PASSWORD_SETUP";
-  
+
   /** Steps completed after enrollment token confirmation. */
   private static final String ONBOARDING_UP_TO_CONFIRMATION = "CONFIRMATION_CODE";
 
@@ -439,9 +446,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       } catch (Exception e) {
         log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
       }
-      
+
       initOnboardingThroughPassword(appUser.getId());
-      
+
       publishUserCreatedEvent(appUser, selfServiceRegistration);
       return appUser;
 
@@ -593,7 +600,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     try {
       JsonCommand command =
           JsonCommand.fromJsonElement(null, parsedSanitizedElement, this.fromApiJsonHelper);
-      CommandProcessingResult result = clientWritePlatformService.createClient(command);      
+      CommandProcessingResult result = clientWritePlatformService.createClient(command);
       Long newClientId = result.getResourceId();
       createClientIdentifierFromEnrollment(newClientId, originalJson);
 
@@ -630,7 +637,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       } catch (Exception e) {
         log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
       }
-      
+
       initOnboardingThroughPassword(appUser.getId());
 
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
@@ -757,7 +764,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
             }
           }
         });
-    
+
     initOnboardingThroughConfirmation(appUser.getId());
 
     log.info("Self-enrollment confirmed: userId={}", appUser.getId());
@@ -1268,31 +1275,24 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         env.getProperty("fineract.selfservice.notification.login.delivery-preference", "email");
     return "email".equalsIgnoreCase(pref);
   }
-  
+
   /**
-    * Creates a client identifier from self-enrollment payload.
-    *
-    * <p>Mapping (required by product):
-    * <ul>
-    *   <li>{@code documentTypeId} → identifier document type
-    *   <li>{@code externalID} / {@code externalId} → {@code documentKey}
-    *   <li>optional explicit {@code documentKey} overrides external id for the key
-    * </ul>
-    *
-    * <p>Runs in the same multi-tenant transaction / security context as client create.
-    * Failures are non-fatal for enrollment (logged); raise if you prefer hard fail.
-    */
-   private void createClientIdentifierFromEnrollment(Long clientId, JsonObject originalJson) {
+   * Creates a client identifier from self-enrollment payload.
+   *
+   * <p>Mapping (required by product):
+   * <ul>
+   *   <li>{@code documentTypeId} → identifier document type
+   *   <li>{@code externalID} / {@code externalId} → {@code documentKey}
+   *   <li>optional explicit {@code documentKey} overrides external id for the key
+   * </ul>
+   *
+   * <p>Runs in the same multi-tenant transaction / security context as client create.
+   * Failures are non-fatal for enrollment (logged). Code values are resolved per-tenant so a
+   * missing/invalid hard-coded id never marks the outer transaction rollback-only.
+   */
+  private void createClientIdentifierFromEnrollment(Long clientId, JsonObject originalJson) {
     if (clientId == null || originalJson == null) {
       return;
-    }
-
-    Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
-    if (documentTypeId == null) {
-      documentTypeId = DEFAULT_DOCUMENT_TYPE_ID;
-      log.info(
-          "Self-enrollment: documentTypeId missing, using fallback={}",
-          DEFAULT_DOCUMENT_TYPE_ID);
     }
 
     String documentKey = resolveDocumentKey(originalJson);
@@ -1303,24 +1303,43 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return;
     }
 
-    if (tryAddClientIdentifier(clientId, documentTypeId, documentKey)) {
-      return;
+    Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
+
+    // Resolve a real, active Customer Identifier code value for this tenant when missing or invalid
+    if (documentTypeId == null || !isValidDocumentTypeId(documentTypeId)) {
+      Long resolved = resolveDefaultDocumentTypeId();
+      if (resolved != null) {
+        log.info(
+            "Self-enrollment: documentTypeId missing/invalid, using resolved Customer Identifier id={}",
+            resolved);
+        documentTypeId = resolved;
+      } else {
+        log.warn(
+            "Self-enrollment: no active Customer Identifier code value found for tenant – "
+                + "skipping client identifier for clientId={}, documentKey={}",
+            clientId,
+            documentKey);
+        return;
+      }
     }
 
-    // Invalid code value (e.g. 1648) → retry once with fallback 1
-    if (!Long.valueOf(DEFAULT_DOCUMENT_TYPE_ID).equals(documentTypeId)) {
-      log.warn(
-          "Self-enrollment: documentTypeId={} failed, retrying with fallback={}",
-          documentTypeId,
-          DEFAULT_DOCUMENT_TYPE_ID);
-      tryAddClientIdentifier(clientId, DEFAULT_DOCUMENT_TYPE_ID, documentKey);
-    }
+    tryAddClientIdentifier(clientId, documentTypeId, documentKey);
   }
 
   /**
    * @return true if identifier was created successfully
    */
   private boolean tryAddClientIdentifier(Long clientId, Long documentTypeId, String documentKey) {
+    // Defensive re-check so CodeValueNotFoundException is never thrown inside the enrollment TX
+    // (a RuntimeException from a nested @Transactional method would mark the shared TX
+    // rollback-only even if caught here).
+    if (!isValidDocumentTypeId(documentTypeId)) {
+      log.warn(
+          "Self-enrollment: documentTypeId={} is not a valid active code value – skipping",
+          documentTypeId);
+      return false;
+    }
+
     try {
       JsonObject identifierJson = new JsonObject();
       identifierJson.addProperty("documentTypeId", documentTypeId);
@@ -1352,42 +1371,107 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-   private String resolveDocumentKey(JsonObject originalJson) {
-     // Explicit documentKey wins if clients send both
-     String explicitKey =
-         stringValueOrDefault(originalJson, SelfServiceApiConstants.documentKeyParamName, null);
-     if (StringUtils.isNotBlank(explicitKey)) {
-       return explicitKey.trim();
-     }
-     String externalId =
-         stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIdParamName, null);
-     if (StringUtils.isBlank(externalId)) {
-       externalId =
-           stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIDParamName, null);
-     }
-     return StringUtils.isNotBlank(externalId) ? externalId.trim() : null;
-   }
+  /**
+   * Resolves the first active code value under the standard "Customer Identifier" code for the
+   * current tenant. Returns null when the code or any active value is missing.
+   */
+  private Long resolveDefaultDocumentTypeId() {
+    try {
+      Long id =
+          jdbcTemplate.queryForObject(
+              """
+              SELECT cv.id
+              FROM m_code_value cv
+              INNER JOIN m_code c ON c.id = cv.code_id
+              WHERE c.code_name = ?
+                AND cv.is_active = true
+              ORDER BY cv.order_position ASC, cv.id ASC
+              LIMIT 1
+              """,
+              Long.class,
+              CUSTOMER_IDENTIFIER_CODE_NAME);
+      return id;
+    } catch (EmptyResultDataAccessException e) {
+      if (isValidDocumentTypeId(FALLBACK_DOCUMENT_TYPE_ID)) {
+        return FALLBACK_DOCUMENT_TYPE_ID;
+      }
+      return null;
+    } catch (Exception e) {
+      log.warn(
+          "Self-enrollment: could not resolve Customer Identifier code value (non-fatal): {}",
+          e.getMessage());
+      return null;
+    }
+  }
 
-   private Long extractLong(JsonObject json, String key) {
-     if (json == null || !json.has(key) || json.get(key).isJsonNull()) {
-       return null;
-     }
-     try {
-       if (json.get(key).isJsonPrimitive() && json.get(key).getAsJsonPrimitive().isNumber()) {
-         return json.get(key).getAsLong();
-       }
-       String asString = json.get(key).getAsString();
-       if (StringUtils.isBlank(asString)) {
-         return null;
-       }
-       return Long.valueOf(asString.trim());
-     } catch (Exception e) {
-       log.warn("Could not parse long for key '{}': {}", key, e.getMessage());
-       return null;
-     }
-   }
-   
-   // =====================================================================
+  /**
+   * Tenant-safe existence check for a document type code value. Prevents CodeValueNotFoundException
+   * from ever being thrown inside the enrollment transaction.
+   */
+  private boolean isValidDocumentTypeId(Long documentTypeId) {
+    if (documentTypeId == null || documentTypeId <= 0) {
+      return false;
+    }
+    try {
+      Integer count =
+          jdbcTemplate.queryForObject(
+              """
+              SELECT COUNT(1)
+              FROM m_code_value cv
+              INNER JOIN m_code c ON c.id = cv.code_id
+              WHERE cv.id = ?
+                AND c.code_name = ?
+                AND cv.is_active = true
+              """,
+              Integer.class,
+              documentTypeId,
+              CUSTOMER_IDENTIFIER_CODE_NAME);
+      return count != null && count > 0;
+    } catch (Exception e) {
+      log.warn(
+          "Self-enrollment: documentTypeId validity check failed for id={}: {}",
+          documentTypeId,
+          e.getMessage());
+      return false;
+    }
+  }
+
+  private String resolveDocumentKey(JsonObject originalJson) {
+    // Explicit documentKey wins if clients send both
+    String explicitKey =
+        stringValueOrDefault(originalJson, SelfServiceApiConstants.documentKeyParamName, null);
+    if (StringUtils.isNotBlank(explicitKey)) {
+      return explicitKey.trim();
+    }
+    String externalId =
+        stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIdParamName, null);
+    if (StringUtils.isBlank(externalId)) {
+      externalId =
+          stringValueOrDefault(originalJson, SelfServiceApiConstants.externalIDParamName, null);
+    }
+    return StringUtils.isNotBlank(externalId) ? externalId.trim() : null;
+  }
+
+  private Long extractLong(JsonObject json, String key) {
+    if (json == null || !json.has(key) || json.get(key).isJsonNull()) {
+      return null;
+    }
+    try {
+      if (json.get(key).isJsonPrimitive() && json.get(key).getAsJsonPrimitive().isNumber()) {
+        return json.get(key).getAsLong();
+      }
+      String asString = json.get(key).getAsString();
+      if (StringUtils.isBlank(asString)) {
+        return null;
+      }
+      return Long.valueOf(asString.trim());
+    } catch (Exception e) {
+      log.warn("Could not parse long for key '{}': {}", key, e.getMessage());
+      return null;
+    }
+  }
+
+  // =====================================================================
   // Onboarding step progress (DB-driven definitions)
   // =====================================================================
 

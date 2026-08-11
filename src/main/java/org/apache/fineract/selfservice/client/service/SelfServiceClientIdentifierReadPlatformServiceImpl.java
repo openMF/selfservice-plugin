@@ -29,16 +29,18 @@ import org.springframework.stereotype.Service;
 public class SelfServiceClientIdentifierReadPlatformServiceImpl
     implements SelfServiceClientIdentifierReadPlatformService {
 
+  /** Standard Fineract code name for client identity document types (multi-tenant safe). */
+  private static final String CUSTOMER_IDENTIFIER_CODE_NAME = "Customer Identifier";
+
   private final JdbcTemplate jdbcTemplate;
 
   @Override
   public List<IdentityDocumentData> retrieveClientIdentifiers() {
-
     final ClientIdentityMapper rm = new ClientIdentityMapper();
-
     String sql = "select " + rm.publicSchema();
-
-    return this.jdbcTemplate.query(sql, rm); // NOSONAR
+    // Multi-tenant: JdbcTemplate is bound to the current tenant DataSource.
+    // Lookup by code_name (not hard-coded c.id = 1) so tenants with different code ids work.
+    return this.jdbcTemplate.query(sql, rm, CUSTOMER_IDENTIFIER_CODE_NAME); // NOSONAR
   }
 
   private static final class ClientIdentityMapper implements RowMapper<IdentityDocumentData> {
@@ -53,9 +55,8 @@ public class SelfServiceClientIdentifierReadPlatformServiceImpl
           + "cv.is_active "
           + "FROM m_code_value cv "
           + "JOIN m_code c ON cv.code_id = c.id "
-          + "WHERE c.id = 1 "
-          + // Customer Identifier
-          "AND cv.is_active = true "
+          + "WHERE c.code_name = ? "
+          + "AND cv.is_active = true "
           + "ORDER BY cv.order_position ";
     }
 
