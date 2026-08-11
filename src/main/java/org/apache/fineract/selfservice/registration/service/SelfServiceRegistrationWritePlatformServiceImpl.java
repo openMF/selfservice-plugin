@@ -375,7 +375,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public AppSelfServiceUser createSelfServiceUser(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+  public AppSelfServiceUser createSelfServiceUser(
+      String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     JsonCommand command = null;
     String username = null;
     try {
@@ -417,9 +418,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
               selfServiceRegistration.getUsername(),
               selfServiceRegistration.getPassword(),
               false, // Disabled by default until confirmEnrollment is called
-              true,  // accountNonExpired
-              true,  // credentialsNonExpired
-              true,  // accountNonLocked
+              true, // accountNonExpired
+              true, // credentialsNonExpired
+              true, // accountNonLocked
               authorities);
       AppSelfServiceUser appUser =
           new AppSelfServiceUser(
@@ -444,7 +445,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
         deviceFingerprintService.registerOrTouch(appUser.getId(), signals, true);
       } catch (Exception e) {
-        log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
+        log.warn(
+            "Self-enrollment: could not persist device fingerprint for userId={}",
+            appUser.getId(),
+            e);
       }
 
       initOnboardingThroughPassword(appUser.getId());
@@ -464,11 +468,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public AppSelfServiceUser createSelfServiceUserOrEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+  public AppSelfServiceUser createSelfServiceUserOrEnroll(
+      String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     return createSelfServiceUser(apiRequestBodyAsJson, httpRequest);
   }
 
-  private void handleDataIntegrityIssues(final JsonCommand command, final Throwable realCause, final Exception dve, String username) {
+  private void handleDataIntegrityIssues(
+      final JsonCommand command, final Throwable realCause, final Exception dve, String username) {
     // Broaden the check to catch any DB constraint violation related to "username"
     if (realCause != null && realCause.getMessage() != null) {
       String normalizedMessage = realCause.getMessage().toLowerCase();
@@ -484,7 +490,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   @Transactional(rollbackFor = Exception.class)
   @Override
-  public SelfServiceRegistration selfEnroll(String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+  public SelfServiceRegistration selfEnroll(
+      String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     Gson gson = new Gson();
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
@@ -635,7 +642,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         DeviceSignals signals = DeviceFingerprintUtil.from(httpRequest, body);
         deviceFingerprintService.registerOrTouch(appUser.getId(), signals, true);
       } catch (Exception e) {
-        log.warn("Self-enrollment: could not persist device fingerprint for userId={}", appUser.getId(), e);
+        log.warn(
+            "Self-enrollment: could not persist device fingerprint for userId={}",
+            appUser.getId(),
+            e);
       }
 
       initOnboardingThroughPassword(appUser.getId());
@@ -678,6 +688,20 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
+  /**
+   * Confirms a pending self-enrollment (or a password-reset token for a not-yet-activated user).
+   *
+   * <p>Accepted token types:
+   *
+   * <ul>
+   *   <li>{@link SelfServiceRequestType#ENROLLMENT}
+   *   <li>{@link SelfServiceRequestType#REGISTRATION}
+   *   <li>{@link SelfServiceRequestType#PASSWORD_RESET} — only if the user is still disabled
+   * </ul>
+   *
+   * <p>For PASSWORD_RESET the endpoint only activates the user; it does not change the password.
+   * Use {@code /self/password/renew} to set a new password for an already-activated user.
+   */
   @Transactional(rollbackFor = Exception.class)
   @Override
   public AppSelfServiceUser confirmEnrollment(String apiRequestBodyAsJson) {
@@ -706,6 +730,22 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           "User with username " + request.getUsername() + " not found.",
           SelfServiceApiConstants.usernameParamName,
           request.getUsername());
+    }
+
+    // PASSWORD_RESET is only valid on this endpoint when the user has not been activated yet
+    if (request.getRequestType() == SelfServiceRequestType.PASSWORD_RESET) {
+      if (appUser.isEnabled()) {
+        final List<ApiParameterError> errors = new ArrayList<>();
+        errors.add(
+            ApiParameterError.parameterError(
+                "error.msg.password.reset.confirm.user.already.activated",
+                "Password-reset token cannot be used on confirm-enrollment because the user is already activated. Use /self/password/renew instead.",
+                SelfServiceApiConstants.externalAuthenticationTokenParamName));
+        throw new PlatformApiDataValidationException(errors);
+      }
+      log.info(
+          "Confirm-enrollment accepting PASSWORD_RESET token for not-yet-activated user '{}'",
+          appUser.getUsername());
     }
 
     try {
@@ -767,7 +807,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
     initOnboardingThroughConfirmation(appUser.getId());
 
-    log.info("Self-enrollment confirmed: userId={}", appUser.getId());
+    log.info(
+        "Self-enrollment confirmed: userId={}, requestType={}",
+        appUser.getId(),
+        request.getRequestType());
     return appUser;
   }
 
@@ -888,6 +931,18 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
+  /**
+   * Resolves the audit/OTP row for confirm-enrollment.
+   *
+   * <p>Lookup order for {@code externalAuthenticationToken}:
+   *
+   * <ol>
+   *   <li>{@link SelfServiceRequestType#ENROLLMENT}
+   *   <li>{@link SelfServiceRequestType#REGISTRATION}
+   *   <li>{@link SelfServiceRequestType#PASSWORD_RESET} (activation-only; enforced in {@link
+   *       #confirmEnrollment})
+   * </ol>
+   */
   private SelfServiceRegistration resolveEnrollmentRequest(
       JsonElement element,
       DataValidatorBuilder baseDataValidator,
@@ -902,13 +957,34 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           .value(externalToken)
           .notBlank()
           .notExceedingLengthOf(100);
-      if (!dataValidationErrors.isEmpty()) return null;
+      if (!dataValidationErrors.isEmpty()) {
+        return null;
+      }
+
+      // 1) ENROLLMENT (self-enroll flow)
       SelfServiceRegistration request =
           this.selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
               externalToken, SelfServiceRequestType.ENROLLMENT);
+
+      // 2) REGISTRATION (legacy / create-registration-request flow)
+      if (request == null) {
+        request =
+            this.selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+                externalToken, SelfServiceRequestType.REGISTRATION);
+      }
+
+      // 3) PASSWORD_RESET — only for not-yet-activated users (checked in confirmEnrollment)
+      if (request == null) {
+        request =
+            this.selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+                externalToken, SelfServiceRequestType.PASSWORD_RESET);
+      }
+
       validateRequestState(request, externalToken);
       return request;
     }
+
+    // Legacy requestId + authenticationToken path (ENROLLMENT only)
     Long id =
         this.fromApiJsonHelper.extractLongNamed(
             SelfServiceApiConstants.requestIdParamName, element);
@@ -928,7 +1004,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .notBlank()
         .notNull()
         .notExceedingLengthOf(100);
-    if (!dataValidationErrors.isEmpty()) return null;
+    if (!dataValidationErrors.isEmpty()) {
+      return null;
+    }
     SelfServiceRegistration request =
         this.selfServiceRegistrationRepository.getRequestByIdAndAuthenticationToken(
             id, authenticationToken, SelfServiceRequestType.ENROLLMENT);
@@ -1134,9 +1212,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     sanitizedJson.addProperty(SelfServiceApiConstants.activeParamName, isActive);
 
     // --- Centralized date override (ignore any date submitted by the REST API) ---
-    // 1) Process optional client date through TransactionDateManagementService for logging /
-    //    validation path consistency (multi-tenant OffsetDateTime).
-    // 2) Force submittedOnDate / activationDate to tenant "today" formatted for Fineract.
     if (StringUtils.isNotBlank(clientSubmittedOnDate)) {
       log.info(
           "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant date",
@@ -1276,20 +1351,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return "email".equalsIgnoreCase(pref);
   }
 
-  /**
-   * Creates a client identifier from self-enrollment payload.
-   *
-   * <p>Mapping (required by product):
-   * <ul>
-   *   <li>{@code documentTypeId} → identifier document type
-   *   <li>{@code externalID} / {@code externalId} → {@code documentKey}
-   *   <li>optional explicit {@code documentKey} overrides external id for the key
-   * </ul>
-   *
-   * <p>Runs in the same multi-tenant transaction / security context as client create.
-   * Failures are non-fatal for enrollment (logged). Code values are resolved per-tenant so a
-   * missing/invalid hard-coded id never marks the outer transaction rollback-only.
-   */
   private void createClientIdentifierFromEnrollment(Long clientId, JsonObject originalJson) {
     if (clientId == null || originalJson == null) {
       return;
@@ -1305,7 +1366,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
     Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
 
-    // Resolve a real, active Customer Identifier code value for this tenant when missing or invalid
     if (documentTypeId == null || !isValidDocumentTypeId(documentTypeId)) {
       Long resolved = resolveDefaultDocumentTypeId();
       if (resolved != null) {
@@ -1326,13 +1386,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     tryAddClientIdentifier(clientId, documentTypeId, documentKey);
   }
 
-  /**
-   * @return true if identifier was created successfully
-   */
   private boolean tryAddClientIdentifier(Long clientId, Long documentTypeId, String documentKey) {
-    // Defensive re-check so CodeValueNotFoundException is never thrown inside the enrollment TX
-    // (a RuntimeException from a nested @Transactional method would mark the shared TX
-    // rollback-only even if caught here).
     if (!isValidDocumentTypeId(documentTypeId)) {
       log.warn(
           "Self-enrollment: documentTypeId={} is not a valid active code value – skipping",
@@ -1371,10 +1425,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-  /**
-   * Resolves the first active code value under the standard "Customer Identifier" code for the
-   * current tenant. Returns null when the code or any active value is missing.
-   */
   private Long resolveDefaultDocumentTypeId() {
     try {
       Long id =
@@ -1404,10 +1454,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-  /**
-   * Tenant-safe existence check for a document type code value. Prevents CodeValueNotFoundException
-   * from ever being thrown inside the enrollment transaction.
-   */
   private boolean isValidDocumentTypeId(Long documentTypeId) {
     if (documentTypeId == null || documentTypeId <= 0) {
       return false;
@@ -1437,7 +1483,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   }
 
   private String resolveDocumentKey(JsonObject originalJson) {
-    // Explicit documentKey wins if clients send both
     String explicitKey =
         stringValueOrDefault(originalJson, SelfServiceApiConstants.documentKeyParamName, null);
     if (StringUtils.isNotBlank(explicitKey)) {
@@ -1471,14 +1516,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-  // =====================================================================
-  // Onboarding step progress (DB-driven definitions)
-  // =====================================================================
-
-  /**
-   * After self-enroll / create-user: create all step rows and mark DOCUMENT_TYPE through
-   * PASSWORD_SETUP as COMPLETED when those fields were collected in the API payload.
-   */
   private void initOnboardingThroughPassword(Long appUserId) {
     if (appUserId == null || onboardingStepService == null) {
       return;
@@ -1499,9 +1536,6 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
   }
 
-  /**
-   * After confirm-enrollment: mark through CONFIRMATION_CODE (includes 1–5).
-   */
   private void initOnboardingThroughConfirmation(Long appUserId) {
     if (appUserId == null || onboardingStepService == null) {
       return;
