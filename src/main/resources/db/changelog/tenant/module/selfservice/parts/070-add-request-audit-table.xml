@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ========================================================= -->
+    <!-- Create request_audit_table                                -->
+    <!-- ========================================================= -->
+    <changeSet author="fineract" id="ss-070-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="request_audit_table"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="request_audit_table"
+                     remarks="Stores audit information for self-service registration / password-reset requests">
+
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_request_audit_table"/>
+            </column>
+
+            <column name="client_id" type="BIGINT" remarks="Reference to m_client">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="username" type="VARCHAR(100)" remarks="Requested / used username">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="firstname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="lastname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="email" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="mobile_number" type="VARCHAR(50)"/>
+
+            <column name="account_number" type="VARCHAR(100)" remarks="Client account number at the time of request">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="password" type="VARCHAR(250)" remarks="Hashed password (never store plain text)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="authentication_token" type="VARCHAR(100)"
+                    remarks="One-time token used for e-mail / SMS verification"/>
+
+            <column name="created_date" type="TIMESTAMP" remarks="When the request was created">
+                <constraints nullable="false"/>
+            </column>
+
+        </createTable>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Indexes                                                   -->
+    <!-- ========================================================= -->
+    <changeSet author="fineract" id="ss-070-2">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="request_audit_table"/>
+            <not>
+                <indexExists tableName="request_audit_table" indexName="idx_request_audit_table_client_id"/>
+            </not>
+        </preConditions>
+
+        <createIndex tableName="request_audit_table" indexName="idx_request_audit_table_client_id">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-070-3">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="request_audit_table"/>
+            <not>
+                <indexExists tableName="request_audit_table" indexName="idx_request_audit_table_username"/>
+            </not>
+        </preConditions>
+
+        <createIndex tableName="request_audit_table" indexName="idx_request_audit_table_username">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-070-4">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="request_audit_table"/>
+            <not>
+                <indexExists tableName="request_audit_table" indexName="idx_request_audit_table_email"/>
+            </not>
+        </preConditions>
+
+        <createIndex tableName="request_audit_table" indexName="idx_request_audit_table_email">
+            <column name="email"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-070-5">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="request_audit_table"/>
+            <not>
+                <indexExists tableName="request_audit_table" indexName="idx_request_audit_table_auth_token"/>
+            </not>
+        </preConditions>
+
+        <createIndex tableName="request_audit_table" indexName="idx_request_audit_table_auth_token">
+            <column name="authentication_token"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Foreign key                                               -->
+    <!-- ========================================================= -->
+    <changeSet author="fineract" id="ss-070-6">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="request_audit_table"/>
+            <tableExists tableName="m_client"/>
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_request_audit_table_m_client"/>
+            </not>
+        </preConditions>
+
+        <addForeignKeyConstraint
+                baseTableName="request_audit_table"
+                baseColumnNames="client_id"
+                referencedTableName="m_client"
+                referencedColumnNames="id"
+                constraintName="fk_request_audit_table_m_client"
+                onDelete="RESTRICT"
+                onUpdate="RESTRICT"
+                deferrable="false"
+                initiallyDeferred="false"
+                validate="true"/>
+    </changeSet>
+
+</databaseChangeLog>
