@@ -9,14 +9,18 @@ package org.apache.fineract.selfservice.registration.service;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
@@ -61,12 +65,12 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
   private final SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
-  
+
   /** Centralized multi-tenant date/time utility for token expiry and validation. */
   private final TransactionDateUtil transactionDateUtil;
-  
+
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
-  
+
   /** Cache manager to bypass notification rate-limits for critical security alerts. */
   private final NotificationCooldownCache notificationCooldownCache;
 
@@ -80,18 +84,21 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     if (StringUtils.isBlank(username)) {
       log.warn("Password reset request rejected: username is missing or blank");
-      throw new IllegalArgumentException("Username is required to request a password reset.");
+      throwValidationError(
+          "error.msg.password.reset.username.required",
+          "Username is required to request a password reset.",
+          SelfServiceApiConstants.usernameParamName);
     }
 
     AppSelfServiceUser user = appSelfServiceUserRepository.findAppSelfServiceUserByName(username);
     if (user == null) {
       log.warn("Password reset request rejected: user '{}' not found", username);
+      // Intentionally return null to avoid user enumeration (existing behaviour)
       return null;
     }
 
     String email = user.getEmail();
     String mobileNumber = extractMobileNumber(user);
-
     if (StringUtils.isBlank(email) && StringUtils.isBlank(mobileNumber)) {
       log.warn(
           "Password reset request for user '{}' cannot be processed: no email or mobile number"
@@ -182,20 +189,27 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     if (StringUtils.isBlank(password)
         || StringUtils.isBlank(repeatPassword)
         || StringUtils.isBlank(externalToken)) {
-      throw new IllegalArgumentException(
-          "Password, repeatPassword, and externalAuthenticationToken are required.");
+      throwValidationError(
+          "error.msg.password.reset.required.fields",
+          "Password, repeatPassword, and externalAuthenticationToken are required.",
+          "password");
     }
 
     if (!password.equals(repeatPassword)) {
-      throw new IllegalArgumentException("Passwords do not match.");
+      throwValidationError(
+          "error.msg.password.reset.passwords.do.not.match",
+          "Passwords do not match.",
+          SelfServiceApiConstants.repeatPasswordParamName);
     }
 
     PasswordValidationPolicy policy =
         passwordValidationPolicyRepository.findActivePasswordValidationPolicy();
     if (policy != null && StringUtils.isNotBlank(policy.getRegex())) {
       if (!password.matches(policy.getRegex())) {
-        throw new IllegalArgumentException(
-            "Password does not meet the required complexity policy: " + policy.getDescription());
+        throwValidationError(
+            "error.msg.password.reset.policy.violation",
+            "Password does not meet the required complexity policy: " + policy.getDescription(),
+            SelfServiceApiConstants.passwordParamName);
       }
     }
 
@@ -204,21 +218,33 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
             externalToken, SelfServiceRequestType.PASSWORD_RESET);
 
     if (request == null) {
-      throw new IllegalArgumentException("Invalid or expired reset token.");
+      throwValidationError(
+          "error.msg.password.reset.token.invalid",
+          "Invalid or expired reset token.",
+          SelfServiceApiConstants.externalAuthenticationTokenParamName);
     }
 
     if (request.isConsumed()) {
-      throw new IllegalArgumentException("Reset token has already been used.");
+      throwValidationError(
+          "error.msg.password.reset.token.already.used",
+          "Reset token has already been used.",
+          SelfServiceApiConstants.externalAuthenticationTokenParamName);
     }
 
     if (request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime())) {
-      throw new IllegalArgumentException("Reset token has expired. Please request a new one.");
+      throwValidationError(
+          "error.msg.password.reset.token.expired",
+          "Reset token has expired. Please request a new one.",
+          SelfServiceApiConstants.externalAuthenticationTokenParamName);
     }
 
     AppSelfServiceUser user =
         appSelfServiceUserRepository.findAppSelfServiceUserByName(request.getUsername());
     if (user == null) {
-      throw new IllegalArgumentException("User not found for this reset token.");
+      throwValidationError(
+          "error.msg.password.reset.user.not.found",
+          "User not found for this reset token.",
+          SelfServiceApiConstants.externalAuthenticationTokenParamName);
     }
 
     user.updatePassword(password);
@@ -232,8 +258,9 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("username", user.getUsername());
-    
-    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobileNumber(user));
+
+    boolean emailMode =
+        notificationDeliveryModeUtil.determineMode(user.getEmail(), extractMobileNumber(user));
 
     // Release cooldown to ensure the security alert is delivered immediately
     releasePasswordRenewedCooldown(user);
@@ -258,11 +285,30 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
+  /**
+   * Throws a {@link PlatformApiDataValidationException} so the client receives a proper Fineract
+   * validation error (typically HTTP 400) instead of a generic 500.
+   */
+  private void throwValidationError(
+      final String globalisationMessageCode,
+      final String defaultUserMessage,
+      final String parameterName) {
+
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    dataValidationErrors.add(
+        ApiParameterError.parameterError(
+            globalisationMessageCode, defaultUserMessage, parameterName));
+
+    throw new PlatformApiDataValidationException(dataValidationErrors);
+  }
+
   private void releasePasswordResetRequestedCooldown(AppSelfServiceUser user) {
     try {
-      String cacheKey = SelfServiceNotificationEvent.Type.PASSWORD_RESET_REQUESTED.name() + ":" + user.getId();
+      String cacheKey =
+          SelfServiceNotificationEvent.Type.PASSWORD_RESET_REQUESTED.name() + ":" + user.getId();
       notificationCooldownCache.release(cacheKey);
-      log.info("FORGOT PASSWORD: Released PASSWORD_RESET_REQUESTED cooldown for user {}", user.getId());
+      log.info(
+          "FORGOT PASSWORD: Released PASSWORD_RESET_REQUESTED cooldown for user {}", user.getId());
     } catch (Exception e) {
       log.warn("Failed to release PASSWORD_RESET_REQUESTED cooldown (non-fatal)", e);
     }
@@ -270,7 +316,8 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
   private void releasePasswordRenewedCooldown(AppSelfServiceUser user) {
     try {
-      String cacheKey = SelfServiceNotificationEvent.Type.PASSWORD_RENEWED.name() + ":" + user.getId();
+      String cacheKey =
+          SelfServiceNotificationEvent.Type.PASSWORD_RENEWED.name() + ":" + user.getId();
       notificationCooldownCache.release(cacheKey);
       log.info("FORGOT PASSWORD: Released PASSWORD_RENEWED cooldown for user {}", user.getId());
     } catch (Exception e) {
