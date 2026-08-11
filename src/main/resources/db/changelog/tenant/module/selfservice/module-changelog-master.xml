@@ -10,6 +10,7 @@
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+  <include file="parts/000-add-request-audit-table.xml" relativeToChangelogFile="true"/>  
   <include file="parts/001-create-selfservice-initial-schema.xml" relativeToChangelogFile="true"/>
   <include file="parts/002-migrate-selfservice-users.xml" relativeToChangelogFile="true"/>
   <include file="parts/003-grant-selfservice-client-read-permissions.xml" relativeToChangelogFile="true"/>
@@ -78,6 +79,5 @@
   <include file="parts/066-add-unknown-device-notification-message.xml" relativeToChangelogFile="true"/>  
   <include file="parts/067-device-fp-drop-fk-appuser.xml" relativeToChangelogFile="true"/>  
   <include file="parts/068-add-onboarding-workflow.xml" relativeToChangelogFile="true"/>
-  <include file="parts/069-enrich-same-bank-transfer-audit.xml" relativeToChangelogFile="true"/>
-  <include file="parts/070-add-request-audit-table.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/069-enrich-same-bank-transfer-audit.xml" relativeToChangelogFile="true"/>  
 </databaseChangeLog>
