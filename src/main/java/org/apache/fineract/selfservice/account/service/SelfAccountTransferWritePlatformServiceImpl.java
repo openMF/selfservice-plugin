@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import  org.apache.fineract.portfolio.account.data.AccountTransferData;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -47,8 +48,6 @@ import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
-import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
-import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -63,7 +62,6 @@ import org.apache.fineract.selfservice.account.data.AccountTransferPrepareReques
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
 import org.apache.fineract.selfservice.account.data.FeeCollectionResult;
-import org.apache.fineract.selfservice.account.data.PaymentDetailDao;
 import org.apache.fineract.selfservice.account.data.PaymentDetailUpdateRequest;
 import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 import org.apache.fineract.selfservice.account.data.SameBankTransferCustomData;
@@ -152,7 +150,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
   
   private final PaymentDetailService paymentDetailService;
-
+  
   // =====================================================================
   //  PREPARE
   // =====================================================================
@@ -531,10 +529,21 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String internalRefNumber =
         generateInternalRefNumber(processingDate, fromOfficeId, result.getResourceId());
     
-    SavingsAccountTransactionData transactionData = this.savingsAccountReadPlatformService.retrieveSavingsTransaction(fromAccountId,
-                result.getResourceId(), DepositAccountType.SAVINGS_DEPOSIT);
+    //AccountTransferData accountTransferData = this.accountTransfersReadPlatformService.retrieveOne(result.getResourceId());
+    
+    SavingsTxnPair savingxTxnPair = this.resolveSavingsTransactionIds(result.getResourceId());
+
+    SavingsAccountTransactionData transactionData = null;
+    if (savingxTxnPair.fromId != null) {
+        transactionData = this.savingsAccountReadPlatformService.retrieveSavingsTransaction(
+            fromAccountId,
+            savingxTxnPair.fromId,
+            DepositAccountType.SAVINGS_DEPOSIT
+        );
+    }
     
     PaymentDetailData paymentDetailData = transactionData.getPaymentDetailData();
+
 
     Long paymentDetailId = paymentDetailData.getId();
     if (paymentDetailId != null) {
