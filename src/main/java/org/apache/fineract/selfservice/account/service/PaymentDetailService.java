@@ -19,6 +19,8 @@ public class PaymentDetailService {
 
     @Transactional
     public void updateRoutingCode(PaymentDetailUpdateRequest request) {
+        log.warn("request.getPaymentDetailId() "+request.getPaymentDetailId());
+        log.warn("request.getRoutingCode() "+request.getRoutingCode());
         if (request == null || request.getPaymentDetailId() == null || request.getRoutingCode() == null) {
             log.warn("Attempted to update routing code with invalid request");
             return;

@@ -529,8 +529,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     String internalRefNumber =
         generateInternalRefNumber(processingDate, fromOfficeId, result.getResourceId());
     
-    //AccountTransferData accountTransferData = this.accountTransfersReadPlatformService.retrieveOne(result.getResourceId());
-    
     SavingsTxnPair savingxTxnPair = this.resolveSavingsTransactionIds(result.getResourceId());
 
     SavingsAccountTransactionData transactionData = null;
