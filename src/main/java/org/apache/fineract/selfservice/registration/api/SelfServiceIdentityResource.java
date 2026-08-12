@@ -62,8 +62,11 @@ public class SelfServiceIdentityResource {
       content =
           @Content(schema = @Schema(implementation = SelfServiceRetrieveIdentityRequest.class)))
   @ApiResponses({
-    @ApiResponse(responseCode = "200", description = "OK"),
-    @ApiResponse(responseCode = "400", description = "Bad Request")
+    @ApiResponse(responseCode = "200", description = "OK - Identity data returned"),
+    @ApiResponse(responseCode = "400", description = "Bad Request - externalId missing or invalid"),
+    @ApiResponse(
+        responseCode = "404",
+        description = "Not Found - External system has no information for this externalId")
   })
   public String retrieveIdentity(
       final SelfServiceRetrieveIdentityRequest selfServiceRetrieveIdentityRequest)

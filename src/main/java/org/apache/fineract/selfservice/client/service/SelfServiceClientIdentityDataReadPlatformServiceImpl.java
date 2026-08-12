@@ -18,15 +18,22 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.selfservice.external.client.ExternalIdentitySystemClient;
 import org.apache.fineract.selfservice.registration.api.SelfServiceRetrieveIdentityRequest;
 import org.apache.fineract.selfservice.registration.data.PersonIdentityData;
+import org.apache.fineract.selfservice.registration.exception.SelfServiceExternalIdentityException;
+import org.apache.fineract.selfservice.registration.exception.SelfServiceExternalIdentityNotFoundException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -44,49 +51,145 @@ import org.springframework.stereotype.Service;
 public class SelfServiceClientIdentityDataReadPlatformServiceImpl
     implements SelfServiceClientIdentityDataReadPlatformService {
 
+  private static final String RESOURCE_NAME = "identity.retrieve";
+  private static final String PARAM_EXTERNAL_ID = "externalId";
+
   private final ExternalIdentitySystemClient externalIdentitySystemClient;
   private final SelfServiceOnboardingStepService onboardingStepService;
   private final JdbcTemplate jdbcTemplate;
 
   @Override
   public PersonIdentityData retrieveClientIdentityData(
-      SelfServiceRetrieveIdentityRequest apiRequestBodyAsJson) throws Exception {
+      final SelfServiceRetrieveIdentityRequest apiRequestBodyAsJson) throws Exception {
 
-    ObjectMapper objectMapper =
+    validateRequest(apiRequestBodyAsJson);
+
+    final String externalId = apiRequestBodyAsJson.getExternalId().trim();
+
+    final ObjectMapper objectMapper =
         JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
 
-    ResponseEntity<JsonNode> response =
-        this.externalIdentitySystemClient.sendGetRequest(apiRequestBodyAsJson.externalId);
-
-    PersonIdentityData data;
-    if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-      log.info("PERSON DATA response {}", response.getBody());
-      JsonNode externalSystemPersonData = response.getBody();
-      data = objectMapper.treeToValue(externalSystemPersonData, PersonIdentityData.class);
-      if (data == null) {
-        data = new PersonIdentityData();
-      }
-    } else {
-      data = new PersonIdentityData();
+    final ResponseEntity<JsonNode> response;
+    try {
+      response = this.externalIdentitySystemClient.sendGetRequest(externalId);
+    } catch (Exception ex) {
+      log.error("External identity system call failed for externalId={}", externalId, ex);
+      throw new SelfServiceExternalIdentityException(
+          externalId, ex.getMessage() != null ? ex.getMessage() : "upstream call failed");
     }
 
-    enrichWithLocalData(data, apiRequestBodyAsJson.externalId);
+    final JsonNode body = response.getBody();
+
+    // Non-2xx HTTP from upstream
+    if (!response.getStatusCode().is2xxSuccessful() || body == null) {
+      log.warn(
+          "External identity system returned status={} bodyNull={} for externalId={}",
+          response.getStatusCode(),
+          body == null,
+          externalId);
+      throw new SelfServiceExternalIdentityException(
+          externalId, "HTTP " + response.getStatusCode().value());
+    }
+
+    log.info("PERSON DATA response {}", body);
+
+    // Business-level error payload from the external system, e.g.:
+    // { "status": "ERROR", "descripcion": "La cédula ..., no reporta información" }
+    if (isExternalErrorPayload(body)) {
+      final String description = extractErrorDescription(body);
+      log.warn(
+          "External identity system reported ERROR for externalId={}: {}",
+          externalId,
+          description);
+      throw new SelfServiceExternalIdentityNotFoundException(externalId, description);
+    }
+
+    PersonIdentityData data = objectMapper.treeToValue(body, PersonIdentityData.class);
+    if (data == null) {
+      data = new PersonIdentityData();
+    }
+    // Ensure the requested externalId is always present on the response
+    if (StringUtils.isBlank(data.getExternalId())) {
+      data.setExternalId(externalId);
+    }
+
+    enrichWithLocalData(data, externalId);
     return data;
   }
 
+  // -------------------------------------------------------------------------
+  // Validation & external-error detection
+  // -------------------------------------------------------------------------
+
+  private void validateRequest(final SelfServiceRetrieveIdentityRequest request) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    final DataValidatorBuilder validator =
+        new DataValidatorBuilder(errors).resource(RESOURCE_NAME);
+
+    final String externalId = request != null ? request.getExternalId() : null;
+    validator.reset().parameter(PARAM_EXTERNAL_ID).value(externalId).notBlank();
+
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  /**
+   * Detects the error envelope used by the national-ID provider, e.g.:
+   *
+   * <pre>{@code { "status": "ERROR", "descripcion": "..." }}</pre>
+   *
+   * Also treats an empty object / missing person fields after an explicit error status as an
+   * error.
+   */
+  private boolean isExternalErrorPayload(final JsonNode body) {
+    if (body == null || body.isNull()) {
+      return true;
+    }
+    final JsonNode statusNode = body.get("status");
+    if (statusNode != null && statusNode.isTextual()) {
+      final String status = statusNode.asText("").trim();
+      if ("ERROR".equalsIgnoreCase(status)
+          || "FAIL".equalsIgnoreCase(status)
+          || "FAILED".equalsIgnoreCase(status)) {
+        return true;
+      }
+    }
+    // Some providers use "codigo" / "code" with non-success values
+    final JsonNode codeNode = body.has("codigo") ? body.get("codigo") : body.get("code");
+    if (codeNode != null && codeNode.isTextual()) {
+      final String code = codeNode.asText("").trim();
+      if ("ERROR".equalsIgnoreCase(code) || "NOT_FOUND".equalsIgnoreCase(code)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private String extractErrorDescription(final JsonNode body) {
+    if (body == null) {
+      return null;
+    }
+    // Preferred field from the CrediD / national-ID provider
+    for (String field : new String[] {"descripcion", "description", "message", "mensaje", "error"}) {
+      final JsonNode node = body.get(field);
+      if (node != null && node.isTextual() && StringUtils.isNotBlank(node.asText())) {
+        return node.asText().trim();
+      }
+    }
+    return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Local enrichment (unchanged behaviour, multi-tenant via tenant JdbcTemplate)
+  // -------------------------------------------------------------------------
+
   /**
    * Resolves local self-service user linked to client.external_id and enriches the identity
-   * payload with:
-   * <ul>
-   *   <li>userId / username / pendingConfirmation
-   *   <li>onboarding progress
-   *   <li>email (m_client.email_address preferred, fallback m_appselfservice_user.email)
-   *   <li>mobileNo (m_client.mobile_no)
-   * </ul>
+   * payload with userId / username / pendingConfirmation / onboarding / email / mobileNo.
    * Failures are non-fatal so external identity data is still returned.
-   * Multi-tenant safe: JdbcTemplate is bound to the current tenant DataSource.
    */
-  private void enrichWithLocalData(PersonIdentityData data, String externalId) {
+  private void enrichWithLocalData(final PersonIdentityData data, final String externalId) {
     if (data == null || StringUtils.isBlank(externalId)) {
       return;
     }
@@ -108,9 +211,9 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
           LIMIT 1
           """;
 
-      Map<String, Object> row = jdbcTemplate.queryForMap(sql, externalId.trim());
+      final Map<String, Object> row = jdbcTemplate.queryForMap(sql, externalId.trim());
 
-      Long userId =
+      final Long userId =
           row.get("user_id") != null ? ((Number) row.get("user_id")).longValue() : null;
       if (userId == null) {
         return;
@@ -119,19 +222,20 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
       data.setUserId(userId);
       data.setUsername(row.get("username") != null ? String.valueOf(row.get("username")) : null);
 
-      Boolean enabled = row.get("is_enabled") != null ? (Boolean) row.get("is_enabled") : null;
-      data.setPendingConfirmation(enabled != null && !enabled);
+      final Object enabledObj = row.get("is_enabled");
+      final boolean enabled =
+          enabledObj instanceof Boolean
+              ? (Boolean) enabledObj
+              : enabledObj != null && Boolean.parseBoolean(String.valueOf(enabledObj));
+      data.setPendingConfirmation(!enabled);
 
-      // Email: prefer client, fall back to self-service user
-      String clientEmail = toStringOrNull(row.get("client_email"));
-      String userEmail = toStringOrNull(row.get("user_email"));
+      final String clientEmail = toStringOrNull(row.get("client_email"));
+      final String userEmail = toStringOrNull(row.get("user_email"));
       data.setEmail(StringUtils.isNotBlank(clientEmail) ? clientEmail : userEmail);
-
-      // Mobile / phone from core client record
       data.setMobileNo(toStringOrNull(row.get("client_mobile")));
 
       try {
-        OnboardingProgressData onboarding = onboardingStepService.getOrInitProgress(userId);
+        final OnboardingProgressData onboarding = onboardingStepService.getOrInitProgress(userId);
         data.setOnboarding(onboarding);
       } catch (Exception e) {
         log.warn(
@@ -141,7 +245,6 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
             e);
       }
     } catch (EmptyResultDataAccessException e) {
-      // No mapped self-service user – still try to enrich contact data from m_client only
       enrichContactFromClientOnly(data, externalId);
       log.info("Identity retrieve: no local self-service user for externalId={}", externalId);
     } catch (Exception e) {
@@ -152,10 +255,7 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
     }
   }
 
-  /**
-   * Fallback when there is no self-service user mapping: still pull email/mobile from m_client.
-   */
-  private void enrichContactFromClientOnly(PersonIdentityData data, String externalId) {
+  private void enrichContactFromClientOnly(final PersonIdentityData data, final String externalId) {
     try {
       final String sql =
           """
@@ -166,7 +266,7 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
           WHERE c.external_id = ?
           LIMIT 1
           """;
-      Map<String, Object> row = jdbcTemplate.queryForMap(sql, externalId.trim());
+      final Map<String, Object> row = jdbcTemplate.queryForMap(sql, externalId.trim());
       if (StringUtils.isBlank(data.getEmail())) {
         data.setEmail(toStringOrNull(row.get("client_email")));
       }
@@ -183,11 +283,11 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
     }
   }
 
-  private static String toStringOrNull(Object value) {
+  private static String toStringOrNull(final Object value) {
     if (value == null) {
       return null;
     }
-    String s = String.valueOf(value).trim();
+    final String s = String.valueOf(value).trim();
     return s.isEmpty() ? null : s;
   }
 }
