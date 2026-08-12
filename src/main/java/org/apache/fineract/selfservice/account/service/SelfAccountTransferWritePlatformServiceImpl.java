@@ -46,17 +46,25 @@ import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
+import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
+import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
+import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
+import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmResponse;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
 import org.apache.fineract.selfservice.account.data.FeeCollectionResult;
+import org.apache.fineract.selfservice.account.data.PaymentDetailDao;
+import org.apache.fineract.selfservice.account.data.PaymentDetailUpdateRequest;
 import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 import org.apache.fineract.selfservice.account.data.SameBankTransferCustomData;
 import org.apache.fineract.selfservice.account.data.SameBankTransferResponseData;
@@ -140,6 +148,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final TransactionDateManagementService transactionDateManagementService;
 
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  
+  private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
+  
+  private final PaymentDetailService paymentDetailService;
 
   // =====================================================================
   //  PREPARE
@@ -518,6 +530,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     String internalRefNumber =
         generateInternalRefNumber(processingDate, fromOfficeId, result.getResourceId());
+    
+    SavingsAccountTransactionData transactionData = this.savingsAccountReadPlatformService.retrieveSavingsTransaction(fromAccountId,
+                result.getResourceId(), DepositAccountType.SAVINGS_DEPOSIT);
+    
+    PaymentDetailData paymentDetailData = transactionData.getPaymentDetailData();
+
+    Long paymentDetailId = paymentDetailData.getId();
+    if (paymentDetailId != null) {
+        PaymentDetailUpdateRequest updateReq = new PaymentDetailUpdateRequest(paymentDetailId, internalRefNumber);
+        paymentDetailService.updateRoutingCode(updateReq);
+    }
 
     String fromAccountIdentifier =
         StringUtils.isNotBlank(request.getFromAccount())
