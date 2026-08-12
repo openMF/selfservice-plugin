@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import  org.apache.fineract.portfolio.account.data.AccountTransferData;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -168,7 +167,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final String currencyCode = request.getCurrencyCode();
     final String transferDescription = buildTransferDescription(request);
     final String reference = request.getReference();
-
+    
     if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException(
           "The transfer amount (transferAmount) must be greater than zero.");
@@ -540,10 +539,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         );
     }
     
-    PaymentDetailData paymentDetailData = transactionData.getPaymentDetailData();
-
-
-    Long paymentDetailId = paymentDetailData.getId();
+    Long paymentDetailId = resolvePaymentDetailId(savingxTxnPair.fromId, transactionData);
     if (paymentDetailId != null) {
         PaymentDetailUpdateRequest updateReq = new PaymentDetailUpdateRequest(paymentDetailId, internalRefNumber);
         paymentDetailService.updateRoutingCode(updateReq);
@@ -658,6 +654,45 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     return wrappedResponse;
   }
+  
+    /**
+    * Resolves the real m_payment_detail.id for a savings transaction.
+    * The read-platform DTO mapper sometimes aliases the transaction ID into
+    * PaymentDetailData.id, so we prefer the entity or a direct JDBC lookup.
+    */
+   private Long resolvePaymentDetailId(Long savingsTransactionId, SavingsAccountTransactionData transactionData) {
+       // 1st choice: load the transaction entity and navigate to its PaymentDetail
+       if (savingsTransactionId != null) {
+           try {
+               SavingsAccountTransaction txn = savingsAccountTransactionRepository.findById(savingsTransactionId).orElse(null);
+               if (txn != null && txn.getPaymentDetail() != null) {
+                   return txn.getPaymentDetail().getId();
+               }
+           } catch (Exception e) {
+               log.warn("Could not load transaction entity to resolve paymentDetailId", e);
+           }
+       }
+
+       // 2nd choice: direct SQL (avoids any mapper bug)
+       if (savingsTransactionId != null) {
+           try {
+               String sql = "SELECT payment_detail_id FROM m_savings_account_transaction WHERE id = ?";
+               return jdbcTemplate.queryForObject(sql, Long.class, savingsTransactionId);
+           } catch (Exception e) {
+               log.warn("JDBC fallback failed to resolve payment_detail_id for txn {}", savingsTransactionId, e);
+           }
+       }
+
+       // 3rd choice: use the DTO only if the ID is sane (does not equal the transaction ID)
+       if (transactionData != null && transactionData.getPaymentDetailData() != null) {
+           Long dtoId = transactionData.getPaymentDetailData().getId();
+           if (dtoId != null && !dtoId.equals(savingsTransactionId)) {
+               return dtoId;
+           }
+       }
+
+       return null;
+   }
 
   private record SavingsTxnPair(Long fromId, Long toId) {}
 
