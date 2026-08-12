@@ -64,6 +64,29 @@ public final class SelfServiceApiConstants {
       "Self service forgot password request created.";
   public static final String documentTypeIdParamName = "documentTypeId";
   public static final String documentKeyParamName = "documentKey";
+  public static final String RESOURCE_NAME_PASSWORD_RESET = "password.reset";
+  public static final String RESOURCE_NAME_PASSWORD_RENEW = "password.renew";
+
+  public static final String ERROR_USERNAME_REQUIRED =
+      "error.msg.self.service.password.reset.username.required";
+  public static final String ERROR_NO_CONTACT_CHANNEL =
+      "error.msg.self.service.password.reset.no.contact.channel";
+  public static final String ERROR_PASSWORD_REQUIRED =
+      "error.msg.self.service.password.renew.password.required";
+  public static final String ERROR_REPEAT_PASSWORD_REQUIRED =
+      "error.msg.self.service.password.renew.repeatPassword.required";
+  public static final String ERROR_TOKEN_REQUIRED =
+      "error.msg.self.service.password.renew.token.required";
+  public static final String ERROR_PASSWORDS_DO_NOT_MATCH =
+      "error.msg.self.service.password.renew.passwords.do.not.match";
+  public static final String ERROR_PASSWORD_POLICY =
+      "error.msg.self.service.password.renew.policy.violation";
+  public static final String ERROR_TOKEN_INVALID =
+      "error.msg.self.service.password.renew.token.invalid";
+  public static final String ERROR_TOKEN_CONSUMED =
+      "error.msg.self.service.password.renew.token.consumed";
+  public static final String ERROR_TOKEN_EXPIRED =
+      "error.msg.self.service.password.renew.token.expired";
 
   public static final Set<String> REGISTRATION_REQUEST_DATA_PARAMETERS =
       Collections.unmodifiableSet(

@@ -16,7 +16,6 @@ package org.apache.fineract.selfservice.registration.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -26,13 +25,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.gson.JsonElement;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
-import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
@@ -40,10 +38,14 @@ import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
-import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
+import org.apache.fineract.selfservice.registration.data.SelfServiceForgotPasswordDataValidator;
+import org.apache.fineract.selfservice.registration.data.SelfServiceForgotPasswordDataValidator.RenewPasswordData;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetNoContactException;
+import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetTokenException;
+import org.apache.fineract.selfservice.registration.exception.SelfServiceUserNotFoundException;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -62,35 +64,27 @@ import org.springframework.core.env.Environment;
 @ExtendWith(MockitoExtension.class)
 class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
-  // Only the 9 dependencies declared in the refactored class
-  @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
-  @Mock private FromJsonHelper fromApiJsonHelper;
-
-  @Mock
-  private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
-
+  @Mock private SelfServiceForgotPasswordDataValidator dataValidator;
   @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
+  @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private PlatformPasswordEncoder platformPasswordEncoder;
   @Mock private SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private Environment env;
+  @Mock private TransactionDateUtil transactionDateUtil;
+  @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  @Mock private NotificationCooldownCache notificationCooldownCache;
 
   private SelfServiceForgotPasswordWritePlatformServiceImpl service;
-
-  @Mock private TransactionDateUtil transactionDateUtil;
-  
-  @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
-  
-  @Mock private NotificationCooldownCache notificationCooldownCache;
 
   @BeforeEach
   void setUp() {
     service =
         new SelfServiceForgotPasswordWritePlatformServiceImpl(
-            selfServiceRegistrationRepository,
-            fromApiJsonHelper,
+            dataValidator,
             appSelfServiceUserRepository,
+            selfServiceRegistrationRepository,
             passwordValidationPolicyRepository,
             platformPasswordEncoder,
             selfServiceAuthorizationTokenService,
@@ -99,6 +93,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             transactionDateUtil,
             notificationDeliveryModeUtil,
             notificationCooldownCache);
+
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }
@@ -108,19 +103,23 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     ThreadLocalContextUtil.reset();
   }
 
+  // -------------------------------------------------------------------------
+  // createForgotPasswordRequest
+  // -------------------------------------------------------------------------
+
   @Test
   void createForgotPasswordRequest_persistsPasswordResetRequest() {
-    // Given: a valid JSON and a user with email and mobile number
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.usernameParamName), any(JsonElement.class)))
-        .thenReturn("jdoe");
+    // Given
+    when(dataValidator.validateAndExtractUsername("{\"username\":\"jdoe\"}")).thenReturn("jdoe");
     when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
+
     LocalDateTime createdAt = LocalDateTime.of(2026, 4, 13, 12, 0, 0);
     LocalDateTime expectedExpiry = LocalDateTime.of(2026, 4, 13, 12, 0, 30);
     when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
     when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
 
     AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
+    when(appUser.getId()).thenReturn(1L);
     when(appUser.getEmail()).thenReturn("test@test.com");
     when(appUser.getFirstname()).thenReturn("John");
     when(appUser.getLastname()).thenReturn("Doe");
@@ -132,14 +131,16 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
     AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
     when(mapping.getClient()).thenReturn(client);
-
     Set<AppSelfServiceUserClientMapping> mappings = new HashSet<>();
     mappings.add(mapping);
     when(appUser.getAppUserClientMappings()).thenReturn(mappings);
+
     when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
+    when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
 
     // When
-    SelfServiceRegistration result = service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
+    SelfServiceRegistration result =
+        service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
 
     // Then
     assertNotNull(result);
@@ -150,11 +151,9 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     verify(selfServiceRegistrationRepository)
         .saveAndFlush(argThat(request -> expectedExpiry.equals(request.getExpiresAt())));
 
-    // Verify that a notification event was published
     ArgumentCaptor<SelfServiceNotificationEvent> eventCaptor =
         ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
     verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
-
     SelfServiceNotificationEvent event = eventCaptor.getValue();
     assertEquals(SelfServiceNotificationEvent.Type.PASSWORD_RESET_REQUESTED, event.getType());
     assertEquals("jdoe", event.getUsername());
@@ -163,80 +162,67 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   }
 
   @Test
-  void createForgotPasswordRequest_returnsNullWhenUserNotFound() {
-    // Given: a username that doesn't exist
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.usernameParamName), any(JsonElement.class)))
+  void createForgotPasswordRequest_throwsUserNotFoundWhenUserMissing() {
+    when(dataValidator.validateAndExtractUsername("{\"username\":\"nonexistent\"}"))
         .thenReturn("nonexistent");
-    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("nonexistent")).thenReturn(null);
+    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("nonexistent"))
+        .thenReturn(null);
 
-    // When
-    SelfServiceRegistration result =
-        service.createForgotPasswordRequest("{\"username\":\"nonexistent\"}");
+    assertThrows(
+        SelfServiceUserNotFoundException.class,
+        () -> service.createForgotPasswordRequest("{\"username\":\"nonexistent\"}"));
 
-    // Then
-    assertNull(result);
     verify(selfServiceRegistrationRepository, never())
         .saveAndFlush(any(SelfServiceRegistration.class));
     verify(applicationEventPublisher, never()).publishEvent(any());
   }
 
   @Test
-  void createForgotPasswordRequest_returnsNullWhenUserHasNoEmailOrMobile() {
-    // Given: a user with no contact information
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.usernameParamName), any(JsonElement.class)))
-        .thenReturn("jdoe");
+  void createForgotPasswordRequest_throwsNoContactWhenUserHasNoEmailOrMobile() {
+    when(dataValidator.validateAndExtractUsername("{\"username\":\"jdoe\"}")).thenReturn("jdoe");
 
     AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
     when(appUser.getEmail()).thenReturn(null);
-    Set<AppSelfServiceUserClientMapping> emptyMappings = new HashSet<>();
-    when(appUser.getAppUserClientMappings()).thenReturn(emptyMappings);
-
+    when(appUser.getAppUserClientMappings()).thenReturn(new HashSet<>());
     when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
 
-    // When
-    SelfServiceRegistration result = service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
+    assertThrows(
+        SelfServicePasswordResetNoContactException.class,
+        () -> service.createForgotPasswordRequest("{\"username\":\"jdoe\"}"));
 
-    // Then
-    assertNull(result);
     verify(selfServiceRegistrationRepository, never())
         .saveAndFlush(any(SelfServiceRegistration.class));
     verify(applicationEventPublisher, never()).publishEvent(any());
   }
 
   @Test
-  void createForgotPasswordRequest_throwsWhenUsernameIsBlank() {
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.usernameParamName), any(JsonElement.class)))
-        .thenReturn("");
+  void createForgotPasswordRequest_throwsValidationWhenUsernameBlank() {
+    when(dataValidator.validateAndExtractUsername("{\"username\":\"\"}"))
+        .thenThrow(new PlatformApiDataValidationException(java.util.List.of()));
 
     assertThrows(
-        IllegalArgumentException.class,
+        PlatformApiDataValidationException.class,
         () -> service.createForgotPasswordRequest("{\"username\":\"\"}"));
 
     verify(selfServiceRegistrationRepository, never())
         .saveAndFlush(any(SelfServiceRegistration.class));
+    verify(appSelfServiceUserRepository, never()).findAppSelfServiceUserByName(any());
   }
+
+  // -------------------------------------------------------------------------
+  // renewPassword
+  // -------------------------------------------------------------------------
 
   @Test
   void renewPassword_updatesEncodedPasswordFromExternalToken() {
-    // Given: a valid reset token and matching passwords
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.passwordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.repeatPasswordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName),
-            any(JsonElement.class)))
-        .thenReturn("external-token");
+    RenewPasswordData data =
+        new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
+    when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
     PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
-    when(policy.getRegex()).thenReturn(".*");
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
+    // validatePasswordAgainstPolicy is void – do nothing (default)
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.getUsername()).thenReturn("jdoe");
@@ -249,65 +235,52 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
     when(appUser.getId()).thenReturn(7L);
     when(appUser.getUsername()).thenReturn("jdoe");
+    when(appUser.getFirstname()).thenReturn("John");
+    when(appUser.getLastname()).thenReturn("Doe");
+    when(appUser.getEmail()).thenReturn("test@test.com");
+    when(appUser.getAppUserClientMappings()).thenReturn(new HashSet<>());
     when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
     when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
+    when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
 
-    // When
     CommandProcessingResult result = service.renewPassword("{}");
 
-    // Then
     assertNotNull(result);
     assertEquals(7L, result.getResourceId());
-    verify(appUser).updatePassword("encoded-password");
+    verify(appUser).updatePassword("Strong#Abc123"); // first call with plain text
+    verify(appUser).updatePassword("encoded-password"); // second call with encoded
     verify(appUser).updatePasswordResetRequired(false);
     verify(appSelfServiceUserRepository).saveAndFlush(appUser);
     verify(request).markConsumed();
     verify(selfServiceRegistrationRepository).saveAndFlush(request);
-
-    // Verify success notification
     verify(applicationEventPublisher).publishEvent(any(SelfServiceNotificationEvent.class));
   }
 
   @Test
   void renewPassword_throwsWhenTokenNotFound() {
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.passwordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.repeatPasswordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName),
-            any(JsonElement.class)))
-        .thenReturn("invalid-token");
+    RenewPasswordData data =
+        new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "invalid-token");
+    when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
-    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
-        .thenReturn(policy);
+        .thenReturn(null);
 
     when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
             "invalid-token", SelfServiceRequestType.PASSWORD_RESET))
         .thenReturn(null);
 
-    assertThrows(IllegalArgumentException.class, () -> service.renewPassword("{}"));
+    assertThrows(
+        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
 
     verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
   }
 
   @Test
-  void renewPassword_throwsWhenPasswordsDoNotMatch() {
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.passwordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.repeatPasswordParamName), any(JsonElement.class)))
-        .thenReturn("Different#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName),
-            any(JsonElement.class)))
-        .thenReturn("external-token");
+  void renewPassword_throwsValidationWhenPasswordsDoNotMatch() {
+    when(dataValidator.validateForRenew("{}"))
+        .thenThrow(new PlatformApiDataValidationException(java.util.List.of()));
 
-    assertThrows(IllegalArgumentException.class, () -> service.renewPassword("{}"));
+    assertThrows(PlatformApiDataValidationException.class, () -> service.renewPassword("{}"));
 
     verify(selfServiceRegistrationRepository, never())
         .getRequestByExternalAuthorizationToken(any(), any());
@@ -316,20 +289,12 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
   @Test
   void renewPassword_throwsWhenTokenAlreadyConsumed() {
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.passwordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.repeatPasswordParamName), any(JsonElement.class)))
-        .thenReturn("Strong#Abc123");
-    when(fromApiJsonHelper.extractStringNamed(
-            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName),
-            any(JsonElement.class)))
-        .thenReturn("external-token");
+    RenewPasswordData data =
+        new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
+    when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
-    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
-        .thenReturn(policy);
+        .thenReturn(null);
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.isConsumed()).thenReturn(true);
@@ -337,7 +302,32 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             "external-token", SelfServiceRequestType.PASSWORD_RESET))
         .thenReturn(request);
 
-    assertThrows(IllegalArgumentException.class, () -> service.renewPassword("{}"));
+    assertThrows(
+        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
+
+    verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void renewPassword_throwsWhenTokenExpired() {
+    RenewPasswordData data =
+        new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
+    when(dataValidator.validateForRenew("{}")).thenReturn(data);
+
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(null);
+
+    SelfServiceRegistration request = mock(SelfServiceRegistration.class);
+    when(request.isConsumed()).thenReturn(false);
+    when(request.isExpired(any())).thenReturn(true);
+    when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+            "external-token", SelfServiceRequestType.PASSWORD_RESET))
+        .thenReturn(request);
+    when(transactionDateUtil.getCurrentTenantLocalDateTime())
+        .thenReturn(LocalDateTime.of(2026, 4, 13, 12, 0, 0));
+
+    assertThrows(
+        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
 
     verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
   }

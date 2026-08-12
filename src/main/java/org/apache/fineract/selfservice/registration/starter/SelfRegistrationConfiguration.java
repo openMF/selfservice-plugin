@@ -16,6 +16,7 @@ import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatfor
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
+import org.apache.fineract.selfservice.registration.data.SelfServiceForgotPasswordDataValidator;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.service.SelfServiceAuthorizationTokenService;
 import org.apache.fineract.selfservice.registration.service.SelfServiceForgotPasswordWritePlatformService;
@@ -109,23 +110,23 @@ public class SelfRegistrationConfiguration {
   @Bean
   @ConditionalOnMissingBean(SelfServiceForgotPasswordWritePlatformService.class)
   public SelfServiceForgotPasswordWritePlatformService selfServiceForgotPassworWritePlatformService(
-      SelfServiceRegistrationRepository selfServiceRegistrationRepository,
-      FromJsonHelper fromApiJsonHelper,
+      SelfServiceForgotPasswordDataValidator dataValidator,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
-      PasswordValidationPolicyRepository passwordValidationPolicy,
+      SelfServiceRegistrationRepository selfServiceRegistrationRepository,
+      PasswordValidationPolicyRepository passwordValidationPolicyRepository,
       PlatformPasswordEncoder platformPasswordEncoder,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
       ApplicationEventPublisher applicationEventPublisher,
       Environment env,
       TransactionDateUtil transactionDateUtil,
       NotificationDeliveryModeUtil notificationDeliveryModeUtil,
-      NotificationCooldownCache notificationCooldownCache) {
+     NotificationCooldownCache notificationCooldownCache) {
 
     return new SelfServiceForgotPasswordWritePlatformServiceImpl(
-        selfServiceRegistrationRepository,
-        fromApiJsonHelper,
+        dataValidator,
         appSelfServiceUserRepository,
-        passwordValidationPolicy,
+        selfServiceRegistrationRepository,
+        passwordValidationPolicyRepository,
         platformPasswordEncoder,
         selfServiceAuthorizationTokenService,
         applicationEventPublisher,

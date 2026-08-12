@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.registration.service;
 
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
+import org.apache.fineract.selfservice.registration.exception.SelfServiceUserNotFoundException;
 
 /**
  * Service responsible for handling self-service password reset workflows, including request
@@ -21,7 +22,9 @@ public interface SelfServiceForgotPasswordWritePlatformService {
    * channels enabled in the system.
    *
    * @param apiRequestBodyAsJson JSON payload containing at least the {@code username} field
-   * @return the created registration request, or {@code null} if the request could not be created
+   * @return the created registration request
+   * @throws SelfServiceUserNotFoundException when the username does not exist in the current tenant
+   * @throws IllegalArgumentException when the username is blank or the user has no contact channel
    */
   SelfServiceRegistration createForgotPasswordRequest(String apiRequestBodyAsJson);
 
