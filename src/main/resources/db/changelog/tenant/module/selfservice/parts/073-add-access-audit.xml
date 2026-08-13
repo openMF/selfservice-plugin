@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MULTI-TENANT NOTE: This changelog is included in the TENANT changelog master.
+        It will be executed against EVERY tenant schema automatically by Fineract's
+        multi-tenant Liquibase runner. No explicit tenant_id column is needed because
+        each tenant has its own isolated schema.
+    -->
+
+    <changeSet id="ss-0070-1" author="fineract">
+        <comment>
+            Creates the access audit table for recording all ownership validation
+            attempts (granted and denied). Used for security monitoring, forensic
+            analysis, and rate-limiting brute-force IDOR probes.
+        </comment>
+        <createTable tableName="m_selfservice_access_audit">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="resource_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="resource_identifier" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="access_result" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="endpoint" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="http_method" type="VARCHAR(10)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="ip_address" type="VARCHAR(45)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="created_at" type="DATETIME"
+                    defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Index for rate-limit queries (user + resource_type + result + time) -->
+        <createIndex tableName="m_selfservice_access_audit"
+                     indexName="idx_ss_audit_ratelimit">
+            <column name="appuser_id"/>
+            <column name="resource_type"/>
+            <column name="access_result"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <!-- Index for global rate-limit queries (user + result + time) -->
+        <createIndex tableName="m_selfservice_access_audit"
+                     indexName="idx_ss_audit_global_ratelimit">
+            <column name="appuser_id"/>
+            <column name="access_result"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <!-- Index for forensic queries by resource -->
+        <createIndex tableName="m_selfservice_access_audit"
+                     indexName="idx_ss_audit_resource">
+            <column name="resource_type"/>
+            <column name="resource_id"/>
+        </createIndex>
+
+        <!-- 
+            Index for time-based cleanup (retention policy).
+            Retention Basis: This table stores transient PII (username, IP) used solely for 
+            immediate rate-limiting and short-term forensic analysis of IDOR/brute-force attacks.
+            Records are automatically purged by the application layer after the approved 
+            retention period (default 30 days) to comply with data minimization and privacy policies.
+        -->
+        <createIndex tableName="m_selfservice_access_audit"
+                     indexName="idx_ss_audit_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0070-2" author="fineract">
+        <comment>
+            Add foreign key to m_appuser for referential integrity.
+            Note: In multi-tenant mode, both tables exist in the same tenant schema.
+        </comment>
+        <addForeignKeyConstraint
+            baseTableName="m_selfservice_access_audit"
+            baseColumnNames="appuser_id"
+            referencedTableName="m_appuser"
+            referencedColumnNames="id"
+            constraintName="fk_ss_audit_appuser"/>
+    </changeSet>
+
+</databaseChangeLog>

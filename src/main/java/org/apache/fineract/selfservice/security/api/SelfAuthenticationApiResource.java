@@ -297,10 +297,7 @@ public class SelfAuthenticationApiResource {
                     new String(base64AccessKey, StandardCharsets.UTF_8))
                 .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8))
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired)
-                .setClients(
-                    returnClientList
-                        ? clientReadPlatformService.retrieveSelfServiceUserClients(userId)
-                        : null)
+                .setClients(returnClientList ? clientList : null)
                 .setKycValidations(getKycStatusForUser(clientId))
                 .setCountry(country)
                 .setOnboarding(onboarding);

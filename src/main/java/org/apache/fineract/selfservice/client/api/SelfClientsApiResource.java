@@ -78,18 +78,16 @@ import org.apache.fineract.portfolio.client.api.ClientApiConstants;
 import org.apache.fineract.portfolio.client.data.ClientChargeData;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.data.ClientTransactionData;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.service.ClientChargeReadPlatformService;
 import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorReadPlatformService;
 import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
 import org.apache.fineract.selfservice.config.SelfServiceModuleIsEnabledCondition;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -116,7 +114,7 @@ public class SelfClientsApiResource {
   private final DefaultToApiJsonSerializer<ClientTransactionData> clientTransactionSerializer;
   private final DefaultToApiJsonSerializer<ObligeeData> obligeeSerializer;
   private final ApiRequestParameterHelper apiRequestParameterHelper;
-  private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   private final SelfClientDataValidator dataValidator;
   private final ImageReadPlatformService imageReadPlatformService;
   private final ImageWritePlatformService imageWritePlatformService;
@@ -490,12 +488,7 @@ public class SelfClientsApiResource {
   }
 
   private void validateAppuserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
+    this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
 
   @POST

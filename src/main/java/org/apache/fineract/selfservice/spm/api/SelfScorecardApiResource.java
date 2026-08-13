@@ -27,10 +27,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.spm.api.ScorecardApiResource;
 import org.apache.fineract.spm.data.ScorecardData;
 import org.springframework.stereotype.Component;
@@ -44,7 +42,7 @@ public class SelfScorecardApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
   private final ScorecardApiResource scorecardApiResource;
-  private final AppSelfServiceUserClientMapperReadService appuserClientMapperReadService;
+  private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
 
   @GET
   @Path("clients/{clientId}")
@@ -87,11 +85,6 @@ public class SelfScorecardApiResource {
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appuserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
+    this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
 }

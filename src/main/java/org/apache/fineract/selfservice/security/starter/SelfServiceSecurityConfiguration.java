@@ -64,7 +64,11 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.apache.fineract.selfservice.config.SelfServiceRateLimitProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
 @Configuration
+@EnableConfigurationProperties(SelfServiceRateLimitProperties.class)
 @Order(1) // Very important: Must have higher priority than main security config
 public class SelfServiceSecurityConfiguration {
 

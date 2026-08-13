@@ -15,6 +15,11 @@ import org.apache.fineract.selfservice.security.data.SelfServiceAuthenticatedUse
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Service responsible for reading KYC (Know Your Customer) feature statuses for clients.
+ * It provides methods to retrieve the most recent KYC status or the most recent approved KYC status.
+ * If no KYC record exists for a client, a default "In Review" status with all verification flags set to false is returned.
+ */
 @Service
 public class KycFeatureStatusReadService {
 
@@ -25,6 +30,10 @@ public class KycFeatureStatusReadService {
   }
 
   /**
+   * Retrieves the most recent KYC feature status for a given client regardless of its approval state.
+   *
+   * @param clientId the ID of the client
+   * @return the {@link SelfServiceAuthenticatedUserKycData} containing the KYC status, or a default "In Review" status if none exists
    * Returns the KYC snapshot shown on self-service authentication.
    *
    * <p>Selection rules (in order):
@@ -67,6 +76,12 @@ public class KycFeatureStatusReadService {
         .orElseGet(this::defaultData);
   }
 
+  /**
+   * Retrieves the most recent explicitly "Approved" KYC feature status for a given client.
+   *
+   * @param clientId the ID of the client
+   * @return the approved {@link SelfServiceAuthenticatedUserKycData}, or a default "In Review" status if no approved record exists
+   */
   @Transactional(readOnly = true)
   public SelfServiceAuthenticatedUserKycData getApprovedKycFeatureStatus(final Long clientId) {
     if (clientId == null) {

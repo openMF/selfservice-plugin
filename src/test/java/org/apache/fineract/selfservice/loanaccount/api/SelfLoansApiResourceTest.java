@@ -32,10 +32,10 @@ import org.apache.fineract.portfolio.loanaccount.exception.LoanTemplateTypeRequi
 import org.apache.fineract.portfolio.loanaccount.exception.NotSupportedLoanTemplateTypeException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiResource;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,8 +54,7 @@ class SelfLoansApiResourceTest {
   @Mock private LoansApiResource loansApiResource;
   @Mock private LoanTransactionsApiResource loanTransactionsApiResource;
   @Mock private LoanChargesApiResource loanChargesApiResource;
-  @Mock private AppuserLoansMapperReadService appuserLoansMapperReadService;
-  @Mock private AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  @Mock private SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   @Mock private SelfLoansDataValidator dataValidator;
   @Mock private GuarantorsApiResource guarantorsApiResource;
   @Mock private UriInfo uriInfo;
@@ -80,8 +79,7 @@ class SelfLoansApiResourceTest {
             loansApiResource,
             loanTransactionsApiResource,
             loanChargesApiResource,
-            appuserLoansMapperReadService,
-            appUserClientMapperReadService,
+            selfServiceOwnershipGuard,
             dataValidator,
             guarantorsApiResource,
             applicationEventPublisher, 
@@ -96,25 +94,23 @@ class SelfLoansApiResourceTest {
   }
 
   private void mockLoanMapped() {
-    mockAuthenticatedUser();
-    when(appuserLoansMapperReadService.isLoanMappedToUser(LOAN_ID, USER_ID)).thenReturn(true);
+    // do nothing, void method mock
   }
 
   private void mockLoanNotMapped() {
-    mockAuthenticatedUser();
-    when(appuserLoansMapperReadService.isLoanMappedToUser(LOAN_ID, USER_ID)).thenReturn(false);
+    org.mockito.Mockito.doThrow(new LoanNotFoundException(LOAN_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateLoanOwnership(LOAN_ID);
   }
 
   private void mockClientMapped() {
-    mockAuthenticatedUser();
-    when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(true);
+    // do nothing, void method mock
   }
 
   private void mockClientNotMapped() {
-    mockAuthenticatedUser();
-    when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(false);
+    org.mockito.Mockito.doThrow(new ClientNotFoundException(CLIENT_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateClientOwnership(CLIENT_ID);
   }
 
   // --- retrieveLoan ---
@@ -300,8 +296,6 @@ class SelfLoansApiResourceTest {
   @Test
   void modifyLoanApplication_mappedLoanAndClient_returnsData() {
     mockLoanMapped();
-    when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(true);
     HashMap<String, Object> map = new HashMap<>();
     map.put("clientId", CLIENT_ID);
     when(dataValidator.validateModifyLoanApplication(any())).thenReturn(map);
