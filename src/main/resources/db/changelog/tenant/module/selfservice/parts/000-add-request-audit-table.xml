@@ -14,7 +14,7 @@
     <!-- ========================================================= -->
     <!-- Create request_audit_table                                -->
     <!-- ========================================================= -->
-    <changeSet author="fineract" id="ss-070-1">
+    <changeSet author="fineract" id="ss-000-1">
         <preConditions onFail="MARK_RAN">
             <not>
                 <tableExists tableName="request_audit_table"/>
@@ -71,7 +71,7 @@
     <!-- ========================================================= -->
     <!-- Indexes                                                   -->
     <!-- ========================================================= -->
-    <changeSet author="fineract" id="ss-070-2">
+    <changeSet author="fineract" id="ss-000-2">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="request_audit_table"/>
             <not>
@@ -84,7 +84,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-070-3">
+    <changeSet author="fineract" id="ss-000-3">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="request_audit_table"/>
             <not>
@@ -97,7 +97,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-070-4">
+    <changeSet author="fineract" id="ss-000-4">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="request_audit_table"/>
             <not>
@@ -110,7 +110,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet author="fineract" id="ss-070-5">
+    <changeSet author="fineract" id="ss-000-5">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="request_audit_table"/>
             <not>
@@ -126,7 +126,7 @@
     <!-- ========================================================= -->
     <!-- Foreign key                                               -->
     <!-- ========================================================= -->
-    <changeSet author="fineract" id="ss-070-6">
+    <changeSet author="fineract" id="ss-000-6">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="request_audit_table"/>
             <tableExists tableName="m_client"/>
