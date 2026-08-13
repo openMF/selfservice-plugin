@@ -7,6 +7,9 @@
  */
 package org.apache.fineract.onboarding.service;
 
+import static org.apache.fineract.onboarding.domain.OnboardingStepStatus.IN_PROGRESS;
+import static org.apache.fineract.onboarding.domain.OnboardingStepStatus.PENDING;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,13 +25,13 @@ import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.onboarding.domain.OnboardingStepData;
 import org.apache.fineract.onboarding.domain.OnboardingStepStatus;
-import static org.apache.fineract.onboarding.domain.OnboardingStepStatus.IN_PROGRESS;
-import static org.apache.fineract.onboarding.domain.OnboardingStepStatus.PENDING;
 import org.apache.fineract.onboarding.domain.SelfServiceOnboardingStep;
 import org.apache.fineract.onboarding.domain.SelfServiceOnboardingStepDef;
 import org.apache.fineract.onboarding.domain.SelfServiceOnboardingStepDefRepository;
 import org.apache.fineract.onboarding.domain.SelfServiceOnboardingStepRepository;
 import org.apache.fineract.onboarding.domain.UpdateOnboardingStepRequest;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMappingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,56 @@ public class SelfServiceOnboardingStepService {
   private final SelfServiceOnboardingStepDefRepository stepDefRepository;
   private final SelfServiceOnboardingStepRepository stepRepository;
   private final TransactionDateUtil transactionDateUtil;
+  private final AppSelfServiceUserClientMappingRepository userClientMappingRepository;
+
+  // ── ClientId resolution (backoffice / webhook) ──────────────────────────
+
+  /**
+   * Resolves the self-service app user id mapped to a Fineract client.
+   * Multi-tenant: mapping lives in the tenant schema.
+   */
+  public Long resolveAppUserIdByClientId(final Long clientId) {
+    if (clientId == null) {
+      throw validationError("clientId", "clientId is required");
+    }
+    final AppSelfServiceUserClientMapping mapping =
+        userClientMappingRepository.fetchByClientId(clientId);
+    if (mapping == null || mapping.getAppUser() == null) {
+      throw validationError(
+          "clientId", "No self-service user mapped to clientId=" + clientId);
+    }
+    return mapping.getAppUser().getId();
+  }
+
+  @Transactional(readOnly = true)
+  public OnboardingProgressData getProgressByClientId(final Long clientId) {
+    return getProgress(resolveAppUserIdByClientId(clientId));
+  }
+
+  @Transactional
+  public OnboardingProgressData getOrInitProgressByClientId(final Long clientId) {
+    return getOrInitProgress(resolveAppUserIdByClientId(clientId));
+  }
+
+  @Transactional
+  public OnboardingProgressData updateStepByClientId(
+      final Long clientId, final UpdateOnboardingStepRequest request) {
+    return updateStep(resolveAppUserIdByClientId(clientId), request);
+  }
+
+  /**
+   * Completes all steps with order ≤ target for the user mapped to {@code clientId}.
+   * Returns full progress for the API response.
+   */
+  @Transactional
+  public OnboardingProgressData completeStepsUpToByClientId(
+      final Long clientId, final String upToStepCode) {
+    final Long appUserId = resolveAppUserIdByClientId(clientId);
+    completeStepsUpTo(appUserId, upToStepCode);
+    return getProgress(appUserId);
+  }
+
+  // ── UserId-based API (self-service / mobile) ────────────────────────────
 
   /** Creates progress rows for every active step definition (idempotent). */
   @Transactional
@@ -66,14 +119,13 @@ public class SelfServiceOnboardingStepService {
               .build());
     }
     stepRepository.saveAll(rows);
-    log.info(
-        "Onboarding steps initialized for userId={}, count={}", appUserId, rows.size());
+    log.info("Onboarding steps initialized for userId={}, count={}", appUserId, rows.size());
   }
 
   /**
    * Marks all active steps with step_order &lt;= target order as COMPLETED.
    *
-   * @param upToStepCode e.g. {@code PASSWORD_SETUP} from DB seed
+   * @param upToStepCode e.g. {@code REGISTRATION_COMPLETE} from DB seed
    */
   @Transactional
   public void completeStepsUpTo(Long appUserId, String upToStepCode) {
@@ -82,9 +134,7 @@ public class SelfServiceOnboardingStepService {
     }
     initializeSteps(appUserId);
     SelfServiceOnboardingStepDef target =
-        stepDefRepository
-            .findByStepCode(upToStepCode.trim().toUpperCase())
-            .orElse(null);
+        stepDefRepository.findByStepCode(upToStepCode.trim().toUpperCase()).orElse(null);
     if (target == null) {
       log.warn("completeStepsUpTo: unknown stepCode={}", upToStepCode);
       return;
@@ -98,6 +148,11 @@ public class SelfServiceOnboardingStepService {
       }
     }
     stepRepository.saveAll(steps);
+    log.info(
+        "completeStepsUpTo: userId={} upTo={} targetOrder={}",
+        appUserId,
+        upToStepCode,
+        target.getStepOrder());
   }
 
   @Transactional
@@ -163,7 +218,6 @@ public class SelfServiceOnboardingStepService {
     if (!stepRepository.existsByAppUserId(appUserId)) {
       initializeSteps(appUserId);
     }
-    // Sync: if new defs were added after user init, create missing PENDING rows
     syncMissingSteps(appUserId);
     return getProgress(appUserId);
   }
@@ -195,6 +249,8 @@ public class SelfServiceOnboardingStepService {
       log.info("Synced {} new onboarding steps for userId={}", toAdd.size(), appUserId);
     }
   }
+
+  // ── Progress builders ───────────────────────────────────────────────────
 
   private OnboardingProgressData buildProgress(List<SelfServiceOnboardingStep> steps) {
     int total = steps.size();

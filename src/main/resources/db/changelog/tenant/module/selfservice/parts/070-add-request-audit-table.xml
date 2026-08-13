@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!--
+    ExpiredTokenPurgeScheduler / SelfServiceRegistration purge issues:
+      DELETE FROM request_audit_table WHERE expires_at IS NOT NULL AND expires_at < ?
+    Column was missing on some tenants → PSQLException: column "expires_at" does not exist
+  -->
+  <changeSet author="fineract" id="ss-070-1">
+    <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+      <tableExists tableName="request_audit_table"/>
+      <not>
+        <columnExists tableName="request_audit_table" columnName="expires_at"/>
+      </not>
+    </preConditions>
+
+    <comment>
+      Add expires_at for self-service registration / request audit token purge
+      (ExpiredTokenPurgeScheduler to deleteExpiredRequests).
+    </comment>
+
+    <addColumn tableName="request_audit_table">
+      <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+        <constraints nullable="true"/>
+      </column>
+    </addColumn>
+
+    <createIndex
+        tableName="request_audit_table"
+        indexName="idx_request_audit_expires_at">
+      <column name="expires_at"/>
+    </createIndex>
+  </changeSet>
+
+</databaseChangeLog>

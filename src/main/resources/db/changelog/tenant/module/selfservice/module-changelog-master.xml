@@ -80,4 +80,6 @@
   <include file="parts/067-device-fp-drop-fk-appuser.xml" relativeToChangelogFile="true"/>  
   <include file="parts/068-add-onboarding-workflow.xml" relativeToChangelogFile="true"/>
   <include file="parts/069-enrich-same-bank-transfer-audit.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/070-add-request-audit-table.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/071-add-onboarding-grants.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
