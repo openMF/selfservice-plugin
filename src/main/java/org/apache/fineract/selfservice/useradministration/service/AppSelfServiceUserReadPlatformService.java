@@ -16,6 +16,7 @@ package org.apache.fineract.selfservice.useradministration.service;
 
 import java.util.Collection;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 
 public interface AppSelfServiceUserReadPlatformService {
 
@@ -26,6 +27,12 @@ public interface AppSelfServiceUserReadPlatformService {
   AppSelfServiceUserData retrieveNewSelfServiceUserDetails();
 
   AppSelfServiceUserData retrieveSelfServiceUser(Long userId);
+
+  Collection<AppSelfServiceUserData> retrieveAllSelfServiceUsersForAdmin();
+
+  AppSelfServiceUserData retrieveSelfServiceUserForAdmin(Long userId);
+
+  AppSelfServiceUser retrieveSelfServiceUserDomainForAdmin(Long userId);
 
   boolean isUsernameExist(String username);
 }

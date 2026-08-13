@@ -98,6 +98,21 @@ class SelfServiceSecurityFilterChainIntegrationTest {
   }
 
   @Test
+  void selfServiceUserAdminEndpoint_isNotHandledBySelfServiceSecurityChain() throws Exception {
+    ResultMatcher notHandledBySelfServiceChain =
+        result -> {
+          int status = result.getResponse().getStatus();
+          if (status != 404) {
+            throw new AssertionError("Expected status to be 404, but was " + status);
+          }
+        };
+
+    mockMvc
+        .perform(get("/v1/selfservice/users").header("Fineract-Platform-TenantId", "default"))
+        .andExpect(notHandledBySelfServiceChain);
+  }
+
+  @Test
   void nonSelfEndpoint_isNotAffectedByOurFilterChain() throws Exception {
     ResultMatcher notUnauthorized =
         result -> {

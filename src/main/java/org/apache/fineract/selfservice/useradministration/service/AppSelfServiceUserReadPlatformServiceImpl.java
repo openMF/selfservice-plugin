@@ -19,9 +19,13 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.office.data.OfficeData;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.organisation.staff.data.StaffData;
@@ -47,6 +51,7 @@ public class AppSelfServiceUserReadPlatformServiceImpl
     implements AppSelfServiceUserReadPlatformService {
 
   private final PlatformSelfServiceSecurityContext context;
+  private final PlatformSecurityContext platformSecurityContext;
   private final JdbcTemplate jdbcTemplate;
   private final OfficeReadPlatformService officeReadPlatformService;
   private final SelfServiceRoleReadPlatformService roleReadPlatformService;
@@ -68,14 +73,7 @@ public class AppSelfServiceUserReadPlatformServiceImpl
   public Collection<AppSelfServiceUserData> retrieveAllSelfServiceUsers() {
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
-    final String hierarchy = currentUser.getOffice().getHierarchy();
-    final String hierarchySearchString = hierarchy + "%";
-
-    final AppSelfServiceUserMapper mapper =
-        new AppSelfServiceUserMapper(this.roleReadPlatformService, this.staffReadPlatformService);
-    final String sql = "select " + mapper.schema();
-
-    return this.jdbcTemplate.query(sql, mapper, new Object[] {hierarchySearchString}); // NOSONAR
+    return retrieveAllSelfServiceUsers(currentUser.getOffice().getHierarchy(), false);
   }
 
   @Override
@@ -116,6 +114,59 @@ public class AppSelfServiceUserReadPlatformServiceImpl
       throw new UserNotFoundException(userId);
     }
 
+    return toUserData(user, false);
+  }
+
+  @Override
+  public Collection<AppSelfServiceUserData> retrieveAllSelfServiceUsersForAdmin() {
+    final String hierarchy =
+        this.platformSecurityContext.authenticatedUser().getOffice().getHierarchy();
+    return retrieveAllSelfServiceUsers(hierarchy, true);
+  }
+
+  @Override
+  public AppSelfServiceUserData retrieveSelfServiceUserForAdmin(final Long userId) {
+    final AppSelfServiceUser user = retrieveSelfServiceUserDomainForAdmin(userId);
+    return toUserData(user, true);
+  }
+
+  @Override
+  public AppSelfServiceUser retrieveSelfServiceUserDomainForAdmin(final Long userId) {
+    final String hierarchySearchString = this.platformSecurityContext.officeHierarchy() + "%";
+    final AppSelfServiceUser user =
+        this.appUserRepository.findByIdAndOfficeHierarchy(userId, hierarchySearchString);
+    if (user == null || user.isDeleted()) {
+      throw new UserNotFoundException(userId);
+    }
+    return user;
+  }
+
+  private Collection<AppSelfServiceUserData> retrieveAllSelfServiceUsers(
+      final String hierarchy, final boolean includeAdminFields) {
+    final String hierarchySearchString = hierarchy + "%";
+    final AppSelfServiceUserMapper mapper =
+        new AppSelfServiceUserMapper(
+            this.roleReadPlatformService, this.staffReadPlatformService, includeAdminFields);
+    final String sql = "select " + mapper.schema();
+    final Collection<AppSelfServiceUserData> users =
+        this.jdbcTemplate.query(sql, mapper, new Object[] {hierarchySearchString}); // NOSONAR
+    if (includeAdminFields && !users.isEmpty()) {
+      Map<Long, AppSelfServiceUser> usersById =
+          this.appUserRepository
+              .findByIdIn(users.stream().map(AppSelfServiceUserData::getId).toList())
+              .stream()
+              .collect(Collectors.toMap(AppSelfServiceUser::getId, Function.identity()));
+      for (AppSelfServiceUserData userData : users) {
+        AppSelfServiceUser user = usersById.get(userData.getId());
+        if (user != null) {
+          appendClients(userData, user);
+        }
+      }
+    }
+    return users;
+  }
+
+  private AppSelfServiceUserData toUserData(final AppSelfServiceUser user, boolean includeStatus) {
     final Collection<RoleData> availableRoles = this.roleReadPlatformService.retrieveAll();
 
     final Collection<RoleData> selectedUserRoles = new ArrayList<>();
@@ -134,22 +185,28 @@ public class AppSelfServiceUserReadPlatformServiceImpl
     }
 
     AppSelfServiceUserData retUser =
-        AppSelfServiceUserData.instance(
+        AppSelfServiceUserData.adminInstance(
             user.getId(),
             user.getUsername(),
             user.getEmail(),
             user.getOffice().getId(),
             user.getOffice().getName(),
             user.getFirstname(),
-            user.getLastname(),
-            availableRoles,
             null,
+            user.getLastname(),
+            includeStatus ? user.isEnabled() : null,
+            includeStatus ? user.isDeleted() : null,
+            availableRoles,
             selectedUserRoles,
             linkedStaff,
             user.getPasswordNeverExpires(),
             user.isSelfServiceUser());
+    appendClients(retUser, user);
+    return retUser;
+  }
 
-    if (retUser.isSelfServiceUser()) {
+  private void appendClients(AppSelfServiceUserData userData, AppSelfServiceUser user) {
+    if (userData.isSelfServiceUser() && user.getAppUserClientMappings() != null) {
       Set<ClientData> clients = new HashSet<>();
       for (AppSelfServiceUserClientMapping clientMap : user.getAppUserClientMappings()) {
         Client client = clientMap.getClient();
@@ -160,22 +217,23 @@ public class AppSelfServiceUserReadPlatformServiceImpl
                 client.getOffice().getId(),
                 client.getOffice().getName()));
       }
-      retUser.setClients(clients);
+      userData.setClients(clients);
     }
-
-    return retUser;
   }
 
   private static final class AppSelfServiceUserMapper implements RowMapper<AppSelfServiceUserData> {
 
     private final SelfServiceRoleReadPlatformService roleReadPlatformService;
     private final StaffReadService staffReadPlatformService;
+    private final boolean includeAdminFields;
 
     AppSelfServiceUserMapper(
         final SelfServiceRoleReadPlatformService roleReadPlatformService,
-        final StaffReadService staffReadPlatformService) {
+        final StaffReadService staffReadPlatformService,
+        final boolean includeAdminFields) {
       this.roleReadPlatformService = roleReadPlatformService;
       this.staffReadPlatformService = staffReadPlatformService;
+      this.includeAdminFields = includeAdminFields;
     }
 
     @Override
@@ -192,6 +250,8 @@ public class AppSelfServiceUserReadPlatformServiceImpl
       final Long staffId = JdbcSupport.getLong(rs, "staffId");
       final Boolean passwordNeverExpire = rs.getBoolean("passwordNeverExpires");
       final Boolean isSelfServiceUser = rs.getBoolean("isSelfServiceUser");
+      final Boolean enabled = rs.getBoolean("enabled");
+      final Boolean deleted = rs.getBoolean("deleted");
       final Collection<RoleData> selectedRoles =
           this.roleReadPlatformService.retrieveAppUserRoles(id);
 
@@ -201,15 +261,17 @@ public class AppSelfServiceUserReadPlatformServiceImpl
       } else {
         linkedStaff = null;
       }
-      return AppSelfServiceUserData.instance(
+      return AppSelfServiceUserData.adminInstance(
           id,
           username,
           email,
           officeId,
           officeName,
           firstname,
-          lastname,
           null,
+          lastname,
+          includeAdminFields ? enabled : null,
+          includeAdminFields ? deleted : null,
           null,
           selectedRoles,
           linkedStaff,
@@ -221,7 +283,8 @@ public class AppSelfServiceUserReadPlatformServiceImpl
       return " u.id as id, u.username as username, u.firstname as firstname, u.lastname as"
           + " lastname, u.email as email, u.password_never_expires as passwordNeverExpires, "
           + " u.office_id as officeId, o.name as officeName, u.staff_id as staffId,"
-          + " u.is_self_service_user as isSelfServiceUser from m_appselfservice_user u  join"
+          + " u.is_self_service_user as isSelfServiceUser, u.enabled as enabled,"
+          + " u.is_deleted as deleted from m_appselfservice_user u  join"
           + " m_office o on o.id = u.office_id where o.hierarchy like ? and"
           + " u.is_deleted=false order by u.username";
     }

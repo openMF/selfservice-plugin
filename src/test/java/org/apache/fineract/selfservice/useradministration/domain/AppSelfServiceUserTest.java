@@ -95,12 +95,23 @@ class AppSelfServiceUserTest {
   @Test
   void delete_shouldSoftDelete() {
     AppSelfServiceUser user = createUser(new HashSet<>());
+    setId(user, 99L);
     user.delete();
 
     assertTrue(user.isDeleted());
     assertFalse(user.isEnabled());
     assertFalse(user.isAccountNonExpired());
-    assertTrue(user.getUsername().contains("DELETED"));
+    assertEquals("99_DELETED_testuser", user.getUsername());
+  }
+
+  @Test
+  void disable_shouldInactivateWithoutDeletingOrRenamingUsername() {
+    AppSelfServiceUser user = createUser(new HashSet<>());
+    user.disable();
+
+    assertFalse(user.isEnabled());
+    assertFalse(user.isDeleted());
+    assertEquals("testuser", user.getUsername());
   }
 
   @Test
@@ -195,5 +206,15 @@ class AppSelfServiceUserTest {
     AppSelfServiceUser user = createUser(new HashSet<>());
     assertNull(user.getStaffId());
     assertNull(user.getStaff());
+  }
+
+  private void setId(AppSelfServiceUser user, Long id) {
+    try {
+      var idField = AppSelfServiceUser.class.getSuperclass().getDeclaredField("id");
+      idField.setAccessible(true);
+      idField.set(user, id);
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
