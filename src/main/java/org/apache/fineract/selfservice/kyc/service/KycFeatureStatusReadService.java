@@ -90,6 +90,6 @@ public class KycFeatureStatusReadService {
 
   private SelfServiceAuthenticatedUserKycData defaultData() {
     return new SelfServiceAuthenticatedUserKycData(
-        Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, "In Review");
+        Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, Boolean.FALSE, "Pending");
   }
 }
