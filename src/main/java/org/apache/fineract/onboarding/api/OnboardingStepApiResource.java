@@ -42,7 +42,7 @@ import org.springframework.stereotype.Component;
  * progress is in {@code m_selfservice_onboarding_step}. Used by the mobile app to advance
  * enrollment steps 6–15 after registration/confirm have completed 1–5.
  */
-@Path("/v1/onboarding/steps")
+@Path("/v1/onboarding")
 @Component
 @Tag(name = "Self Service Onboarding Steps", description = "Track and update enrollment step status")
 @RequiredArgsConstructor
