@@ -45,8 +45,6 @@ public class SelfServiceOnboardingStepService {
   private final TransactionDateUtil transactionDateUtil;
   private final AppSelfServiceUserClientMappingRepository userClientMappingRepository;
 
-  // ── ClientId resolution (backoffice / webhook) ──────────────────────────
-
   /**
    * Resolves the self-service app user id mapped to a Fineract client.
    * Multi-tenant: mapping lives in the tenant schema.
@@ -92,7 +90,6 @@ public class SelfServiceOnboardingStepService {
     return getProgress(appUserId);
   }
 
-  // ── UserId-based API (self-service / mobile) ────────────────────────────
 
   /** Creates progress rows for every active step definition (idempotent). */
   @Transactional
@@ -249,8 +246,6 @@ public class SelfServiceOnboardingStepService {
       log.info("Synced {} new onboarding steps for userId={}", toAdd.size(), appUserId);
     }
   }
-
-  // ── Progress builders ───────────────────────────────────────────────────
 
   private OnboardingProgressData buildProgress(List<SelfServiceOnboardingStep> steps) {
     int total = steps.size();
