@@ -15,6 +15,7 @@
 package org.apache.fineract.selfservice.useradministration.domain;
 
 import java.util.Optional;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -29,16 +30,22 @@ public interface AppSelfServiceUserClientMappingRepository
 
   @Modifying(clearAutomatically = true)
   @Transactional
+  @CacheEvict(
+      value = {
+        "appSelfServiceUserClientFetchByClientId",
+        "appSelfServiceUserUserClientFetchByAppuserUsername",
+        "appSelfServiceUserUserClientFetchByAppUserId"
+      },
+      allEntries = true)
   @Query(
       value =
           "INSERT INTO m_selfservice_user_client_mapping (appuser_id, client_id) VALUES (?1, ?2)",
       nativeQuery = true)
-  void saveClientUserMapping(
-      @Param("appuserId") Long appuserId, @Param("clientId") Long clientId);
+  void saveClientUserMapping(@Param("appuserId") Long appuserId, @Param("clientId") Long clientId);
 
   /**
-   * Lookup mapping by Fineract client id (backoffice / webhook flows).
-   * Cache key is tenant-scoped for multi-tenant safety.
+   * Lookup mapping by Fineract client id (backoffice / webhook flows). Cache key is tenant-scoped
+   * for multi-tenant safety.
    *
    * @return mapping or {@code null} if none exists
    */
@@ -53,8 +60,8 @@ public interface AppSelfServiceUserClientMappingRepository
   AppSelfServiceUserClientMapping fetchByClientId(@Param("clientId") Long clientId);
 
   /**
-   * Same as {@link #fetchByClientId(Long)} but as {@link Optional} for safer null handling
-   * in onboarding / KYC backoffice APIs.
+   * Same as {@link #fetchByClientId(Long)} but as {@link Optional} for safer null handling in
+   * onboarding / KYC backoffice APIs.
    */
   @Query(
       "SELECT appUserMapping FROM AppSelfServiceUserClientMapping appUserMapping"
@@ -88,11 +95,24 @@ public interface AppSelfServiceUserClientMappingRepository
               + ".getTenant().getTenantIdentifier().concat(#appUserId)")
   AppSelfServiceUserClientMapping fetchByAppUserId(@Param("appUserId") Long appUserId);
 
-  /**
-   * Optional variant of {@link #fetchByAppUserId(Long)}.
-   */
+  /** Optional variant of {@link #fetchByAppUserId(Long)}. */
   @Query(
       "SELECT appUserMapping FROM AppSelfServiceUserClientMapping appUserMapping"
           + " WHERE appUserMapping.appUser.id = :appUserId")
   Optional<AppSelfServiceUserClientMapping> findByAppUserId(@Param("appUserId") Long appUserId);
+
+  boolean existsByAppUserIdAndClientId(Long appUserId, Long clientId);
+
+  boolean existsByClientId(Long clientId);
+
+  @Modifying(clearAutomatically = true)
+  @Transactional
+  @CacheEvict(
+      value = {
+        "appSelfServiceUserClientFetchByClientId",
+        "appSelfServiceUserUserClientFetchByAppuserUsername",
+        "appSelfServiceUserUserClientFetchByAppUserId"
+      },
+      allEntries = true)
+  void deleteByAppUserIdAndClientId(Long appUserId, Long clientId);
 }

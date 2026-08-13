@@ -428,6 +428,10 @@ public class AppSelfServiceUser extends AbstractPersistableCustom<Long>
     this.roles.clear();
   }
 
+  public void disable() {
+    this.enabled = false;
+  }
+
   public boolean isDeleted() {
     return this.deleted;
   }

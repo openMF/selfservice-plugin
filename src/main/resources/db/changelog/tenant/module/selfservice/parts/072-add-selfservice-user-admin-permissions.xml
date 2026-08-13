@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="fineract" id="ss-0058-1-add-selfservice-user-admin-permissions">
+    <preConditions onFail="MARK_RAN">
+      <tableExists tableName="m_permission"/>
+    </preConditions>
+    <sql>
+      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+      SELECT 'user administration', 'READ_SELFSERVICEUSER', 'SELFSERVICEUSER', 'READ', false
+      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_SELFSERVICEUSER');
+
+      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+      SELECT 'user administration', 'UPDATE_SELFSERVICEUSER', 'SELFSERVICEUSER', 'UPDATE', false
+      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'UPDATE_SELFSERVICEUSER');
+
+      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+      SELECT 'user administration', 'DELETE_SELFSERVICEUSER', 'SELFSERVICEUSER', 'DELETE', false
+      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'DELETE_SELFSERVICEUSER');
+    </sql>
+  </changeSet>
+</databaseChangeLog>

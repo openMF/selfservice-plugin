@@ -30,8 +30,11 @@ public final class AppSelfServiceUserData {
   private final Long officeId;
   private final String officeName;
   private final String firstname;
+  private final String middleName;
   private final String lastname;
   private final String email;
+  private final Boolean enabled;
+  private final Boolean deleted;
   private final Boolean passwordNeverExpires;
 
   // import fields
@@ -92,8 +95,11 @@ public final class AppSelfServiceUserData {
     this.officeId = officeId;
     this.officeName = null;
     this.firstname = firstname;
+    this.middleName = null;
     this.lastname = lastname;
     this.email = email;
+    this.enabled = null;
+    this.deleted = null;
     this.passwordNeverExpires = passwordNeverExpires;
     this.roles = roleIds;
     this.sendPasswordToEmail = sendPasswordToEmail;
@@ -121,7 +127,10 @@ public final class AppSelfServiceUserData {
         user.officeId,
         user.officeName,
         user.firstname,
+        user.middleName,
         user.lastname,
+        user.enabled,
+        user.deleted,
         user.availableRoles,
         user.selfServiceRoles,
         user.selectedRoles,
@@ -143,6 +152,9 @@ public final class AppSelfServiceUserData {
         null,
         null,
         null,
+        null,
+        null,
+        null,
         availableRoles,
         selfServiceRoles,
         null,
@@ -154,7 +166,8 @@ public final class AppSelfServiceUserData {
 
   public static AppSelfServiceUserData dropdown(final Long id, final String username) {
     return new AppSelfServiceUserData(
-        id, username, null, null, null, null, null, null, null, null, null, null, null, null);
+        id, username, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null);
   }
 
   public static AppSelfServiceUserData instance(
@@ -178,7 +191,10 @@ public final class AppSelfServiceUserData {
         officeId,
         officeName,
         firstname,
+        null,
         lastname,
+        null,
+        null,
         availableRoles,
         selfServiceRoles,
         selectedRoles,
@@ -195,7 +211,10 @@ public final class AppSelfServiceUserData {
       final Long officeId,
       final String officeName,
       final String firstname,
+      final String middleName,
       final String lastname,
+      final Boolean enabled,
+      final Boolean deleted,
       final Collection<RoleData> availableRoles,
       final Collection<RoleData> selfServiceRoles,
       final Collection<RoleData> selectedRoles,
@@ -208,8 +227,11 @@ public final class AppSelfServiceUserData {
     this.officeId = officeId;
     this.officeName = officeName;
     this.firstname = firstname;
+    this.middleName = middleName;
     this.lastname = lastname;
     this.email = email;
+    this.enabled = enabled;
+    this.deleted = deleted;
     this.allowedOffices = allowedOffices;
     this.availableRoles = availableRoles;
     this.selfServiceRoles = selfServiceRoles;
@@ -219,8 +241,48 @@ public final class AppSelfServiceUserData {
     this.isSelfServiceUser = isSelfServiceUser;
   }
 
+  public static AppSelfServiceUserData adminInstance(
+      final Long id,
+      final String username,
+      final String email,
+      final Long officeId,
+      final String officeName,
+      final String firstname,
+      final String middleName,
+      final String lastname,
+      final Boolean enabled,
+      final Boolean deleted,
+      final Collection<RoleData> availableRoles,
+      final Collection<RoleData> selectedRoles,
+      final StaffData staff,
+      final Boolean passwordNeverExpire,
+      final Boolean isSelfServiceUser) {
+    return new AppSelfServiceUserData(
+        id,
+        username,
+        email,
+        officeId,
+        officeName,
+        firstname,
+        middleName,
+        lastname,
+        enabled,
+        deleted,
+        availableRoles,
+        null,
+        selectedRoles,
+        null,
+        staff,
+        passwordNeverExpire,
+        isSelfServiceUser);
+  }
+
   public boolean hasIdentifyOf(final Long createdById) {
     return this.id.equals(createdById);
+  }
+
+  public Long getId() {
+    return this.id;
   }
 
   public String username() {

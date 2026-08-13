@@ -16,6 +16,7 @@ package org.apache.fineract.selfservice.useradministration.domain;
 
 import java.util.Collection;
 import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUserRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -32,4 +33,17 @@ public interface AppSelfServiceUserRepository
   AppSelfServiceUser findAppSelfServiceUserByName(@Param("username") String username);
 
   Collection<AppSelfServiceUser> findByOfficeId(Long officeId);
+
+  @Query(
+      "select appSelfServiceUser from AppSelfServiceUser appSelfServiceUser where"
+          + " appSelfServiceUser.id = :userId and appSelfServiceUser.office.hierarchy like"
+          + " :officeHierarchy")
+  AppSelfServiceUser findByIdAndOfficeHierarchy(
+      @Param("userId") Long userId, @Param("officeHierarchy") String officeHierarchy);
+
+  @EntityGraph(attributePaths = {"appUserClientMappings", "appUserClientMappings.client"})
+  @Query(
+      "select appSelfServiceUser from AppSelfServiceUser appSelfServiceUser where"
+          + " appSelfServiceUser.id in :userIds")
+  Collection<AppSelfServiceUser> findByIdIn(Collection<Long> userIds);
 }
