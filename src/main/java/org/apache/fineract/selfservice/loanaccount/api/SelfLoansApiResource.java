@@ -52,16 +52,15 @@ import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoanTransactionsApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoansApiResource;
-import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanTemplateTypeRequiredException;
 import org.apache.fineract.portfolio.loanaccount.exception.NotSupportedLoanTemplateTypeException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiResource;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -81,8 +80,7 @@ public class SelfLoansApiResource {
   private final LoansApiResource loansApiResource;
   private final LoanTransactionsApiResource loanTransactionsApiResource;
   private final LoanChargesApiResource loanChargesApiResource;
-  private final AppuserLoansMapperReadService appuserLoansMapperReadService;
-  private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   private final SelfLoansDataValidator dataValidator;
   private final GuarantorsApiResource guarantorsApiResource;
 
@@ -506,21 +504,11 @@ public class SelfLoansApiResource {
   }
 
   private void validateAppSelfServiceUserLoanMapping(final Long loanId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean isLoanMappedToUser =
-        this.appuserLoansMapperReadService.isLoanMappedToUser(loanId, user.getId());
-    if (!isLoanMappedToUser) {
-      throw new LoanNotFoundException(loanId);
-    }
+    this.selfServiceOwnershipGuard.validateLoanOwnership(loanId);
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
+    this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
 
   private boolean is(final String commandParam, final String commandValue) {

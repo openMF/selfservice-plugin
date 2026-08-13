@@ -43,6 +43,7 @@ import org.apache.fineract.selfservice.account.service.SelfAccountTransferWriteP
 import org.apache.fineract.selfservice.account.service.SelfBeneficiariesTPTReadPlatformService;
 import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.context.ApplicationEventPublisher;
@@ -76,6 +77,7 @@ public class SelfAccountTransferApiResource {
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
   private final ConfigurationDomainService configurationDomainService;
   private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
+  private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
 
   @POST
   @Path("/prepare")
@@ -88,6 +90,10 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    if (request != null && request.getFromAccount() != null) {
+      this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
+          request.getFromAccount(), request.getFromAccountType());
+    }
     Object result = transferWritePlatformService.prepareTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -103,6 +109,10 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    if (request != null && request.getFromAccount() != null) {
+      this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
+          request.getFromAccount(), request.getFromAccountType());
+    }
     Object result = transferWritePlatformService.quoteTransfer(request);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -119,6 +129,10 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferConfirmRequest request =
         new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    if (request != null && request.getFromAccount() != null) {
+      this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
+          request.getFromAccount(), request.getFromAccountType());
+    }
     Object result = transferWritePlatformService.confirmTransfer(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -215,6 +229,14 @@ public class SelfAccountTransferApiResource {
       @Context HttpServletRequest httpRequest) {
 
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+
+    Map<String, Object> params = this.dataValidator.validateCreate(type, apiRequestBodyAsJson);
+    SelfAccountTemplateData fromAccount = (SelfAccountTemplateData) params.get("fromAccount");
+    if (fromAccount != null && fromAccount.getAccountId() != null) {
+      this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
+          fromAccount.getAccountId().toString(), fromAccount.getAccountType());
+    }
+
     CommandProcessingResult result =
         transferWritePlatformService.createTransfer(type, apiRequestBodyAsJson, httpRequest);
     return toApiJsonSerializer.serialize(result);

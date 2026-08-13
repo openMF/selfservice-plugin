@@ -32,7 +32,7 @@ import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMa
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
-import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,9 +51,8 @@ class SelfSavingsAccountApiResourceTest {
   @Mock private SavingsAccountsApiResource savingsAccountsApiResource;
   @Mock private SavingsAccountChargesApiResource savingsAccountChargesApiResource;
   @Mock private SavingsAccountTransactionsApiResource savingsAccountTransactionsApiResource;
-  @Mock private AppuserSavingsMapperReadService appuserSavingsMapperReadService;
+  @Mock private SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   @Mock private SelfSavingsDataValidator dataValidator;
-  @Mock private AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
   @Mock private UriInfo uriInfo;
 
   // NEW MOCKS for notification dependencies
@@ -100,9 +99,8 @@ class SelfSavingsAccountApiResourceTest {
             savingsAccountsApiResource,
             savingsAccountChargesApiResource,
             savingsAccountTransactionsApiResource,
-            appuserSavingsMapperReadService,
             dataValidator,
-            appUserClientMapperReadService,
+            selfServiceOwnershipGuard,
             applicationEventPublisher, 
             env,
             notificationDeliveryModeUtil); 
@@ -115,27 +113,23 @@ class SelfSavingsAccountApiResourceTest {
   }
 
   private void mockSavingsMapped() {
-    mockAuthenticatedUser();
-    when(appuserSavingsMapperReadService.isSavingsMappedToUser(ACCOUNT_ID, USER_ID))
-        .thenReturn(true);
+    // do nothing, void method mock
   }
 
   private void mockSavingsNotMapped() {
-    mockAuthenticatedUser();
-    when(appuserSavingsMapperReadService.isSavingsMappedToUser(ACCOUNT_ID, USER_ID))
-        .thenReturn(false);
+    org.mockito.Mockito.doThrow(new SavingsAccountNotFoundException(ACCOUNT_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(ACCOUNT_ID);
   }
 
   private void mockClientMapped() {
-    mockAuthenticatedUser();
-    when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(true);
+    // do nothing, void method mock
   }
 
   private void mockClientNotMapped() {
-    mockAuthenticatedUser();
-    when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(false);
+    org.mockito.Mockito.doThrow(new ClientNotFoundException(CLIENT_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateClientOwnership(CLIENT_ID);
   }
 
   // --- retrieveSavings ---
@@ -153,6 +147,7 @@ class SelfSavingsAccountApiResourceTest {
 
     assertNotNull(result);
     verify(dataValidator).validateRetrieveSavings(uriInfo);
+
   }
 
   @Test

@@ -52,9 +52,9 @@ public abstract class SelfServiceIntegrationTestBase {
     // 3. Fineract Container with Strict Env Variables
     //
     // Image selection (first match wins): -Dfineract.it.image, then env FINERACT_IT_IMAGE, else
-    // apache/fineract:develop (Docker Hub — tracks Fineract develop, aligned with README and
-    // mifosx/docker-compose.yml). Use FINERACT_IT_IMAGE (-Dfineract.it.image) to pin a digest or a
-    // locally built image that matches pom fineract.version exactly.
+    // apache/fineract:develop (Docker Hub provides named tags 'latest' and 'develop' that track
+    // HEAD of Fineract develop branch, as well as shortened and full commit-hash tags). Use
+    // FINERACT_IT_IMAGE (-Dfineract.it.image) to override with a locally built or pinned commit-hash image.
     final String fromEnv = System.getenv("FINERACT_IT_IMAGE");
     final String fromProperty = System.getProperty("fineract.it.image");
     final String defaultImage = "apache/fineract:develop";
@@ -64,6 +64,16 @@ public abstract class SelfServiceIntegrationTestBase {
             : (fromEnv != null && !fromEnv.isBlank() ? fromEnv : defaultImage);
     final DockerImageName dockerImageName =
         DockerImageName.parse(fineractImage).asCompatibleSubstituteFor("apache/fineract");
+
+    String buildDir = System.getProperty("project.build.directory", "target");
+    String testPluginsPath = buildDir + "/test-plugins";
+    java.io.File testPluginsDir = new java.io.File(testPluginsPath);
+    if (!testPluginsDir.exists() && !testPluginsDir.mkdirs()) {
+      throw new IllegalStateException("Failed to create test-plugins directory at: " + testPluginsPath);
+    }
+    if (!testPluginsDir.isDirectory()) {
+      throw new IllegalStateException("Path exists but is not a directory: " + testPluginsPath);
+    }
 
     fineract =
         new GenericContainer<>(dockerImageName)
@@ -99,29 +109,25 @@ public abstract class SelfServiceIntegrationTestBase {
 
             // Mount the compiled Plugin JAR into the auto-scanned /app/plugins directory
             .withCopyFileToContainer(
-                MountableFile.forHostPath("target/selfservice-plugin-1.15.0-SNAPSHOT.jar"),
+                MountableFile.forHostPath(buildDir + "/selfservice-plugin-1.15.0-SNAPSHOT.jar"),
                 "/app/plugins/selfservice-plugin.jar")
 
-            // Mount the savings-plugin dependency alongside it. The stock apache/fineract
-            // image does not ship the exchange-rate/KYC classes (BccrExchangeRateService,
-            // KycFeatureStatus) that this plugin's transfer and authentication beans depend
-            // on; savings-plugin supplies them, so without it on the classpath the context
-            // fails to boot. Copied here by maven-dependency-plugin (pre-integration-test).
+            // Mount the test plugins directory containing other Mifos dependencies (like
+            // savings-plugin)
             .withCopyFileToContainer(
-                MountableFile.forHostPath("target/it-plugins/savings-plugin.jar"),
-                "/app/plugins/savings-plugin.jar")
+                MountableFile.forHostPath(testPluginsPath + "/"), "/app/test-plugins/")
 
-            // Prepend both plugin JARs to the JIB container's classpath.
+            // Prepend the plugin JARs to the JIB container's classpath.
             .withCreateContainerCmdModifier(
                 cmd -> {
                   cmd.withEntrypoint(
                       "sh",
                       "-c",
-                      "CLASSPATH=$(cat /app/jib-classpath-file) && exec java $JAVA_TOOL_OPTIONS"
-                          + " -Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
-                          + " -Djava.security.egd=file:/dev/./urandom -cp"
-                          + " /app/plugins/selfservice-plugin.jar:/app/plugins/savings-plugin.jar:$CLASSPATH"
-                          + " org.apache.fineract.ServerApplication");
+                      "CLASSPATH=$(cat /app/jib-classpath-file) && "
+                          + "exec java $JAVA_TOOL_OPTIONS "
+                          + "-Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Djava.security.egd=file:/dev/./urandom "
+                          + "-cp /app/plugins/selfservice-plugin.jar:/app/test-plugins/*:$CLASSPATH "
+                          + "org.apache.fineract.ServerApplication");
                   cmd.withCmd();
                 })
 
@@ -135,9 +141,23 @@ public abstract class SelfServiceIntegrationTestBase {
                 Wait.forHttps("/fineract-provider/actuator/health")
                     .allowInsecure()
                     .forStatusCode(200)
-                    .withStartupTimeout(Duration.ofMinutes(7)));
+                    .withStartupTimeout(Duration.ofMinutes(15)));
 
-    fineract.start();
+    try {
+      fineract.start();
+    } catch (Exception e) {
+      String containerLogs = "";
+      try {
+        containerLogs = fineract.getLogs();
+      } catch (Exception logEx) {
+        containerLogs = "Failed to retrieve container logs: " + logEx.getMessage();
+      }
+      LOG.error(
+          "Fineract container failed to start. Image: {}. Container logs:\n{}",
+          fineract.getDockerImageName(),
+          containerLogs);
+      throw new ExceptionInInitializerError(e);
+    }
   }
 
   protected static int getFineractPort() {

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        Grants the Self Service User role permissions required by the
+        centralized ownership guard. These permissions are checked via
+        AppSelfServiceUser.validateHasSelfServiceReadPermission().
+    -->
+
+    <changeSet id="ss-0071-2" author="fineract">
+        <comment>
+            Ensure the Self Service User role has the ACCOUNTTRANSFER CREATE permission
+            required by the refactored transfer endpoints.
+        </comment>
+        <sql>
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'self_service', 'CREATE_ACCOUNTTRANSFER', 'ACCOUNTTRANSFER', 'CREATE', FALSE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="ss-0071-3" author="fineract">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_role WHERE name = 'Self Service User'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Grant ACCOUNTTRANSFER CREATE to the Self Service User role if not already granted.
+        </comment>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM m_role r
+            CROSS JOIN m_permission p
+            WHERE r.name = 'Self Service User'
+              AND p.code = 'CREATE_ACCOUNTTRANSFER'
+              AND NOT EXISTS (
+                  SELECT 1 FROM m_role_permission rp
+                  WHERE rp.role_id = r.id AND rp.permission_id = p.id
+              );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

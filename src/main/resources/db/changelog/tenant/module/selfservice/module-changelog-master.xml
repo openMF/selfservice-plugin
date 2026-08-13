@@ -83,4 +83,7 @@
   <include file="parts/070-add-request-audit-table.xml" relativeToChangelogFile="true"/>  
   <include file="parts/071-add-onboarding-grants.xml" relativeToChangelogFile="true"/>
   <include file="parts/072-add-selfservice-user-admin-permissions.xml" relativeToChangelogFile="true"/>
+  <!-- Security: ownership guard audit table and permissions (from security hardening) -->
+  <include file="parts/073-add-access-audit.xml" relativeToChangelogFile="true"/>  
+  <include file="parts/074-create-ownership-guard-permissions.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

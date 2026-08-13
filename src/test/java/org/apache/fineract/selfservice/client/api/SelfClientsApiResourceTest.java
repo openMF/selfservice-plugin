@@ -43,9 +43,9 @@ import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatfor
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorReadPlatformService;
 import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
@@ -72,7 +72,7 @@ class SelfClientsApiResourceTest {
   @Mock private DefaultToApiJsonSerializer<ClientTransactionData> clientTransactionSerializer;
   @Mock private DefaultToApiJsonSerializer<ObligeeData> obligeeSerializer;
   @Mock private ApiRequestParameterHelper apiRequestParameterHelper;
-  @Mock private AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  @Mock private SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   @Mock private SelfClientDataValidator dataValidator;
   @Mock private ImageReadPlatformService imageReadPlatformService;
   @Mock private ImageWritePlatformService imageWritePlatformService;
@@ -99,7 +99,7 @@ class SelfClientsApiResourceTest {
             clientTransactionSerializer,
             obligeeSerializer,
             apiRequestParameterHelper,
-            appUserClientMapperReadService,
+            selfServiceOwnershipGuard,
             dataValidator,
             imageReadPlatformService,
             imageWritePlatformService,
@@ -127,17 +127,14 @@ class SelfClientsApiResourceTest {
   }
 
   private void mockClientMapped() {
-    mockAuthenticatedUser();
-    org.mockito.Mockito.lenient()
-        .when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(true);
+    // do nothing
   }
 
   private void mockClientNotMapped() {
-    mockAuthenticatedUser();
-    org.mockito.Mockito.lenient()
-        .when(appUserClientMapperReadService.isClientMappedToSelfServiceUser(CLIENT_ID, USER_ID))
-        .thenReturn(false);
+    org.mockito.Mockito.doThrow(
+            new org.apache.fineract.portfolio.client.exception.ClientNotFoundException(CLIENT_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateClientOwnership(CLIENT_ID);
   }
 
   // --- retrieveAll ---

@@ -62,7 +62,7 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
-import org.apache.fineract.selfservice.savings.service.AppuserSavingsMapperReadService;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -83,9 +83,8 @@ public class SelfSavingsAccountApiResource {
   private final SavingsAccountsApiResource savingsAccountsApiResource;
   private final SavingsAccountChargesApiResource savingsAccountChargesApiResource;
   private final SavingsAccountTransactionsApiResource savingsAccountTransactionsApiResource;
-  private final AppuserSavingsMapperReadService appuserSavingsMapperReadService;
   private final SelfSavingsDataValidator dataValidator;
-  private final AppSelfServiceUserClientMapperReadService appUserClientMapperReadService;
+  private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
 
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
@@ -308,12 +307,7 @@ public class SelfSavingsAccountApiResource {
   }
 
   private void validateAppSelfServiceUserSavingsAccountMapping(final Long accountId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean isMappedSavings =
-        this.appuserSavingsMapperReadService.isSavingsMappedToUser(accountId, user.getId());
-    if (!isMappedSavings) {
-      throw new SavingsAccountNotFoundException(accountId);
-    }
+    this.selfServiceOwnershipGuard.validateSavingsOwnership(accountId);
   }
 
   @GET
@@ -408,12 +402,7 @@ public class SelfSavingsAccountApiResource {
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
-    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final boolean mappedClientId =
-        this.appUserClientMapperReadService.isClientMappedToSelfServiceUser(clientId, user.getId());
-    if (!mappedClientId) {
-      throw new ClientNotFoundException(clientId);
-    }
+    this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
 
   // --- Helper Methods for Notifications ---
