@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Copyright since 2026 Mifos Initiative
-
     This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
     If a copy of the MPL was not distributed with this file, You can obtain one at
     http://mozilla.org/MPL/2.0/.
@@ -13,29 +12,59 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
     <!--
+        MULTI-TENANT NOTE: This changelog is included in the TENANT changelog master.
+        It will be executed against EVERY tenant schema automatically by Fineract's
+        multi-tenant Liquibase runner.
+
         Grants the Self Service User role permissions required by the
         centralized ownership guard. These permissions are checked via
         AppSelfServiceUser.validateHasSelfServiceReadPermission().
     -->
 
+    <!-- ========================================================= -->
+    <!-- Ensure CREATE_ACCOUNTTRANSFER permission exists           -->
+    <!-- ========================================================= -->
     <changeSet id="ss-0071-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_permission"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
+            </sqlCheck>
+        </preConditions>
         <comment>
             Ensure the Self Service User role has the ACCOUNTTRANSFER CREATE permission
             required by the refactored transfer endpoints.
         </comment>
-        <sql>
-            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
-            SELECT 'self_service', 'CREATE_ACCOUNTTRANSFER', 'ACCOUNTTRANSFER', 'CREATE', FALSE
-            WHERE NOT EXISTS (
-                SELECT 1 FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
-            );
-        </sql>
+        <insert tableName="m_permission">
+            <column name="grouping" value="self_service"/>
+            <column name="code" value="CREATE_ACCOUNTTRANSFER"/>
+            <column name="entity_name" value="ACCOUNTTRANSFER"/>
+            <column name="action_name" value="CREATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
     </changeSet>
 
+    <!-- ========================================================= -->
+    <!-- Grant permission to Self Service User role                -->
+    <!-- ========================================================= -->
     <changeSet id="ss-0071-3" author="fineract">
         <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_role"/>
+            <tableExists tableName="m_permission"/>
+            <tableExists tableName="m_role_permission"/>
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_role WHERE name = 'Self Service User'
+            </sqlCheck>
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM m_role_permission rp
+                INNER JOIN m_role r ON r.id = rp.role_id
+                INNER JOIN m_permission p ON p.id = rp.permission_id
+                WHERE r.name = 'Self Service User'
+                  AND p.code = 'CREATE_ACCOUNTTRANSFER'
             </sqlCheck>
         </preConditions>
         <comment>
@@ -48,10 +77,6 @@
             CROSS JOIN m_permission p
             WHERE r.name = 'Self Service User'
               AND p.code = 'CREATE_ACCOUNTTRANSFER'
-              AND NOT EXISTS (
-                  SELECT 1 FROM m_role_permission rp
-                  WHERE rp.role_id = r.id AND rp.permission_id = p.id
-              );
         </sql>
     </changeSet>
 

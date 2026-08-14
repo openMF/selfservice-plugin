@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Copyright since 2026 Mifos Initiative
-
     This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
     If a copy of the MPL was not distributed with this file, You can obtain one at
     http://mozilla.org/MPL/2.0/.
@@ -19,7 +18,15 @@
         each tenant has its own isolated schema.
     -->
 
+    <!-- ========================================================= -->
+    <!-- Create m_selfservice_access_audit                         -->
+    <!-- ========================================================= -->
     <changeSet id="ss-0073-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_access_audit"/>
+            </not>
+        </preConditions>
         <comment>
             Creates the access audit table for recording all ownership validation
             attempts (granted and denied). Used for security monitoring, forensic
@@ -61,8 +68,21 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
+    </changeSet>
 
-        <!-- Index for rate-limit queries (user + resource_type + result + time) -->
+    <!-- ========================================================= -->
+    <!-- Indexes                                                   -->
+    <!-- ========================================================= -->
+
+    <!-- Index for rate-limit queries (user + resource_type + result + time) -->
+    <changeSet id="ss-0073-1a" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_access_audit"/>
+            <not>
+                <indexExists tableName="m_selfservice_access_audit"
+                             indexName="idx_ss_audit_ratelimit"/>
+            </not>
+        </preConditions>
         <createIndex tableName="m_selfservice_access_audit"
                      indexName="idx_ss_audit_ratelimit">
             <column name="appuser_id"/>
@@ -70,36 +90,73 @@
             <column name="access_result"/>
             <column name="created_at"/>
         </createIndex>
+    </changeSet>
 
-        <!-- Index for global rate-limit queries (user + result + time) -->
+    <!-- Index for global rate-limit queries (user + result + time) -->
+    <changeSet id="ss-0073-1b" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_access_audit"/>
+            <not>
+                <indexExists tableName="m_selfservice_access_audit"
+                             indexName="idx_ss_audit_global_ratelimit"/>
+            </not>
+        </preConditions>
         <createIndex tableName="m_selfservice_access_audit"
                      indexName="idx_ss_audit_global_ratelimit">
             <column name="appuser_id"/>
             <column name="access_result"/>
             <column name="created_at"/>
         </createIndex>
+    </changeSet>
 
-        <!-- Index for forensic queries by resource -->
+    <!-- Index for forensic queries by resource -->
+    <changeSet id="ss-0073-1c" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_access_audit"/>
+            <not>
+                <indexExists tableName="m_selfservice_access_audit"
+                             indexName="idx_ss_audit_resource"/>
+            </not>
+        </preConditions>
         <createIndex tableName="m_selfservice_access_audit"
                      indexName="idx_ss_audit_resource">
             <column name="resource_type"/>
             <column name="resource_id"/>
         </createIndex>
+    </changeSet>
 
-        <!-- 
-            Index for time-based cleanup (retention policy).
-            Retention Basis: This table stores transient PII (username, IP) used solely for 
-            immediate rate-limiting and short-term forensic analysis of IDOR/brute-force attacks.
-            Records are automatically purged by the application layer after the approved 
-            retention period (default 30 days) to comply with data minimization and privacy policies.
-        -->
+    <!--
+        Index for time-based cleanup (retention policy).
+        Retention Basis: This table stores transient PII (username, IP) used solely for
+        immediate rate-limiting and short-term forensic analysis of IDOR/brute-force attacks.
+        Records are automatically purged by the application layer after the approved
+        retention period (default 30 days) to comply with data minimization and privacy policies.
+    -->
+    <changeSet id="ss-0073-1d" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_access_audit"/>
+            <not>
+                <indexExists tableName="m_selfservice_access_audit"
+                             indexName="idx_ss_audit_created_at"/>
+            </not>
+        </preConditions>
         <createIndex tableName="m_selfservice_access_audit"
                      indexName="idx_ss_audit_created_at">
             <column name="created_at"/>
         </createIndex>
     </changeSet>
 
+    <!-- ========================================================= -->
+    <!-- Foreign key                                               -->
+    <!-- ========================================================= -->
     <changeSet id="ss-0073-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_access_audit"/>
+            <tableExists tableName="m_appuser"/>
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_ss_audit_appuser"/>
+            </not>
+        </preConditions>
         <comment>
             Add foreign key to m_appuser for referential integrity.
             Note: In multi-tenant mode, both tables exist in the same tenant schema.
@@ -109,7 +166,9 @@
             baseColumnNames="appuser_id"
             referencedTableName="m_appuser"
             referencedColumnNames="id"
-            constraintName="fk_ss_audit_appuser"/>
+            constraintName="fk_ss_audit_appuser"
+            onDelete="RESTRICT"
+            onUpdate="RESTRICT"/>
     </changeSet>
 
 </databaseChangeLog>
