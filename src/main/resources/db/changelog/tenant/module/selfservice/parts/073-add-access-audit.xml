@@ -14,8 +14,7 @@
     <!--
         MULTI-TENANT NOTE: This changelog is included in the TENANT changelog master.
         It will be executed against EVERY tenant schema automatically by Fineract's
-        multi-tenant Liquibase runner. No explicit tenant_id column is needed because
-        each tenant has its own isolated schema.
+        multi-tenant Liquibase runner.
     -->
 
     <!-- ========================================================= -->
@@ -71,10 +70,8 @@
     </changeSet>
 
     <!-- ========================================================= -->
-    <!-- Indexes                                                   -->
+    <!-- Indexes (each independently guarded)                      -->
     <!-- ========================================================= -->
-
-    <!-- Index for rate-limit queries (user + resource_type + result + time) -->
     <changeSet id="ss-0073-1a" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
@@ -92,7 +89,6 @@
         </createIndex>
     </changeSet>
 
-    <!-- Index for global rate-limit queries (user + result + time) -->
     <changeSet id="ss-0073-1b" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
@@ -109,7 +105,6 @@
         </createIndex>
     </changeSet>
 
-    <!-- Index for forensic queries by resource -->
     <changeSet id="ss-0073-1c" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
@@ -125,13 +120,6 @@
         </createIndex>
     </changeSet>
 
-    <!--
-        Index for time-based cleanup (retention policy).
-        Retention Basis: This table stores transient PII (username, IP) used solely for
-        immediate rate-limiting and short-term forensic analysis of IDOR/brute-force attacks.
-        Records are automatically purged by the application layer after the approved
-        retention period (default 30 days) to comply with data minimization and privacy policies.
-    -->
     <changeSet id="ss-0073-1d" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
@@ -140,6 +128,11 @@
                              indexName="idx_ss_audit_created_at"/>
             </not>
         </preConditions>
+        <comment>
+            Index for time-based cleanup (retention policy).
+            Records are purged by the application layer after the approved
+            retention period (default 30 days).
+        </comment>
         <createIndex tableName="m_selfservice_access_audit"
                      indexName="idx_ss_audit_created_at">
             <column name="created_at"/>
@@ -159,7 +152,6 @@
         </preConditions>
         <comment>
             Add foreign key to m_appuser for referential integrity.
-            Note: In multi-tenant mode, both tables exist in the same tenant schema.
         </comment>
         <addForeignKeyConstraint
             baseTableName="m_selfservice_access_audit"

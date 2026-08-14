@@ -24,7 +24,7 @@
     <!-- ========================================================= -->
     <!-- Ensure CREATE_ACCOUNTTRANSFER permission exists           -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0071-2" author="fineract">
+    <changeSet id="ss-0074-2" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_permission"/>
             <sqlCheck expectedResult="0">
@@ -47,7 +47,7 @@
     <!-- ========================================================= -->
     <!-- Grant permission to Self Service User role                -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0071-3" author="fineract">
+    <changeSet id="ss-0074-3" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_role"/>
             <tableExists tableName="m_permission"/>
