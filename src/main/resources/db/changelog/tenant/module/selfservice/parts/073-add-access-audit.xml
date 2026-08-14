@@ -72,7 +72,7 @@
     <!-- ========================================================= -->
     <!-- Indexes (each independently guarded)                      -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0073-1a" author="fineract">
+    <changeSet id="ss-0073-2" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
             <not>
@@ -89,7 +89,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="ss-0073-1b" author="fineract">
+    <changeSet id="ss-0073-3" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
             <not>
@@ -105,7 +105,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="ss-0073-1c" author="fineract">
+    <changeSet id="ss-0073-4" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
             <not>
@@ -120,7 +120,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="ss-0073-1d" author="fineract">
+    <changeSet id="ss-0073-5" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
             <not>
@@ -142,7 +142,7 @@
     <!-- ========================================================= -->
     <!-- Foreign key                                               -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0073-2" author="fineract">
+    <changeSet id="ss-0073-6" author="fineract">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_access_audit"/>
             <tableExists tableName="m_appuser"/>
