@@ -7,20 +7,31 @@
 package org.apache.fineract.branding.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
 import org.apache.fineract.branding.data.TenantBrandingData;
+import org.apache.fineract.branding.domain.TenantBranding;
+import org.apache.fineract.branding.domain.TenantBrandingRepository;
 import org.apache.fineract.branding.service.TenantBrandingService;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.useradministration.domain.AppUser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 
 class TenantBrandingApiResourceTest {
 
@@ -50,7 +61,6 @@ class TenantBrandingApiResourceTest {
     when(service.retrieveCurrentTenantBranding()).thenReturn(new TenantBrandingData("blue"));
 
     resource.retrieveBranding();
-
   }
 
   @Test
@@ -102,5 +112,58 @@ class TenantBrandingApiResourceTest {
     resource.updateBranding("{}");
 
     verify(service).updateCurrentTenantBranding(null);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"pink", "light-green", "black", "#3f51b5", "#FFFFFF"})
+  void update_readsTheColoursAddedForTheWebAppFromTheRequestBody(final String colour) {
+    // The hex forms carry a `#`, which has to survive JSON parsing untouched.
+    when(service.updateCurrentTenantBranding(colour)).thenReturn(new TenantBrandingData(colour));
+
+    resource.updateBranding("{\"primaryColor\":\"" + colour + "\"}");
+
+    verify(service).updateCurrentTenantBranding(colour);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"pink", "light-green", "black", "#3f51b5", "#FFFFFF"})
+  void update_storesTheColoursAddedForTheWebApp(final String colour) {
+    // End to end through the real service, so this asserts the endpoint itself
+    // accepts the values rather than only that the resource forwards them.
+    final TenantBrandingRepository repository = mock(TenantBrandingRepository.class);
+    when(repository.findByTenantId("default")).thenReturn(Optional.empty());
+
+    resourceBackedBy(repository).updateBranding("{\"primaryColor\":\"" + colour + "\"}");
+
+    final ArgumentCaptor<TenantBranding> saved = ArgumentCaptor.forClass(TenantBranding.class);
+    verify(repository).save(saved.capture());
+    assertEquals(colour, saved.getValue().getPrimaryColor());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"foobar", "123456", "#12345", "#GGGGGG", "rgb(1,2,3)", "javascript:x"})
+  void update_rejectsAnInvalidColourEndToEnd(final String colour) {
+    final TenantBrandingRepository repository = mock(TenantBrandingRepository.class);
+    final TenantBrandingApiResource endToEnd = resourceBackedBy(repository);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> endToEnd.updateBranding("{\"primaryColor\":\"" + colour + "\"}"));
+    verify(repository, never()).save(any());
+  }
+
+  /**
+   * @return the resource wired to a real service over the given repository.
+   */
+  private TenantBrandingApiResource resourceBackedBy(final TenantBrandingRepository repository) {
+    ThreadLocalContextUtil.setTenant(
+        FineractPlatformTenant.builder().id(1L).tenantIdentifier("default").build());
+    return new TenantBrandingApiResource(
+        context, new TenantBrandingService(repository), serializer, new FromJsonHelper());
+  }
+
+  @AfterEach
+  void tearDown() {
+    ThreadLocalContextUtil.clearTenant();
   }
 }

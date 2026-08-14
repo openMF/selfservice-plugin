@@ -63,7 +63,9 @@ public class TenantBrandingApiResource {
   @Operation(
       summary = "Retrieve Tenant Branding",
       description =
-          "Returns the primary colour for the authenticated tenant.\n\n"
+          "Returns the primary colour for the authenticated tenant, either a supported named colour"
+              + " or a six digit hex colour. A tenant that has never set one, or whose stored value"
+              + " is no longer supported, reads as blue.\n\n"
               + "Example Request:\n\n"
               + "branding")
   @ApiResponse(responseCode = "200", description = "OK")
@@ -84,8 +86,12 @@ public class TenantBrandingApiResource {
   @Operation(
       summary = "Update Tenant Branding",
       description =
-          "Sets the primary colour for the authenticated tenant. Supported colours are blue, green,"
-              + " purple, orange, red and yellow.\n\n"
+          "Sets the primary colour for the authenticated tenant.\n\n"
+              + "The primary colour is either one of the supported named colours - blue, green,"
+              + " purple, orange, red, yellow, pink, light-green and black - or a six digit hex"
+              + " colour such as #3f51b5. Named colours are matched case insensitively and stored"
+              + " in lower case; a hex colour keeps the case it was given. Surrounding whitespace"
+              + " is removed from both. Anything else is rejected.\n\n"
               + "Example Request:\n\n"
               + "branding")
   @ApiResponse(responseCode = "200", description = "OK")
