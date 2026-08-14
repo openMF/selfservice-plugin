@@ -11,7 +11,7 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-  <changeSet author="fineract" id="ss-071-1">
+  <changeSet author="fineract" id="ss-0071-1">
     <preConditions onFail="MARK_RAN">
       <sqlCheck expectedResult="0">
         SELECT COUNT(*) FROM m_permission WHERE code = 'READ_ONBOARDING'

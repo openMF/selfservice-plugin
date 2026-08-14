@@ -11,7 +11,7 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-    <changeSet author="fineract" id="ss-069-1">
+    <changeSet author="fineract" id="ss-0069-1">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_same_bank_transfer_audit"/>
             <not>

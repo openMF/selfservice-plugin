@@ -1,24 +1,89 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
-  <changeSet author="fineract" id="ss-0058-1-add-selfservice-user-admin-permissions">
-    <preConditions onFail="MARK_RAN">
-      <tableExists tableName="m_permission"/>
-    </preConditions>
-    <sql>
-      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
-      SELECT 'user administration', 'READ_SELFSERVICEUSER', 'SELFSERVICEUSER', 'READ', false
-      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_SELFSERVICEUSER');
+    <!--
+        MULTI-TENANT NOTE: This changelog is included in the TENANT changelog master.
+        It will be executed against EVERY tenant schema automatically by Fineract's
+        multi-tenant Liquibase runner.
 
-      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
-      SELECT 'user administration', 'UPDATE_SELFSERVICEUSER', 'SELFSERVICEUSER', 'UPDATE', false
-      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'UPDATE_SELFSERVICEUSER');
+        Registers Self Service User administration permissions required by
+        back-office staff to manage self-service accounts.
+    -->
 
-      INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
-      SELECT 'user administration', 'DELETE_SELFSERVICEUSER', 'SELFSERVICEUSER', 'DELETE', false
-      WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'DELETE_SELFSERVICEUSER');
-    </sql>
-  </changeSet>
+    <!-- ========================================================= -->
+    <!-- READ_SELFSERVICEUSER                                      -->
+    <!-- ========================================================= -->
+    <changeSet id="ss-0072-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_permission"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_permission WHERE code = 'READ_SELFSERVICEUSER'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Register READ permission for Self Service User administration.
+        </comment>
+        <insert tableName="m_permission">
+            <column name="grouping" value="user administration"/>
+            <column name="code" value="READ_SELFSERVICEUSER"/>
+            <column name="entity_name" value="SELFSERVICEUSER"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- UPDATE_SELFSERVICEUSER                                    -->
+    <!-- ========================================================= -->
+    <changeSet id="ss-0072-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_permission"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_permission WHERE code = 'UPDATE_SELFSERVICEUSER'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Register UPDATE permission for Self Service User administration.
+        </comment>
+        <insert tableName="m_permission">
+            <column name="grouping" value="user administration"/>
+            <column name="code" value="UPDATE_SELFSERVICEUSER"/>
+            <column name="entity_name" value="SELFSERVICEUSER"/>
+            <column name="action_name" value="UPDATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- DELETE_SELFSERVICEUSER                                    -->
+    <!-- ========================================================= -->
+    <changeSet id="ss-0072-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_permission"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_permission WHERE code = 'DELETE_SELFSERVICEUSER'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Register DELETE permission for Self Service User administration.
+        </comment>
+        <insert tableName="m_permission">
+            <column name="grouping" value="user administration"/>
+            <column name="code" value="DELETE_SELFSERVICEUSER"/>
+            <column name="entity_name" value="SELFSERVICEUSER"/>
+            <column name="action_name" value="DELETE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
 </databaseChangeLog>

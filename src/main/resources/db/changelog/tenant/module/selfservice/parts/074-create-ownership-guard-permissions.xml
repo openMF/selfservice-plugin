@@ -16,24 +16,27 @@
         It will be executed against EVERY tenant schema automatically by Fineract's
         multi-tenant Liquibase runner.
 
-        Grants the Self Service User role permissions required by the
-        centralized ownership guard. These permissions are checked via
-        AppSelfServiceUser.validateHasSelfServiceReadPermission().
+        Ensures CREATE_ACCOUNTTRANSFER exists and is granted to the Self Service User
+        role. Used by the centralized ownership guard
+        (AppSelfServiceUser.validateHasSelfServiceReadPermission()).
+
+        CREATE_ACCOUNTTRANSFER may already exist from core Fineract; the permission
+        changeSet is skipped in that case. The grant changeSet still runs when needed.
     -->
 
     <!-- ========================================================= -->
-    <!-- Ensure CREATE_ACCOUNTTRANSFER permission exists           -->
+    <!-- Ensure CREATE_ACCOUNTTRANSFER permission row exists       -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0074-2" author="fineract">
-        <preConditions onFail="MARK_RAN">
+    <changeSet id="ss-0074-1" author="fineract">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
             <tableExists tableName="m_permission"/>
             <sqlCheck expectedResult="0">
                 SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
             </sqlCheck>
         </preConditions>
         <comment>
-            Ensure the Self Service User role has the ACCOUNTTRANSFER CREATE permission
-            required by the refactored transfer endpoints.
+            Insert CREATE_ACCOUNTTRANSFER only if it does not already exist
+            (core Fineract or a previous plugin run may have created it).
         </comment>
         <insert tableName="m_permission">
             <column name="grouping" value="self_service"/>
@@ -45,19 +48,22 @@
     </changeSet>
 
     <!-- ========================================================= -->
-    <!-- Grant permission to Self Service User role                -->
+    <!-- Grant CREATE_ACCOUNTTRANSFER to Self Service User role    -->
     <!-- ========================================================= -->
-    <changeSet id="ss-0074-3" author="fineract">
-        <preConditions onFail="MARK_RAN">
+    <changeSet id="ss-0074-2" author="fineract">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
             <tableExists tableName="m_role"/>
             <tableExists tableName="m_permission"/>
             <tableExists tableName="m_role_permission"/>
+            <!-- Role must exist -->
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_role WHERE name = 'Self Service User'
             </sqlCheck>
+            <!-- Permission must exist (from this file or core) -->
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ACCOUNTTRANSFER'
             </sqlCheck>
+            <!-- Grant must not already exist -->
             <sqlCheck expectedResult="0">
                 SELECT COUNT(*)
                 FROM m_role_permission rp
@@ -68,15 +74,21 @@
             </sqlCheck>
         </preConditions>
         <comment>
-            Grant ACCOUNTTRANSFER CREATE to the Self Service User role if not already granted.
+            Grant CREATE_ACCOUNTTRANSFER to the Self Service User role when
+            the role and permission exist and the link has not been granted yet.
         </comment>
         <sql>
             INSERT INTO m_role_permission (role_id, permission_id)
             SELECT r.id, p.id
             FROM m_role r
-            CROSS JOIN m_permission p
+            INNER JOIN m_permission p ON p.code = 'CREATE_ACCOUNTTRANSFER'
             WHERE r.name = 'Self Service User'
-              AND p.code = 'CREATE_ACCOUNTTRANSFER'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM m_role_permission rp
+                  WHERE rp.role_id = r.id
+                    AND rp.permission_id = p.id
+              )
         </sql>
     </changeSet>
 

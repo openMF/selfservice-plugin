@@ -16,7 +16,7 @@
       DELETE FROM request_audit_table WHERE expires_at IS NOT NULL AND expires_at < ?
     Column was missing on some tenants → PSQLException: column "expires_at" does not exist
   -->
-  <changeSet author="fineract" id="ss-070-1">
+  <changeSet author="fineract" id="ss-0070-1">
     <preConditions onFail="MARK_RAN" onError="MARK_RAN">
       <tableExists tableName="request_audit_table"/>
       <not>
