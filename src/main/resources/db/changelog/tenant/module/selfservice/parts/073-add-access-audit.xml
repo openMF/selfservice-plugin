@@ -19,7 +19,7 @@
         each tenant has its own isolated schema.
     -->
 
-    <changeSet id="ss-0070-1" author="fineract">
+    <changeSet id="ss-0073-1" author="fineract">
         <comment>
             Creates the access audit table for recording all ownership validation
             attempts (granted and denied). Used for security monitoring, forensic
@@ -99,7 +99,7 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="ss-0070-2" author="fineract">
+    <changeSet id="ss-0073-2" author="fineract">
         <comment>
             Add foreign key to m_appuser for referential integrity.
             Note: In multi-tenant mode, both tables exist in the same tenant schema.

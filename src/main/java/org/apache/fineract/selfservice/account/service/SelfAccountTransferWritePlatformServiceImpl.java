@@ -46,7 +46,6 @@ import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
-import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -129,7 +128,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
   private static final String FINERACT_TRANSFER_DATE_FORMAT = "dd MMMM yyyy";
   private static final String FINERACT_TRANSFER_LOCALE = "en";
-
+  
   private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
   private final SelfServiceAccountTransferRepository selfServiceAccountTransferRepository;
   private final SelfServiceTransferAuditRepository transferAuditRepository;
@@ -211,13 +210,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
     prepareResponse.put("totalAmount", totalAmount);
     prepareResponse.put("transferType", transferType);
     prepareResponse.put("currencyCode", currencyCode);
-    prepareResponse.put(
-        "message",
-        "The destination account was verified and the status is suitable to proceed with the"
-            + " quote.");
+    prepareResponse.put("message", "The destination account was verified and the status is suitable to proceed with the quote.");
 
-    log.info(
-        "PREPARE: Transfer successfully validated and prepared for destination: {}", toAccount);
+    log.info("PREPARE: Transfer successfully validated and prepared for destination: {}", toAccount);
     return prepareResponse;
   }
 
@@ -641,10 +636,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
             .data(homologatedData)
             .build();
     releaseTransferSuccessCooldown(user);
-    publishFastPaymentTransferEvent(result, request, user, client, httpRequest);
+        
+    String toClientName = displayNameOrUnknown(toSavingsAccount.getClient());
+    publishFastPaymentTransferEvent(result, request, user, client, resolvedCurrencyCode, toClientName, httpRequest);
 
-    log.info(
-        "CONFIRM SAME_BANK: Transfer completed. operationId={}, internalRefNumber={},"
+    log.info("CONFIRM SAME_BANK: Transfer completed. operationId={}, internalRefNumber={},"
             + " fineractTransferId={}, fromSat={}, toSat={}",
         operationId,
         internalRefNumber,
@@ -1149,13 +1145,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   // =====================================================================
-  //  NOTIFICATION PUBLISHERS
+  //  NOTIFICATION PUBLISHERS (ACTUALIZADOS CUMPLIMIENTO SINPE)
   // =====================================================================
   private void publishFastPaymentTransferEvent(
       CommandProcessingResult result,
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
       Client sourceClient,
+      String currencyCode,
+      String toClientName,
       HttpServletRequest httpRequest) {
     try {
       releaseTransferSuccessCooldown(user);
@@ -1169,30 +1167,22 @@ public class SelfAccountTransferWritePlatformServiceImpl
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
-      contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
-      contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount())
-              ? request.getToAccount()
-              : (StringUtils.isNotBlank(request.getToPhoneNumber())
-                  ? request.getToPhoneNumber()
-                  : "N/A"));
+      contextData.put("fromAccountNumber", maskAccountNumber(request.getFromAccount()));
+      
+      String toAccount = StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : request.getToPhoneNumber();
+      contextData.put("toAccountNumber", maskAccountNumber(toAccount));
+      
       contextData.put(
           "transferId",
           result != null && result.getResourceId() != null
               ? result.getResourceId().toString()
               : "N/A");
-      contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+      contextData.put("transactionDate", getFormattedNotificationDate());
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+      contextData.put("currency", StringUtils.isNotBlank(currencyCode) ? currencyCode : "CRC");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
-
-      contextData.put("toClientName", "N/A");
+      contextData.put("toClientName", StringUtils.isNotBlank(toClientName) ? toClientName : "N/A");
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
 
@@ -1233,12 +1223,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
-      contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
-      contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+      contextData.put("fromAccountNumber", maskAccountNumber(request.getFromAccount()));
+      contextData.put("toAccountNumber", maskAccountNumber(request.getToAccount()));
 
       String transferId = "N/A";
       if (externalData != null) {
@@ -1251,14 +1237,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
         }
       }
       contextData.put("transferId", transferId);
-      contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+      contextData.put("transactionDate", getFormattedNotificationDate());
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+      contextData.put("currency", "CRC");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
-
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
@@ -1304,14 +1287,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
           "transactionAmount",
           request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
-      contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
-      contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+      contextData.put("fromAccountNumber", maskAccountNumber(request.getFromAccount()));
+      contextData.put("toAccountNumber", maskAccountNumber(request.getToAccount()));
 
       String transferId = "N/A";
+      String currency = request.getCurrencyCode();
       if (externalData != null) {
         if (externalData.get("channelRefNumber") != null) {
           transferId = externalData.get("channelRefNumber").toString();
@@ -1320,16 +1300,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
         } else if (externalData.get("operationId") != null) {
           transferId = externalData.get("operationId").toString();
         }
+        if (externalData.get("debitCurrencyCode") != null) {
+            currency = externalData.get("debitCurrencyCode").toString();
+        }
       }
       contextData.put("transferId", transferId);
-      contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+      contextData.put("transactionDate", getFormattedNotificationDate());
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+      contextData.put("currency", StringUtils.isNotBlank(currency) ? currency : "CRC");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
-
       contextData.put("toClientName", "N/A");
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
@@ -1380,19 +1360,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put(
           "transferDescription",
           getFieldValue(params, originalParams, "transferDescription", "description"));
-      contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+      contextData.put("transactionDate", getFormattedNotificationDate());
       contextData.put(
           "fromAccountNumber",
-          getFieldValue(params, originalParams, "fromAccountNumber", "fromAccountId"));
+          maskAccountNumber(String.valueOf(getFieldValue(params, originalParams, "fromAccountNumber", "fromAccountId"))));
       contextData.put(
           "toAccountNumber",
-          getFieldValue(params, originalParams, "toAccountNumber", "toAccountId"));
+          maskAccountNumber(String.valueOf(getFieldValue(params, originalParams, "toAccountNumber", "toAccountId"))));
       contextData.put(
           "transferId", result.getResourceId() != null ? result.getResourceId().toString() : "N/A");
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
+      contextData.put("currency", getFieldValue(params, originalParams, "currencyCode", "currency"));
 
       resolveClientAndOfficeNames(contextData, params, originalParams);
 
@@ -1418,8 +1396,25 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   // =====================================================================
-  //  PRIVATE HELPERS
+  //  PRIVATE HELPERS 
   // =====================================================================
+    
+  private String maskAccountNumber(String accountNumber) {
+    if (StringUtils.isBlank(accountNumber)) return "N/A";
+    String clean = accountNumber.replaceAll("\\s+", "");
+    if (clean.length() <= 4) return clean;
+    if (clean.toUpperCase().startsWith("CR") && clean.length() >= 21) {
+        return "CR** **** **** " + clean.substring(clean.length() - 4);
+    }
+    return "****" + clean.substring(clean.length() - 4);
+  }
+
+  private String getFormattedNotificationDate() {
+    LocalDateTime tenantLdt = transactionDateUtil.getCurrentTenantLocalDateTime();
+    DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+    return tenantLdt.format(formatter);
+  }
+
   private JsonCommand createJsonCommand(String json) {
     if (StringUtils.isBlank(json)) {
       throw new IllegalArgumentException("JSON request body cannot be blank");
@@ -1473,8 +1468,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     registration.markDispatched();
     registrationRepository.saveAndFlush(registration);
 
-    log.info(
-        "OTP GENERATED: registrationId={}, clientId={}, expiresAt={}",
+    log.info("OTP GENERATED: registrationId={}, clientId={}, expiresAt={}",
         registration.getId(),
         sourceClient.getId(),
         expiry);
@@ -1482,9 +1476,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", otp);
     contextData.put("expirationMinutes", 10);
-    contextData.put(
-        "transferAmount",
-        request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+    contextData.put("transferAmount", request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
     contextData.put("resend", true);
 
     applicationEventPublisher.publishEvent(
@@ -1503,8 +1495,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
             LocaleContextHolder.getLocale(),
             contextData));
 
-    log.info(
-        "OTP EVENT PUBLISHED: type=TRANSFER_OTP, userId={}, registrationId={}",
+    log.info("OTP EVENT PUBLISHED: type=TRANSFER_OTP, userId={}, registrationId={}",
         user.getId(),
         registration.getId());
 
@@ -1721,55 +1712,47 @@ public class SelfAccountTransferWritePlatformServiceImpl
     boolean isBeneficiaryActive = isAlreadyRegisteredAsBeneficiary(appUserId, destinationAccount);
 
     if (isBeneficiaryActive) {
-      log.info(
-          "PREPARE: The destination account {} is already registered and active as a beneficiary.",
+      log.info("PREPARE: The destination account {} is already registered and active as a beneficiary.",
           destinationAccount);
       return;
     }
 
-    log.info(
-        "PREPARE: Destination account not previously registered. Evaluating channel for: {}",
+    log.info("PREPARE: Destination account not previously registered. Evaluating channel for: {}",
         transferType);
 
     String cleanAccount = destinationAccount.replaceAll("\\s+", "");
 
     if ("SAME_BANK".equalsIgnoreCase(transferType)) {
-      log.info(
-          "PREPARE [SAME_BANK]: Destination is an internal account. Validation will be performed"
+      log.info("PREPARE [SAME_BANK]: Destination is an internal account. Validation will be performed"
               + " via external ID resolution during execution.");
     } else if ("PIN".equalsIgnoreCase(transferType) || isSameBankIbanAccount(cleanAccount)) {
-      log.info(
-          "PREPARE [PIN / Same Bank IBAN]: Validating account via"
+      log.info("PREPARE [PIN / Same Bank IBAN]: Validating account via"
               + " PinExternalTransferService.getAccountInfo");
       try {
         String accountInfoResponse = pinExternalTransferService.getAccountInfo(cleanAccount);
 
         if (accountInfoResponse == null || accountInfoResponse.contains("\"disabled\"")) {
-          throw new IllegalArgumentException(
-              "The account validation service (PIN/Same Bank) is not available.");
+          throw new IllegalArgumentException("The account validation service (PIN/Same Bank) is not available.");
         }
 
         Map<String, Object> accountData = gson.fromJson(accountInfoResponse, Map.class);
 
         if (accountData.containsKey("error")
             || (accountData.containsKey("message") && accountInfoResponse.contains("not found"))) {
-          throw new IllegalArgumentException(
-              "The destination account does not exist in the financial system.");
+          throw new IllegalArgumentException("The destination account does not exist in the financial system.");
         }
 
         String state = String.valueOf(accountData.get("state"));
         String stateDescription = String.valueOf(accountData.get("stateDescription"));
 
         if (!"1".equals(state) && !"Active".equalsIgnoreCase(stateDescription)) {
-          throw new IllegalArgumentException(
-              "The destination account exists but is not active (Status: "
+          throw new IllegalArgumentException("The destination account exists but is not active (Status: "
                   + stateDescription
                   + ").");
         }
 
         String holderName = String.valueOf(accountData.get("holder"));
-        log.info(
-            "PREPARE [PIN / Same Bank]: Account successfully verified. Holder: {}, Bank: {}",
+        log.info("PREPARE [PIN / Same Bank]: Account successfully verified. Holder: {}, Bank: {}",
             holderName,
             accountData.get("entityName"));
 
@@ -1777,15 +1760,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
         throw e;
       } catch (Exception e) {
         log.error("Error validating account via PIN/Same Bank: {}", e.getMessage());
-        throw new IllegalArgumentException(
-            "Could not verify the existence or status of the account.");
+        throw new IllegalArgumentException("Could not verify the existence or status of the account.");
       }
     } else if ("SINPE".equalsIgnoreCase(transferType)
         || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
       log.info("PREPARE [SINPE]: Executing specific validation flow for SINPE.");
     } else {
-      log.warn(
-          "PREPARE: Could not determine the validation channel for account: {} with type: {}",
+      log.warn("PREPARE: Could not determine the validation channel for account: {} with type: {}",
           destinationAccount,
           transferType);
     }
@@ -1888,16 +1869,14 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       FeeCollectionResult result = feeCollectionService.collectFee(feeReq);
 
-      log.info(
-          "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {}",
+      log.info("ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {}",
           result.getStatus(),
           result.getTransactionId(),
           result.getFeeAmount(),
           result.getCurrency());
 
     } catch (Exception e) {
-      log.error(
-          "ACCOUNTING CONFIRM: Commission collection failed (non-fatal). "
+      log.error("ACCOUNTING CONFIRM: Commission collection failed (non-fatal). "
               + "Original transfer remains intact.",
           e);
       persistTransferAudit(
@@ -1918,15 +1897,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String cleanAccount = destinationAccount.replaceAll("\\s+", "");
       boolean isRegistered =
           this.tptBeneficiaryReadPlatformService.isBeneficiaryRegistered(appUserId, cleanAccount);
-      log.info(
-          "BENEFICIARY VALIDATION: Does account {} belong to the beneficiaries of user {}?: {}",
+      log.info("BENEFICIARY VALIDATION: Does account {} belong to the beneficiaries of user {}?: {}",
           cleanAccount,
           appUserId,
           isRegistered);
       return isRegistered;
     } catch (Exception e) {
-      log.error(
-          "BENEFICIARY VALIDATION: Error executing query on m_selfservice_beneficiaries_tpt for"
+      log.error("BENEFICIARY VALIDATION: Error executing query on m_selfservice_beneficiaries_tpt for"
               + " account: {}",
           destinationAccount,
           e);

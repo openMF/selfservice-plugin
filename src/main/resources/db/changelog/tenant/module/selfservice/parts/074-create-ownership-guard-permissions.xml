@@ -33,7 +33,7 @@
     </changeSet>
 
     <changeSet id="ss-0071-3" author="fineract">
-        <preConditions onFail="HALT">
+        <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="1">
                 SELECT COUNT(*) FROM m_role WHERE name = 'Self Service User'
             </sqlCheck>
