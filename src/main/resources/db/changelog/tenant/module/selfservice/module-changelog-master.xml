@@ -86,4 +86,5 @@
   <!-- Security: ownership guard audit table and permissions (from security hardening) -->
   <include file="parts/073-add-access-audit.xml" relativeToChangelogFile="true"/>  
   <include file="parts/074-create-ownership-guard-permissions.xml" relativeToChangelogFile="true"/>
+  <include file="parts/075-add-rate-limit-config.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
