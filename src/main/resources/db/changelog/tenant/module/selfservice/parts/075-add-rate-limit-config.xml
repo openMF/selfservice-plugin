@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+    <changeSet id="ss-0075-1-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_RATE_LIMIT'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        
+        <insert tableName="c_external_service">
+            <column name="name" value="SELF_SERVICE_RATE_LIMIT"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0075-1-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp 
+                WHERE esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_RATE_LIMIT')
+            </sqlCheck>
+        </preConditions>
+
+        <!-- perResource: Maximum allowed attempts per specific resource (e.g. account ID) within the time window -->
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
+            <column name="name" value="perResource"/>
+            <column name="value" value="10"/>
+        </insert>
+        
+        <!-- global: Maximum allowed total attempts across all resources for the user within the time window -->
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
+            <column name="name" value="global"/>
+            <column name="value" value="25"/>
+        </insert>
+        
+        <!-- windowMinutes: The rolling time window in minutes for which limits are evaluated -->
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
+            <column name="name" value="windowMinutes"/>
+            <column name="value" value="15"/>
+        </insert>
+        
+        <!-- retentionDays: The number of days to retain access audit records before purging -->
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
+            <column name="name" value="retentionDays"/>
+            <column name="value" value="30"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
