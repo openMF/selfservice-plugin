@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ============================================================ -->
+    <!-- Create the PUC add account audit table                       -->
+    <!-- ============================================================ -->
+    <changeSet id="ss-078-1" author="fineract" >
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_puc_add_account_audit"/>
+            </not>
+        </preConditions>
+        <comment>Create audit table for PUC account registration executed via Self-Service</comment>
+
+        <createTable tableName="m_puc_add_account_audit">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT"/>
+            <column name="account_number" type="VARCHAR(34)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="holder_id" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="holder_id_type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="holder" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ip_number" type="VARCHAR(45)"/>
+            <column name="operation_id" type="VARCHAR(64)"/>
+            <column name="successful" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reject_description" type="VARCHAR(500)"/>
+            <column name="created_on_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Indexes for common query paths -->
+        <createIndex indexName="idx_puc_add_audit_client_id"
+                     tableName="m_puc_add_account_audit">
+            <column name="client_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_puc_add_audit_account_number"
+                     tableName="m_puc_add_account_audit">
+            <column name="account_number"/>
+        </createIndex>
+
+        <createIndex indexName="idx_puc_add_audit_holder_id"
+                     tableName="m_puc_add_account_audit">
+            <column name="holder_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_puc_add_audit_operation_id"
+                     tableName="m_puc_add_account_audit">
+            <column name="operation_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_puc_add_audit_created"
+                     tableName="m_puc_add_account_audit">
+            <column name="created_on_utc"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- ============================================================ -->
+    <!-- Foreign key to m_client (soft — no cascade delete)           -->
+    <!-- ============================================================ -->
+    <changeSet author="fineract" id="ss-078-1">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_puc_add_account_audit"/>
+            <tableExists tableName="m_client"/>
+        </preConditions>
+        <comment>Add FK from PUC add account audit to m_client</comment>
+        <addForeignKeyConstraint
+                baseTableName="m_puc_add_account_audit"
+                baseColumnNames="client_id"
+                referencedTableName="m_client"
+                referencedColumnNames="id"
+                constraintName="fk_puc_add_audit_client"
+                onDelete="SET NULL"
+                onUpdate="CASCADE"/>
+    </changeSet>
+
+</databaseChangeLog>
