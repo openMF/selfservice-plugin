@@ -2327,54 +2327,102 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   private String buildTransferDescription(AccountTransferPrepareRequest request) {
-    String description = request.getTransferDescription();
-    String mode = request.getTransferMode();
+    final String description = request.getTransferDescription();
+    final String mode = request.getTransferMode();
 
-    boolean useOriginal =
+    log.info(
+        "buildTransferDescription[PREPARE]: rawDescription='{}', transferMode='{}'",
+        description,
+        mode);
+
+    final boolean useOriginal =
         description != null
             && !description.isBlank()
-            && description.length() >= 16
+            && description.length() >= 15
             && mode != null
             && (mode.equalsIgnoreCase("PIN")
                 || mode.equalsIgnoreCase("SINPE")
                 || mode.equalsIgnoreCase("SAME_BANK"));
 
-    String result =
+    final String result =
         useOriginal
             ? description
             : (description != null && !description.isBlank() ? description : "Transfer")
                 + " via "
                 + (mode != null ? mode : "");
 
-    return String.format("%-15s", result);
+    final String formatted = String.format("%-15s", result);
+
+    if (useOriginal) {
+      log.info(
+          "buildTransferDescription[PREPARE]: using original description (length={}, mode={}) → '{}'",
+          description.length(),
+          mode,
+          formatted.trim());
+    } else {
+      log.info(
+          "buildTransferDescription[PREPARE]: synthesized description (rawDesc blank/short={}, mode={}) → '{}'",
+          description == null || description.isBlank() || description.length() < 15,
+          mode,
+          formatted.trim());
+    }
+
+    return formatted;
   }
 
   private String buildTransferDescription(AccountTransferConfirmRequest request) {
     if (request == null) {
+      log.warn(
+          "buildTransferDescription[CONFIRM]: request is null — falling back to default description 'Transfer'");
       return String.format("%-15s", "Transfer");
     }
-    String description = request.getTransferDescription();
+
+    final String description = request.getTransferDescription();
     String mode = request.getTransferMode();
     if (StringUtils.isBlank(mode)) {
       mode = request.getTransferType();
+      log.info(
+          "buildTransferDescription[CONFIRM]: transferMode blank — falling back to transferType='{}'",
+          mode);
     }
 
-    boolean useOriginal =
+    log.info(
+        "buildTransferDescription[CONFIRM]: rawDescription='{}', effectiveMode='{}'",
+        description,
+        mode);
+
+    final boolean useOriginal =
         description != null
             && !description.isBlank()
-            && description.length() >= 16
+            && description.length() >= 15
             && mode != null
             && (mode.equalsIgnoreCase("PIN")
                 || mode.equalsIgnoreCase("SINPE")
                 || mode.equalsIgnoreCase("SAME_BANK"));
 
-    String result =
+    final String result =
         useOriginal
             ? description
             : (description != null && !description.isBlank() ? description : "Transfer")
                 + " via "
                 + (mode != null ? mode : "");
 
-    return String.format("%-15s", result);
+    final String formatted = String.format("%-15s", result);
+
+    if (useOriginal) {
+      log.info(
+          "buildTransferDescription[CONFIRM]: using original description (length={}, mode={}) → '{}'",
+          description.length(),
+          mode,
+          formatted.trim());
+    } else {
+      log.info(
+          "buildTransferDescription[CONFIRM]: synthesized description (rawDesc blank/short={}, mode={}) → '{}'",
+          description == null || description.isBlank() || description.length() < 15,
+          mode,
+          formatted.trim());
+    }
+
+    return formatted;
   }
 }
