@@ -2331,18 +2331,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final String mode = request.getTransferMode();
 
     log.info(
-        "buildTransferDescription[PREPARE]: rawDescription='{}', transferMode='{}'",
+        "buildTransferDescription[PREPARE]: rawDescription='{}', transferMode='{}', length={}",
         description,
-        mode);
+        mode,
+        description != null ? description.length() : 0);
 
     final boolean useOriginal =
-        description != null
-            && !description.isBlank()
-            && description.length() >= 15
-            && mode != null
-            && (mode.equalsIgnoreCase("PIN")
-                || mode.equalsIgnoreCase("SINPE")
-                || mode.equalsIgnoreCase("SAME_BANK"));
+        description != null && !description.isBlank() && description.length() >= 15;
 
     final String result =
         useOriginal
@@ -2355,14 +2350,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     if (useOriginal) {
       log.info(
-          "buildTransferDescription[PREPARE]: using original description (length={}, mode={}) → '{}'",
+          "buildTransferDescription[PREPARE]: using original description (length={}) → '{}'",
           description.length(),
-          mode,
           formatted.trim());
     } else {
       log.info(
-          "buildTransferDescription[PREPARE]: synthesized description (rawDesc blank/short={}, mode={}) → '{}'",
-          description == null || description.isBlank() || description.length() < 15,
+          "buildTransferDescription[PREPARE]: synthesized description (length={}, mode={}) → '{}'",
+          description != null ? description.length() : 0,
           mode,
           formatted.trim());
     }
@@ -2387,18 +2381,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
 
     log.info(
-        "buildTransferDescription[CONFIRM]: rawDescription='{}', effectiveMode='{}'",
+        "buildTransferDescription[CONFIRM]: rawDescription='{}', effectiveMode='{}', length={}",
         description,
-        mode);
+        mode,
+        description != null ? description.length() : 0);
 
     final boolean useOriginal =
-        description != null
-            && !description.isBlank()
-            && description.length() >= 15
-            && mode != null
-            && (mode.equalsIgnoreCase("PIN")
-                || mode.equalsIgnoreCase("SINPE")
-                || mode.equalsIgnoreCase("SAME_BANK"));
+        description != null && !description.isBlank() && description.length() >= 15;
 
     final String result =
         useOriginal
@@ -2411,14 +2400,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     if (useOriginal) {
       log.info(
-          "buildTransferDescription[CONFIRM]: using original description (length={}, mode={}) → '{}'",
+          "buildTransferDescription[CONFIRM]: using original description (length={}) → '{}'",
           description.length(),
-          mode,
           formatted.trim());
     } else {
       log.info(
-          "buildTransferDescription[CONFIRM]: synthesized description (rawDesc blank/short={}, mode={}) → '{}'",
-          description == null || description.isBlank() || description.length() < 15,
+          "buildTransferDescription[CONFIRM]: synthesized description (length={}, mode={}) → '{}'",
+          description != null ? description.length() : 0,
           mode,
           formatted.trim());
     }
