@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MULTI-TENANT: included in the TENANT changelog master.
+        Runs against every tenant schema via Fineract's multi-tenant Liquibase runner.
+    -->
+
+    <changeSet id="ss-0076-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <foreignKeyConstraintExists
+                foreignKeyTableName="m_selfservice_access_audit"
+                foreignKeyName="fk_ss_audit_appuser"/>
+        </preConditions>
+        <comment>
+            Self-service user ids live in m_appselfservice_user, not m_appuser.
+            Store appuser_id as a soft reference (same pattern as device fingerprint).
+            Dropping the FK prevents insert failures for legitimate self-service users.
+        </comment>
+        <dropForeignKeyConstraint
+            baseTableName="m_selfservice_access_audit"
+            constraintName="fk_ss_audit_appuser"/>
+    </changeSet>
+
+</databaseChangeLog>
