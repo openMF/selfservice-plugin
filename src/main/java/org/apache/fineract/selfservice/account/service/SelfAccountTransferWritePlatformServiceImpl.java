@@ -2333,7 +2333,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     boolean useOriginal =
         description != null
             && !description.isBlank()
-            && description.length() >= 15
+            && description.length() >= 16
             && mode != null
             && (mode.equalsIgnoreCase("PIN")
                 || mode.equalsIgnoreCase("SINPE")
