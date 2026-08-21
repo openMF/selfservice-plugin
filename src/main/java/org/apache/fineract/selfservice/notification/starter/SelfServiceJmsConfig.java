@@ -28,10 +28,7 @@ import org.springframework.util.StringUtils;
 @Configuration
 @EnableJms
 @ConditionalOnProperty(
-    name = {
-      "fineract.events.external.producer.jms.enabled",
-      "fineract.external.events.producer.jms.enabled"
-    },
+    name = "fineract.events.external.producer.jms.enabled",
     havingValue = "true",
     matchIfMissing = false)
 public class SelfServiceJmsConfig {

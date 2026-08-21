@@ -51,10 +51,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(
-    name = {
-      "fineract.events.external.producer.jms.enabled",
-      "fineract.external.events.producer.jms.enabled"
-    },
+    name = "fineract.events.external.producer.jms.enabled",
     havingValue = "true",
     matchIfMissing = false)
 @ConditionalOnBean(name = "topicJmsListenerContainerFactory")
@@ -78,6 +75,16 @@ public class SelfServiceSavingsEventNotificationListener {
    */
   @Value("${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
   private String subscriptionName;
+  
+  @jakarta.annotation.PostConstruct
+  public void init() {
+    log.info("============================================================");
+    log.info("SelfServiceSavingsEventNotificationListener STARTED");
+    log.info("  destination     = {}", eventTopicName);
+    log.info("  subscription    = {}", subscriptionName);
+    log.info("  containerFactory= topicJmsListenerContainerFactory");
+    log.info("============================================================");
+  }
 
   @JmsListener(
       destination =
