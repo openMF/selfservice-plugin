@@ -87,7 +87,7 @@
     <!-- ============================================================ -->
     <!-- Foreign key to m_client (soft — no cascade delete)           -->
     <!-- ============================================================ -->
-    <changeSet author="fineract" id="ss-078-1">
+    <changeSet author="fineract" id="ss-078-2">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_puc_add_account_audit"/>
             <tableExists tableName="m_client"/>
