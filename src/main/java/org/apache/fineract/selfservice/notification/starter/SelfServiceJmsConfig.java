@@ -49,8 +49,8 @@ public class SelfServiceJmsConfig {
   /** Must be unique per JVM. Matches the value you set in docker-compose. */
   @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
   private String clientId;
-
-  @Value("${fineract.external.events.jms.concurrency:3-10}")
+  
+  @Value("${fineract.external.events.jms.concurrency:1}")
   private String concurrency;
 
   @Value("${fineract.external.events.jms.prefetch:1}")
