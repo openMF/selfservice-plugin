@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.notification.listener;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,20 +32,24 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jms.annotation.JmsListener;
+import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(
-    name = "fineract.external.events.producer.jms.enabled",
+    name = {
+      "fineract.events.external.producer.jms.enabled",
+      "fineract.external.events.producer.jms.enabled"
+    },
     havingValue = "true",
     matchIfMissing = false)
-// REMOVED @ConditionalOnBean(JmsListenerContainerFactory.class) because it often evaluates to false 
-// during component scanning if the factory bean hasn't been created yet, silently dropping the listener!
+@ConditionalOnBean(JmsListenerContainerFactory.class)
 public class SelfServiceSavingsEventNotificationListener {
 
   private final ApplicationEventPublisher eventPublisher;
@@ -48,11 +58,11 @@ public class SelfServiceSavingsEventNotificationListener {
   private final TenantDetailsService tenantDetailsService;
   private final ObjectMapper objectMapper;
 
-  @Value("${fineract.external.events.producer.jms.topic.name:fineract.external.events}")
-  private String eventTopicName;
+  @Value("${fineract.external.event.queue.name:fineract.external.events}")
+  private String eventQueueName;
 
   @JmsListener(
-      destination = "${fineract.external.events.producer.jms.topic.name:fineract.external.events}",
+      destination = "${fineract.external.event.queue.name:fineract.external.events}",
       containerFactory = "topicJmsListenerContainerFactory")
   public void onMessage(Message message) {
     // 1. Capture original tenant context to restore later
@@ -81,8 +91,8 @@ public class SelfServiceSavingsEventNotificationListener {
 
       String eventType = messageV1.getType() != null ? messageV1.getType().toString() : null;
 
-      // 3. Extract tenant identifier from the 'tenantId' field of the Avro message
-      String source = messageV1.getTenantId() != null ? messageV1.getTenantId().toString() : "default";
+      // 3. Extract tenant identifier from the 'source' field of the Avro message
+      String source = messageV1.getTenantId() != null ? messageV1.getTenantId() : "default";
 
       log.info(
           "Successfully parsed Avro MessageV1. Event type: {}, Category: {}, Source: {}",
@@ -99,10 +109,10 @@ public class SelfServiceSavingsEventNotificationListener {
         HashMap<BusinessDateType, LocalDate> contextData = new HashMap<>();
         contextData.put(BusinessDateType.BUSINESS_DATE, businessDate);
         ThreadLocalContextUtil.setBusinessDates(contextData);
-        log.debug("Set tenant context to: {}", tenant.getTenantIdentifier());
+        log.debug("Set tenant context to: {}", tenant.getId());
       } else {
         log.error("Could not resolve any valid tenant. Database operations will fail.");
-        return;
+        return; // Abort processing if we can't determine the tenant
       }
 
       // 5. Process the specific event
@@ -121,10 +131,9 @@ public class SelfServiceSavingsEventNotificationListener {
 
     } catch (Exception e) {
       log.error("Failed to parse or process external event message", e);
-      // Exception is caught to prevent infinite redelivery loops on poison pills, 
-      // but the JMS transaction will still commit, dequeuing the malformed message.
     } finally {
-      // 6. CRITICAL: Always reset the tenant context to prevent thread pollution in the JMS thread pool
+      // 6. CRITICAL: Always reset the tenant context to prevent thread pollution in the JMS thread
+      // pool
       ThreadLocalContextUtil.reset();
       if (originalTenant != null) {
         ThreadLocalContextUtil.setTenant(originalTenant);
@@ -132,7 +141,12 @@ public class SelfServiceSavingsEventNotificationListener {
     }
   }
 
+  /**
+   * Resolves the tenant to use for database operations. First tries the provided source. If that
+   * fails (e.g., source is a malformed UUID), it falls back to the standard "default" tenant.
+   */
   private FineractPlatformTenant resolveTenant(String source) {
+    // 1. Try to load by the provided source (which should ideally be the tenant identifier)
     try {
       return tenantDetailsService.loadTenantById(source);
     } catch (Exception e) {
@@ -140,6 +154,10 @@ public class SelfServiceSavingsEventNotificationListener {
           "Failed to retrieve tenant with identifier: '{}'. Error: {}", source, e.getMessage());
     }
 
+    // 2. Fallback to "default" tenant.
+    // In some Fineract setups, the 'source' field in the Avro message might contain
+    // a message UUID instead of the actual tenant identifier. Falling back to "default"
+    // ensures the query executes against the primary tenant schema.
     if (!"default".equals(source)) {
       try {
         log.info("Falling back to 'default' tenant identifier.");
@@ -175,6 +193,7 @@ public class SelfServiceSavingsEventNotificationListener {
         }
       }
 
+      // Fetch clientId from SavingsAccountData (now runs with correct tenant context)
       Long clientId = null;
       if (savingsAccountId != null) {
         try {
@@ -190,7 +209,8 @@ public class SelfServiceSavingsEventNotificationListener {
               clientId);
         } catch (Exception e) {
           log.error(
-              "Could not fetch savings account data for accountId: {}. Tenant context may still be incorrect.",
+              "Could not fetch savings account data for accountId: {}. Tenant context may still be"
+                  + " incorrect.",
               savingsAccountId,
               e);
         }
@@ -230,7 +250,8 @@ public class SelfServiceSavingsEventNotificationListener {
       clientData = clientReadPlatformService.retrieveOne(clientId);
     } catch (Exception e) {
       log.warn(
-          "Could not fetch client data for clientId: {}. Notification will be sent with limited data.",
+          "Could not fetch client data for clientId: {}. Notification will be sent with limited"
+              + " data.",
           clientId,
           e);
     }

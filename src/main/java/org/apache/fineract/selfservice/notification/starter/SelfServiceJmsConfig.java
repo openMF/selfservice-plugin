@@ -1,3 +1,9 @@
+/**
+ * Copyright since 2026 Mifos Initiative
+ *
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.apache.fineract.selfservice.notification.starter;
 
 import jakarta.jms.ConnectionFactory;
@@ -12,15 +18,21 @@ import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
 
 /**
- * Production-ready JMS Configuration for the Self-Service Plugin.
- * Configured for high-load environments with proper durable subscriptions and prefetch settings.
+ * Production-ready JMS Configuration for the Self-Service Plugin. Optimized for high-load
+ * environments with proper concurrency, caching, and prefetch settings.
  */
 @Configuration
 @ConditionalOnProperty(
-    name = "fineract.external.events.producer.jms.enabled",
+    name = {
+      "fineract.events.external.producer.jms.enabled",
+      "fineract.external.events.producer.jms.enabled"
+    },
     havingValue = "true",
     matchIfMissing = false)
 public class SelfServiceJmsConfig {
+
+  @Value("${fineract.external.events.jms.concurrency:3-10}")
+  private String concurrency;
 
   @Value("${fineract.external.events.jms.prefetch:1}")
   private int prefetch;
@@ -28,52 +40,47 @@ public class SelfServiceJmsConfig {
   @Value("${fineract.external.events.jms.recovery-interval:5000}")
   private long recoveryInterval;
 
-  @Value("${fineract.external.events.jms.client-id:#{null}}")
-  private String clientId;
-
-  @Value("${fineract.external.events.jms.subscription-name:#{null}}")
-  private String subscriptionName;
-
+  /**
+   * Creates a JMS Listener Container Factory configured for Publish/Subscribe (Topics). Optimized
+   * for high throughput and reliability in production.
+   */
   @Bean
   public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
       ConnectionFactory connectionFactory,
       DefaultJmsListenerContainerFactoryConfigurer configurer) {
 
     DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
+
+    // Apply default Spring Boot properties
     configurer.configure(factory, connectionFactory);
 
     // 1. CRITICAL: Enable Topic (Pub/Sub) mode
     factory.setPubSubDomain(true);
 
-    // 2. CRITICAL: Enable Durable Topic Subscription to prevent message loss
-    if (clientId != null && !clientId.trim().isEmpty() 
-        && subscriptionName != null && !subscriptionName.trim().isEmpty()) {
-      factory.setSubscriptionDurable(true);
-      factory.setClientId(clientId);
-      factory.setSubscriptionName(subscriptionName);
-      // ActiveMQ 5.x requires concurrency=1 for durable topics with a single clientId
-      factory.setConcurrency("1");
-    } else {
-      factory.setConcurrency("3-10");
-    }
+    // 2. HIGH LOAD OPTIMIZATION: Dynamic concurrency (min 3, max 10 consumers)
+    factory.setConcurrency(concurrency);
 
     // 3. RELIABILITY: Transacted sessions ensure messages are only acknowledged
     // upon successful processing. Failures trigger automatic redelivery.
     factory.setSessionTransacted(true);
 
-    // 4. PERFORMANCE: CACHE_CONNECTION is preferred for durable topics with clientId
-    factory.setCacheLevelName("CACHE_CONNECTION");
+    // 4. PERFORMANCE: Cache the JMS Session to reduce overhead of creating
+    // sessions for each message, while remaining safe for concurrent consumers.
+    factory.setCacheLevelName("CACHE_SESSION");
 
     // 5. RESILIENCE: Configure recovery interval for connection drops
     factory.setRecoveryInterval(recoveryInterval);
 
-    // 6. ACTIVE-MQ SPECIFIC OPTIMIZATION
+    // 6. ACTIVE-MQ SPECIFIC OPTIMIZATION: Tune prefetch policy to prevent
+    // a single consumer from hoarding messages, ensuring better load distribution.
     if (connectionFactory instanceof ActiveMQConnectionFactory) {
       ActiveMQConnectionFactory amqFactory = (ActiveMQConnectionFactory) connectionFactory;
       ActiveMQPrefetchPolicy prefetchPolicy = new ActiveMQPrefetchPolicy();
       prefetchPolicy.setTopicPrefetch(prefetch);
       prefetchPolicy.setQueuePrefetch(prefetch);
       amqFactory.setPrefetchPolicy(prefetchPolicy);
+
+      // Optional: Enable optimized message dispatch
       amqFactory.setOptimizeAcknowledge(true);
     }
 
