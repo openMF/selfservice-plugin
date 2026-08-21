@@ -88,4 +88,8 @@
   <include file="parts/074-create-ownership-guard-permissions.xml" relativeToChangelogFile="true"/>
   <include file="parts/075-add-rate-limit-config.xml" relativeToChangelogFile="true"/>
   <include file="parts/076-access-audit-drop-fk-appuser.xml" relativeToChangelogFile="true"/>
+  <include file="parts/077-add-external-puc-system.xml" relativeToChangelogFile="true"/>
+  <include file="parts/078-create-add-account-puc-audit-table.xml" relativeToChangelogFile="true"/>
+  <include file="parts/079-add-external-remittance-system.xml" relativeToChangelogFile="true"/>
+  <include file="parts/080-create-remittance-table.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

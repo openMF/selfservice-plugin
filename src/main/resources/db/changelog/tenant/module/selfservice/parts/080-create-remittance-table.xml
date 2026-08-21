@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0080-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_remittance"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="m_selfservice_remittance">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="app_selfservice_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="savings_account_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="vendor" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation_type" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="external_id" type="VARCHAR(128)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="pin" type="VARCHAR(64)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="reference_number" type="VARCHAR(128)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_name" type="VARCHAR(200)"/>
+            <column name="recipient_name" type="VARCHAR(200)"/>
+            <column name="receiving_amount" type="DECIMAL(19,6)"/>
+            <column name="receiving_currency" type="VARCHAR(3)"/>
+            <column name="sending_amount" type="DECIMAL(19,6)"/>
+            <column name="sending_currency" type="VARCHAR(3)"/>
+            <column name="fee_amount" type="DECIMAL(19,6)"/>
+            <column name="fee_currency" type="VARCHAR(3)"/>
+            <column name="country_from" type="VARCHAR(3)"/>
+            <column name="country_to" type="VARCHAR(3)"/>
+            <column name="delivery_method" type="VARCHAR(64)"/>
+            <column name="product_id" type="VARCHAR(32)"/>
+            <column name="created_on" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_on" type="TIMESTAMP"/>
+            <column name="external_response" type="TEXT"/>
+            <column name="additional_info" type="TEXT"/>
+        </createTable>
+
+        <createIndex tableName="m_selfservice_remittance" indexName="idx_ss_remittance_pin">
+            <column name="pin"/>
+        </createIndex>
+        <createIndex tableName="m_selfservice_remittance" indexName="idx_ss_remittance_external_id">
+            <column name="external_id"/>
+        </createIndex>
+        <createIndex tableName="m_selfservice_remittance" indexName="idx_ss_remittance_user">
+            <column name="app_selfservice_user_id"/>
+        </createIndex>
+        <createIndex tableName="m_selfservice_remittance" indexName="idx_ss_remittance_client">
+            <column name="client_id"/>
+        </createIndex>
+        <createIndex tableName="m_selfservice_remittance" indexName="idx_ss_remittance_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

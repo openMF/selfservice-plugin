@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="ss-0079-1">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'RemittanceService'
+                </sqlCheck>
+            </and>
+        </preConditions>
+
+        <comment>Bootstrap RemittanceService external configuration for multi-vendor remittance (RIA, TRANZMIT, etc.)</comment>
+
+        <insert tableName="c_external_service">
+            <column name="name" value="RemittanceService"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="host"/>
+            <column name="value" value="https://apis.mifos.community/1.0/remittance"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="header"/>
+            <column name="value" value="x-gravitee-api-key"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="headerValue"/>
+            <column name="value" value="d25d3881-6415-4753-bca8-a7ccec694fad"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="httpMethod"/>
+            <column name="value" value="POST"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="isEnabled"/>
+            <column name="value" value="false"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <insert tableName="c_external_service_properties">
+            <column name="name" value="defaultVendor"/>
+            <column name="value" value="RIA"/>
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name = 'RemittanceService')"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="c_external_service_properties">
+                <where>external_service_id = (SELECT id FROM c_external_service WHERE name = 'RemittanceService')</where>
+            </delete>
+            <delete tableName="c_external_service">
+                <where>name = 'RemittanceService'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
