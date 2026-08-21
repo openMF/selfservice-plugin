@@ -43,10 +43,10 @@ public class SelfServiceJmsConfig {
   @Value("${fineract.events.external.producer.jms.broker-url:tcp://localhost:61616}")
   private String brokerUrl;
 
-  @Value("${fineract.events.external.producer.jms.broker-username:}")
+  @Value("${fineract.events.external.producer.jms.broker-username:admin}")
   private String brokerUsername;
 
-  @Value("${fineract.events.external.producer.jms.broker-password:}")
+  @Value("${fineract.events.external.producer.jms.broker-password:admin}")
   private String brokerPassword;
 
   /** Must be unique per JVM. Matches the value you set in docker-compose. */
