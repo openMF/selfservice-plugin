@@ -128,7 +128,7 @@ public class PucExternalApiClient {
             return null;
         }
 
-        String url = getHost(props) + "/AddAccount";
+        String url = getHost(props) + "/addAccount";
         log.info("PucExternalApiClient.addAccount calling POST url={}", url);
 
         Long clientId = resolveClientIdByHolderId(request.getHolderId());
