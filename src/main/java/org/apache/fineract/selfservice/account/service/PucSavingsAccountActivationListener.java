@@ -30,7 +30,6 @@ import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.selfservice.account.data.PucAddAccountRequest;
-import org.apache.fineract.selfservice.account.service.PucExternalApiClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
@@ -228,6 +227,9 @@ public class PucSavingsAccountActivationListener {
             // Holder ID (Cédula/Identificación)
             String holderId = extractExternalIdValue(clientData.getExternalId());
 
+            // Holder ID Type (FISICA o JURIDICA)
+            String holderIdType = resolveHolderIdType(clientData);
+
             // Currency Code
             String currencyCode = (accountData.getCurrency() != null && accountData.getCurrency().getCode() != null)
                     ? accountData.getCurrency().getCode()
@@ -237,11 +239,12 @@ public class PucSavingsAccountActivationListener {
             pucRequest.setAccountNumber(iban);
             pucRequest.setHolder(holder);
             pucRequest.setHolderId(holderId);
+            pucRequest.setHolderIdType(holderIdType);
             pucRequest.setCurrencyCode(currencyCode);
             pucRequest.setAccountType("CAR");
 
-            log.info("Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Moneda: {}, Tipo: CAR",
-                    iban, accountNumber, holder, holderId, currencyCode);
+            log.info("Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Tipo Cédula: {}, Moneda: {}, Tipo: CAR",
+                    iban, accountNumber, holder, holderId, holderIdType, currencyCode);
 
             // 4. Enviar la petición al cliente REST de PUC
             String response = this.pucExternalApiClient.addAccount(pucRequest);
@@ -250,6 +253,27 @@ public class PucSavingsAccountActivationListener {
         } catch (Exception e) {
             log.error("Error procesando el registro en PUC tras evento de activación (SavingsActivateBusinessEvent)", e);
         }
+    }
+
+    /**
+     * Determina el tipo de identificación (FISICA o JURIDICA) según la forma legal del cliente
+     */
+    private String resolveHolderIdType(ClientData clientData) {
+        if (clientData == null || clientData.getLegalForm() == null) {
+            return "FISICA";
+        }
+
+        Long legalFormId = clientData.getLegalForm().getId();
+        if (legalFormId != null && legalFormId == 2L) {
+            return "JURIDICA";
+        }
+
+        String value = clientData.getLegalForm().getValue();
+        if (value != null && "Entity".equalsIgnoreCase(value.trim())) {
+            return "JURIDICA";
+        }
+
+        return "FISICA";
     }
 
     /**
