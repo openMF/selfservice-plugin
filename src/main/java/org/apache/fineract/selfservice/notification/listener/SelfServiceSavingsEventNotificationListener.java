@@ -50,11 +50,6 @@ import org.springframework.util.StringUtils;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(
-    name = "fineract.events.external.producer.jms.enabled",
-    havingValue = "true",
-    matchIfMissing = false)
-@ConditionalOnBean(name = "topicJmsListenerContainerFactory")
 public class SelfServiceSavingsEventNotificationListener {
 
   private final ApplicationEventPublisher eventPublisher;
