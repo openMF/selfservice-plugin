@@ -36,9 +36,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jms.annotation.JmsListener;
-import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
+/**
+ * Durable JMS topic listener that consumes Fineract external business events
+ * ({@code SavingsDepositBusinessEvent} / {@code SavingsWithdrawalBusinessEvent})
+ * and turns them into {@link SelfServiceNotificationEvent} instances.
+ *
+ * <p>Fully multi-tenant: restores the correct {@link FineractPlatformTenant} from the Avro
+ * envelope before any database access and always clears the {@code ThreadLocal} afterwards.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -59,22 +67,31 @@ public class SelfServiceSavingsEventNotificationListener {
   private final ObjectMapper objectMapper;
 
   /**
-   * Destination must match the topic that Fineract’s JMS producer publishes to.
-   * Official property: fineract.events.external.producer.jms.event-topic-name
+   * Destination = the topic name published by Fineract core.
+   * Official property: {@code fineract.events.external.producer.jms.event-topic-name}
    */
   @Value("${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}")
   private String eventTopicName;
 
+  /**
+   * Durable subscription name – matches the value already set in docker-compose.
+   */
+  @Value("${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
+  private String subscriptionName;
+
   @JmsListener(
-      destination = "${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}",
+      destination =
+          "${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}",
       containerFactory = "topicJmsListenerContainerFactory",
-      subscription = "${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
+      subscription =
+          "${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}",
+      id = "selfServiceSavingsExternalEventsListener")
   public void onMessage(Message message) {
     FineractPlatformTenant originalTenant = null;
     try {
       originalTenant = ThreadLocalContextUtil.getTenant();
     } catch (IllegalStateException ignored) {
-      // expected on background JMS threads
+      // Expected on pure JMS threads
     }
 
     try {
@@ -85,53 +102,61 @@ public class SelfServiceSavingsEventNotificationListener {
       }
 
       log.info(
-          "JMS message received on topic '{}' - Type: {}, Length: {}",
+          "JMS message received on topic [{}] – Type: {}, Length: {}",
           eventTopicName,
           message.getClass().getSimpleName(),
           payloadBytes.length);
 
+      // Avro MessageV1 envelope
       ByteBuffer byteBuffer = ByteBuffer.wrap(payloadBytes);
       MessageV1 messageV1 = MessageV1.fromByteBuffer(byteBuffer);
 
       String eventType = messageV1.getType() != null ? messageV1.getType().toString() : null;
       String tenantIdentifier =
-          messageV1.getTenantId() != null ? messageV1.getTenantId().toString() : "default";
+          StringUtils.hasText(messageV1.getTenantId()) ? messageV1.getTenantId() : "default";
 
       log.info(
-          "Parsed Avro MessageV1. Event type: {}, Category: {}, Tenant: {}",
+          "Parsed Avro MessageV1 – type={}, category={}, tenant={}",
           eventType,
           messageV1.getCategory(),
           tenantIdentifier);
 
+      // Multi-tenant context restoration BEFORE any DB call
       FineractPlatformTenant tenant = resolveTenant(tenantIdentifier);
       if (tenant == null) {
-        log.error("Could not resolve any valid tenant for identifier '{}'. Aborting.", tenantIdentifier);
+        log.error("Unable to resolve tenant [{}]. Aborting message processing.", tenantIdentifier);
         return;
       }
 
       ThreadLocalContextUtil.setTenant(tenant);
+      // ThreadLocalContextUtil.setBusinessDates expects a concrete HashMap
       HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
       businessDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.now());
       ThreadLocalContextUtil.setBusinessDates(businessDates);
 
+      // Process only the events we care about
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
+
         ByteBuffer dataBuffer = messageV1.getData();
         if (dataBuffer == null) {
-          log.warn("Event envelope has no data payload");
+          log.warn("Event envelope has no data payload for type {}", eventType);
           return;
         }
+
         SavingsAccountTransactionDataV1 txnData =
             SavingsAccountTransactionDataV1.fromByteBuffer(dataBuffer);
         processSavingsTransactionEvent(txnData, eventType);
       } else {
-        log.debug("Ignoring unsupported external event type: {}", eventType);
+        log.debug("Ignoring external event type: {}", eventType);
       }
+
     } catch (Exception e) {
       log.error("Failed to parse or process external event message", e);
-      // rethrow so the transacted session rolls back and the message is redelivered
-      throw new RuntimeException("Failed to process external event", e);
+      // Session is transacted → message will be redelivered
+      throw new RuntimeException("JMS processing failed – triggering redelivery", e);
     } finally {
+      // Always clean ThreadLocal to avoid pollution of the JMS thread pool
       ThreadLocalContextUtil.reset();
       if (originalTenant != null) {
         ThreadLocalContextUtil.setTenant(originalTenant);
@@ -139,68 +164,61 @@ public class SelfServiceSavingsEventNotificationListener {
     }
   }
 
-  private FineractPlatformTenant resolveTenant(String source) {
+  private FineractPlatformTenant resolveTenant(String tenantIdentifier) {
     try {
-      return tenantDetailsService.loadTenantById(source);
+      return tenantDetailsService.loadTenantById(tenantIdentifier);
     } catch (Exception e) {
-      log.warn("Failed to load tenant '{}': {}", source, e.getMessage());
-    }
-    if (!"default".equals(source)) {
+      log.warn(
+          "Could not load tenant by id [{}]. Falling back to 'default'. Cause: {}",
+          tenantIdentifier,
+          e.getMessage());
       try {
-        log.info("Falling back to 'default' tenant");
         return tenantDetailsService.loadTenantById("default");
-      } catch (Exception e) {
-        log.error("Failed to load fallback 'default' tenant: {}", e.getMessage());
+      } catch (Exception ex) {
+        log.error("Even the default tenant could not be loaded", ex);
+        return null;
       }
     }
-    return null;
   }
 
   private void processSavingsTransactionEvent(
-      SavingsAccountTransactionDataV1 txnRecord, String eventType) {
-    try {
-      Long savingsAccountId = txnRecord.getAccountId();
-      String accountNumber =
-          txnRecord.getAccountNo() != null ? txnRecord.getAccountNo().toString() : null;
-      BigDecimal amount = txnRecord.getAmount() != null ? txnRecord.getAmount() : BigDecimal.ZERO;
+      SavingsAccountTransactionDataV1 txnData, String eventType) {
 
-      String currencyCode = "USD";
-      if (txnRecord.getCurrency() != null && txnRecord.getCurrency().getCode() != null) {
-        currencyCode = txnRecord.getCurrency().getCode().toString();
-      }
+    // Avro field is "accountId", NOT "savingsAccountId"
+    Long savingsAccountId = txnData.getAccountId();
+    BigDecimal amount = txnData.getAmount() != null ? txnData.getAmount() : BigDecimal.ZERO;
+    String currencyCode =
+        txnData.getCurrency() != null ? txnData.getCurrency().getCode() : "XXX";
+    LocalDate transactionDate =
+        txnData.getDate() != null
+            ? LocalDate.parse(txnData.getDate().toString())
+            : LocalDate.now();
+    String accountNumber = txnData.getAccountNo();
 
-      LocalDate transactionDate = LocalDate.now();
-      if (txnRecord.getDate() != null) {
-        try {
-          transactionDate = LocalDate.parse(txnRecord.getDate().toString());
-        } catch (Exception e) {
-          log.warn("Could not parse date string: {}", txnRecord.getDate());
+    Long clientId = null;
+    if (savingsAccountId != null) {
+      try {
+        SavingsAccountData accountData =
+            savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
+        clientId = accountData.getClientId();
+        if (accountNumber == null) {
+          accountNumber = accountData.getAccountNo();
         }
+      } catch (Exception e) {
+        log.error("Unable to load SavingsAccountData for id={}", savingsAccountId, e);
+        return;
       }
-
-      Long clientId = null;
-      if (savingsAccountId != null) {
-        try {
-          SavingsAccountData accountData =
-              savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
-          clientId = accountData.getClientId();
-          if (accountNumber == null) {
-            accountNumber = accountData.getAccountNo();
-          }
-          log.info(
-              "Retrieved savings account {} for client {}", savingsAccountId, clientId);
-        } catch (Exception e) {
-          log.error(
-              "Could not fetch savings account data for accountId: {}", savingsAccountId, e);
-        }
-      }
-
-      triggerNotification(
-          clientId, savingsAccountId, accountNumber, amount, currencyCode, transactionDate, eventType);
-    } catch (Exception e) {
-      log.error("Failed to process savings transaction event", e);
-      throw e; // let the outer handler roll back the JMS transaction
     }
+
+    if (clientId == null) {
+      log.warn(
+          "No clientId resolved for savingsAccountId={}. Skipping notification.",
+          savingsAccountId);
+      return;
+    }
+
+    triggerNotification(
+        clientId, savingsAccountId, accountNumber, amount, currencyCode, transactionDate, eventType);
   }
 
   private void triggerNotification(
@@ -212,33 +230,27 @@ public class SelfServiceSavingsEventNotificationListener {
       LocalDate transactionDate,
       String eventType) {
 
-    if (clientId == null || savingsAccountId == null) {
-      log.warn(
-          "Incomplete payload. ClientId: {}, SavingsAccountId: {}", clientId, savingsAccountId);
+    ClientData client;
+    try {
+      client = clientReadPlatformService.retrieveOne(clientId);
+    } catch (Exception e) {
+      log.error("Unable to load ClientData for clientId={}", clientId, e);
       return;
     }
 
-    ClientData clientData = null;
-    try {
-      clientData = clientReadPlatformService.retrieveOne(clientId);
-    } catch (Exception e) {
-      log.warn("Could not fetch client data for clientId: {}", clientId, e);
-    }
+    String firstName = client.getFirstname();
+    String lastName = client.getLastname();
+    String email = client.getEmailAddress();
+    String mobileNumber = client.getMobileNo();
 
-    String firstName = clientData != null ? clientData.getFirstname() : null;
-    String lastName = clientData != null ? clientData.getLastname() : null;
-    String email = clientData != null ? clientData.getEmailAddress() : null;
-    String mobileNumber = clientData != null ? clientData.getMobileNo() : null;
-
-    String transactionType = eventType.contains("Deposit") ? "DEPOSIT" : "WITHDRAWAL";
     SelfServiceNotificationEvent.Type notificationType =
-        eventType.contains("Deposit")
+        "SavingsDepositBusinessEvent".equals(eventType)
             ? SelfServiceNotificationEvent.Type.SAVINGS_DEPOSIT
             : SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWAL;
 
     log.info(
-        "Triggering {} notification for Client: {}, Savings Account: {}, Amount: {} {}",
-        transactionType,
+        "Triggering {} notification – clientId={}, savingsAccountId={}, amount={} {}",
+        notificationType,
         clientId,
         savingsAccountId,
         amount.setScale(2, RoundingMode.HALF_UP),
@@ -250,12 +262,13 @@ public class SelfServiceSavingsEventNotificationListener {
     contextData.put("amount", amount.setScale(2, RoundingMode.HALF_UP));
     contextData.put("currency", currencyCode);
     contextData.put("transactionDate", transactionDate.toString());
-    contextData.put("transactionType", transactionType);
+    contextData.put("transactionType", notificationType.name());
 
     FineractPlatformTenant tenant = null;
     try {
       tenant = ThreadLocalContextUtil.getTenant();
     } catch (Exception ignored) {
+      // ignore
     }
 
     SelfServiceNotificationEvent event =
@@ -284,8 +297,9 @@ public class SelfServiceSavingsEventNotificationListener {
       bytesMessage.readBytes(byteData);
       return byteData;
     } else if (message instanceof TextMessage textMessage) {
+      // Fallback path (rare – Fineract publishes Avro binary)
       String text = textMessage.getText();
-      log.info("Received TextMessage – attempting JSON fallback parsing");
+      log.info("Received TextMessage – attempting JSON fallback");
       processJsonPayload(text.getBytes(StandardCharsets.UTF_8));
       return null;
     } else {
@@ -301,7 +315,8 @@ public class SelfServiceSavingsEventNotificationListener {
       String eventType = rootNode.has("type") ? rootNode.get("type").asText() : null;
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
-        log.info("JSON fallback for event type: {}", eventType);
+        log.info("JSON fallback processed for event type: {}", eventType);
+        // Extend here if a pure-JSON path is ever needed
       }
     } catch (Exception e) {
       log.error("Failed to process JSON payload", e);

@@ -11,21 +11,22 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.ActiveMQPrefetchPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jms.DefaultJmsListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
-import org.springframework.jms.support.converter.MessageConverter;
-import org.springframework.jms.support.converter.SimpleMessageConverter;
 import org.springframework.util.StringUtils;
 
 /**
- * Production-ready JMS configuration for the Self-Service Plugin.
- * Supports durable topic subscriptions (required for reliable consumption of
- * fineract.external.events) and is fully multi-tenant aware via the listener.
+ * Self-contained JMS configuration for the Self-Service Plugin.
+ *
+ * <p>Creates its own ActiveMQ {@link ConnectionFactory} so the durable topic consumer does not
+ * depend on Fineract’s internal producer beans. This guarantees that a consumer always appears on
+ * the topic {@code fineract.external.events}.
  */
 @Configuration
+@EnableJms
 @ConditionalOnProperty(
     name = {
       "fineract.events.external.producer.jms.enabled",
@@ -34,6 +35,23 @@ import org.springframework.util.StringUtils;
     havingValue = "true",
     matchIfMissing = false)
 public class SelfServiceJmsConfig {
+
+  /** Broker URL used by Fineract’s external-event producer (same property). */
+  @Value("${fineract.events.external.producer.jms.broker-url:tcp://localhost:61616}")
+  private String brokerUrl;
+
+  @Value("${fineract.events.external.producer.jms.broker-username:}")
+  private String brokerUsername;
+
+  @Value("${fineract.events.external.producer.jms.broker-password:}")
+  private String brokerPassword;
+
+  /**
+   * Client-ID for the durable subscription. Must be unique per JVM instance.
+   * Matches the env-var you already set in docker-compose.
+   */
+  @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
+  private String clientId;
 
   @Value("${fineract.external.events.jms.concurrency:3-10}")
   private String concurrency;
@@ -45,68 +63,63 @@ public class SelfServiceJmsConfig {
   private long recoveryInterval;
 
   /**
-   * Client ID used for durable subscriptions. Matches the env var supplied in docker-compose.
-   * Must be unique per consumer instance.
+   * Dedicated ConnectionFactory for the self-service durable topic consumer.
    */
-  @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
-  private String clientId;
+  @Bean(name = "selfServiceJmsConnectionFactory")
+  public ConnectionFactory selfServiceJmsConnectionFactory() {
+    ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory();
+    factory.setBrokerURL(brokerUrl);
 
-  /**
-   * Creates a JMS Listener Container Factory configured for Publish/Subscribe (Topics)
-   * with durable subscription support.
-   */
-  @Bean
-  public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
-      ConnectionFactory connectionFactory,
-      DefaultJmsListenerContainerFactoryConfigurer configurer) {
+    if (StringUtils.hasText(brokerUsername)) {
+      factory.setUserName(brokerUsername);
+      factory.setPassword(brokerPassword);
+    }
 
-    DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
-    configurer.configure(factory, connectionFactory);
-
-    // Topic (pub/sub) mode – mandatory for fineract.external.events
-    factory.setPubSubDomain(true);
-
-    // Durable subscription so messages are retained when the consumer is offline
-    factory.setSubscriptionDurable(true);
+    // Mandatory for durable subscriptions
     if (StringUtils.hasText(clientId)) {
-      factory.setClientId(clientId);
+      factory.setClientID(clientId);
     }
 
-    // Dynamic concurrency
-    factory.setConcurrency(concurrency);
+    ActiveMQPrefetchPolicy prefetchPolicy = new ActiveMQPrefetchPolicy();
+    prefetchPolicy.setTopicPrefetch(prefetch);
+    prefetchPolicy.setQueuePrefetch(prefetch);
+    factory.setPrefetchPolicy(prefetchPolicy);
+    factory.setOptimizeAcknowledge(true);
 
-    // Transacted sessions → automatic redelivery on failure
-    factory.setSessionTransacted(true);
-
-    // Session caching (safe with concurrent consumers)
-    factory.setCacheLevelName("CACHE_SESSION");
-
-    // Recovery on broker disconnect
-    factory.setRecoveryInterval(recoveryInterval);
-
-    // ActiveMQ-specific tuning
-    if (connectionFactory instanceof ActiveMQConnectionFactory amqFactory) {
-      // Ensure the same clientId is also set on the underlying factory
-      if (StringUtils.hasText(clientId) && !StringUtils.hasText(amqFactory.getClientID())) {
-        amqFactory.setClientID(clientId);
-      }
-
-      ActiveMQPrefetchPolicy prefetchPolicy = new ActiveMQPrefetchPolicy();
-      prefetchPolicy.setTopicPrefetch(prefetch);
-      prefetchPolicy.setQueuePrefetch(prefetch);
-      amqFactory.setPrefetchPolicy(prefetchPolicy);
-      amqFactory.setOptimizeAcknowledge(true);
-    }
+    // Fail fast if the broker is unreachable at startup
+    factory.setConnectResponseTimeout(10_000);
 
     return factory;
   }
 
   /**
-   * Simple converter – the listener works with raw BytesMessage / TextMessage
-   * (Avro MessageV1). Override if a custom converter is required later.
+   * Topic-mode listener-container factory with durable-subscription support.
+   * This is the bean referenced by {@code @JmsListener(containerFactory = "...")}.
    */
-  @Bean
-  public MessageConverter jmsMessageConverter() {
-    return new SimpleMessageConverter();
+  @Bean(name = "topicJmsListenerContainerFactory")
+  public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
+      ConnectionFactory selfServiceJmsConnectionFactory) {
+
+    DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
+    factory.setConnectionFactory(selfServiceJmsConnectionFactory);
+
+    // Pub/Sub (topic)
+    factory.setPubSubDomain(true);
+
+    // Durable subscription – messages are retained until this consumer acknowledges them
+    factory.setSubscriptionDurable(true);
+    if (StringUtils.hasText(clientId)) {
+      factory.setClientId(clientId);
+    }
+
+    factory.setConcurrency(concurrency);
+    factory.setSessionTransacted(true);
+    factory.setCacheLevelName("CACHE_SESSION");
+    factory.setRecoveryInterval(recoveryInterval);
+
+    // Make sure the container starts automatically
+    factory.setAutoStartup(true);
+
+    return factory;
   }
 }
