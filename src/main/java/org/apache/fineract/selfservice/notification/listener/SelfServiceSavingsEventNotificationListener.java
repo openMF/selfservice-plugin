@@ -43,10 +43,10 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(
-    name = "fineract.external.events.producer.jms.enabled",
+    name = "fineract.events.external.producer.jms.enabled",
     havingValue = "true",
     matchIfMissing = false)
-@ConditionalOnBean(JmsListenerContainerFactory.class)
+@ConditionalOnBean(name = "topicJmsListenerContainerFactory")
 public class SelfServiceSavingsEventNotificationListener {
 
   private final ApplicationEventPublisher eventPublisher;
@@ -55,19 +55,23 @@ public class SelfServiceSavingsEventNotificationListener {
   private final TenantDetailsService tenantDetailsService;
   private final ObjectMapper objectMapper;
 
-  @Value("${fineract.external.event.queue.name:fineract.external.events}")
-  private String eventQueueName;
+  /**
+   * Destination must match the topic that Fineract’s JMS producer publishes to.
+   * Official property: fineract.events.external.producer.jms.event-topic-name
+   */
+  @Value("${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}")
+  private String eventTopicName;
 
   @JmsListener(
-      destination = "${fineract.external.event.queue.name:fineract.external.events}",
-      containerFactory = "topicJmsListenerContainerFactory")
+      destination = "${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}",
+      containerFactory = "topicJmsListenerContainerFactory",
+      subscription = "${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
   public void onMessage(Message message) {
-    // 1. Capture original tenant context to restore later
     FineractPlatformTenant originalTenant = null;
     try {
       originalTenant = ThreadLocalContextUtil.getTenant();
-    } catch (IllegalStateException e) {
-      // No tenant set, which is expected for background JMS threads
+    } catch (IllegalStateException ignored) {
+      // expected on background JMS threads
     }
 
     try {
@@ -78,41 +82,35 @@ public class SelfServiceSavingsEventNotificationListener {
       }
 
       log.info(
-          "JMS message received - Type: {}, Length: {}",
+          "JMS message received on topic '{}' - Type: {}, Length: {}",
+          eventTopicName,
           message.getClass().getSimpleName(),
           payloadBytes.length);
 
-      // 2. Deserialize Avro Message
       ByteBuffer byteBuffer = ByteBuffer.wrap(payloadBytes);
       MessageV1 messageV1 = MessageV1.fromByteBuffer(byteBuffer);
 
       String eventType = messageV1.getType() != null ? messageV1.getType().toString() : null;
-
-      // 3. Extract tenant identifier from the 'source' field of the Avro message
-      String source = messageV1.getTenantId() != null ? messageV1.getTenantId() : "default";
+      String tenantIdentifier =
+          messageV1.getTenantId() != null ? messageV1.getTenantId().toString() : "default";
 
       log.info(
-          "Successfully parsed Avro MessageV1. Event type: {}, Category: {}, Source: {}",
+          "Parsed Avro MessageV1. Event type: {}, Category: {}, Tenant: {}",
           eventType,
           messageV1.getCategory(),
-          source);
+          tenantIdentifier);
 
-      // 4. Resolve and set tenant context BEFORE any database operations
-      FineractPlatformTenant tenant = resolveTenant(source);
-
-      LocalDate businessDate = LocalDate.now();
-      if (tenant != null) {
-        ThreadLocalContextUtil.setTenant(tenant);
-        HashMap<BusinessDateType, LocalDate> contextData = new HashMap<>();
-        contextData.put(BusinessDateType.BUSINESS_DATE, businessDate);
-        ThreadLocalContextUtil.setBusinessDates(contextData);
-        log.debug("Set tenant context to: {}", tenant.getId());
-      } else {
-        log.error("Could not resolve any valid tenant. Database operations will fail.");
-        return; // Abort processing if we can't determine the tenant
+      FineractPlatformTenant tenant = resolveTenant(tenantIdentifier);
+      if (tenant == null) {
+        log.error("Could not resolve any valid tenant for identifier '{}'. Aborting.", tenantIdentifier);
+        return;
       }
 
-      // 5. Process the specific event
+      ThreadLocalContextUtil.setTenant(tenant);
+      HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
+      businessDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.now());
+      ThreadLocalContextUtil.setBusinessDates(businessDates);
+
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
         ByteBuffer dataBuffer = messageV1.getData();
@@ -120,17 +118,17 @@ public class SelfServiceSavingsEventNotificationListener {
           log.warn("Event envelope has no data payload");
           return;
         }
-
         SavingsAccountTransactionDataV1 txnData =
             SavingsAccountTransactionDataV1.fromByteBuffer(dataBuffer);
         processSavingsTransactionEvent(txnData, eventType);
+      } else {
+        log.debug("Ignoring unsupported external event type: {}", eventType);
       }
-
     } catch (Exception e) {
       log.error("Failed to parse or process external event message", e);
+      // rethrow so the transacted session rolls back and the message is redelivered
+      throw new RuntimeException("Failed to process external event", e);
     } finally {
-      // 6. CRITICAL: Always reset the tenant context to prevent thread pollution in the JMS thread
-      // pool
       ThreadLocalContextUtil.reset();
       if (originalTenant != null) {
         ThreadLocalContextUtil.setTenant(originalTenant);
@@ -138,32 +136,20 @@ public class SelfServiceSavingsEventNotificationListener {
     }
   }
 
-  /**
-   * Resolves the tenant to use for database operations. First tries the provided source. If that
-   * fails (e.g., source is a malformed UUID), it falls back to the standard "default" tenant.
-   */
   private FineractPlatformTenant resolveTenant(String source) {
-    // 1. Try to load by the provided source (which should ideally be the tenant identifier)
     try {
       return tenantDetailsService.loadTenantById(source);
     } catch (Exception e) {
-      log.warn(
-          "Failed to retrieve tenant with identifier: '{}'. Error: {}", source, e.getMessage());
+      log.warn("Failed to load tenant '{}': {}", source, e.getMessage());
     }
-
-    // 2. Fallback to "default" tenant.
-    // In some Fineract setups, the 'source' field in the Avro message might contain
-    // a message UUID instead of the actual tenant identifier. Falling back to "default"
-    // ensures the query executes against the primary tenant schema.
     if (!"default".equals(source)) {
       try {
-        log.info("Falling back to 'default' tenant identifier.");
+        log.info("Falling back to 'default' tenant");
         return tenantDetailsService.loadTenantById("default");
       } catch (Exception e) {
-        log.error("Failed to retrieve 'default' tenant as fallback. Error: {}", e.getMessage());
+        log.error("Failed to load fallback 'default' tenant: {}", e.getMessage());
       }
     }
-
     return null;
   }
 
@@ -182,15 +168,13 @@ public class SelfServiceSavingsEventNotificationListener {
 
       LocalDate transactionDate = LocalDate.now();
       if (txnRecord.getDate() != null) {
-        String dateString = txnRecord.getDate().toString();
         try {
-          transactionDate = LocalDate.parse(dateString);
+          transactionDate = LocalDate.parse(txnRecord.getDate().toString());
         } catch (Exception e) {
-          log.warn("Could not parse date string: {}", dateString);
+          log.warn("Could not parse date string: {}", txnRecord.getDate());
         }
       }
 
-      // Fetch clientId from SavingsAccountData (now runs with correct tenant context)
       Long clientId = null;
       if (savingsAccountId != null) {
         try {
@@ -201,28 +185,18 @@ public class SelfServiceSavingsEventNotificationListener {
             accountNumber = accountData.getAccountNo();
           }
           log.info(
-              "Successfully retrieved savings account {} for client {}",
-              savingsAccountId,
-              clientId);
+              "Retrieved savings account {} for client {}", savingsAccountId, clientId);
         } catch (Exception e) {
           log.error(
-              "Could not fetch savings account data for accountId: {}. Tenant context may still be"
-                  + " incorrect.",
-              savingsAccountId,
-              e);
+              "Could not fetch savings account data for accountId: {}", savingsAccountId, e);
         }
       }
 
       triggerNotification(
-          clientId,
-          savingsAccountId,
-          accountNumber,
-          amount,
-          currencyCode,
-          transactionDate,
-          eventType);
+          clientId, savingsAccountId, accountNumber, amount, currencyCode, transactionDate, eventType);
     } catch (Exception e) {
       log.error("Failed to process savings transaction event", e);
+      throw e; // let the outer handler roll back the JMS transaction
     }
   }
 
@@ -234,11 +208,10 @@ public class SelfServiceSavingsEventNotificationListener {
       String currencyCode,
       LocalDate transactionDate,
       String eventType) {
+
     if (clientId == null || savingsAccountId == null) {
       log.warn(
-          "Incomplete payload for savings transaction event. ClientId: {}, SavingsAccountId: {}",
-          clientId,
-          savingsAccountId);
+          "Incomplete payload. ClientId: {}, SavingsAccountId: {}", clientId, savingsAccountId);
       return;
     }
 
@@ -246,11 +219,7 @@ public class SelfServiceSavingsEventNotificationListener {
     try {
       clientData = clientReadPlatformService.retrieveOne(clientId);
     } catch (Exception e) {
-      log.warn(
-          "Could not fetch client data for clientId: {}. Notification will be sent with limited"
-              + " data.",
-          clientId,
-          e);
+      log.warn("Could not fetch client data for clientId: {}", clientId, e);
     }
 
     String firstName = clientData != null ? clientData.getFirstname() : null;
@@ -313,7 +282,7 @@ public class SelfServiceSavingsEventNotificationListener {
       return byteData;
     } else if (message instanceof TextMessage textMessage) {
       String text = textMessage.getText();
-      log.info("Received TextMessage, attempting JSON parsing");
+      log.info("Received TextMessage – attempting JSON fallback parsing");
       processJsonPayload(text.getBytes(StandardCharsets.UTF_8));
       return null;
     } else {
@@ -327,10 +296,9 @@ public class SelfServiceSavingsEventNotificationListener {
       String jsonStr = new String(payloadBytes, StandardCharsets.UTF_8);
       JsonNode rootNode = objectMapper.readTree(jsonStr);
       String eventType = rootNode.has("type") ? rootNode.get("type").asText() : null;
-
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
-        log.info("Processing JSON payload for event type: {}", eventType);
+        log.info("JSON fallback for event type: {}", eventType);
       }
     } catch (Exception e) {
       log.error("Failed to process JSON payload", e);

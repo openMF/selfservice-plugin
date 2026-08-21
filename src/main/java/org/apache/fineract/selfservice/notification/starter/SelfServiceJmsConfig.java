@@ -14,16 +14,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.jms.DefaultJmsListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
 
 /**
- * Production-ready JMS Configuration for the Self-Service Plugin. Optimized for high-load
- * environments with proper concurrency, caching, and prefetch settings.
+ * Production-ready JMS Configuration for the Self-Service Plugin.
+ * Listens to the Fineract external-events topic with a durable subscription
+ * so messages are never lost when the consumer is temporarily down.
  */
 @Configuration
+@EnableJms
 @ConditionalOnProperty(
-    name = "fineract.external.events.producer.jms.enabled",
+    name = "fineract.events.external.producer.jms.enabled",
     havingValue = "true",
     matchIfMissing = false)
 public class SelfServiceJmsConfig {
@@ -38,46 +41,48 @@ public class SelfServiceJmsConfig {
   private long recoveryInterval;
 
   /**
-   * Creates a JMS Listener Container Factory configured for Publish/Subscribe (Topics). Optimized
-   * for high throughput and reliability in production.
+   * Unique client identifier required by ActiveMQ for durable topic subscriptions.
+   * Must be stable across restarts of the same logical consumer.
    */
+  @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
+  private String clientId;
+
   @Bean
   public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
       ConnectionFactory connectionFactory,
       DefaultJmsListenerContainerFactoryConfigurer configurer) {
 
     DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
-
-    // Apply default Spring Boot properties
     configurer.configure(factory, connectionFactory);
 
-    // 1. CRITICAL: Enable Topic (Pub/Sub) mode
+    // Topic (pub/sub) mode
     factory.setPubSubDomain(true);
 
-    // 2. HIGH LOAD OPTIMIZATION: Dynamic concurrency (min 3, max 10 consumers)
+    // Durable subscription – messages published while the consumer is offline are retained.
+    // The actual subscription name is supplied by the @JmsListener(subscription = "...") attribute.
+    factory.setSubscriptionDurable(true);
+
+    // Dynamic concurrency
     factory.setConcurrency(concurrency);
 
-    // 3. RELIABILITY: Transacted sessions ensure messages are only acknowledged
-    // upon successful processing. Failures trigger automatic redelivery.
+    // Transacted session → acknowledge only after successful processing
     factory.setSessionTransacted(true);
 
-    // 4. PERFORMANCE: Cache the JMS Session to reduce overhead of creating
-    // sessions for each message, while remaining safe for concurrent consumers.
+    // Session cache is safe with concurrent consumers
     factory.setCacheLevelName("CACHE_SESSION");
 
-    // 5. RESILIENCE: Configure recovery interval for connection drops
     factory.setRecoveryInterval(recoveryInterval);
 
-    // 6. ACTIVE-MQ SPECIFIC OPTIMIZATION: Tune prefetch policy to prevent
-    // a single consumer from hoarding messages, ensuring better load distribution.
-    if (connectionFactory instanceof ActiveMQConnectionFactory) {
-      ActiveMQConnectionFactory amqFactory = (ActiveMQConnectionFactory) connectionFactory;
+    // ActiveMQ-specific tuning
+    if (connectionFactory instanceof ActiveMQConnectionFactory amqFactory) {
+      // Client ID is mandatory for durable subscriptions
+      amqFactory.setClientID(clientId);
+
       ActiveMQPrefetchPolicy prefetchPolicy = new ActiveMQPrefetchPolicy();
       prefetchPolicy.setTopicPrefetch(prefetch);
       prefetchPolicy.setQueuePrefetch(prefetch);
       amqFactory.setPrefetchPolicy(prefetchPolicy);
 
-      // Optional: Enable optimized message dispatch
       amqFactory.setOptimizeAcknowledge(true);
     }
 
