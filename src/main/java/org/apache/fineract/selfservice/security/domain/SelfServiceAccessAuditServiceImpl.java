@@ -7,24 +7,24 @@
 package org.apache.fineract.selfservice.security.domain;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
-import org.springframework.beans.factory.annotation.Value;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsService;
+import org.apache.fineract.selfservice.config.SelfServiceRateLimitProperties;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.apache.fineract.selfservice.config.SelfServiceRateLimitProperties;
 
 /**
  * Implementation of {@link SelfServiceAccessAuditService}.
  *
- * <p>Audit writes are asynchronous to avoid impacting request latency. Rate-limit checks are
- * synchronous (they gate the request).
- *
- * <p>Multi-tenant: the repository operates on the tenant-scoped datasource. Rate-limit thresholds
- * are configurable per deployment via application properties.
+ * <p>Audit writes are asynchronous. Rate-limit checks are synchronous (they gate the request).
+ * The nightly purge iterates every tenant so the job is multi-tenant safe.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,15 +33,12 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
 
   private final SelfServiceAccessAuditRepository auditRepository;
   private final SelfServiceRateLimitProperties rateLimitProperties;
+  private final TenantDetailsService tenantDetailsService;
 
-  /**
-   * Records an access audit event asynchronously.
-   * This method captures the context of resource access (both allowed and denied).
-   * Any exceptions during persistence are swallowed to prevent audit logging failures
-   * from impacting the main transaction.
-   * 
-   * @param auditDto the details of the access event
-   */
+  // -------------------------------------------------------------------------
+  // recordAccess
+  // -------------------------------------------------------------------------
+
   @Override
   @Async("notificationExecutor")
   public void recordAccess(final SelfServiceAccessAuditDto auditDto) {
@@ -57,59 +54,37 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
               .endpoint(auditDto.getEndpoint())
               .httpMethod(auditDto.getHttpMethod())
               .ipAddress(auditDto.getIpAddress())
-              .createdAt(
-                  auditDto.getTimestamp() != null
-                      ? auditDto.getTimestamp()
-                      : DateUtils.getOffsetDateTimeOfTenant())
+              .createdAt(DateUtils.getOffsetDateTimeOfTenant())
               .build();
-
       auditRepository.save(entity);
-
-      if (auditDto.getAccessResult() == SelfServiceAccessAudit.AccessResult.DENIED) {
-        log.warn(
-            "SECURITY AUDIT [DENIED]: resource={} endpoint={}",
-            auditDto.getResourceType(),
-            auditDto.getEndpoint());
-      }
     } catch (Exception e) {
-      // Audit failure must NEVER propagate to the caller
-      log.error("Failed to persist access audit record (non-fatal)", e);
+      // Never let audit failures break the main request
+      log.warn("Failed to persist access audit record: {}", e.getMessage());
     }
   }
 
-  /**
-   * Checks if the per-resource rate limit for denied accesses has been exceeded.
-   * <p>
-   * Fail-open behavior: If the database query fails, this method returns false,
-   * allowing the request to proceed. This prevents a database outage from
-   * locking out all legitimate traffic.
-   *
-   * @param appUserId    the user attempting access
-   * @param resourceType the specific type of resource
-   * @return true if the limit is exceeded, false otherwise (including on error)
-   */
+  // -------------------------------------------------------------------------
+  // Rate-limit checks (fail-open)
+  // -------------------------------------------------------------------------
+
   @Override
   public boolean isRateLimitExceeded(
       final Long appUserId, final SelfServiceAccessAudit.ResourceType resourceType) {
     try {
       OffsetDateTime windowStart =
-          DateUtils.getOffsetDateTimeOfTenant().minusMinutes(rateLimitProperties.windowMinutes());
+          DateUtils.getOffsetDateTimeOfTenant()
+              .minusMinutes(rateLimitProperties.windowMinutes());
 
-      // ═══════════════════════════════════════════════════════════
-      // FIX: Pass AccessResult.DENIED as a typed enum parameter.
-      // EclipseLink requires the parameter type to match the entity
-      // field type. A string literal 'DENIED' in JPQL causes:
-      //   ClassCastException: String cannot be cast to Enum
-      // ═══════════════════════════════════════════════════════════
       long deniedCount =
           auditRepository.countByUserResourceTypeAndResult(
-              appUserId, resourceType, SelfServiceAccessAudit.AccessResult.DENIED, windowStart);
+              appUserId,
+              resourceType,
+              SelfServiceAccessAudit.AccessResult.DENIED,
+              windowStart);
 
       return deniedCount >= rateLimitProperties.perResource();
     } catch (Exception e) {
-      // INTENTIONAL FAIL-OPEN: If the datasource or query fails, we log a warning but return false
-      // to allow the request to proceed. This ensures that an audit-database outage does not
-      // inadvertently lock out all legitimate traffic (denial of service).
+      // INTENTIONAL FAIL-OPEN
       log.warn(
           "Rate-limit check failed for user={} resourceType={} (fail-open)",
           appUserId,
@@ -119,50 +94,82 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
     }
   }
 
-  /**
-   * Checks if the global rate limit for all denied accesses has been exceeded for a user.
-   * <p>
-   * Fail-open behavior: If the database query fails, this method returns false,
-   * allowing the request to proceed. This prevents an audit-database outage
-   * from locking out legitimate traffic.
-   *
-   * @param appUserId the user attempting access
-   * @return true if the global limit is exceeded, false otherwise (including on error)
-   */
   @Override
   public boolean isGlobalRateLimitExceeded(final Long appUserId) {
     try {
       OffsetDateTime windowStart =
-          DateUtils.getOffsetDateTimeOfTenant().minusMinutes(rateLimitProperties.windowMinutes());
+          DateUtils.getOffsetDateTimeOfTenant()
+              .minusMinutes(rateLimitProperties.windowMinutes());
 
-      // ═══════════════════════════════════════════════════════════
-      // FIX: Same — pass enum parameter, not string literal
-      // ═══════════════════════════════════════════════════════════
       long deniedCount =
           auditRepository.countByUserAndResult(
               appUserId, SelfServiceAccessAudit.AccessResult.DENIED, windowStart);
 
       return deniedCount >= rateLimitProperties.global();
     } catch (Exception e) {
-      // INTENTIONAL FAIL-OPEN: Same as above. An audit system failure should not break core banking availability.
+      // INTENTIONAL FAIL-OPEN
       log.warn("Global rate-limit check failed for user={} (fail-open)", appUserId, e);
       return false;
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Nightly multi-tenant purge
+  // -------------------------------------------------------------------------
+
   /**
-   * Automated purge mechanism to enforce the approved retention period for personal-data fields
-   * in the access audit log. Runs daily at 2 AM.
+   * Runs once per day at 02:00. Iterates every tenant so the job is fully multi-tenant.
+   * Failures in one tenant never abort the others.
    */
   @Scheduled(cron = "0 0 2 * * ?")
-  @Transactional
   public void purgeExpiredAuditRecords() {
+    final int retentionDays = rateLimitProperties.retentionDays(); // isolated lookup
+    final OffsetDateTime cutoff = OffsetDateTime.now().minusDays(retentionDays);
+
+    log.info(
+        "Starting access-audit purge (retention={} days, cutoff={})", retentionDays, cutoff);
+
+    List<FineractPlatformTenant> tenants;
     try {
-      OffsetDateTime cutoff = OffsetDateTime.now().minusDays(rateLimitProperties.retentionDays());
-      log.info("Purging access audit records older than {} days (cutoff: {})", rateLimitProperties.retentionDays(), cutoff);
-      auditRepository.deleteByCreatedAtBefore(cutoff);
+      tenants = tenantDetailsService.findAllTenants();
     } catch (Exception e) {
-      log.error("Failed to purge expired access audit records", e);
+      log.error("Unable to load tenant list – aborting purge", e);
+      return;
     }
+
+    for (FineractPlatformTenant tenant : tenants) {
+      try {
+        ThreadLocalContextUtil.setTenant(tenant);
+        purgeForCurrentTenant(cutoff, retentionDays);
+      } catch (Exception e) {
+        log.error(
+            "Failed to purge access-audit records for tenant {}",
+            tenant.getTenantIdentifier(),
+            e);
+      } finally {
+        ThreadLocalContextUtil.clearTenant();
+      }
+    }
+
+    log.info("Access-audit purge finished for {} tenant(s)", tenants.size());
+  }
+
+  /**
+   * Performs the actual delete for the tenant currently set in ThreadLocalContextUtil.
+   * Runs in its own transaction.
+   */
+  @Transactional
+  protected void purgeForCurrentTenant(OffsetDateTime cutoff, int retentionDays) {
+    String tenantId = ThreadLocalContextUtil.getTenant().getTenantIdentifier();
+    log.info(
+        "Purging access audit records older than {} days for tenant {} (cutoff: {})",
+        retentionDays,
+        tenantId,
+        cutoff);
+
+    // Repository method returns void
+    auditRepository.deleteByCreatedAtBefore(cutoff);
+
+    log.info("Access-audit purge completed for tenant {}", tenantId);
   }
 }
