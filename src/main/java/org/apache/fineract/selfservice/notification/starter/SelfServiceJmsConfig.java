@@ -14,19 +14,23 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.jms.DefaultJmsListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
+import org.springframework.jms.support.converter.MessageConverter;
+import org.springframework.jms.support.converter.SimpleMessageConverter;
+import org.springframework.util.StringUtils;
 
 /**
- * Production-ready JMS Configuration for the Self-Service Plugin.
- * Listens to the Fineract external-events topic with a durable subscription
- * so messages are never lost when the consumer is temporarily down.
+ * Production-ready JMS configuration for the Self-Service Plugin.
+ * Supports durable topic subscriptions (required for reliable consumption of
+ * fineract.external.events) and is fully multi-tenant aware via the listener.
  */
 @Configuration
-@EnableJms
 @ConditionalOnProperty(
-    name = "fineract.events.external.producer.jms.enabled",
+    name = {
+      "fineract.events.external.producer.jms.enabled",
+      "fineract.external.events.producer.jms.enabled"
+    },
     havingValue = "true",
     matchIfMissing = false)
 public class SelfServiceJmsConfig {
@@ -41,12 +45,16 @@ public class SelfServiceJmsConfig {
   private long recoveryInterval;
 
   /**
-   * Unique client identifier required by ActiveMQ for durable topic subscriptions.
-   * Must be stable across restarts of the same logical consumer.
+   * Client ID used for durable subscriptions. Matches the env var supplied in docker-compose.
+   * Must be unique per consumer instance.
    */
   @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
   private String clientId;
 
+  /**
+   * Creates a JMS Listener Container Factory configured for Publish/Subscribe (Topics)
+   * with durable subscription support.
+   */
   @Bean
   public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
       ConnectionFactory connectionFactory,
@@ -55,37 +63,50 @@ public class SelfServiceJmsConfig {
     DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
     configurer.configure(factory, connectionFactory);
 
-    // Topic (pub/sub) mode
+    // Topic (pub/sub) mode – mandatory for fineract.external.events
     factory.setPubSubDomain(true);
 
-    // Durable subscription – messages published while the consumer is offline are retained.
-    // The actual subscription name is supplied by the @JmsListener(subscription = "...") attribute.
+    // Durable subscription so messages are retained when the consumer is offline
     factory.setSubscriptionDurable(true);
+    if (StringUtils.hasText(clientId)) {
+      factory.setClientId(clientId);
+    }
 
     // Dynamic concurrency
     factory.setConcurrency(concurrency);
 
-    // Transacted session → acknowledge only after successful processing
+    // Transacted sessions → automatic redelivery on failure
     factory.setSessionTransacted(true);
 
-    // Session cache is safe with concurrent consumers
+    // Session caching (safe with concurrent consumers)
     factory.setCacheLevelName("CACHE_SESSION");
 
+    // Recovery on broker disconnect
     factory.setRecoveryInterval(recoveryInterval);
 
     // ActiveMQ-specific tuning
     if (connectionFactory instanceof ActiveMQConnectionFactory amqFactory) {
-      // Client ID is mandatory for durable subscriptions
-      amqFactory.setClientID(clientId);
+      // Ensure the same clientId is also set on the underlying factory
+      if (StringUtils.hasText(clientId) && !StringUtils.hasText(amqFactory.getClientID())) {
+        amqFactory.setClientID(clientId);
+      }
 
       ActiveMQPrefetchPolicy prefetchPolicy = new ActiveMQPrefetchPolicy();
       prefetchPolicy.setTopicPrefetch(prefetch);
       prefetchPolicy.setQueuePrefetch(prefetch);
       amqFactory.setPrefetchPolicy(prefetchPolicy);
-
       amqFactory.setOptimizeAcknowledge(true);
     }
 
     return factory;
+  }
+
+  /**
+   * Simple converter – the listener works with raw BytesMessage / TextMessage
+   * (Avro MessageV1). Override if a custom converter is required later.
+   */
+  @Bean
+  public MessageConverter jmsMessageConverter() {
+    return new SimpleMessageConverter();
   }
 }
