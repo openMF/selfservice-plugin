@@ -41,11 +41,11 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@Slf4j/*
 @ConditionalOnProperty(
     name = "fineract.events.external.producer.jms.enabled",
     havingValue = "true",
-    matchIfMissing = false)
+    matchIfMissing = false)*/
 @ConditionalOnBean(name = "topicJmsListenerContainerFactory")
 public class SelfServiceSavingsEventNotificationListener {
 

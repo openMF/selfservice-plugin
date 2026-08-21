@@ -26,13 +26,14 @@ import org.springframework.util.StringUtils;
  * fineract.external.events) and is fully multi-tenant aware via the listener.
  */
 @Configuration
+/*
 @ConditionalOnProperty(
     name = {
       "fineract.events.external.producer.jms.enabled",
       "fineract.external.events.producer.jms.enabled"
     },
     havingValue = "true",
-    matchIfMissing = false)
+    matchIfMissing = false)*/
 public class SelfServiceJmsConfig {
 
   @Value("${fineract.external.events.jms.concurrency:3-10}")
