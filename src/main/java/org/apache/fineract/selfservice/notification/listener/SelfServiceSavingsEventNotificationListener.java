@@ -35,9 +35,16 @@ import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformS
 import org.apache.fineract.selfservice.account.data.PucAddAccountRequest;
 import org.apache.fineract.selfservice.account.service.PucExternalApiClient;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
+import org.apache.fineract.useradministration.domain.AppUser;
+import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jms.annotation.JmsListener;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -48,6 +55,12 @@ import org.springframework.util.StringUtils;
  *
  * <p>Fully multi-tenant: restores the correct {@link FineractPlatformTenant} from the Avro
  * envelope before any database access and always clears the {@code ThreadLocal} afterwards.
+ *
+ * <p>JMS listener threads have no HTTP security context. Core read services such as
+ * {@link ClientReadPlatformService#retrieveOne} call {@code officeHierarchy()}, which requires
+ * an authenticated {@link AppUser}. This listener therefore installs a system/audit user
+ * (default username {@code mifos}) into {@link SecurityContextHolder} for the duration of
+ * message processing — the same pattern used by self-service enrollment.
  */
 @Component
 @RequiredArgsConstructor
@@ -58,9 +71,10 @@ public class SelfServiceSavingsEventNotificationListener {
   private final ClientReadPlatformService clientReadPlatformService;
   private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
   private final TenantDetailsService tenantDetailsService;
-  private final ObjectMapper objectMapper;  
+  private final ObjectMapper objectMapper;
   private final PucExternalApiClient pucExternalApiClient;
-    
+  private final AppUserRepository appUserRepository;
+  private final JdbcTemplate jdbcTemplate;
 
   /**
    * Destination = the topic name published by Fineract core.
@@ -74,7 +88,14 @@ public class SelfServiceSavingsEventNotificationListener {
    */
   @Value("${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
   private String subscriptionName;
-  
+
+  /**
+   * System/audit username used when processing background JMS events (no HTTP principal).
+   * Must exist in {@code m_appuser}. Defaults to {@code mifos} (standard Fineract bootstrap user).
+   */
+  @Value("${fineract.selfservice.events.system-user:mifos}")
+  private String systemUsername;
+
   @jakarta.annotation.PostConstruct
   public void init() {
     log.info("============================================================");
@@ -82,6 +103,7 @@ public class SelfServiceSavingsEventNotificationListener {
     log.info("  destination     = {}", eventTopicName);
     log.info("  subscription    = {}", subscriptionName);
     log.info("  containerFactory= topicJmsListenerContainerFactory");
+    log.info("  systemUser      = {}", systemUsername);
     log.info("============================================================");
   }
 
@@ -99,6 +121,8 @@ public class SelfServiceSavingsEventNotificationListener {
     } catch (IllegalStateException ignored) {
       // Expected on pure JMS threads
     }
+
+    final Authentication previousAuth = SecurityContextHolder.getContext().getAuthentication();
 
     try {
       byte[] payloadBytes = extractPayloadBytes(message);
@@ -140,6 +164,10 @@ public class SelfServiceSavingsEventNotificationListener {
       businessDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.now());
       ThreadLocalContextUtil.setBusinessDates(businessDates);
 
+      // JMS threads have no HTTP security context. Core services (e.g. ClientReadPlatformService)
+      // call authenticatedUser() / officeHierarchy(). Install system user for this thread.
+      establishSystemSecurityContext();
+
       // Process only the events we care about
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
@@ -156,16 +184,15 @@ public class SelfServiceSavingsEventNotificationListener {
       } // Process only the activation event
       else if ("SavingsActivateBusinessEvent".equals(eventType)) {
 
-                ByteBuffer dataBuffer = messageV1.getData();
-                if (dataBuffer == null) {
-                    log.warn("Event envelope has no data payload for type {}", eventType);
-                    return;
-                }
+        ByteBuffer dataBuffer = messageV1.getData();
+        if (dataBuffer == null) {
+          log.warn("Event envelope has no data payload for type {}", eventType);
+          return;
+        }
 
-                SavingsAccountDataV1 accountDataV1 = SavingsAccountDataV1.fromByteBuffer(dataBuffer);
-                processSavingsActivationEvent(accountDataV1);
-      }
-      else {
+        SavingsAccountDataV1 accountDataV1 = SavingsAccountDataV1.fromByteBuffer(dataBuffer);
+        processSavingsActivationEvent(accountDataV1);
+      } else {
         log.debug("Ignoring external event type: {}", eventType);
       }
 
@@ -174,11 +201,63 @@ public class SelfServiceSavingsEventNotificationListener {
       // Session is transacted → message will be redelivered
       throw new RuntimeException("JMS processing failed – triggering redelivery", e);
     } finally {
+      // Always restore previous security context (or clear) to avoid polluting the JMS pool
+      if (previousAuth != null) {
+        SecurityContextHolder.getContext().setAuthentication(previousAuth);
+      } else {
+        SecurityContextHolder.clearContext();
+      }
       // Always clean ThreadLocal to avoid pollution of the JMS thread pool
       ThreadLocalContextUtil.reset();
       if (originalTenant != null) {
         ThreadLocalContextUtil.setTenant(originalTenant);
       }
+    }
+  }
+
+  /**
+   * Loads the configured system/audit {@link AppUser} and places it in the current thread's
+   * {@link SecurityContextHolder}. Required so that core platform read services can call
+   * {@code authenticatedUser()} / {@code officeHierarchy()} without throwing
+   * {@code UnAuthenticatedUserException}.
+   */
+  private void establishSystemSecurityContext() {
+    AppUser systemUser = resolveSystemUser(systemUsername);
+    Authentication auth =
+        new UsernamePasswordAuthenticationToken(systemUser, null, systemUser.getAuthorities());
+    SecurityContextHolder.getContext().setAuthentication(auth);
+    log.debug("Installed system security context for JMS processing as user '{}'", systemUsername);
+  }
+
+  private AppUser resolveSystemUser(String username) {
+    try {
+      Long userId =
+          jdbcTemplate.queryForObject(
+              "SELECT id FROM m_appuser WHERE username = ? AND is_deleted = false",
+              Long.class,
+              username);
+      if (userId == null) {
+        throw new IllegalStateException(
+            "System user '"
+                + username
+                + "' is configured but no matching m_appuser id was returned.");
+      }
+      return appUserRepository
+          .findById(userId)
+          .orElseThrow(
+              () ->
+                  new IllegalStateException(
+                      "System user '"
+                          + username
+                          + "' was found in m_appuser lookup but could not be loaded from the"
+                          + " repository."));
+    } catch (EmptyResultDataAccessException e) {
+      throw new IllegalStateException(
+          "Configured system user '"
+              + username
+              + "' does not exist in m_appuser. Set fineract.selfservice.events.system-user to a"
+              + " valid username.",
+          e);
     }
   }
 
@@ -198,84 +277,98 @@ public class SelfServiceSavingsEventNotificationListener {
       }
     }
   }
-  
+
   private void processSavingsActivationEvent(SavingsAccountDataV1 accountDataV1) {
-        Long savingsAccountId = null;
+    Long savingsAccountId = null;
 
-        if (accountDataV1.getId() != null) {
-            try {
-                savingsAccountId = Long.valueOf(accountDataV1.getId().toString());
-            } catch (NumberFormatException e) {
-                log.error("No se pudo parsear el ID de la cuenta desde Avro: {}", accountDataV1.getId());
-                return;
-            }
-        }
-
-        if (savingsAccountId == null) {
-            log.warn("No savingsAccountId present in SavingsAccountDataV1 payload");
-            return;
-        }
-
-        log.info("Evento capturado: [SavingsActivateBusinessEvent]. Iniciando registro automático de cuenta en el PUC para ID: {}", savingsAccountId);
-
-        try {
-            // 1. Consultar la información de la cuenta en Fineract
-            SavingsAccountData accountData = this.savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
-            if (accountData == null) {
-                log.warn("No se encontró la cuenta de ahorro con ID: {}", savingsAccountId);
-                return;
-            }
-
-            // 2. Consultar la información del Cliente para obtener la Identificación/Cédula
-            ClientData clientData = this.clientReadPlatformService.retrieveOne(accountData.getClientId());
-            if (clientData == null) {
-                log.warn("No se encontraron datos del cliente con ID: {}", accountData.getClientId());
-                return;
-            }
-
-            // 3. Construir la solicitud para el PUC / KINDO
-            PucAddAccountRequest pucRequest = new PucAddAccountRequest();
-
-            // IBAN (externalId de la cuenta) -> "CR19037300220010000086"
-            String iban = extractExternalIdValue(accountData.getExternalId());
-            if (iban.isBlank()) {
-                iban = accountData.getAccountNo();
-            }
-
-            // Account Number
-            String accountNumber = (accountData.getAccountNo() != null) ? accountData.getAccountNo() : iban;
-
-            // Holder Name
-            String holder = (accountData.getClientName() != null && !accountData.getClientName().isBlank())
-                    ? accountData.getClientName()
-                    : clientData.getDisplayName();
-
-            // Holder ID (Cédula/Identificación)
-            String holderId = extractExternalIdValue(clientData.getExternalId());
-
-            // Currency Code
-            String currencyCode = (accountData.getCurrency() != null && accountData.getCurrency().getCode() != null)
-                    ? accountData.getCurrency().getCode()
-                    : "CRC";
-
-            // Seteo de propiedades en el DTO del PUC
-            pucRequest.setAccountNumber(iban);
-            pucRequest.setHolder(holder);
-            pucRequest.setHolderId(holderId);
-            pucRequest.setCurrencyCode(currencyCode);
-            pucRequest.setAccountType("CAR");
-
-            log.info("Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Moneda: {}, Tipo: CAR",
-                    iban, accountNumber, holder, holderId, currencyCode);
-
-            // 4. Enviar la petición al cliente REST de PUC
-            String response = this.pucExternalApiClient.addAccount(pucRequest);
-            log.info("Respuesta del servicio PUC para IBAN {}: {}", iban, response);
-
-        } catch (Exception e) {
-            log.error("Error procesando el registro en PUC tras evento de activación (SavingsActivateBusinessEvent)", e);
-        }
+    if (accountDataV1.getId() != null) {
+      try {
+        savingsAccountId = Long.valueOf(accountDataV1.getId().toString());
+      } catch (NumberFormatException e) {
+        log.error("No se pudo parsear el ID de la cuenta desde Avro: {}", accountDataV1.getId());
+        return;
+      }
     }
+
+    if (savingsAccountId == null) {
+      log.warn("No savingsAccountId present in SavingsAccountDataV1 payload");
+      return;
+    }
+
+    log.info(
+        "Evento capturado: [SavingsActivateBusinessEvent]. Iniciando registro automático de cuenta"
+            + " en el PUC para ID: {}",
+        savingsAccountId);
+
+    try {
+      // 1. Consultar la información de la cuenta en Fineract
+      SavingsAccountData accountData = this.savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
+      if (accountData == null) {
+        log.warn("No se encontró la cuenta de ahorro con ID: {}", savingsAccountId);
+        return;
+      }
+
+      // 2. Consultar la información del Cliente para obtener la Identificación/Cédula
+      ClientData clientData = this.clientReadPlatformService.retrieveOne(accountData.getClientId());
+      if (clientData == null) {
+        log.warn("No se encontraron datos del cliente con ID: {}", accountData.getClientId());
+        return;
+      }
+
+      // 3. Construir la solicitud para el PUC / KINDO
+      PucAddAccountRequest pucRequest = new PucAddAccountRequest();
+
+      // IBAN (externalId de la cuenta) -> "CR19037300220010000086"
+      String iban = extractExternalIdValue(accountData.getExternalId());
+      if (iban.isBlank()) {
+        iban = accountData.getAccountNo();
+      }
+
+      // Account Number
+      String accountNumber = (accountData.getAccountNo() != null) ? accountData.getAccountNo() : iban;
+
+      // Holder Name
+      String holder =
+          (accountData.getClientName() != null && !accountData.getClientName().isBlank())
+              ? accountData.getClientName()
+              : clientData.getDisplayName();
+
+      // Holder ID (Cédula/Identificación)
+      String holderId = extractExternalIdValue(clientData.getExternalId());
+
+      // Currency Code
+      String currencyCode =
+          (accountData.getCurrency() != null && accountData.getCurrency().getCode() != null)
+              ? accountData.getCurrency().getCode()
+              : "CRC";
+
+      // Seteo de propiedades en el DTO del PUC
+      pucRequest.setAccountNumber(iban);
+      pucRequest.setHolder(holder);
+      pucRequest.setHolderId(holderId);
+      pucRequest.setCurrencyCode(currencyCode);
+      pucRequest.setAccountType("CAR");
+
+      log.info(
+          "Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Moneda:"
+              + " {}, Tipo: CAR",
+          iban,
+          accountNumber,
+          holder,
+          holderId,
+          currencyCode);
+
+      // 4. Enviar la petición al cliente REST de PUC
+      String response = this.pucExternalApiClient.addAccount(pucRequest);
+      log.info("Respuesta del servicio PUC para IBAN {}: {}", iban, response);
+
+    } catch (Exception e) {
+      log.error(
+          "Error procesando el registro en PUC tras evento de activación"
+              + " (SavingsActivateBusinessEvent)",
+          e);
+    }
+  }
 
   private void processSavingsTransactionEvent(
       SavingsAccountTransactionDataV1 txnData, String eventType) {
@@ -418,20 +511,20 @@ public class SelfServiceSavingsEventNotificationListener {
       log.error("Failed to process JSON payload", e);
     }
   }
-  
+
   /**
-     * Extrae de forma segura el valor en String de un objeto ExternalId o String.
-     */
-    private String extractExternalIdValue(Object externalIdObj) {
-        if (externalIdObj == null) {
-            return "";
-        }
-        if (externalIdObj instanceof ExternalId extId) {
-            return extId.isEmpty() ? "" : extId.getValue();
-        }
-        if (externalIdObj instanceof String str) {
-            return str;
-        }
-        return externalIdObj.toString();
+   * Extrae de forma segura el valor en String de un objeto ExternalId o String.
+   */
+  private String extractExternalIdValue(Object externalIdObj) {
+    if (externalIdObj == null) {
+      return "";
     }
+    if (externalIdObj instanceof ExternalId extId) {
+      return extId.isEmpty() ? "" : extId.getValue();
+    }
+    if (externalIdObj instanceof String str) {
+      return str;
+    }
+    return externalIdObj.toString();
+  }
 }
