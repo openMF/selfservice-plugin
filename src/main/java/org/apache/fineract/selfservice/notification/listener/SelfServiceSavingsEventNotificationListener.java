@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.notification.listener;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.jms.BytesMessage;
 import jakarta.jms.Message;
 import jakarta.jms.TextMessage;
@@ -33,7 +34,6 @@ import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformS
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
@@ -46,10 +46,15 @@ import org.springframework.util.StringUtils;
  *
  * <p>Fully multi-tenant: restores the correct {@link FineractPlatformTenant} from the Avro
  * envelope before any database access and always clears the {@code ThreadLocal} afterwards.
+ *
+ * <p>Only activated when the {@code topicJmsListenerContainerFactory} bean exists
+ * (i.e. when {@link org.apache.fineract.selfservice.notification.starter.SelfServiceJmsConfig}
+ * has been loaded).
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnBean(name = "topicJmsListenerContainerFactory")
 public class SelfServiceSavingsEventNotificationListener {
 
   private final ApplicationEventPublisher eventPublisher;
@@ -70,23 +75,29 @@ public class SelfServiceSavingsEventNotificationListener {
    */
   @Value("${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
   private String subscriptionName;
-  
-  @jakarta.annotation.PostConstruct
+
+  @PostConstruct
   public void init() {
+    // Guard against an empty property value overriding the default
+    if (!StringUtils.hasText(eventTopicName)) {
+      eventTopicName = "fineract.external.events";
+    }
+    if (!StringUtils.hasText(subscriptionName)) {
+      subscriptionName = "selfservice-savings-notifications";
+    }
+
     log.info("============================================================");
     log.info("SelfServiceSavingsEventNotificationListener STARTED");
-    log.info("  destination     = {}", eventTopicName);
-    log.info("  subscription    = {}", subscriptionName);
-    log.info("  containerFactory= topicJmsListenerContainerFactory");
+    log.info("  destination      = {}", eventTopicName);
+    log.info("  subscription     = {}", subscriptionName);
+    log.info("  containerFactory = topicJmsListenerContainerFactory");
     log.info("============================================================");
   }
 
   @JmsListener(
-      destination =
-          "${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}",
+      destination = "${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}",
       containerFactory = "topicJmsListenerContainerFactory",
-      subscription =
-          "${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}",
+      subscription = "${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}",
       id = "selfServiceSavingsExternalEventsListener")
   public void onMessage(Message message) {
     FineractPlatformTenant originalTenant = null;
@@ -318,7 +329,6 @@ public class SelfServiceSavingsEventNotificationListener {
       if ("SavingsDepositBusinessEvent".equals(eventType)
           || "SavingsWithdrawalBusinessEvent".equals(eventType)) {
         log.info("JSON fallback processed for event type: {}", eventType);
-        // Extend here if a pure-JSON path is ever needed
       }
     } catch (Exception e) {
       log.error("Failed to process JSON payload", e);
