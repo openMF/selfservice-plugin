@@ -181,8 +181,7 @@ public class SelfServiceSavingsEventNotificationListener {
         SavingsAccountTransactionDataV1 txnData =
             SavingsAccountTransactionDataV1.fromByteBuffer(dataBuffer);
         processSavingsTransactionEvent(txnData, eventType);
-      } // Process only the activation event
-      else if ("SavingsActivateBusinessEvent".equals(eventType)) {
+      } else if ("SavingsActivateBusinessEvent".equals(eventType)) {
 
         ByteBuffer dataBuffer = messageV1.getData();
         if (dataBuffer == null) {
@@ -302,7 +301,8 @@ public class SelfServiceSavingsEventNotificationListener {
 
     try {
       // 1. Consultar la información de la cuenta en Fineract
-      SavingsAccountData accountData = this.savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
+      SavingsAccountData accountData =
+          this.savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
       if (accountData == null) {
         log.warn("No se encontró la cuenta de ahorro con ID: {}", savingsAccountId);
         return;
@@ -325,7 +325,8 @@ public class SelfServiceSavingsEventNotificationListener {
       }
 
       // Account Number
-      String accountNumber = (accountData.getAccountNo() != null) ? accountData.getAccountNo() : iban;
+      String accountNumber =
+          (accountData.getAccountNo() != null) ? accountData.getAccountNo() : iban;
 
       // Holder Name
       String holder =
@@ -333,8 +334,35 @@ public class SelfServiceSavingsEventNotificationListener {
               ? accountData.getClientName()
               : clientData.getDisplayName();
 
-      // Holder ID (Cédula/Identificación)
+      // Holder ID + Holder ID Type from m_client_identifier (same pattern as account transfers).
+      // PUC requires holderIdType ("HolderIdType es obligatorio"). Default "0" =
+      // Persona Física Nacional (Cédula).
       String holderId = extractExternalIdValue(clientData.getExternalId());
+      String holderIdType = "0";
+      try {
+        final String sql =
+            "SELECT COALESCE(ci.document_key, '') AS document_key, "
+                + "COALESCE(CAST(cv.order_position AS VARCHAR), '0') AS id_type "
+                + "FROM m_client_identifier ci "
+                + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
+                + "WHERE ci.client_id = ? "
+                + "ORDER BY ci.id ASC LIMIT 1";
+        Map<String, Object> idRow = jdbcTemplate.queryForMap(sql, accountData.getClientId());
+        String documentKey = String.valueOf(idRow.getOrDefault("document_key", "")).trim();
+        String idType = String.valueOf(idRow.getOrDefault("id_type", "0")).trim();
+        if (!documentKey.isEmpty()) {
+          holderId = documentKey;
+        }
+        if (!idType.isEmpty()) {
+          holderIdType = idType;
+        }
+      } catch (Exception e) {
+        log.warn(
+            "Could not load client identifier for clientId={}. Using externalId/holderIdType=0."
+                + " Cause: {}",
+            accountData.getClientId(),
+            e.getMessage());
+      }
 
       // Currency Code
       String currencyCode =
@@ -346,16 +374,18 @@ public class SelfServiceSavingsEventNotificationListener {
       pucRequest.setAccountNumber(iban);
       pucRequest.setHolder(holder);
       pucRequest.setHolderId(holderId);
+      pucRequest.setHolderIdType(holderIdType);
       pucRequest.setCurrencyCode(currencyCode);
       pucRequest.setAccountType("CAR");
 
       log.info(
-          "Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Moneda:"
-              + " {}, Tipo: CAR",
+          "Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {},"
+              + " HolderIdType: {}, Moneda: {}, Tipo: CAR",
           iban,
           accountNumber,
           holder,
           holderId,
+          holderIdType,
           currencyCode);
 
       // 4. Enviar la petición al cliente REST de PUC
