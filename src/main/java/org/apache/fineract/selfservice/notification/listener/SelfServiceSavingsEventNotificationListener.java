@@ -21,8 +21,10 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.avro.MessageV1;
+import org.apache.fineract.avro.savings.v1.SavingsAccountDataV1;
 import org.apache.fineract.avro.savings.v1.SavingsAccountTransactionDataV1;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsService;
@@ -30,6 +32,8 @@ import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
+import org.apache.fineract.selfservice.account.data.PucAddAccountRequest;
+import org.apache.fineract.selfservice.account.service.PucExternalApiClient;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,7 +58,9 @@ public class SelfServiceSavingsEventNotificationListener {
   private final ClientReadPlatformService clientReadPlatformService;
   private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
   private final TenantDetailsService tenantDetailsService;
-  private final ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;  
+  private final PucExternalApiClient pucExternalApiClient;
+    
 
   /**
    * Destination = the topic name published by Fineract core.
@@ -147,7 +153,19 @@ public class SelfServiceSavingsEventNotificationListener {
         SavingsAccountTransactionDataV1 txnData =
             SavingsAccountTransactionDataV1.fromByteBuffer(dataBuffer);
         processSavingsTransactionEvent(txnData, eventType);
-      } else {
+      } // Process only the activation event
+      else if ("SavingsActivateBusinessEvent".equals(eventType)) {
+
+                ByteBuffer dataBuffer = messageV1.getData();
+                if (dataBuffer == null) {
+                    log.warn("Event envelope has no data payload for type {}", eventType);
+                    return;
+                }
+
+                SavingsAccountDataV1 accountDataV1 = SavingsAccountDataV1.fromByteBuffer(dataBuffer);
+                processSavingsActivationEvent(accountDataV1);
+      }
+      else {
         log.debug("Ignoring external event type: {}", eventType);
       }
 
@@ -180,6 +198,84 @@ public class SelfServiceSavingsEventNotificationListener {
       }
     }
   }
+  
+  private void processSavingsActivationEvent(SavingsAccountDataV1 accountDataV1) {
+        Long savingsAccountId = null;
+
+        if (accountDataV1.getId() != null) {
+            try {
+                savingsAccountId = Long.valueOf(accountDataV1.getId().toString());
+            } catch (NumberFormatException e) {
+                log.error("No se pudo parsear el ID de la cuenta desde Avro: {}", accountDataV1.getId());
+                return;
+            }
+        }
+
+        if (savingsAccountId == null) {
+            log.warn("No savingsAccountId present in SavingsAccountDataV1 payload");
+            return;
+        }
+
+        log.info("Evento capturado: [SavingsActivateBusinessEvent]. Iniciando registro automático de cuenta en el PUC para ID: {}", savingsAccountId);
+
+        try {
+            // 1. Consultar la información de la cuenta en Fineract
+            SavingsAccountData accountData = this.savingsAccountReadPlatformService.retrieveOne(savingsAccountId);
+            if (accountData == null) {
+                log.warn("No se encontró la cuenta de ahorro con ID: {}", savingsAccountId);
+                return;
+            }
+
+            // 2. Consultar la información del Cliente para obtener la Identificación/Cédula
+            ClientData clientData = this.clientReadPlatformService.retrieveOne(accountData.getClientId());
+            if (clientData == null) {
+                log.warn("No se encontraron datos del cliente con ID: {}", accountData.getClientId());
+                return;
+            }
+
+            // 3. Construir la solicitud para el PUC / KINDO
+            PucAddAccountRequest pucRequest = new PucAddAccountRequest();
+
+            // IBAN (externalId de la cuenta) -> "CR19037300220010000086"
+            String iban = extractExternalIdValue(accountData.getExternalId());
+            if (iban.isBlank()) {
+                iban = accountData.getAccountNo();
+            }
+
+            // Account Number
+            String accountNumber = (accountData.getAccountNo() != null) ? accountData.getAccountNo() : iban;
+
+            // Holder Name
+            String holder = (accountData.getClientName() != null && !accountData.getClientName().isBlank())
+                    ? accountData.getClientName()
+                    : clientData.getDisplayName();
+
+            // Holder ID (Cédula/Identificación)
+            String holderId = extractExternalIdValue(clientData.getExternalId());
+
+            // Currency Code
+            String currencyCode = (accountData.getCurrency() != null && accountData.getCurrency().getCode() != null)
+                    ? accountData.getCurrency().getCode()
+                    : "CRC";
+
+            // Seteo de propiedades en el DTO del PUC
+            pucRequest.setAccountNumber(iban);
+            pucRequest.setHolder(holder);
+            pucRequest.setHolderId(holderId);
+            pucRequest.setCurrencyCode(currencyCode);
+            pucRequest.setAccountType("CAR");
+
+            log.info("Enviando AddAccount a PUC -> IBAN: {}, AccountNo: {}, Titular: {}, Cédula: {}, Moneda: {}, Tipo: CAR",
+                    iban, accountNumber, holder, holderId, currencyCode);
+
+            // 4. Enviar la petición al cliente REST de PUC
+            String response = this.pucExternalApiClient.addAccount(pucRequest);
+            log.info("Respuesta del servicio PUC para IBAN {}: {}", iban, response);
+
+        } catch (Exception e) {
+            log.error("Error procesando el registro en PUC tras evento de activación (SavingsActivateBusinessEvent)", e);
+        }
+    }
 
   private void processSavingsTransactionEvent(
       SavingsAccountTransactionDataV1 txnData, String eventType) {
@@ -322,4 +418,20 @@ public class SelfServiceSavingsEventNotificationListener {
       log.error("Failed to process JSON payload", e);
     }
   }
+  
+  /**
+     * Extrae de forma segura el valor en String de un objeto ExternalId o String.
+     */
+    private String extractExternalIdValue(Object externalIdObj) {
+        if (externalIdObj == null) {
+            return "";
+        }
+        if (externalIdObj instanceof ExternalId extId) {
+            return extId.isEmpty() ? "" : extId.getValue();
+        }
+        if (externalIdObj instanceof String str) {
+            return str;
+        }
+        return externalIdObj.toString();
+    }
 }
