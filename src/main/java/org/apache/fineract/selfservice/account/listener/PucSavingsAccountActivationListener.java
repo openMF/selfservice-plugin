@@ -32,7 +32,7 @@ import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformS
 import org.apache.fineract.selfservice.account.data.PucAddAccountRequest;
 import org.apache.fineract.selfservice.account.service.PucExternalApiClient;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -48,7 +48,10 @@ import org.springframework.util.StringUtils;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnBean(name = "topicJmsListenerContainerFactory")
+@ConditionalOnProperty(
+    name = "fineract.events.external.producer.jms.enabled",
+    havingValue = "true",
+    matchIfMissing = false)
 public class PucSavingsAccountActivationListener {
 
     private final PucExternalApiClient pucExternalApiClient;
