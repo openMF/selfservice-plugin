@@ -32,7 +32,6 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
@@ -49,10 +48,6 @@ import org.springframework.util.StringUtils;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(
-    name = "fineract.events.external.producer.jms.enabled",
-    havingValue = "true",
-    matchIfMissing = false)
 public class SelfServiceSavingsEventNotificationListener {
 
   private final ApplicationEventPublisher eventPublisher;
