@@ -334,31 +334,36 @@ public class SelfServiceSavingsEventNotificationListener {
               ? accountData.getClientName()
               : clientData.getDisplayName();
 
-      // Holder ID + Holder ID Type from m_client_identifier (same pattern as account transfers).
-      // PUC requires holderIdType ("HolderIdType es obligatorio"). Default "0" =
-      // Persona Física Nacional (Cédula).
+      // Holder ID + Holder ID Type from m_client_identifier.
+      // PUC requires holderIdType as one of: FISICA, JURIDICA, PASAPORTE, DIMEX, DIDI
+      // (not numeric position). Map from m_code_value.code_value name.
+      //
+      // Known Fineract document types:
+      //   Persona Física Nacional   → FISICA
+      //   Persona Jurídica Nacional → JURIDICA
+      //   DIMEX                     → DIMEX
+      //   Pasaporte                 → PASAPORTE
       String holderId = extractExternalIdValue(clientData.getExternalId());
-      String holderIdType = "0";
+      String holderIdType = "FISICA";
       try {
         final String sql =
             "SELECT COALESCE(ci.document_key, '') AS document_key, "
-                + "COALESCE(CAST(cv.order_position AS VARCHAR), '0') AS id_type "
+                + "COALESCE(cv.code_value, '') AS id_type_description "
                 + "FROM m_client_identifier ci "
                 + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
                 + "WHERE ci.client_id = ? "
                 + "ORDER BY ci.id ASC LIMIT 1";
         Map<String, Object> idRow = jdbcTemplate.queryForMap(sql, accountData.getClientId());
         String documentKey = String.valueOf(idRow.getOrDefault("document_key", "")).trim();
-        String idType = String.valueOf(idRow.getOrDefault("id_type", "0")).trim();
+        String idTypeDescription =
+            String.valueOf(idRow.getOrDefault("id_type_description", "")).trim();
         if (!documentKey.isEmpty()) {
           holderId = documentKey;
         }
-        if (!idType.isEmpty()) {
-          holderIdType = idType;
-        }
+        holderIdType = mapToPucHolderIdType(idTypeDescription);
       } catch (Exception e) {
         log.warn(
-            "Could not load client identifier for clientId={}. Using externalId/holderIdType=0."
+            "Could not load client identifier for clientId={}. Using externalId/holderIdType=FISICA."
                 + " Cause: {}",
             accountData.getClientId(),
             e.getMessage());
@@ -540,6 +545,85 @@ public class SelfServiceSavingsEventNotificationListener {
     } catch (Exception e) {
       log.error("Failed to process JSON payload", e);
     }
+  }
+
+  /**
+   * Maps Fineract document type labels (m_code_value.code_value) to PUC holderIdType enums.
+   *
+   * <p>Known Fineract values:
+   * <ul>
+   *   <li>Persona Física Nacional → FISICA
+   *   <li>Persona Jurídica Nacional → JURIDICA
+   *   <li>DIMEX → DIMEX
+   *   <li>Pasaporte → PASAPORTE
+   * </ul>
+   * Allowed by PUC: FISICA, JURIDICA, PASAPORTE, DIMEX, DIDI.
+   */
+  private String mapToPucHolderIdType(String codeValueOrDescription) {
+    if (codeValueOrDescription == null || codeValueOrDescription.isBlank()) {
+      return "FISICA";
+    }
+
+    String normalized =
+        codeValueOrDescription
+            .trim()
+            .toUpperCase()
+            .replace("Á", "A")
+            .replace("É", "E")
+            .replace("Í", "I")
+            .replace("Ó", "O")
+            .replace("Ú", "U");
+
+    // Already a valid PUC enum
+    if (normalized.equals("FISICA")
+        || normalized.equals("JURIDICA")
+        || normalized.equals("PASAPORTE")
+        || normalized.equals("DIMEX")
+        || normalized.equals("DIDI")) {
+      return normalized;
+    }
+
+    // Exact Fineract labels from m_code_value
+    if (normalized.equals("PERSONA FISICA NACIONAL") || normalized.equals("PERSONA FISICA")) {
+      return "FISICA";
+    }
+    if (normalized.equals("PERSONA JURIDICA NACIONAL") || normalized.equals("PERSONA JURIDICA")) {
+      return "JURIDICA";
+    }
+    if (normalized.equals("PASAPORTE") || normalized.equals("PASAPORT")) {
+      return "PASAPORTE";
+    }
+    if (normalized.equals("DIMEX")) {
+      return "DIMEX";
+    }
+    if (normalized.equals("DIDI")) {
+      return "DIDI";
+    }
+
+    // Fuzzy fallback
+    if (normalized.contains("JURID")) {
+      return "JURIDICA";
+    }
+    if (normalized.contains("PASAPORT")) {
+      return "PASAPORTE";
+    }
+    if (normalized.contains("DIMEX")) {
+      return "DIMEX";
+    }
+    if (normalized.contains("DIDI") || normalized.contains("DIPLOMAT")) {
+      return "DIDI";
+    }
+    if (normalized.contains("FISIC")
+        || normalized.contains("CEDULA")
+        || normalized.contains("NACIONAL")
+        || normalized.contains("PERSONA")) {
+      return "FISICA";
+    }
+
+    log.warn(
+        "Unrecognized document type '{}'. Defaulting holderIdType to FISICA for PUC.",
+        codeValueOrDescription);
+    return "FISICA";
   }
 
   /**
