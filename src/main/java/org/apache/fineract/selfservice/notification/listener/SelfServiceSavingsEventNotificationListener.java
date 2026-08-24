@@ -38,6 +38,7 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.AppUserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -63,6 +64,10 @@ import org.springframework.util.StringUtils;
  * message processing — the same pattern used by self-service enrollment.
  */
 @Component
+@ConditionalOnProperty(
+    name = "fineract.events.external.producer.jms.enabled",
+    havingValue = "true",
+    matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 public class SelfServiceSavingsEventNotificationListener {
