@@ -27,8 +27,8 @@
             <column name="primary_color" type="VARCHAR(20)" defaultValue="blue">
                 <constraints nullable="false"/>
             </column>
-            <column name="created_at" type="TIMESTAMP WITH TIME ZONE"/>
-            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
         </createTable>
     </changeSet>
 

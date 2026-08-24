@@ -27,8 +27,8 @@
             <column name="default_date_format" type="VARCHAR(50)" defaultValue="dd-MM-yyyy"/>
             <column name="default_datetime_format" type="VARCHAR(50)" defaultValue="yyyy-MM-dd HH:mm:ss"/>
             <column name="timezone_offset" type="VARCHAR(20)" defaultValue="+00:00"/>
-            <column name="created_at" type="TIMESTAMP WITH TIME ZONE"/>
-            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
         </createTable>
         
         <addUniqueConstraint tableName="m_selfservice_tenant_date_preferences" 

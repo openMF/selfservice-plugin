@@ -30,7 +30,7 @@
     </comment>
 
     <addColumn tableName="request_audit_table">
-      <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+      <column name="expires_at" type="TIMESTAMP">
         <constraints nullable="true"/>
       </column>
     </addColumn>
