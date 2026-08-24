@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           java-version: "21"
           distribution: "zulu"
@@ -28,7 +28,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: surefire-reports
           path: target/surefire-reports/
@@ -37,7 +37,7 @@ jobs:
       # Upload the .exec binary so the coverage gate can merge it with IT data
       - name: Upload Unit Test Coverage Data
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: jacoco-unit-exec
           path: target/jacoco.exec
@@ -53,10 +53,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           java-version: "21"
           distribution: "zulu"
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload Failsafe Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: failsafe-reports
           path: target/failsafe-reports/
@@ -93,7 +93,7 @@ jobs:
       # Upload the IT .exec binary for the coverage merge step
       - name: Upload Integration Test Coverage Data
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: jacoco-it-exec
           path: target/jacoco-it.exec
@@ -122,10 +122,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           java-version: "21"
           distribution: "zulu"
@@ -133,13 +133,13 @@ jobs:
 
       # Download both .exec files produced in the previous two jobs
       - name: Download Unit Test Coverage Data
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: jacoco-unit-exec
           path: target/
 
       - name: Download Integration Test Coverage Data
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: jacoco-it-exec
           path: target/
@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload Merged Coverage Report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: jacoco-merged-report
           path: target/site/jacoco-merged/
