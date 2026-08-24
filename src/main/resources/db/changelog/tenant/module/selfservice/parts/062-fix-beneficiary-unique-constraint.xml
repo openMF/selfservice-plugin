@@ -10,20 +10,31 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
     
-    <!-- Step 1: Drop the poorly named unique constraint if it exists -->
+    <!-- Step 1: Drop any poorly-named / legacy unique constraint or index if present -->
     <changeSet author="fineract" id="ss-062-1">
         <preConditions onFail="MARK_RAN">
-            <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt" constraintName="name"/>
+            <or>
+                <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt" constraintName="name"/>
+                <indexExists tableName="m_selfservice_beneficiaries_tpt" indexName="name"/>
+            </or>
         </preConditions>
         <dropUniqueConstraint tableName="m_selfservice_beneficiaries_tpt" constraintName="name"/>
     </changeSet>
 
-    <!-- Step 2: Ensure the correctly named unique constraint exists -->
+    <!-- Step 2: Ensure the correctly named unique constraint exists (MariaDB-safe) -->
     <changeSet author="fineract" id="ss-062-2-add-correct-constraint">
         <preConditions onFail="MARK_RAN">
-            <not>
-                <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt" constraintName="uk_m_selfservice_beneficiaries_tpt_name"/>
-            </not>
+            <and>
+                <tableExists tableName="m_selfservice_beneficiaries_tpt"/>
+                <not>
+                    <or>
+                        <uniqueConstraintExists tableName="m_selfservice_beneficiaries_tpt"
+                                                constraintName="uk_m_selfservice_beneficiaries_tpt_name"/>
+                        <indexExists tableName="m_selfservice_beneficiaries_tpt"
+                                     indexName="uk_m_selfservice_beneficiaries_tpt_name"/>
+                    </or>
+                </not>
+            </and>
         </preConditions>
         <addUniqueConstraint tableName="m_selfservice_beneficiaries_tpt"
                              columnNames="name, app_selfservice_user_id, is_active"
