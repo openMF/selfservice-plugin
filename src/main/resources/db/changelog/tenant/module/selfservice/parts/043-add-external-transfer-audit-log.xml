@@ -33,7 +33,8 @@
             <column name="status" type="VARCHAR(50)"/>
             <column name="response_payload" type="TEXT"/>
             <column name="error_message" type="TEXT"/>
-            <column name="created_on_utc" type="TIMESTAMP">
+            <!-- MariaDB/MySQL compatible -->
+            <column name="created_on_utc" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
                 <constraints nullable="false"/>
             </column>
         </createTable>
