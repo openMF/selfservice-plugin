@@ -100,21 +100,25 @@
     </changeSet>
 
     <!-- ============================================================ -->
-    <!-- Foreign key to m_client (soft — no cascade delete)           -->
+    <!-- Foreign key to m_client                                      -->
+    <!-- RESTRICT because client_id is NOT NULL (cannot use SET NULL) -->
     <!-- ============================================================ -->
     <changeSet author="fineract" id="ss-051-2">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="m_selfservice_same_bank_transfer_audit"/>
             <tableExists tableName="m_client"/>
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_ss_sbt_audit_client"/>
+            </not>
         </preConditions>
-        <comment>Add FK from same-bank audit to m_client</comment>
+        <comment>Add FK from same-bank audit to m_client (RESTRICT – column is NOT NULL)</comment>
         <addForeignKeyConstraint
             baseTableName="m_selfservice_same_bank_transfer_audit"
             baseColumnNames="client_id"
             referencedTableName="m_client"
             referencedColumnNames="id"
             constraintName="fk_ss_sbt_audit_client"
-            onDelete="SET NULL"
+            onDelete="RESTRICT"
             onUpdate="CASCADE"/>
     </changeSet>
 
