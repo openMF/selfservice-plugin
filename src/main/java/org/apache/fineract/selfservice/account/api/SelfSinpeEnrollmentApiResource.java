@@ -115,7 +115,7 @@ public class SelfSinpeEnrollmentApiResource {
   }
 
   @POST
-  @Path("/subscription/delete-request")
+  @Path("/delete-request")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(

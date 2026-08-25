@@ -450,6 +450,14 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info(
             "deleteSubscription: external API deleteSubscription completed for phone={}", phoneNumber);
 
+    sinpeRepository
+            .findByAppSelfServiceUserIdAndMobileNumber(user.getId(),phoneNumber)
+            .ifPresent(enrollment -> {
+              sinpeRepository.delete(enrollment);
+              sinpeRepository.flush();
+              log.info("deleteSubscription: local enrollment deleted for userId={}, mobileNumber={}", user.getId(), phoneNumber);
+            });
+
     Map<String, Object> contextData = new HashMap<>();
     contextData.put("phoneNumber", phoneNumber);
 
