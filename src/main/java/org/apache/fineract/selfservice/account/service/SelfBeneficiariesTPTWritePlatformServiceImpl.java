@@ -192,7 +192,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                     }
                 }
             }
-        } else if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
+        } else if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
             // External beneficiaries: length/format validation is already guaranteed by SelfBeneficiariesTPTDataValidator
             validAccountDetails = (accountNumber != null && !accountNumber.trim().isEmpty());
             log.info(
@@ -236,7 +236,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                             currency);
 
             // Populate external-specific fields only when applicable
-            if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
+            if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
                 beneficiary.setCustomAccountNumber(accountNumber);
                 beneficiary.setHolderName((String) params.get("holderName"));
                 beneficiary.setHolderId((String) params.get("holderId"));

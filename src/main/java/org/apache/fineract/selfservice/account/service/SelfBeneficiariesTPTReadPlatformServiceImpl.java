@@ -166,7 +166,7 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
       if ("PIN".equals(paymentType)) {
         accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "PIN/IBAN");
-      } else if ("SINPE".equals(paymentType)) {
+      } else if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType)) {
         accountType = new EnumOptionData((long) accountTypeId, "accountType." + accountTypeId, "SINPE Móvil");
       } else {
         accountType = AccountTransferEnumerations.accountType(PortfolioAccountType.fromInt(accountTypeId));
