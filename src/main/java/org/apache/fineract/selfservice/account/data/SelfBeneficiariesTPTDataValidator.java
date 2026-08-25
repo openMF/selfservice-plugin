@@ -17,6 +17,7 @@ package org.apache.fineract.selfservice.account.data;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_NUMBER_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.ACCOUNT_TYPE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_CODE_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_ID_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_CUSTOMER_NAME_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.DESTINATION_IBAN_PARAM_NAME;
@@ -28,6 +29,7 @@ import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTAp
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.HOLDER_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.NAME_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.OFFICE_NAME_PARAM_NAME;
+import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PAYMENT_TYPE_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PHONE_NUMBER_PARAM_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.RESOURCE_NAME;
 import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.TRANSFER_LIMIT_PARAM_NAME;
@@ -50,8 +52,6 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.CURRENCY_PARAM_NAME;
-import static org.apache.fineract.selfservice.account.api.SelfBeneficiariesTPTApiConstants.PAYMENT_TYPE_PARAM_NAME;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -80,11 +80,16 @@ public class SelfBeneficiariesTPTDataValidator {
               CURRENCY_CODE_PARAM_NAME,
               ENTITY_CODE_PARAM_NAME,
               ENTITY_NAME_PARAM_NAME,
-              PAYMENT_TYPE_PARAM_NAME, 
+              PAYMENT_TYPE_PARAM_NAME,
               CURRENCY_PARAM_NAME));
 
   private static final Set<String> UPDATE_REQUEST_DATA_PARAMETERS =
       new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
+
+  /** Allowed paymentType values for TPT beneficiaries (multi-tenant safe string codes). */
+  private static final String[] ALLOWED_PAYMENT_TYPES = {
+    "SAME_BANK", "SINPE", "SINPE_MOVIL", "PIN"
+  };
 
   @Autowired
   public SelfBeneficiariesTPTDataValidator(final FromJsonHelper fromApiJsonHelper) {
@@ -104,12 +109,23 @@ public class SelfBeneficiariesTPTDataValidator {
     final DataValidatorBuilder baseDataValidator =
         new DataValidatorBuilder(dataValidationErrors).resource(RESOURCE_NAME);
     final JsonElement element = this.fromApiJsonHelper.parse(json);
-    
-    final String paymentType = this.fromApiJsonHelper.extractStringNamed(PAYMENT_TYPE_PARAM_NAME, element);
-    baseDataValidator.reset().parameter(PAYMENT_TYPE_PARAM_NAME).value(paymentType).notBlank().isOneOfTheseValues("SAME_BANK", "SINPE", "PIN");
-    
+
+    final String paymentType =
+        this.fromApiJsonHelper.extractStringNamed(PAYMENT_TYPE_PARAM_NAME, element);
+    baseDataValidator
+        .reset()
+        .parameter(PAYMENT_TYPE_PARAM_NAME)
+        .value(paymentType)
+        .notBlank()
+        .isOneOfTheseValues(ALLOWED_PAYMENT_TYPES);
+
     final String currency = this.fromApiJsonHelper.extractStringNamed(CURRENCY_PARAM_NAME, element);
-    baseDataValidator.reset().parameter(CURRENCY_PARAM_NAME).value(currency).notBlank().notExceedingLengthOf(3);
+    baseDataValidator
+        .reset()
+        .parameter(CURRENCY_PARAM_NAME)
+        .value(currency)
+        .notBlank()
+        .notExceedingLengthOf(3);
 
     final String name = this.fromApiJsonHelper.extractStringNamed(NAME_PARAM_NAME, element);
     baseDataValidator
@@ -135,7 +151,7 @@ public class SelfBeneficiariesTPTDataValidator {
         .parameter(ACCOUNT_NUMBER_PARAM_NAME)
         .value(accountNo)
         .ignoreIfNull()
-        .notExceedingLengthOf(50); // Aumentado para tolerar longitud de IBAN
+        .notExceedingLengthOf(50);
 
     final Integer accountType =
         this.fromApiJsonHelper.extractIntegerNamed(
@@ -148,7 +164,11 @@ public class SelfBeneficiariesTPTDataValidator {
         .value(accountType)
         .notNull()
         .isOneOfTheseValues(
-            PortfolioAccountType.LOAN.getValue(), PortfolioAccountType.SAVINGS.getValue(), 2, 3, 4);
+            PortfolioAccountType.LOAN.getValue(),
+            PortfolioAccountType.SAVINGS.getValue(),
+            2,
+            3,
+            4);
 
     final Long transferLimit =
         this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
@@ -297,7 +317,6 @@ public class SelfBeneficiariesTPTDataValidator {
     }
 
     throwExceptionIfValidationWarningsExist(dataValidationErrors);
-
     return ret;
   }
 
