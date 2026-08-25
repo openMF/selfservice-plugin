@@ -370,6 +370,70 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
   @Override
   @Transactional
+  public CommandProcessingResult requestDeleteSubscription(String phoneNumber) {
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    log.info(
+            "requestDeleteSubscription START userId={}, username={}, phoneNumber={}",
+            user.getId(),
+            user.getUsername(),
+            phoneNumber);
+
+    if (phoneNumber == null || !phoneNumber.replaceAll("\\s+", "").matches("\\d{8}")) {
+      log.info("requestDeleteSubscription rejected: invalid phoneNumber format. value={}", phoneNumber);
+      throw new IllegalArgumentException("Invalid SINPE Móvil phone number. Must be 8 digits.");
+    }
+
+    String otp = String.format("%06d", new SecureRandom().nextInt(999999));
+    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
+
+    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+
+    SelfServiceRegistration request =
+            SelfServiceRegistration.instance(
+                    client,
+                    client.getAccountNumber(),
+                    client.getFirstname(),
+                    client.getMiddlename(),
+                    client.getLastname(),
+                    phoneNumber,
+                    user.getEmail(),
+                    otp,
+                    otp,
+                    user.getUsername(),
+                    "SINPE_DELETE_OTP",
+                    SelfServiceRequestType.SINPE_ENROLLMENT,
+                    expiry);
+
+    registrationRepository.saveAndFlush(request);
+
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("authCode", otp);
+    contextData.put("expirationMinutes", 10);
+    contextData.put("action", "DELETE_SUBSCRIPTION");
+
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), phoneNumber);
+
+    applicationEventPublisher.publishEvent(
+            SelfServiceNotificationEvent.withTenantContext(
+                    this,
+                    SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_OTP,
+                    user.getId(),
+                    user.getFirstname(),
+                    user.getLastname(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    phoneNumber,
+                    emailMode,
+                    null,
+                    LocaleContextHolder.getLocale(),
+                    contextData));
+
+    log.info("requestDeleteSubscription END userId={}, phoneNumber={}", user.getId(), phoneNumber);
+    return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
+  }
+
+  @Override
+  @Transactional
   public CommandProcessingResult deleteSubscription(String phoneNumber, String otp) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     log.info(
@@ -379,7 +443,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             StringUtils.isNotBlank(otp),
             otp != null ? otp.length() : 0);
 
-    validateOtp(phoneNumber, otp);
+    validateAndConsumeOtp(phoneNumber, otp);
     log.info("deleteSubscription: OTP validated, calling external API deleteSubscription");
 
     sinpeExternalApiClient.deleteSubscription(phoneNumber);
@@ -505,6 +569,35 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     log.info(
             "validateOtp END OK registrationId={}, mobileNumber={}", request.getId(), mobileNumber);
+  }
+
+
+  private void validateAndConsumeOtp(String mobileNumber, String otp) {
+    if (StringUtils.isBlank(otp)) {
+      throw new IllegalArgumentException("OTP is required for this operation.");
+    }
+
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    Long clientId = user.getAppUserClientMappings().iterator().next().getClient().getId();
+
+    SelfServiceRegistration request =
+            registrationRepository
+                    .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                            clientId, SelfServiceRequestType.SINPE_ENROLLMENT, otp)
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
+
+    boolean expired = request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime());
+    if (request.isConsumed() || expired) {
+      throw new IllegalArgumentException("Invalid or expired OTP.");
+    }
+
+    if (!request.getMobileNumber().equals(mobileNumber)) {
+      throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
+    }
+
+    // Invalida el OTP tras usarse en el borrado
+    request.markConsumed();
+    registrationRepository.saveAndFlush(request);
   }
 
 }

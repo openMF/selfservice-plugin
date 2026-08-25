@@ -14,5 +14,7 @@ public interface SelfServiceSinpeEnrollmentWritePlatformService {
 
   CommandProcessingResult editSubscription(SinpeSubscriptionEditRequest request, String otp);
 
+  CommandProcessingResult requestDeleteSubscription(String phoneNumber);
+
   CommandProcessingResult deleteSubscription(String phoneNumber, String otp);
 }

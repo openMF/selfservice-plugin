@@ -114,14 +114,31 @@ public class SelfSinpeEnrollmentApiResource {
     return toApiJsonSerializer.serialize(result);
   }
 
+  @POST
+  @Path("/subscription/delete-request")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+          summary = "Request OTP for Deleting SINPE Subscription",
+          description = "Generates and sends an OTP to authorize the deletion/unsubscribing of a SINPE Móvil subscription.")
+  public String requestDeleteSubscription(final String apiRequestBodyAsJson) {
+    context.authenticatedSelfServiceUser().validateHasDeletePermission("SSBENEFICIARYTPT");
+
+    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+    String phoneNumber = json.get("phoneNumber").getAsString();
+
+    CommandProcessingResult result = writePlatformService.requestDeleteSubscription(phoneNumber);
+    return toApiJsonSerializer.serialize(result);
+  }
+
   @DELETE
   @Path("/subscription/{phoneNumber}")
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
-      summary = "Delete SINPE Subscription",
-      description = "Deletes a SINPE subscription from the external system. Requires a valid OTP.")
+          summary = "Delete SINPE Subscription",
+          description = "Deletes a SINPE subscription from the external system. Requires a valid OTP.")
   public String deleteSubscription(
-      @PathParam("phoneNumber") final String phoneNumber, @QueryParam("otp") final String otp) {
+          @PathParam("phoneNumber") final String phoneNumber, @QueryParam("otp") final String otp) {
     context.authenticatedSelfServiceUser().validateHasDeletePermission("SSBENEFICIARYTPT");
 
     CommandProcessingResult result = writePlatformService.deleteSubscription(phoneNumber, otp);
