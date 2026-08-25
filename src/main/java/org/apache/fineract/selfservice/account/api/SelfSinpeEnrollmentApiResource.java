@@ -125,7 +125,7 @@ public class SelfSinpeEnrollmentApiResource {
     context.authenticatedSelfServiceUser().validateHasDeletePermission("SSBENEFICIARYTPT");
 
     JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String phoneNumber = json.get("phoneNumber").getAsString();
+    String phoneNumber = json.get("mobileNumber").getAsString();
 
     CommandProcessingResult result = writePlatformService.requestDeleteSubscription(phoneNumber);
     return toApiJsonSerializer.serialize(result);
