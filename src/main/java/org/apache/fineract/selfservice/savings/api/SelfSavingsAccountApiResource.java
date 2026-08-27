@@ -153,6 +153,11 @@ public class SelfSavingsAccountApiResource {
     if (!CollectionUtils.isEmpty(transactions)) {
       List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
+      filtered = filtered.stream()
+              .filter(Objects::nonNull)
+              .filter(t -> t.getPaymentDetailData() != null)
+              .collect(Collectors.toList());
+
       if (month != null && year != null) {
         filtered =
             filtered.stream()
