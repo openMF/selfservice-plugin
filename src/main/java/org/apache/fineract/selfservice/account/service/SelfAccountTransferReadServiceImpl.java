@@ -239,6 +239,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
             + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
             + "WHERE sat.savings_account_id = ? "
+            + "  AND sat.payment_detail_id IS NOT NULL "
             + "  AND ( "
             + "        CAST(sat.id AS VARCHAR) = ? "
             + "     OR CAST(sat.id AS CHAR) = ? "
