@@ -626,6 +626,14 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
+    // Extracción robusta de campos vacíos en la raíz si vienen fuera de destinationCustomer
+    if (isStringBlank(destCustomer.get("name")) && data.containsKey("destinationCustomerName")) {
+      destCustomer.put("name", data.get("destinationCustomerName"));
+    }
+    if (isStringBlank(destCustomer.get("id")) && data.containsKey("destinationCustomerId")) {
+      destCustomer.put("id", data.get("destinationCustomerId"));
+    }
+
     // Identificar la cuenta o teléfono destino para resolver información faltante
     String target = "";
     if (destCustomer.get("iban") != null && !destCustomer.get("iban").toString().isBlank()) {
@@ -634,7 +642,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       target = customData.get("toAccountIdentifier").toString().trim();
     }
 
-    // Si falta alguno de los campos (entityCode, entityName, name o id), realizamos la consulta dinámica
+    // Forzar resolución dinámica si faltan entityCode, entityName, name o id
     boolean needsResolution = isStringBlank(destCustomer.get("entityCode"))
             || isStringBlank(destCustomer.get("entityName"))
             || isStringBlank(destCustomer.get("name"))
