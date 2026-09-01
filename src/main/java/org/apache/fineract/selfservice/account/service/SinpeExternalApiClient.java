@@ -251,7 +251,7 @@ public class SinpeExternalApiClient {
               phoneNumber);
       return null;
     }
-    String url = getHost(props) + "/sinpe/phone/" + phoneNumber;
+    String url = getHost(props) + "/phone/" + phoneNumber;
     log.info("getPhoneInfo calling GET url={}", url);
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
     try {
