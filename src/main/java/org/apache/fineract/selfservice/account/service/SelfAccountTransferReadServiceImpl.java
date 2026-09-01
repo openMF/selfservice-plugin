@@ -630,7 +630,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    // Identificar destino objetivo (IBAN o Teléfono)
     String target = "";
     if (customData.get("toAccountIdentifier") != null && !customData.get("toAccountIdentifier").toString().isBlank()) {
       target = customData.get("toAccountIdentifier").toString().trim();
