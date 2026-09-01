@@ -197,9 +197,15 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     Map<String, Object> destinationCustomer =
             getDestinationCustomerInfoByAccount(audit.getToAccountIdentifier());
 
-    String[] bankDetails = resolveBankDetailsFromAccount(audit.getToAccountIdentifier());
-    destinationCustomer.put("entityCode", bankDetails[0]);
-    destinationCustomer.put("entityName", bankDetails[1]);
+    Map<String, String> bankDetails = resolveBankDetailsFromAccount(audit.getToAccountIdentifier());
+    destinationCustomer.put("entityCode", bankDetails.getOrDefault("entityCode", ""));
+    destinationCustomer.put("entityName", bankDetails.getOrDefault("entityName", ""));
+    if (isStringBlank(destinationCustomer.get("name"))) {
+      destinationCustomer.put("name", bankDetails.getOrDefault("holder", ""));
+    }
+    if (isStringBlank(destinationCustomer.get("id"))) {
+      destinationCustomer.put("id", bankDetails.getOrDefault("holderId", ""));
+    }
 
     Map<String, Object> customData = new HashMap<>();
     customData.put("fromAccountIdentifier", audit.getFromAccountIdentifier());
@@ -306,10 +312,16 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     !toAccountNumber.isEmpty() ? toAccountNumber : null);
 
     String targetAccount = !toAccountNumber.isEmpty() ? toAccountNumber : fromIban;
-    String[] bankDetails = resolveBankDetailsFromAccount(targetAccount);
+    Map<String, String> bankDetails = resolveBankDetailsFromAccount(targetAccount);
 
-    destinationCustomer.put("entityCode", !bankNumber.isEmpty() ? bankNumber : bankDetails[0]);
-    destinationCustomer.put("entityName", bankDetails[1]);
+    destinationCustomer.put("entityCode", !bankNumber.isEmpty() ? bankNumber : bankDetails.getOrDefault("entityCode", ""));
+    destinationCustomer.put("entityName", bankDetails.getOrDefault("entityName", ""));
+    if (isStringBlank(destinationCustomer.get("name"))) {
+      destinationCustomer.put("name", bankDetails.getOrDefault("holder", ""));
+    }
+    if (isStringBlank(destinationCustomer.get("id"))) {
+      destinationCustomer.put("id", bankDetails.getOrDefault("holderId", ""));
+    }
 
     Map<String, Object> customData = new HashMap<>();
     customData.put("fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
@@ -343,31 +355,32 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return rawData;
   }
 
-  private String[] resolveBankDetailsFromAccount(String accountIdentifier) {
+  private Map<String, String> resolveBankDetailsFromAccount(String accountIdentifier) {
+    Map<String, String> details = new HashMap<>();
     if (accountIdentifier == null || accountIdentifier.isBlank()) {
-      return new String[] {"", ""};
+      return details;
     }
     try {
       String jsonResponse = this.pinExternalTransferService.getAccountInfo(accountIdentifier);
       if (jsonResponse != null && !jsonResponse.contains("\"error\"")) {
         Map<String, Object> infoMap = this.gson.fromJson(jsonResponse, Map.class);
         if (infoMap != null) {
-          String entityCode =
-                  infoMap.get("entityCode") != null ? infoMap.get("entityCode").toString() : "";
-          String entityName =
-                  infoMap.get("entityName") != null ? infoMap.get("entityName").toString() : "";
-          return new String[] {entityCode, entityName};
+          details.put("entityCode", infoMap.get("entityCode") != null ? infoMap.get("entityCode").toString() : "");
+          details.put("entityName", infoMap.get("entityName") != null ? infoMap.get("entityName").toString() : "");
+          details.put("holder", infoMap.get("holder") != null ? infoMap.get("holder").toString() : "");
+          details.put("holderId", infoMap.get("holderId") != null ? infoMap.get("holderId").toString() : "");
         }
       }
     } catch (Exception e) {
       log.warn("Could not fetch account info for entity details on IBAN: {}", accountIdentifier, e);
     }
-    return new String[] {"", ""};
+    return details;
   }
 
-  private String[] resolveBankDetailsFromPhone(String phoneNumber) {
+  private Map<String, String> resolveBankDetailsFromPhone(String phoneNumber) {
+    Map<String, String> details = new HashMap<>();
     if (phoneNumber == null || phoneNumber.isBlank()) {
-      return new String[] {"", ""};
+      return details;
     }
     try {
       Object phoneResponse = this.sinpeExternalApiClient.getPhoneInfo(phoneNumber);
@@ -379,21 +392,24 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       if (jsonPhoneInfo != null && !jsonPhoneInfo.contains("\"error\"")) {
         Map<String, Object> phoneData = this.gson.fromJson(jsonPhoneInfo, Map.class);
         if (phoneData != null) {
-          String entityCode =
-                  phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "";
-          String entityName =
-                  phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "";
-          return new String[] {entityCode, entityName};
+          details.put("entityCode", phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "");
+          details.put("entityName", phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "");
+          details.put("holder", phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
+          details.put("holderId", phoneData.get("holderId") != null ? phoneData.get("holderId").toString() : "");
         }
       }
     } catch (Exception e) {
       log.warn("Could not fetch phone info for entity details on Phone: {}", phoneNumber, e);
     }
-    return new String[] {"", ""};
+    return details;
   }
 
   private static String nullToEmpty(String v) {
     return v == null ? "" : v.trim();
+  }
+
+  private static boolean isStringBlank(Object obj) {
+    return obj == null || obj.toString().trim().isEmpty();
   }
 
   private Map<String, Object> processExternalTransfer(
@@ -610,31 +626,40 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    // Resolución dinámica de entityCode / entityName para IBAN (PIN/SAME_BANK) o Teléfono (SINPE)
-    if (!destCustomer.containsKey("entityCode") || destCustomer.get("entityCode") == null || destCustomer.get("entityCode").toString().isBlank()) {
-      if (data.containsKey("entityCode") && data.get("entityCode") != null) {
-        destCustomer.put("entityCode", data.get("entityCode"));
-      } else if (customData.containsKey("toAccountIdentifier") && customData.get("toAccountIdentifier") != null) {
-        String target = customData.get("toAccountIdentifier").toString().trim();
-        if (!target.isBlank()) {
-          String[] bankDetails;
-          if (target.toUpperCase().startsWith("CR")) {
-            bankDetails = resolveBankDetailsFromAccount(target);
-          } else {
-            bankDetails = resolveBankDetailsFromPhone(target);
-          }
-          if (bankDetails[0] != null && !bankDetails[0].isBlank()) {
-            destCustomer.put("entityCode", bankDetails[0]);
-          }
-          if (bankDetails[1] != null && !bankDetails[1].isBlank() && (!destCustomer.containsKey("entityName") || destCustomer.get("entityName") == null || destCustomer.get("entityName").toString().isBlank())) {
-            destCustomer.put("entityName", bankDetails[1]);
-          }
-        }
-      }
+    // Identificar la cuenta o teléfono destino para resolver información faltante
+    String target = "";
+    if (destCustomer.get("iban") != null && !destCustomer.get("iban").toString().isBlank()) {
+      target = destCustomer.get("iban").toString().trim();
+    } else if (customData.get("toAccountIdentifier") != null) {
+      target = customData.get("toAccountIdentifier").toString().trim();
     }
 
-    if ((!destCustomer.containsKey("entityName") || destCustomer.get("entityName") == null || destCustomer.get("entityName").toString().isBlank()) && data.containsKey("entityName")) {
-      destCustomer.put("entityName", data.get("entityName"));
+    // Si falta alguno de los campos (entityCode, entityName, name o id), realizamos la consulta dinámica
+    boolean needsResolution = isStringBlank(destCustomer.get("entityCode"))
+            || isStringBlank(destCustomer.get("entityName"))
+            || isStringBlank(destCustomer.get("name"))
+            || isStringBlank(destCustomer.get("id"));
+
+    if (needsResolution && !target.isBlank()) {
+      Map<String, String> resolvedDetails;
+      if (target.toUpperCase().startsWith("CR")) {
+        resolvedDetails = resolveBankDetailsFromAccount(target);
+      } else {
+        resolvedDetails = resolveBankDetailsFromPhone(target);
+      }
+
+      if (isStringBlank(destCustomer.get("entityCode")) && resolvedDetails.containsKey("entityCode")) {
+        destCustomer.put("entityCode", resolvedDetails.get("entityCode"));
+      }
+      if (isStringBlank(destCustomer.get("entityName")) && resolvedDetails.containsKey("entityName")) {
+        destCustomer.put("entityName", resolvedDetails.get("entityName"));
+      }
+      if (isStringBlank(destCustomer.get("name")) && resolvedDetails.containsKey("holder")) {
+        destCustomer.put("name", resolvedDetails.get("holder"));
+      }
+      if (isStringBlank(destCustomer.get("id")) && resolvedDetails.containsKey("holderId")) {
+        destCustomer.put("id", resolvedDetails.get("holderId"));
+      }
     }
 
     customData.put("destinationCustomer", destCustomer);
