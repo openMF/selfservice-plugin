@@ -32,28 +32,24 @@
             </sqlCheck>
         </preConditions>
 
-        <!-- perResource: Maximum allowed attempts per specific resource (e.g. account ID) within the time window -->
         <insert tableName="c_external_service_properties">
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
             <column name="name" value="perResource"/>
             <column name="value" value="10"/>
         </insert>
         
-        <!-- global: Maximum allowed total attempts across all resources for the user within the time window -->
         <insert tableName="c_external_service_properties">
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
             <column name="name" value="global"/>
             <column name="value" value="25"/>
         </insert>
         
-        <!-- windowMinutes: The rolling time window in minutes for which limits are evaluated -->
         <insert tableName="c_external_service_properties">
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
             <column name="name" value="windowMinutes"/>
             <column name="value" value="15"/>
         </insert>
         
-        <!-- retentionDays: The number of days to retain access audit records before purging -->
         <insert tableName="c_external_service_properties">
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_RATE_LIMIT')"/>
             <column name="name" value="retentionDays"/>
