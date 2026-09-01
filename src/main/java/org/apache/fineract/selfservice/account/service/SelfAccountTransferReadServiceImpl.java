@@ -197,7 +197,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     Map<String, Object> destinationCustomer =
             getDestinationCustomerInfoByAccount(audit.getToAccountIdentifier());
 
-    Map<String, String> bankDetails = resolveBankDetailsFromAccount(audit.getToAccountIdentifier());
+    Map<String, String> bankDetails = resolveDestinationDetails(audit.getToAccountIdentifier());
     destinationCustomer.put("entityCode", bankDetails.getOrDefault("entityCode", ""));
     destinationCustomer.put("entityName", bankDetails.getOrDefault("entityName", ""));
     if (isStringBlank(destinationCustomer.get("name"))) {
@@ -312,7 +312,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     !toAccountNumber.isEmpty() ? toAccountNumber : null);
 
     String targetAccount = !toAccountNumber.isEmpty() ? toAccountNumber : fromIban;
-    Map<String, String> bankDetails = resolveBankDetailsFromAccount(targetAccount);
+    Map<String, String> bankDetails = resolveDestinationDetails(targetAccount);
 
     destinationCustomer.put("entityCode", !bankNumber.isEmpty() ? bankNumber : bankDetails.getOrDefault("entityCode", ""));
     destinationCustomer.put("entityName", bankDetails.getOrDefault("entityName", ""));
@@ -355,11 +355,20 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return rawData;
   }
 
+  private Map<String, String> resolveDestinationDetails(String identifier) {
+    if (identifier == null || identifier.isBlank()) {
+      return new HashMap<>();
+    }
+    String cleanIdentifier = identifier.trim();
+    if (cleanIdentifier.toUpperCase().startsWith("CR")) {
+      return resolveBankDetailsFromAccount(cleanIdentifier);
+    } else {
+      return resolveBankDetailsFromPhone(cleanIdentifier);
+    }
+  }
+
   private Map<String, String> resolveBankDetailsFromAccount(String accountIdentifier) {
     Map<String, String> details = new HashMap<>();
-    if (accountIdentifier == null || accountIdentifier.isBlank()) {
-      return details;
-    }
     try {
       String jsonResponse = this.pinExternalTransferService.getAccountInfo(accountIdentifier);
       if (jsonResponse != null && !jsonResponse.contains("\"error\"")) {
@@ -372,39 +381,27 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         }
       }
     } catch (Exception e) {
-      log.warn("Could not fetch account info for entity details on IBAN: {}", accountIdentifier, e);
+      log.warn("Could not fetch account info for IBAN: {}", accountIdentifier, e);
     }
     return details;
   }
 
-  @SuppressWarnings("unchecked")
   private Map<String, String> resolveBankDetailsFromPhone(String phoneNumber) {
     Map<String, String> details = new HashMap<>();
-    if (phoneNumber == null || phoneNumber.isBlank()) {
-      return details;
-    }
     try {
-      log.info("INVOQUING KINDO SAPI PHONE INFO FOR: {}", phoneNumber);
-      Object phoneResponse = this.sinpeExternalApiClient.getPhoneInfo(phoneNumber);
-      Map<String, Object> phoneData = null;
-
-      if (phoneResponse instanceof Map) {
-        phoneData = (Map<String, Object>) phoneResponse;
-      } else if (phoneResponse != null) {
-        String jsonPhoneInfo = phoneResponse instanceof String ? (String) phoneResponse : this.gson.toJson(phoneResponse);
-        if (!jsonPhoneInfo.contains("\"error\"")) {
-          phoneData = this.gson.fromJson(jsonPhoneInfo, Map.class);
+      log.info("Querying Kindo-SAPI SINPE Phone Info for: {}", phoneNumber);
+      String jsonResponse = this.sinpeExternalApiClient.getPhoneInfo(phoneNumber);
+      if (jsonResponse != null && !jsonResponse.isBlank() && !jsonResponse.contains("\"error\"")) {
+        Map<String, Object> phoneData = this.gson.fromJson(jsonResponse, Map.class);
+        if (phoneData != null) {
+          details.put("entityCode", phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "");
+          details.put("entityName", phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "");
+          details.put("holder", phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
+          details.put("holderId", phoneData.get("holderId") != null ? phoneData.get("holderId").toString() : "");
         }
       }
-
-      if (phoneData != null) {
-        details.put("entityCode", phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "");
-        details.put("entityName", phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "");
-        details.put("holder", phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
-        details.put("holderId", phoneData.get("holderId") != null ? phoneData.get("holderId").toString() : "");
-      }
     } catch (Exception e) {
-      log.warn("Could not fetch phone info for entity details on Phone: {}", phoneNumber, e);
+      log.warn("Could not fetch phone info for Phone: {}", phoneNumber, e);
     }
     return details;
   }
@@ -633,7 +630,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    // Identificar destino exacto (Teléfono o IBAN)
+    // Identificar destino objetivo (IBAN o Teléfono)
     String target = "";
     if (customData.get("toAccountIdentifier") != null && !customData.get("toAccountIdentifier").toString().isBlank()) {
       target = customData.get("toAccountIdentifier").toString().trim();
@@ -641,25 +638,20 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       target = destCustomer.get("iban").toString().trim();
     }
 
-    // Forzar siempre la llamada si faltan entityCode, entityName, name o id
+    // Comprobar si faltan datos obligatorios (entityCode, entityName, name o id)
     boolean needsResolution = isStringBlank(destCustomer.get("entityCode"))
             || isStringBlank(destCustomer.get("entityName"))
             || isStringBlank(destCustomer.get("name"))
             || isStringBlank(destCustomer.get("id"));
 
     if (needsResolution && !target.isBlank()) {
-      Map<String, String> resolvedDetails;
-      if (target.toUpperCase().startsWith("CR")) {
-        resolvedDetails = resolveBankDetailsFromAccount(target);
-      } else {
-        // Ejecución directa para números de teléfono (SINPE Móvil)
-        resolvedDetails = resolveBankDetailsFromPhone(target);
-      }
+      // Invocación a la función unificada
+      Map<String, String> resolvedDetails = resolveDestinationDetails(target);
 
-      if (isStringBlank(destCustomer.get("entityCode")) && resolvedDetails.containsKey("entityCode")) {
+      if (resolvedDetails.containsKey("entityCode") && !isStringBlank(resolvedDetails.get("entityCode"))) {
         destCustomer.put("entityCode", resolvedDetails.get("entityCode"));
       }
-      if (isStringBlank(destCustomer.get("entityName")) && resolvedDetails.containsKey("entityName")) {
+      if (resolvedDetails.containsKey("entityName") && !isStringBlank(resolvedDetails.get("entityName"))) {
         destCustomer.put("entityName", resolvedDetails.get("entityName"));
       }
       if (isStringBlank(destCustomer.get("name")) && resolvedDetails.containsKey("holder")) {
