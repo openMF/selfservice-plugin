@@ -610,22 +610,30 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    if (!destCustomer.containsKey("entityCode") || destCustomer.get("entityCode") == null) {
-      if (data.containsKey("entityCode")) {
+    // Resolución dinámica de entityCode / entityName para IBAN (PIN/SAME_BANK) o Teléfono (SINPE)
+    if (!destCustomer.containsKey("entityCode") || destCustomer.get("entityCode") == null || destCustomer.get("entityCode").toString().isBlank()) {
+      if (data.containsKey("entityCode") && data.get("entityCode") != null) {
         destCustomer.put("entityCode", data.get("entityCode"));
-      } else if (customData.containsKey("toAccountIdentifier")) {
-        String target = customData.get("toAccountIdentifier").toString();
-        if (!target.startsWith("CR") && !target.isBlank()) {
-          String[] phoneDetails = resolveBankDetailsFromPhone(target);
-          destCustomer.put("entityCode", phoneDetails[0]);
-          if (!destCustomer.containsKey("entityName")) {
-            destCustomer.put("entityName", phoneDetails[1]);
+      } else if (customData.containsKey("toAccountIdentifier") && customData.get("toAccountIdentifier") != null) {
+        String target = customData.get("toAccountIdentifier").toString().trim();
+        if (!target.isBlank()) {
+          String[] bankDetails;
+          if (target.toUpperCase().startsWith("CR")) {
+            bankDetails = resolveBankDetailsFromAccount(target);
+          } else {
+            bankDetails = resolveBankDetailsFromPhone(target);
+          }
+          if (bankDetails[0] != null && !bankDetails[0].isBlank()) {
+            destCustomer.put("entityCode", bankDetails[0]);
+          }
+          if (bankDetails[1] != null && !bankDetails[1].isBlank() && (!destCustomer.containsKey("entityName") || destCustomer.get("entityName") == null || destCustomer.get("entityName").toString().isBlank())) {
+            destCustomer.put("entityName", bankDetails[1]);
           }
         }
       }
     }
 
-    if (!destCustomer.containsKey("entityName") && data.containsKey("entityName")) {
+    if ((!destCustomer.containsKey("entityName") || destCustomer.get("entityName") == null || destCustomer.get("entityName").toString().isBlank()) && data.containsKey("entityName")) {
       destCustomer.put("entityName", data.get("entityName"));
     }
 
