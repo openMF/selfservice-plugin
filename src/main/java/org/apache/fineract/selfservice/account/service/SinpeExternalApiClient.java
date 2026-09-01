@@ -242,6 +242,34 @@ public class SinpeExternalApiClient {
     }
   }
 
+  public String getPhoneInfo(String phoneNumber) {
+    log.info("getPhoneInfo START phoneNumber={}", phoneNumber);
+    Map<String, String> props = getServiceProperties();
+    if (!isEnabled(props)) {
+      log.warn(
+              "SinpeService is disabled in c_external_service. Skipping getPhoneInfo for phone: {}",
+              phoneNumber);
+      return null;
+    }
+    String url = getHost(props) + "/sinpe/phone/" + phoneNumber;
+    log.info("getPhoneInfo calling GET url={}", url);
+    HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
+    try {
+      ResponseEntity<String> response =
+              restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+      log.info(
+              "getPhoneInfo HTTP status={}, body (truncated): {}",
+              response.getStatusCode(),
+              truncate(response.getBody(), 500));
+      log.info("SINPE phone details fetched successfully for phone: {}", phoneNumber);
+      log.info("getPhoneInfo END phoneNumber={}", phoneNumber);
+      return response.getBody();
+    } catch (Exception e) {
+      log.error("Failed to fetch SINPE phone details for phone: {}", phoneNumber, e);
+      throw new RuntimeException("Failed to fetch SINPE phone details: " + e.getMessage(), e);
+    }
+  }
+
   /** Truncate long response bodies so info logs stay readable. */
   private static String truncate(String value, int maxLen) {
     if (value == null) {
