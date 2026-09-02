@@ -1164,6 +1164,29 @@ public class SelfAccountTransferWritePlatformServiceImpl
       boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
       String ipAddress = extractClientIp(httpRequest);
 
+      String transferId =
+              result != null && result.getResourceId() != null
+                      ? result.getResourceId().toString()
+                      : "N/A";
+
+      String resolvedCurrencyCode =
+              StringUtils.isNotBlank(request.getCurrencyCode())
+                      ? request.getCurrencyCode()
+                      : "N/A";
+
+      String toClientName = "N/A";
+      try {
+        if (StringUtils.isNotBlank(request.getToAccount())) {
+          Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
+          SavingsAccount toSavingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
+          if (toSavingsAccount != null && toSavingsAccount.getClient() != null) {
+            toClientName = displayNameOrUnknown(toSavingsAccount.getClient());
+          }
+        }
+      } catch (Exception e) {
+        log.debug("Could not resolve destination client name for fast payment event", e);
+      }
+
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
           "transactionAmount",
@@ -1192,9 +1215,22 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
-      contextData.put("toClientName", "N/A");
-      contextData.put("fromOfficeName", "N/A");
+      contextData.put("toClientName", toClientName);
+      contextData.put(
+              "fromOfficeName",
+              sourceClient != null
+                      && sourceClient.getOffice() != null
+                      && StringUtils.isNotBlank(sourceClient.getOffice().getName())
+                      ? sourceClient.getOffice().getName()
+                      : "N/A");
       contextData.put("toOfficeName", "N/A");
+
+      contextData.put("currencyCode", resolvedCurrencyCode);
+      contextData.put("externalTransactionId", transferId);
+
+      log.info("ResourceExternalId: {}, TransactionId: {}, ResourceIdentifier: {} , ResourceId : {}"
+              ,result.getResourceExternalId(),result.getTransactionId(),
+              result.getResourceIdentifier(),result.getResourceId());
 
       applicationEventPublisher.publishEvent(
           SelfServiceNotificationEvent.withTenantContext(
@@ -1216,11 +1252,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   private void publishSinpeTransferEvent(
-      AccountTransferConfirmRequest request,
-      AppSelfServiceUser user,
-      Client sourceClient,
-      HttpServletRequest httpRequest,
-      Map<String, Object> externalData) {
+          AccountTransferConfirmRequest request,
+          AppSelfServiceUser user,
+          Client sourceClient,
+          HttpServletRequest httpRequest,
+          Map<String, Object> externalData) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1230,15 +1266,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-          "transactionAmount",
-          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+              "transactionAmount",
+              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+              "fromAccountNumber",
+              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+              "toAccountNumber",
+              StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
 
       String transferId = "N/A";
       if (externalData != null) {
@@ -1252,46 +1288,69 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
       contextData.put("transferId", transferId);
       contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+              "transactionDate",
+              transactionDateUtil.getCurrentDateForFineract(
+                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
-      contextData.put("toClientName", "N/A");
+      // Resolución dinámica de toClientName desde el API SINPE
+      String toClientName = "N/A";
+      try {
+        if (StringUtils.isNotBlank(request.getToAccount())) {
+          Object phoneInfo = sinpeExternalApiClient.getPhoneInfo(request.getToAccount());
+          String jsonInfo = phoneInfo instanceof String ? (String) phoneInfo : gson.toJson(phoneInfo);
+          if (StringUtils.isNotBlank(jsonInfo)) {
+            Map<String, Object> infoMap = gson.fromJson(jsonInfo, Map.class);
+            if (infoMap != null && infoMap.get("holder") != null) {
+              toClientName = infoMap.get("holder").toString();
+            }
+          }
+        }
+      } catch (Exception e) {
+        log.debug("Could not resolve SINPE destination holder name for notification", e);
+      }
+
+      contextData.put("toClientName", toClientName);
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
 
+      // Campos adicionados
+      contextData.put(
+              "currencyCode",
+              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC");
+      contextData.put("externalTransactionId", transferId);
+
       applicationEventPublisher.publishEvent(
-          SelfServiceNotificationEvent.withTenantContext(
-              this,
-              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-              user.getId(),
-              user.getFirstname(),
-              user.getLastname(),
-              user.getUsername(),
-              user.getEmail(),
-              mobileNumber,
-              emailMode,
-              ipAddress,
-              LocaleContextHolder.getLocale(),
-              contextData));
+              SelfServiceNotificationEvent.withTenantContext(
+                      this,
+                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+                      user.getId(),
+                      user.getFirstname(),
+                      user.getLastname(),
+                      user.getUsername(),
+                      user.getEmail(),
+                      mobileNumber,
+                      emailMode,
+                      ipAddress,
+                      LocaleContextHolder.getLocale(),
+                      contextData));
 
       log.info(
-          "CONFIRM SINPE_MOVIL: Notification event published successfully for user {}",
-          user.getId());
+              "CONFIRM SINPE_MOVIL: Notification event published successfully for user {}",
+              user.getId());
     } catch (Exception e) {
       log.warn("Failed to publish SINPE_MOVIL transfer notification event", e);
     }
   }
 
   private void publishPinTransferEvent(
-      AccountTransferConfirmRequest request,
-      AppSelfServiceUser user,
-      Client sourceClient,
-      HttpServletRequest httpRequest,
-      Map<String, Object> externalData) {
+          AccountTransferConfirmRequest request,
+          AppSelfServiceUser user,
+          Client sourceClient,
+          HttpServletRequest httpRequest,
+          Map<String, Object> externalData) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1301,15 +1360,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-          "transactionAmount",
-          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+              "transactionAmount",
+              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+              "fromAccountNumber",
+              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+              "toAccountNumber",
+              StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
 
       String transferId = "N/A";
       if (externalData != null) {
@@ -1323,31 +1382,54 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
       contextData.put("transferId", transferId);
       contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+              "transactionDate",
+              transactionDateUtil.getCurrentDateForFineract(
+                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
-      contextData.put("toClientName", "N/A");
+      // Resolución dinámica de toClientName desde el API PIN/IBAN
+      String toClientName = "N/A";
+      try {
+        if (StringUtils.isNotBlank(request.getToAccount())) {
+          String infoJsonResponse = pinExternalTransferService.getAccountInfo(request.getToAccount().replaceAll("\\s+", ""));
+          if (StringUtils.isNotBlank(infoJsonResponse)) {
+            Map<String, Object> infoMap = gson.fromJson(infoJsonResponse, Map.class);
+            if (infoMap != null && infoMap.get("holder") != null) {
+              toClientName = infoMap.get("holder").toString();
+            }
+          }
+        }
+      } catch (Exception e) {
+        log.debug("Could not resolve PIN destination holder name for notification", e);
+      }
+
+      contextData.put("toClientName", toClientName);
+
       contextData.put("fromOfficeName", "N/A");
       contextData.put("toOfficeName", "N/A");
 
+      // Campos adicionados
+      contextData.put(
+              "currencyCode",
+              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A");
+      contextData.put("externalTransactionId", transferId);
+
       applicationEventPublisher.publishEvent(
-          SelfServiceNotificationEvent.withTenantContext(
-              this,
-              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-              user.getId(),
-              user.getFirstname(),
-              user.getLastname(),
-              user.getUsername(),
-              user.getEmail(),
-              mobileNumber,
-              emailMode,
-              ipAddress,
-              LocaleContextHolder.getLocale(),
-              contextData));
+              SelfServiceNotificationEvent.withTenantContext(
+                      this,
+                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+                      user.getId(),
+                      user.getFirstname(),
+                      user.getLastname(),
+                      user.getUsername(),
+                      user.getEmail(),
+                      mobileNumber,
+                      emailMode,
+                      ipAddress,
+                      LocaleContextHolder.getLocale(),
+                      contextData));
 
       log.info("CONFIRM PIN: Notification event published successfully for user {}", user.getId());
     } catch (Exception e) {
