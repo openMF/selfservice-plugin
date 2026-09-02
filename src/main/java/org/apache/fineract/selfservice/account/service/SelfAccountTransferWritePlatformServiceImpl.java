@@ -1228,6 +1228,12 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("currencyCode", resolvedCurrencyCode);
       contextData.put("externalTransactionId", transferId);
 
+      log.info(
+              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
+              resolvedCurrencyCode,
+              toClientName,
+              transferId);
+
       log.info("ResourceExternalId: {}, TransactionId: {}, ResourceIdentifier: {} , ResourceId : {}"
               ,result.getResourceExternalId(),result.getTransactionId(),
               result.getResourceIdentifier(),result.getResourceId());
@@ -1317,10 +1323,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("toOfficeName", "N/A");
 
       // Campos adicionados
-      contextData.put(
-              "currencyCode",
-              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC");
+      String currencyCode =
+              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
+      contextData.put("currencyCode",currencyCode);
       contextData.put("externalTransactionId", transferId);
+
+      log.info(
+              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
+              currencyCode,
+              toClientName,
+              transferId);
 
       applicationEventPublisher.publishEvent(
               SelfServiceNotificationEvent.withTenantContext(
@@ -1411,10 +1423,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("toOfficeName", "N/A");
 
       // Campos adicionados
-      contextData.put(
-              "currencyCode",
-              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A");
+      String currencyCode =
+              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
+      contextData.put("currencyCode", currencyCode);
       contextData.put("externalTransactionId", transferId);
+
+      log.info(
+              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
+              currencyCode,
+              toClientName,
+              transferId);
 
       applicationEventPublisher.publishEvent(
               SelfServiceNotificationEvent.withTenantContext(
