@@ -1152,11 +1152,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
   //  NOTIFICATION PUBLISHERS
   // =====================================================================
   private void publishFastPaymentTransferEvent(
-      CommandProcessingResult result,
-      AccountTransferConfirmRequest request,
-      AppSelfServiceUser user,
-      Client sourceClient,
-      HttpServletRequest httpRequest) {
+          CommandProcessingResult result,
+          AccountTransferConfirmRequest request,
+          AppSelfServiceUser user,
+          Client sourceClient,
+          HttpServletRequest httpRequest) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1172,45 +1172,47 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String resolvedCurrencyCode =
               StringUtils.isNotBlank(request.getCurrencyCode())
                       ? request.getCurrencyCode()
-                      : "N/A";
+                      : "CRC";
 
+      // Obtención segura de toClientName mediante consulta SQL directa para no alterar entidades JPA ni estados
       String toClientName = "N/A";
       try {
         if (StringUtils.isNotBlank(request.getToAccount())) {
-          Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
-          SavingsAccount toSavingsAccount = savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
-          if (toSavingsAccount != null && toSavingsAccount.getClient() != null) {
-            toClientName = displayNameOrUnknown(toSavingsAccount.getClient());
+          final String sql =
+                  "SELECT COALESCE(c.display_name, c.fullname, 'N/A') "
+                          + "FROM m_savings_account sa "
+                          + "JOIN m_client c ON sa.client_id = c.id "
+                          + "WHERE sa.account_no = ? OR sa.external_id = ? LIMIT 1";
+          String accountClean = request.getToAccount().replaceAll("\\s+", "");
+          List<String> names = jdbcTemplate.queryForList(sql, String.class, accountClean, accountClean);
+          if (!names.isEmpty() && StringUtils.isNotBlank(names.get(0))) {
+            toClientName = names.get(0);
           }
         }
       } catch (Exception e) {
-        log.debug("Could not resolve destination client name for fast payment event", e);
+        log.debug("Could not resolve local destination client name via JDBC", e);
       }
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-          "transactionAmount",
-          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+              "transactionAmount",
+              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-          "fromAccountNumber",
-          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+              "fromAccountNumber",
+              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-          "toAccountNumber",
-          StringUtils.isNotBlank(request.getToAccount())
-              ? request.getToAccount()
-              : (StringUtils.isNotBlank(request.getToPhoneNumber())
-                  ? request.getToPhoneNumber()
-                  : "N/A"));
+              "toAccountNumber",
+              StringUtils.isNotBlank(request.getToAccount())
+                      ? request.getToAccount()
+                      : (StringUtils.isNotBlank(request.getToPhoneNumber())
+                      ? request.getToPhoneNumber()
+                      : "N/A"));
+      contextData.put("transferId", transferId);
       contextData.put(
-          "transferId",
-          result != null && result.getResourceId() != null
-              ? result.getResourceId().toString()
-              : "N/A");
-      contextData.put(
-          "transactionDate",
-          transactionDateUtil.getCurrentDateForFineract(
-              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+              "transactionDate",
+              transactionDateUtil.getCurrentDateForFineract(
+                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1218,40 +1220,35 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("toClientName", toClientName);
       contextData.put(
               "fromOfficeName",
-              sourceClient != null
-                      && sourceClient.getOffice() != null
-                      && StringUtils.isNotBlank(sourceClient.getOffice().getName())
+              sourceClient != null && sourceClient.getOffice() != null && StringUtils.isNotBlank(sourceClient.getOffice().getName())
                       ? sourceClient.getOffice().getName()
                       : "N/A");
       contextData.put("toOfficeName", "N/A");
 
+      // Campos adicionados
       contextData.put("currencyCode", resolvedCurrencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
-              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
+              "publishFastPaymentTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
               resolvedCurrencyCode,
               toClientName,
               transferId);
 
-      log.info("ResourceExternalId: {}, TransactionId: {}, ResourceIdentifier: {} , ResourceId : {}"
-              ,result.getResourceExternalId(),result.getTransactionId(),
-              result.getResourceIdentifier(),result.getResourceId());
-
       applicationEventPublisher.publishEvent(
-          SelfServiceNotificationEvent.withTenantContext(
-              this,
-              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-              user.getId(),
-              user.getFirstname(),
-              user.getLastname(),
-              user.getUsername(),
-              user.getEmail(),
-              mobileNumber,
-              emailMode,
-              ipAddress,
-              LocaleContextHolder.getLocale(),
-              contextData));
+              SelfServiceNotificationEvent.withTenantContext(
+                      this,
+                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+                      user.getId(),
+                      user.getFirstname(),
+                      user.getLastname(),
+                      user.getUsername(),
+                      user.getEmail(),
+                      mobileNumber,
+                      emailMode,
+                      ipAddress,
+                      LocaleContextHolder.getLocale(),
+                      contextData));
     } catch (Exception e) {
       log.warn("Failed to publish transfer notification event", e);
     }
