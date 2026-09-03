@@ -1174,6 +1174,24 @@ public class SelfAccountTransferWritePlatformServiceImpl
                       ? request.getCurrencyCode()
                       : "CRC";
 
+      String externalTransactionId = transferId;
+      if (result != null && result.getResourceId() != null) {
+        try {
+          final String routingSql =
+                  "SELECT pd.routing_code "
+                          + "FROM m_account_transfer_transaction att "
+                          + "JOIN m_savings_account_transaction sat ON att.from_savings_transaction_id = sat.id "
+                          + "JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id "
+                          + "WHERE att.id = ? LIMIT 1";
+          List<String> codes = jdbcTemplate.queryForList(routingSql, String.class, result.getResourceId());
+          if (!codes.isEmpty() && StringUtils.isNotBlank(codes.get(0))) {
+            externalTransactionId = codes.get(0);
+          }
+        } catch (Exception e) {
+          log.debug("Could not resolve routing_code via JDBC, falling back to transferId", e);
+        }
+      }
+
       // Obtención segura de toClientName mediante consulta SQL directa para no alterar entidades JPA ni estados
       String toClientName = "N/A";
       try {
@@ -1228,55 +1246,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
       // Campos adicionados
       contextData.put("currencyCode", resolvedCurrencyCode);
       contextData.put("currency", resolvedCurrencyCode);
-      contextData.put("externalTransactionId", transferId);
-
-      log.info("""
-    CommandProcessingResult details:
-      commandId: {}
-      officeId: {}
-      groupId: {}
-      clientId: {}
-      loanId: {}
-      savingsId: {}
-      resourceId: {}
-      subResourceId: {}
-      transactionId: {}
-      changes: {}
-      creditBureauReportData: {}
-      resourceIdentifier: {}
-      productId: {}
-      gsimId: {}
-      glimId: {}
-      rollbackTransaction: {}
-      resourceExternalId: {}
-      subResourceExternalId: {}
-      loanExternalId: {}""",
-              result.getCommandId(),
-              result.getOfficeId(),
-              result.getGroupId(),
-              result.getClientId(),
-              result.getLoanId(),
-              result.getSavingsId(),
-              result.getResourceId(),
-              result.getSubResourceId(),
-              result.getTransactionId(),
-              result.getChanges(),
-              result.getCreditBureauReportData(),
-              result.getResourceIdentifier(),
-              result.getProductId(),
-              result.getGsimId(),
-              result.getGlimId(),
-              result.isRollbackTransaction(),
-              result.getResourceExternalId() != null ? result.getResourceExternalId().getValue() : null,
-              result.getSubResourceExternalId() != null ? result.getSubResourceExternalId().getValue() : null,
-              result.getLoanExternalId() != null ? result.getLoanExternalId().getValue() : null
-      );
+      contextData.put("externalTransactionId", externalTransactionId);
 
       log.info(
               "publishFastPaymentTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
               resolvedCurrencyCode,
               toClientName,
-              transferId);
+              externalTransactionId);
 
       applicationEventPublisher.publishEvent(
               SelfServiceNotificationEvent.withTenantContext(
