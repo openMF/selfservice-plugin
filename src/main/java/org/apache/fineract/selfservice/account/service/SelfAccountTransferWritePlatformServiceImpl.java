@@ -1227,6 +1227,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       // Campos adicionados
       contextData.put("currencyCode", resolvedCurrencyCode);
+      contextData.put("currency", resolvedCurrencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
@@ -1323,6 +1324,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String currencyCode =
               StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
       contextData.put("currencyCode",currencyCode);
+      contextData.put("currency",currencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
@@ -1423,6 +1425,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String currencyCode =
               StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
       contextData.put("currencyCode", currencyCode);
+      contextData.put("currency", currencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
