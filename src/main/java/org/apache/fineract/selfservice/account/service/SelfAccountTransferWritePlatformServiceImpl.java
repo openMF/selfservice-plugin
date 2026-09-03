@@ -1230,6 +1230,48 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("currency", resolvedCurrencyCode);
       contextData.put("externalTransactionId", transferId);
 
+      log.info("""
+    CommandProcessingResult details:
+      commandId: {}
+      officeId: {}
+      groupId: {}
+      clientId: {}
+      loanId: {}
+      savingsId: {}
+      resourceId: {}
+      subResourceId: {}
+      transactionId: {}
+      changes: {}
+      creditBureauReportData: {}
+      resourceIdentifier: {}
+      productId: {}
+      gsimId: {}
+      glimId: {}
+      rollbackTransaction: {}
+      resourceExternalId: {}
+      subResourceExternalId: {}
+      loanExternalId: {}""",
+              result.getCommandId(),
+              result.getOfficeId(),
+              result.getGroupId(),
+              result.getClientId(),
+              result.getLoanId(),
+              result.getSavingsId(),
+              result.getResourceId(),
+              result.getSubResourceId(),
+              result.getTransactionId(),
+              result.getChanges(),
+              result.getCreditBureauReportData(),
+              result.getResourceIdentifier(),
+              result.getProductId(),
+              result.getGsimId(),
+              result.getGlimId(),
+              result.isRollbackTransaction(),
+              result.getResourceExternalId() != null ? result.getResourceExternalId().getValue() : null,
+              result.getSubResourceExternalId() != null ? result.getSubResourceExternalId().getValue() : null,
+              result.getLoanExternalId() != null ? result.getLoanExternalId().getValue() : null
+      );
+
       log.info(
               "publishFastPaymentTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
               resolvedCurrencyCode,
