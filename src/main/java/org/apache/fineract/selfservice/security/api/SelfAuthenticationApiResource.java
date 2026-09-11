@@ -26,6 +26,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -385,11 +386,12 @@ public class SelfAuthenticationApiResource {
             "userAgent", StringUtils.defaultIfBlank(signals.userAgent(), "Unknown"));
         contextData.put(
             "deviceLabel", StringUtils.defaultIfBlank(signals.deviceLabel(), "Unknown"));
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
         contextData.put(
-            "loginTime",
-            transactionDateUtil.getCurrentTenantLocalDateTime() != null
-                ? transactionDateUtil.getCurrentTenantLocalDateTime().toString()
-                : "");
+                "loginTime",
+                transactionDateUtil.getCurrentTenantLocalDateTime() != null
+                        ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
+                        : "");
 
         publishNotificationEvent(
             SelfServiceNotificationEvent.Type.LOGIN_UNKNOWN_DEVICE,
@@ -454,10 +456,11 @@ public class SelfAuthenticationApiResource {
     contextData.putIfAbsent("username", username);
     contextData.putIfAbsent("firstname",user.getFirstname());
     contextData.putIfAbsent("lastname",user.getLastname());
+    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
     contextData.put(
             "loginTime",
             transactionDateUtil.getCurrentTenantLocalDateTime() != null
-                    ? transactionDateUtil.getCurrentTenantLocalDateTime().toString()
+                    ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
                     : "");
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
