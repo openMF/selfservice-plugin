@@ -452,6 +452,8 @@ public class SelfAuthenticationApiResource {
     }
     contextData.putIfAbsent("ipAddress", StringUtils.defaultIfBlank(ipAddress, "Unknown"));
     contextData.putIfAbsent("username", username);
+    contextData.putIfAbsent("firstname",user.getFirstname());
+    contextData.putIfAbsent("lastname",user.getLastname());
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
       applicationEventPublisher.publishEvent(

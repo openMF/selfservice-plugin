@@ -781,21 +781,29 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           @Override
           public void afterCommit() {
             try {
-              applicationEventPublisher.publishEvent(
-                  new SelfServiceNotificationEvent(
-                      SelfServiceRegistrationWritePlatformServiceImpl.this,
-                      SelfServiceNotificationEvent.Type.USER_ACTIVATED,
-                      appUser.getId(),
-                      appUser.getFirstname(),
-                      appUser.getLastname(),
-                      appUser.getUsername(),
-                      request.getEmail(),
-                      request.getMobileNumber(),
-                      isEmailMode(request),
-                      null,
-                      LocaleContextHolder.getLocale(),
-                      tenantSnapshot,
-                      businessDatesSnapshot));
+
+              OnboardingProgressData onboardingData =
+                      onboardingStepService.getOrInitProgress(appUser.getId());
+
+              if (onboardingData != null && onboardingData.isOnboardingComplete()) {
+                applicationEventPublisher.publishEvent(
+                        new SelfServiceNotificationEvent(
+                                SelfServiceRegistrationWritePlatformServiceImpl.this,
+                                SelfServiceNotificationEvent.Type.USER_ACTIVATED,
+                                appUser.getId(),
+                                appUser.getFirstname(),
+                                appUser.getLastname(),
+                                appUser.getUsername(),
+                                request.getEmail(),
+                                request.getMobileNumber(),
+                                isEmailMode(request),
+                                null,
+                                LocaleContextHolder.getLocale(),
+                                tenantSnapshot,
+                                businessDatesSnapshot));
+              } else {
+                log.info("USER_ACTIVATED notification skipped for userId={}: Onboarding is not complete", appUser.getId());
+              }
             } catch (Exception e) {
               log.warn(
                   "Failed to publish USER_ACTIVATED notification for userId={}",

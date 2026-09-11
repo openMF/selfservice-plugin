@@ -51,7 +51,8 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     SINPE_SUBSCRIPTION_DELETED("sinpe-subscription-deleted"),
     SAVINGS_DEPOSIT("savings-deposit"),
     LOGIN_UNKNOWN_DEVICE("login-unknown-device"),
-    SAVINGS_WITHDRAWAL("savings-withdrawal");    
+    SAVINGS_WITHDRAWAL("savings-withdrawal"),
+    PAYMENT_LINK_CREATED("payment-link-created");
 
     private final String templatePrefix;
 
