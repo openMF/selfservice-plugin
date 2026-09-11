@@ -454,6 +454,11 @@ public class SelfAuthenticationApiResource {
     contextData.putIfAbsent("username", username);
     contextData.putIfAbsent("firstname",user.getFirstname());
     contextData.putIfAbsent("lastname",user.getLastname());
+    contextData.put(
+            "loginTime",
+            transactionDateUtil.getCurrentTenantLocalDateTime() != null
+                    ? transactionDateUtil.getCurrentTenantLocalDateTime().toString()
+                    : "");
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
       applicationEventPublisher.publishEvent(
