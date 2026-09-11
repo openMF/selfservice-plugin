@@ -1,55 +1,66 @@
-<!-- Notification Templates for Payment Link Created -->
-<changeSet author="fineract" id="ss-0081-1">
-    <preConditions onFail="MARK_RAN">
-        <sqlCheck expectedResult="0">SELECT COUNT(*)
-            FROM m_template
-            WHERE name IN (
-            'SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL_SUBJECT',
-            'SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL',
-            'SELF_SERVICE_PAYMENT_LINK_CREATED_SMS',
-            'SELF_SERVICE_PAYMENT_LINK_CREATED_WHATSAPP',
-            'SELF_SERVICE_PAYMENT_LINK_CREATED_IN_APP'
-            );</sqlCheck>
-    </preConditions>
-    <comment>Payment Link Created Templates</comment>
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
 
-    <!-- 1. SUBJECT -->
-    <insert tableName="m_template">
-        <column name="entity" valueNumeric="0" />
-        <column name="type" valueNumeric="1" />
-        <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL_SUBJECT" />
-        <column name="text" value="Creó un nuevo link de pago" />
-    </insert>
+ Copyright since 2026 Mifos Initiative
 
-    <!-- 2. EMAIL (HTML) -->
-    <insert tableName="m_template">
-        <column name="entity" valueNumeric="0" />
-        <column name="type" valueNumeric="1" />
-        <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL" />
-        <column name="text" value="&lt;p&gt;Estimado ${firstname} ${lastname}, su link de pago fue creado y está listo para compartir.&lt;/p&gt;&lt;p&gt;N.° de link: ${numero}&lt;br/&gt;Monto: ${monto}&lt;br/&gt;Vence: ${vence}&lt;br/&gt;Estado: ${estado}&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;${paymentUrl}&quot;&gt;Ver y compartir el link&lt;/a&gt;&lt;/p&gt;" />
-    </insert>
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    <!-- 3. SMS -->
-    <insert tableName="m_template">
-        <column name="entity" valueNumeric="0" />
-        <column name="type" valueNumeric="1" />
-        <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_SMS" />
-        <column name="text" value="Estimado ${firstname}, su link de pago por ${monto} fue creado. Compártelo: ${paymentUrl}" />
-    </insert>
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <!-- Notification Templates for Payment Link Created -->
+    <changeSet author="fineract" id="ss-0081-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*)
+                FROM m_template
+                WHERE name IN (
+                'SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL_SUBJECT',
+                'SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL',
+                'SELF_SERVICE_PAYMENT_LINK_CREATED_SMS',
+                'SELF_SERVICE_PAYMENT_LINK_CREATED_WHATSAPP',
+                'SELF_SERVICE_PAYMENT_LINK_CREATED_IN_APP'
+                );</sqlCheck>
+        </preConditions>
+        <comment>Payment Link Created Templates</comment>
 
-    <!-- 4. WHATSAPP -->
-    <insert tableName="m_template">
-        <column name="entity" valueNumeric="0" />
-        <column name="type" valueNumeric="1" />
-        <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_WHATSAPP" />
-        <column name="text" value="🔗 *Creó un nuevo link de pago*\n\nEstimado *${firstname} ${lastname}*, su link de pago fue creado y está listo para compartir.\n\n*N.° de link:* ${numero}\n*Monto:* ${monto}\n*Vence:* ${vence}\n*Estado:* ${estado}\n\n👉 *Ver y compartir el link:*\n${paymentUrl}" />
-    </insert>
+        <!-- 1. SUBJECT -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0" />
+            <column name="type" valueNumeric="1" />
+            <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL_SUBJECT" />
+            <column name="text" value="Creó un nuevo link de pago" />
+        </insert>
 
-    <!-- 5. IN_APP -->
-    <insert tableName="m_template">
-        <column name="entity" valueNumeric="0" />
-        <column name="type" valueNumeric="1" />
-        <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_IN_APP" />
-        <column name="text" value="Su link de pago N.° ${numero} por ${monto} ha sido creado exitosamente." />
-    </insert>
-</changeSet>
+        <!-- 2. EMAIL (HTML) -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0" />
+            <column name="type" valueNumeric="1" />
+            <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_EMAIL" />
+            <column name="text" value="&lt;p&gt;Estimado ${firstname} ${lastname}, su link de pago fue creado y está listo para compartir.&lt;/p&gt;&lt;p&gt;N.° de link: ${numero}&lt;br/&gt;Monto: ${monto}&lt;br/&gt;Vence: ${vence}&lt;br/&gt;Estado: ${estado}&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;${paymentUrl}&quot;&gt;Ver y compartir el link&lt;/a&gt;&lt;/p&gt;" />
+        </insert>
+
+        <!-- 3. SMS -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0" />
+            <column name="type" valueNumeric="1" />
+            <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_SMS" />
+            <column name="text" value="Estimado ${firstname}, su link de pago por ${monto} fue creado. Compártelo: ${paymentUrl}" />
+        </insert>
+
+        <!-- 4. WHATSAPP -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0" />
+            <column name="type" valueNumeric="1" />
+            <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_WHATSAPP" />
+            <column name="text" value="🔗 *Creó un nuevo link de pago*\n\nEstimado *${firstname} ${lastname}*, su link de pago fue creado y está listo para compartir.\n\n*N.° de link:* ${numero}\n*Monto:* ${monto}\n*Vence:* ${vence}\n*Estado:* ${estado}\n\n👉 *Ver y compartir el link:*\n${paymentUrl}" />
+        </insert>
+
+        <!-- 5. IN_APP -->
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0" />
+            <column name="type" valueNumeric="1" />
+            <column name="name" value="SELF_SERVICE_PAYMENT_LINK_CREATED_IN_APP" />
+            <column name="text" value="Su link de pago N.° ${numero} por ${monto} ha sido creado exitosamente." />
+        </insert>
+    </changeSet>
+</databaseChangeLog>
