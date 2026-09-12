@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        TENANT STORE changelog - see module-changelog-master.xml in this directory.
+
+        Apache Fineract's `tenants` table carries no lifecycle state: a row exists and the
+        tenant is reachable, or it does not. MX-406 requires Active / Inactive / Suspended,
+        so the column is added here rather than assumed.
+
+        Existing rows default to ACTIVE, which preserves today's behaviour exactly: every
+        tenant already in the registry is by definition live, and no deployment changes
+        meaning when this migration runs.
+    -->
+
+    <changeSet id="tm-0001-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenants"/>
+            <not>
+                <columnExists tableName="tenants" columnName="status"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add lifecycle status to the tenant registry, defaulting existing tenants to ACTIVE.
+        </comment>
+        <addColumn tableName="tenants">
+            <column name="status" type="VARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="tm-0001-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenants"/>
+            <not>
+                <columnExists tableName="tenants" columnName="description"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add the optional free-text description from MX-406's tenant metadata.
+        </comment>
+        <addColumn tableName="tenants">
+            <column name="description" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="tm-0001-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenants"/>
+            <not>
+                <columnExists tableName="tenants" columnName="contact_email"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add the optional administrative contact from MX-406's tenant metadata.
+        </comment>
+        <addColumn tableName="tenants">
+            <column name="contact_email" type="VARCHAR(150)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="tm-0001-4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenants"/>
+            <not>
+                <indexExists tableName="tenants" indexName="idx_tenants_status"/>
+            </not>
+        </preConditions>
+        <comment>
+            Index status so filtering the tenant list by status does not scan the registry.
+        </comment>
+        <createIndex tableName="tenants" indexName="idx_tenants_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

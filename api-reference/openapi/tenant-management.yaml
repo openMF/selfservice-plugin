@@ -1,0 +1,521 @@
+openapi: 3.0.1
+info:
+  title: Fineract Tenant Management API
+  description: "Tenant lifecycle administration provided by the Mifos self-service\
+    \ plugin (MX-406). Served in a master context: authenticate as a master user holding\
+    \ the SUPER_MASTER role, with no tenant header."
+  version: "1.0"
+servers:
+- url: /fineract-provider/api
+  description: Apache Fineract with the self-service plugin loaded
+security:
+- masterBasicAuth: []
+tags:
+- name: Tenant Management
+  description: Lifecycle management of the tenants on this installation. Requires
+    a master user with the SUPER_MASTER role; database credentials are write-only
+    and are never returned.
+paths:
+  /v1/admin/tenants:
+    get:
+      tags:
+      - Tenant Management
+      summary: List Tenants
+      description: |-
+        Returns the tenants on this installation, newest registry entries last.
+
+        Optional `search` matches the identifier and the name, case insensitively and literally. Optional `status` restricts to ACTIVE, INACTIVE or SUSPENDED. `offset` and `limit` page the result; `limit` is capped so one request cannot return an entire large registry.
+
+        Database credentials are never included.
+      operationId: retrieveAll
+      parameters:
+      - name: search
+        in: query
+        description: "Matches identifier and name, literally and case-insensitively"
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: "ACTIVE, INACTIVE or SUSPENDED"
+        schema:
+          type: string
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantsResponse"
+        "400":
+          description: Validation failed
+        "401":
+          description: Not authenticated as a master user
+    post:
+      tags:
+      - Tenant Management
+      summary: Create a Tenant
+      description: |-
+        Registers a tenant, creates its schema and migrates it.
+
+        The schema is created and proved reachable before anything is written to the registry, so a tenant that could never have worked leaves no row behind. An existing schema is reused rather than rejected, and is never emptied.
+
+        `schemaPassword` is stored encrypted and is never returned by any endpoint.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostTenantsRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantResponse"
+        "400":
+          description: Validation failed
+        "401":
+          description: Not authenticated as a master user
+        "403":
+          description: Refused by a domain rule
+  /v1/admin/tenants/template:
+    get:
+      tags:
+      - Tenant Management
+      summary: Retrieve Tenant Template
+      description: "Returns the selectable time zones and lifecycle statuses, so a\
+        \ client never hardcodes a list the backend owns."
+      operationId: retrieveTemplate
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantsTemplateResponse"
+        "401":
+          description: Not authenticated as a master user
+  /v1/admin/tenants/test-connection:
+    post:
+      tags:
+      - Tenant Management
+      summary: Test a Tenant Database Connection
+      description: |-
+        Opens a connection with the supplied details and reports whether it succeeded, so an administrator can check credentials before committing a tenant.
+
+        Returns only whether the database answered. The driver's own error is written to the server log rather than returned, since those messages routinely echo the connection string and user back.
+      operationId: testConnection
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostTestConnectionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostTestConnectionResponse"
+        "400":
+          description: Validation failed
+        "401":
+          description: Not authenticated as a master user
+  /v1/admin/tenants/{id}:
+    get:
+      tags:
+      - Tenant Management
+      summary: Retrieve a Tenant
+      description: Returns one tenant. Database credentials are never included.
+      operationId: retrieveOne
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantResponse"
+        "401":
+          description: Not authenticated as a master user
+        "404":
+          description: No tenant has this id
+    put:
+      tags:
+      - Tenant Management
+      summary: Update a Tenant
+      description: |-
+        Updates a tenant. Every field is optional; omitting one leaves it unchanged, and omitting `schemaPassword` keeps the stored credential.
+
+        `identifier` cannot be changed: it is how every request selects a tenant and is embedded in that tenant's existing sessions and integrations. Sending one is rejected rather than ignored.
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutTenantsRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantResponse"
+        "400":
+          description: Validation failed
+        "401":
+          description: Not authenticated as a master user
+        "403":
+          description: Refused by a domain rule
+        "404":
+          description: No tenant has this id
+    post:
+      tags:
+      - Tenant Management
+      summary: Change Tenant Status
+      description: |-
+        Activates, deactivates or suspends a tenant, selected with the `command` query parameter.
+
+        Idempotent: issuing a command a tenant is already in succeeds and changes nothing, so a retried request does not look like a failure.
+      operationId: changeStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: command
+        in: query
+        description: "activate, deactivate or suspend"
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTenantResponse"
+        "400":
+          description: Validation failed
+        "401":
+          description: Not authenticated as a master user
+        "404":
+          description: No tenant has this id
+    delete:
+      tags:
+      - Tenant Management
+      summary: Remove a Tenant
+      description: |-
+        Removes the tenant's registry entry so the platform stops routing to it.
+
+        This never drops a schema or deletes tenant data: the database is left intact for retention, audit or reinstatement.
+
+        An active tenant is refused; deactivate it first, so removal is a deliberate two-step action.
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteTenantResponse"
+        "401":
+          description: Not authenticated as a master user
+        "403":
+          description: Refused by a domain rule
+        "404":
+          description: No tenant has this id
+components:
+  schemas:
+    DeleteTenantResponse:
+      type: object
+      properties:
+        resourceId:
+          type: integer
+          format: int64
+          example: 3
+      description: DeleteTenantsResponse
+    GetTenantConnectionResponse:
+      type: object
+      properties:
+        autoUpdate:
+          type: boolean
+          example: true
+        id:
+          type: integer
+          format: int64
+          example: 3
+        schemaConnectionParameters:
+          type: string
+          example: sslmode=require
+        schemaName:
+          type: string
+          example: mifostenant_acme
+        schemaServer:
+          type: string
+          example: localhost
+        schemaServerPort:
+          type: string
+          example: "5432"
+        schemaUsername:
+          type: string
+          example: fineract
+      description: GetTenantConnectionResponse - never includes a password
+    GetTenantResponse:
+      type: object
+      properties:
+        connection:
+          $ref: "#/components/schemas/GetTenantConnectionResponse"
+        contactEmail:
+          type: string
+          example: ops@acme.example.org
+        createdDate:
+          type: string
+          example: 2026-09-14T10:15:30Z
+        description:
+          type: string
+          example: Pilot tenant
+        id:
+          type: integer
+          format: int64
+          example: 3
+        identifier:
+          type: string
+          example: acme
+        joinedDate:
+          type: array
+          description: "Year, month, day"
+          example:
+          - 2026
+          - 9
+          - 14
+          items:
+            type: integer
+            description: "Year, month, day"
+            format: int32
+        lastModifiedDate:
+          type: string
+          example: 2026-09-14T11:02:00Z
+        name:
+          type: string
+          example: Acme Microfinance
+        status:
+          type: string
+          description: null when the stored status is not one this plugin recognises;
+            such a tenant is refused until its status is set again
+          nullable: true
+          example: ACTIVE
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - SUSPENDED
+        timezoneId:
+          type: string
+          example: Asia/Kolkata
+      description: GetTenantResponse
+    GetTenantsResponse:
+      type: object
+      properties:
+        pageItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/GetTenantResponse"
+        totalFilteredRecords:
+          type: integer
+          format: int32
+          example: 1
+      description: GetTenantsResponse
+    GetTenantsTemplateResponse:
+      type: object
+      properties:
+        statuses:
+          type: array
+          example:
+          - ACTIVE
+          - INACTIVE
+          - SUSPENDED
+          items:
+            type: string
+            example: "[\"ACTIVE\",\"INACTIVE\",\"SUSPENDED\"]"
+        timezones:
+          type: array
+          example:
+          - Africa/Abidjan
+          - Asia/Kolkata
+          items:
+            type: string
+            example: "[\"Africa/Abidjan\",\"Asia/Kolkata\"]"
+      description: GetTenantsTemplateResponse
+    PostTenantsRequest:
+      required:
+      - identifier
+      - name
+      - schemaName
+      - schemaPassword
+      - schemaServer
+      - schemaServerPort
+      - schemaUsername
+      - timezoneId
+      type: object
+      properties:
+        autoUpdate:
+          type: boolean
+          description: Migrate the schema on startup; defaults to true
+          example: true
+        contactEmail:
+          type: string
+          example: ops@acme.example.org
+        description:
+          type: string
+          example: Pilot tenant
+        identifier:
+          type: string
+          description: "Unique, lower case; cannot be changed later"
+          example: acme
+        name:
+          type: string
+          example: Acme Microfinance
+        schemaConnectionParameters:
+          type: string
+          example: sslmode=require
+        schemaName:
+          type: string
+          description: "Letters, digits and underscore, starting with a letter or\
+            \ underscore, at most 63 characters, stored in lower case. Created if\
+            \ absent; must not belong to another tenant."
+          example: mifostenant_acme
+        schemaPassword:
+          type: string
+          description: "Write-only: stored encrypted and never returned by any endpoint"
+          example: a-unique-database-secret
+        schemaServer:
+          type: string
+          example: localhost
+        schemaServerPort:
+          type: string
+          description: 1-65535
+          example: "5432"
+        schemaUsername:
+          type: string
+          example: fineract
+        status:
+          type: string
+          description: "ACTIVE, INACTIVE or SUSPENDED; defaults to ACTIVE"
+          example: ACTIVE
+        timezoneId:
+          type: string
+          description: IANA time zone
+          example: Asia/Kolkata
+      description: PostTenantsRequest
+    PostTestConnectionRequest:
+      required:
+      - schemaName
+      - schemaPassword
+      - schemaServer
+      - schemaServerPort
+      - schemaUsername
+      type: object
+      properties:
+        schemaConnectionParameters:
+          type: string
+          example: sslmode=require
+        schemaName:
+          type: string
+          example: mifostenant_acme
+        schemaPassword:
+          type: string
+          description: Used for this probe only; never stored
+        schemaServer:
+          type: string
+          example: localhost
+        schemaServerPort:
+          type: string
+          example: "5432"
+        schemaUsername:
+          type: string
+          example: fineract
+      description: PostTenantsTestConnectionRequest
+    PostTestConnectionResponse:
+      type: object
+      properties:
+        reachable:
+          type: boolean
+          example: true
+      description: PostTenantsTestConnectionResponse
+    PutTenantsRequest:
+      type: object
+      properties:
+        autoUpdate:
+          type: boolean
+          example: true
+        contactEmail:
+          type: string
+          example: newops@acme.example.org
+        description:
+          type: string
+        name:
+          type: string
+          example: Acme Microfinance Ltd
+        schemaConnectionParameters:
+          type: string
+          example: sslmode=require
+        schemaPassword:
+          type: string
+          description: Write-only; omit to keep the stored password
+        schemaServer:
+          type: string
+          example: db.internal
+        schemaServerPort:
+          type: string
+          example: "5432"
+        schemaUsername:
+          type: string
+          example: fineract
+        timezoneId:
+          type: string
+          example: Asia/Kolkata
+      description: "PutTenantsRequest - every field optional. Omitted fields are unchanged;\
+        \ blank values are refused except for description, contactEmail and schemaConnectionParameters,\
+        \ which an empty string or null clears."
+  securitySchemes:
+    masterBasicAuth:
+      type: http
+      description: A master user holding the SUPER_MASTER role
+      scheme: basic

@@ -1,0 +1,28 @@
+info:
+  name: 08. TEST TENANT CONNECTION
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants/test-connection
+  body:
+    type: json
+    data: |-
+      {
+          "schemaName": "mifostenant_acme",
+          "schemaServer": "localhost",
+          "schemaServerPort": "5432",
+          "schemaUsername": "postgres",
+          "schemaPassword": "{{tenant_db_password}}"
+      }
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

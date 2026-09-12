@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<!--
+    Master changelog for tenant administration (MX-406), run against the TENANT STORE
+    database (the central registry holding `tenants` and `tenant_server_connections`),
+    NOT against an individual tenant schema.
+
+    Fineract core's own tenant-store changelog
+    (db/changelog/tenant-store/changelog-tenant-store.xml) is a flat, hard-coded list of
+    parts with no module extension point - unlike the per-tenant master, which does
+    provide one. A plugin therefore cannot append to it. Instead TenantStoreLiquibaseConfig
+    runs this changelog itself against the `hikariTenantDataSource` bean, which keeps the
+    whole feature inside the plugin and requires no change to Apache Fineract.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+  <include file="parts/001-add-tenant-status-and-metadata.xml" relativeToChangelogFile="true"/>
+  <include file="parts/002-create-tenant-administration-audit.xml" relativeToChangelogFile="true"/>
+  <include file="parts/003-create-tenant-master-user.xml" relativeToChangelogFile="true"/>
+  <include file="parts/004-create-tenant-retained-schema.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

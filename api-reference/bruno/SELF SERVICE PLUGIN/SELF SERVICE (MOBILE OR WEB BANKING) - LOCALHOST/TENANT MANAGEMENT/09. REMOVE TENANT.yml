@@ -1,0 +1,18 @@
+info:
+  name: 09. REMOVE TENANT
+  type: http
+  seq: 9
+
+http:
+  method: DELETE
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants/1
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

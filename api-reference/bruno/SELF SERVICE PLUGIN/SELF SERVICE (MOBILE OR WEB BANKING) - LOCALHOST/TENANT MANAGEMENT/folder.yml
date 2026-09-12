@@ -1,0 +1,7 @@
+info:
+  name: TENANT MANAGEMENT
+  type: folder
+  seq: 11
+
+request:
+  auth: inherit

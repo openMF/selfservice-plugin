@@ -1,0 +1,18 @@
+info:
+  name: 01. LIST TENANTS
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants?offset=0&limit=20
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

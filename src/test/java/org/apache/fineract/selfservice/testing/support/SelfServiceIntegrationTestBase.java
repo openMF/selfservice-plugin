@@ -60,7 +60,8 @@ public abstract class SelfServiceIntegrationTestBase {
     String testPluginsPath = buildDir + "/test-plugins";
     java.io.File testPluginsDir = new java.io.File(testPluginsPath);
     if (!testPluginsDir.exists() && !testPluginsDir.mkdirs()) {
-      throw new IllegalStateException("Failed to create test-plugins directory at: " + testPluginsPath);
+      throw new IllegalStateException(
+          "Failed to create test-plugins directory at: " + testPluginsPath);
     }
     if (!testPluginsDir.isDirectory()) {
       throw new IllegalStateException("Path exists but is not a directory: " + testPluginsPath);
@@ -82,6 +83,10 @@ public abstract class SelfServiceIntegrationTestBase {
             .withEnv("FINERACT_MODULE_SELFSERVICE_ENABLED", "true")
             .withEnv("SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING", "true")
             .withEnv("FINERACT_MODULES_SELFSERVICE_RUNREPORTS_ALLOWLIST", "Client Details")
+            // Master user for tenant management (MX-406); see TenantMasterUserBootstrap.
+            .withEnv("FINERACT_TENANT_MANAGEMENT_BOOTSTRAP_MASTER_USERNAME", "master")
+            .withEnv(
+                "FINERACT_TENANT_MANAGEMENT_BOOTSTRAP_MASTER_PASSWORD", "master-password-for-tests")
             .withEnv("TZ", "UTC")
             .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2G")
             .withEnv("FINERACT_SERVER_SSL_ENABLED", "true")
@@ -96,10 +101,10 @@ public abstract class SelfServiceIntegrationTestBase {
                   cmd.withEntrypoint(
                       "sh",
                       "-c",
-                      "CLASSPATH=$(cat /app/jib-classpath-file) && "
-                          + "exec java $JAVA_TOOL_OPTIONS "
-                          + "-Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Djava.security.egd=file:/dev/./urandom "
-                          + "-cp /app/plugins/selfservice-plugin.jar:/app/test-plugins/*:$CLASSPATH "
+                      "CLASSPATH=$(cat /app/jib-classpath-file) && exec java $JAVA_TOOL_OPTIONS"
+                          + " -Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
+                          + " -Djava.security.egd=file:/dev/./urandom -cp"
+                          + " /app/plugins/selfservice-plugin.jar:/app/test-plugins/*:$CLASSPATH "
                           + "org.apache.fineract.ServerApplication");
                   cmd.withCmd();
                 })

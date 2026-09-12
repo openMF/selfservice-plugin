@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        TENANT STORE changelog - see module-changelog-master.xml in this directory.
+
+        Master users for tenant administration (MX-406). Tenant management is a platform
+        capability above every tenant, so the users allowed to perform it belong to no
+        tenant: they live here, beside the registry, rather than in any tenant's m_appuser.
+        A tenant's own administrator - even one holding ALL_FUNCTIONS - is not a master user
+        and cannot reach /v1/admin/tenants.
+
+        Passwords are stored only as Spring Security delegating hashes ({bcrypt}...), never
+        in clear. The first user is created at startup from configuration; see
+        TenantMasterUserBootstrap.
+    -->
+
+    <changeSet id="tm-0003-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="tenant_master_user"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create the master user store for tenant administration.
+        </comment>
+        <createTable tableName="tenant_master_user">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="username" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"
+                             uniqueConstraintName="uq_tenant_master_user_username"/>
+            </column>
+            <column name="password_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(50)" defaultValue="SUPER_MASTER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

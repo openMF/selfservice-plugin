@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        TENANT STORE changelog - see module-changelog-master.xml in this directory.
+
+        Audit trail for tenant administration (MX-406: "audit logging of all tenant
+        management actions").
+
+        WHY IN THE TENANT STORE: the actions recorded here concern the registry itself,
+        not any one tenant's business data. Keeping the trail beside `tenants` means it
+        survives the removal of any tenant it describes - an audit trail that disappeared
+        along with the tenant whose deletion it recorded would be worthless - and gives
+        an auditor a single place to look rather than one table per tenant.
+
+        NO CREDENTIALS ARE RECORDED. The `detail` column holds the NAMES of the fields a
+        request changed, never their values, so a password change is recorded as having
+        happened without the password itself ever reaching this table.
+    -->
+
+    <changeSet id="tm-0002-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="tenant_administration_audit"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create the tenant administration audit trail.
+        </comment>
+        <createTable tableName="tenant_administration_audit">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="action" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="outcome" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Kept even when the tenant row is gone, which is the point of the trail. -->
+            <column name="tenant_identifier" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Null once the tenant has been removed. -->
+            <column name="tenant_id" type="BIGINT"/>
+            <column name="performed_by" type="VARCHAR(100)"/>
+            <column name="performed_by_tenant" type="VARCHAR(100)"/>
+            <!-- Field names only, never values. -->
+            <column name="detail" type="VARCHAR(1000)"/>
+            <column name="created_at" type="datetime">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="tm-0002-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenant_administration_audit"/>
+            <not>
+                <indexExists tableName="tenant_administration_audit"
+                             indexName="idx_tenant_admin_audit_tenant"/>
+            </not>
+        </preConditions>
+        <comment>
+            Index the tenant identifier so one tenant's history can be pulled without a scan.
+        </comment>
+        <createIndex tableName="tenant_administration_audit"
+                     indexName="idx_tenant_admin_audit_tenant">
+            <column name="tenant_identifier"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

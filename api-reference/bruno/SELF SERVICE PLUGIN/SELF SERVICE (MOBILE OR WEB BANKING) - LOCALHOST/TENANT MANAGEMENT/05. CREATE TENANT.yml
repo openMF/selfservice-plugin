@@ -1,0 +1,35 @@
+info:
+  name: 05. CREATE TENANT
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants
+  body:
+    type: json
+    data: |-
+      {
+          "identifier": "acme",
+          "name": "Acme Microfinance",
+          "timezoneId": "Asia/Kolkata",
+          "status": "ACTIVE",
+          "description": "Created through the tenant management API",
+          "contactEmail": "ops@acme.example.org",
+          "schemaName": "mifostenant_acme",
+          "schemaServer": "localhost",
+          "schemaServerPort": "5432",
+          "schemaUsername": "postgres",
+          "schemaPassword": "{{tenant_db_password}}",
+          "autoUpdate": true
+      }
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

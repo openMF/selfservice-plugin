@@ -21,6 +21,7 @@ A Spring Boot plugin that extends [Apache Fineract](https://fineract.apache.org/
   - [Deploy with Fineract (Docker)](#deploy-with-fineract-docker)
   - [Deploy with Fineract (Tomcat)](#deploy-with-fineract-tomcat)
 - [API Reference](#api-reference)
+- [Tenant Management](#tenant-management)
 - [Contributing](#contributing)
 - [History](#history)
 - [Important Notices](#important-notices)
@@ -143,7 +144,7 @@ Pre-built snapshots are published to JFrog Artifactory:
 
 ## API Reference
 
-All endpoints live under `/v1/self/`. Here's a summary of the available resources:
+Most endpoints live under `/v1/self/`. Here's a summary of the available resources:
 
 | Base Path | Resource | Methods |
 |---|---|---|
@@ -165,9 +166,31 @@ All endpoints live under `/v1/self/`. Here's a summary of the available resource
 | `/v1/self/surveys` | Surveys (SPM) | `GET` |
 | `/v1/self/surveys/scorecards` | Survey Scorecards | `GET`, `POST` |
 
+### Administrative Endpoints
+
+These are consumed by staff-facing clients such as the web app rather than by self-service users,
+so they sit **outside** `/v1/self/`: that prefix is matched by the self-service security chain and
+authenticates self-service users only. Outside it, ordinary platform credentials apply.
+
+| Base Path | Resource | Methods |
+|---|---|---|
+| `/v1/branding` | Tenant Branding | `GET`, `PUT` |
+| `/v1/admin/tenants` | Tenant Management (master users only) — see [TENANT_MANAGEMENT.md](TENANT_MANAGEMENT.md) | `GET`, `POST`, `PUT`, `DELETE` |
+
 Full OpenAPI/Swagger documentation is available at runtime via the Fineract Swagger UI when the plugin is loaded.
 
 A [Postman collection](postman/) is also included for hands-on API exploration.
+
+## Tenant Management
+
+The plugin can manage the tenants of the installation itself — create, update, activate, deactivate,
+suspend and remove — with schema provisioning, an audit trail, and enforcement so a suspended tenant
+actually stops being served.
+
+Because this administers the platform itself rather than any one tenant, it runs in a separate
+master context — master users with the `SUPER_MASTER` role — and is documented separately:
+
+**→ [TENANT_MANAGEMENT.md](TENANT_MANAGEMENT.md)**
 
 ## Contributing
 

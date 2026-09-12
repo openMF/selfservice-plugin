@@ -1,0 +1,22 @@
+info:
+  name: 07. CHANGE TENANT STATUS
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants/1?command=suspend
+  body:
+    type: json
+    data: |-
+      {}
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

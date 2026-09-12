@@ -1,0 +1,25 @@
+info:
+  name: 06. UPDATE TENANT
+  type: http
+  seq: 6
+
+http:
+  method: PUT
+  url: http://localhost:8080/fineract-provider/api/v1/admin/tenants/1
+  body:
+    type: json
+    data: |-
+      {
+          "name": "Acme Microfinance Ltd",
+          "contactEmail": "newops@acme.example.org"
+      }
+  auth:
+    type: basic
+    username: "{{master_username}}"
+    password: "{{master_password}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

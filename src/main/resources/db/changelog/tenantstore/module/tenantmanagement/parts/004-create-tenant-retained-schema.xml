@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        TENANT STORE changelog - see module-changelog-master.xml in this directory.
+
+        Removing a tenant keeps its database (it is never dropped through the API). Without a
+        record of who that data belongs to, a later tenant created under a different identifier
+        could name the same database and be routed straight to the removed tenant's data. Each
+        removal therefore records the database here, and creating a tenant refuses a retained
+        database unless it is the same identifier coming back.
+    -->
+
+    <changeSet id="tm-0004-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="tenant_retained_schema"/>
+            </not>
+        </preConditions>
+        <comment>
+            Record databases retained after a tenant is removed, and the identifier that owns them.
+        </comment>
+        <createTable tableName="tenant_retained_schema">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="tenant_identifier" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_server" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_server_port" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retained_at" type="datetime">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="tm-0004-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="tenant_retained_schema"/>
+            <not>
+                <indexExists tableName="tenant_retained_schema" indexName="idx_tenant_retained_schema_name"/>
+            </not>
+        </preConditions>
+        <comment>
+            Index the database name, which every tenant creation looks up.
+        </comment>
+        <createIndex tableName="tenant_retained_schema" indexName="idx_tenant_retained_schema_name">
+            <column name="schema_name"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
