@@ -65,7 +65,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
-@Order(1) // Very important: Must have higher priority than main security config
+@Order(1) // Must have higher priority than main security config
 public class SelfServiceSecurityConfiguration {
 
   private static final PathPatternRequestMatcher.Builder API_MATCHER =
@@ -88,25 +88,21 @@ public class SelfServiceSecurityConfiguration {
 
   @Autowired private IdempotencyStoreHelper idempotencyStoreHelper;
   @Autowired private PlatformUserDetailsChecker platformUserDetailsChecker;
-
   @Autowired private SelfServiceAuthenticationTokenService tokenService;
 
   @Bean
   public SecurityFilterChain selfServiceSecurityFilterChain(HttpSecurity http) throws Exception {
-
     http
         // Apply only to self-service endpoints
         .securityMatcher(
-          "/api/v1/self/**",
-          "/v1/self/**",
-          "/api/v1/branding",
-          "/api/v1/branding/**",
-          "/v1/branding",
-          "/v1/branding/**")
-
+            "/api/v1/self/**",
+            "/v1/self/**",
+            "/api/v1/branding",
+            "/api/v1/branding/**",
+            "/v1/branding",
+            "/v1/branding/**")
         // Disable CSRF for public self-service APIs
         .csrf(AbstractHttpConfigurer::disable)
-
         // Stateless session
         .sessionManagement(smc -> smc.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .addFilterBefore(tenantAwareBasicAuthenticationFilter(), SecurityContextHolderFilter.class)
@@ -134,25 +130,21 @@ public class SelfServiceSecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/registration/client-user/confirm")
                     .permitAll()
-
                     // Client Identity documents available in the platform
                     .requestMatchers(HttpMethod.GET, "/api/v1/self/registration/identifiers")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/v1/self/registration/identifiers")
                     .permitAll()
-
                     // External System Client Identity
                     .requestMatchers(HttpMethod.POST, "/api/v1/self/identity/retrieve")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/identity/retrieve")
                     .permitAll()
-
                     // Self authentication (login)
                     .requestMatchers(HttpMethod.POST, "/api/v1/self/authentication")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/authentication")
                     .permitAll()
-
                     // Password Reset
                     .requestMatchers(HttpMethod.POST, "/api/v1/self/password")
                     .permitAll()
@@ -166,7 +158,6 @@ public class SelfServiceSecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/password/renew")
                     .permitAll()
-
                     // Public loan simulation endpoints (MX-250)
                     .requestMatchers(HttpMethod.GET, "/api/v1/self/loans/simulate/products")
                     .permitAll()
@@ -180,7 +171,7 @@ public class SelfServiceSecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/v1/self/loans/simulate")
                     .permitAll()
-                    //Branding 
+                    // Branding
                     .requestMatchers(HttpMethod.GET, "/api/v1/branding")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/branding/**")
@@ -188,7 +179,7 @@ public class SelfServiceSecurityConfiguration {
                     .requestMatchers(HttpMethod.GET, "/v1/branding")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/v1/branding/**")
-                    .permitAll()  
+                    .permitAll()
                     // All other self-service endpoints require self-service authentication and must
                     // pass the self-service authorization manager (guards self vs non-self
                     // traffic).
@@ -196,12 +187,10 @@ public class SelfServiceSecurityConfiguration {
                     .access(SelfServiceUserAuthorizationManager.selfServiceUserAuthManager())
                     .anyRequest()
                     .permitAll());
-
     // Optional: CORS if needed for mobile/web clients
     if (fineractProperties.getSecurity().getCors().isEnabled()) {
       http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
     }
-
     return http.build();
   }
 
@@ -247,10 +236,8 @@ public class SelfServiceSecurityConfiguration {
             userNotificationService,
             basicAuthTenantDetailsService,
             businessDateReadPlatformService);
-
     // Inject custom converter to handle both Password and Token auth
     filter.setAuthenticationConverter(new SelfServiceAuthenticationConverter());
-
     // Must match both /api/v1/self/** and /v1/self/** endpoints.
     // Some self-service resources (e.g. runreports) are registered under /v1/self/** without
     // the /api prefix, so authentication filter must cover both patterns.
@@ -265,7 +252,6 @@ public class SelfServiceSecurityConfiguration {
     return filter;
   }
 
-  // Add new Bean for Token Provider:
   @Bean(name = "selfServiceTokenAuthenticationProvider")
   public SelfServiceTokenAuthenticationProvider selfServiceTokenAuthProvider() {
     return new SelfServiceTokenAuthenticationProvider(tokenService, userDetailsService);
@@ -278,17 +264,20 @@ public class SelfServiceSecurityConfiguration {
     return entryPoint;
   }
 
+  /**
+   * Spring Security 7: DaoAuthenticationProvider no longer has a no-arg constructor. UserDetailsService
+   * must be supplied via the constructor; setUserDetailsService(...) was removed.
+   */
   @Bean(name = "selfServiceAuthenticationProvider")
-    public DaoAuthenticationProvider selfServiceAuthProvider() {
-      // Spring Security 7: UserDetailsService is a required constructor arg
-      DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
-      authProvider.setPasswordEncoder(selfServicePasswordEncoder());
-      authProvider.setPreAuthenticationChecks(
-          new org.apache.fineract.selfservice.security.service.SelfServiceUserDetailsChecker(
-              platformUserDetailsChecker));
-      authProvider.setPostAuthenticationChecks(platformUserDetailsChecker);
-      return authProvider;
-    }
+  public DaoAuthenticationProvider selfServiceAuthProvider() {
+    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
+    authProvider.setPasswordEncoder(selfServicePasswordEncoder());
+    authProvider.setPreAuthenticationChecks(
+        new org.apache.fineract.selfservice.security.service.SelfServiceUserDetailsChecker(
+            platformUserDetailsChecker));
+    authProvider.setPostAuthenticationChecks(platformUserDetailsChecker);
+    return authProvider;
+  }
 
   public PasswordEncoder selfServicePasswordEncoder() {
     return PasswordEncoderFactories.createDelegatingPasswordEncoder();
@@ -311,7 +300,6 @@ public class SelfServiceSecurityConfiguration {
     config.setAllowedHeaders(corsConfiguration.getAllowedHeaders());
     config.setExposedHeaders(corsConfiguration.getExposedHeaders());
     config.setAllowCredentials(corsConfiguration.isAllowCredentials());
-
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", config);
     return source;
