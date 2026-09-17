@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
@@ -27,8 +28,8 @@ public class SelfServiceUserAuthorizationManager
     implements AuthorizationManager<RequestAuthorizationContext> {
 
   @Override
-  public AuthorizationDecision check(
-      Supplier<Authentication> authentication, RequestAuthorizationContext fi) {
+  public AuthorizationResult authorize(
+      Supplier<? extends Authentication> authentication, RequestAuthorizationContext fi) {
     if (!"OPTIONS".equalsIgnoreCase(fi.getRequest().getMethod())) {
       Authentication auth = authentication.get();
       if (auth == null || auth.getPrincipal() == null) {

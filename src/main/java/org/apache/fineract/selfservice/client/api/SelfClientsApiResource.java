@@ -542,8 +542,8 @@ public class SelfClientsApiResource {
             .then(sizeContentProcessor)
             .process(body);
 
-    final String contentType = ctx.getResult(DATA_URL_DECODE_RESULT_CONTENT_TYPE);
-    Long size = ctx.getResult(SIZE_RESULT_VALUE);
+    final String contentType = ctx.getResult(DATA_URL_DECODE_RESULT_CONTENT_TYPE, String.class);
+    Long size = ctx.getResult(SIZE_RESULT_VALUE, Long.class);
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
 

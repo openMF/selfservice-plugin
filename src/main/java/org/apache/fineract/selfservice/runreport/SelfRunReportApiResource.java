@@ -47,6 +47,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriTemplate;
 
 @Path("/v1/self/runreports")
 @Component("selfservicePluginSelfRunReportApiResource")
@@ -132,21 +133,17 @@ public class SelfRunReportApiResource {
   public Response runReport(
       @PathParam("reportName") @Parameter(description = "reportName") final String reportName,
       @Context final UriInfo uriInfo) {
-
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-
     final Set<String> allowlist =
         Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
             .map(String::trim)
             .filter(s -> !s.isBlank())
             .map(s -> s.toLowerCase(Locale.ROOT))
             .collect(Collectors.toSet());
-
     if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
       throw new NoAuthorizationException(
           "Self-service is not permitted to run this report: " + reportName);
     }
-
     // Scrub all R_* parameters and re-inject trusted scoping params derived from the
     // authenticated self-service user mapping.
     final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
@@ -158,7 +155,6 @@ public class SelfRunReportApiResource {
                 qp.put(k, v);
               }
             });
-
     // Force report scope to the user's mapped clientId (if any).
     final Long mappedClientId =
         user.getAppUserClientMappings() == null || user.getAppUserClientMappings().isEmpty()
@@ -167,13 +163,13 @@ public class SelfRunReportApiResource {
     if (mappedClientId != null) {
       qp.putSingle("R_clientId", String.valueOf(mappedClientId));
     }
-
     return this.runreportsApiResource.runReport(
         reportName, new UriInfoWithQueryParams(uriInfo, qp));
   }
 
   /** Minimal UriInfo wrapper overriding query parameters only. */
   static final class UriInfoWithQueryParams implements UriInfo {
+
     private final UriInfo delegate;
     private final MultivaluedMap<String, String> queryParams;
 
@@ -275,6 +271,12 @@ public class SelfRunReportApiResource {
     @Override
     public URI relativize(URI uri) {
       return delegate.relativize(uri);
+    }
+
+    /** Required by Jakarta REST {@link UriInfo}; return type is String. */
+    @Override
+    public String getMatchedResourceTemplate() {
+      return delegate.getMatchedResourceTemplate();
     }
   }
 }

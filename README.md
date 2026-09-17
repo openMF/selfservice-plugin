@@ -2,9 +2,9 @@
 
 [![Java CI](https://github.com/openMF/selfservice-plugin/actions/workflows/maven-build.yml/badge.svg)](https://github.com/openMF/selfservice-plugin/actions/workflows/maven-build.yml)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
-![Java 21](https://img.shields.io/badge/Java-21-blue)
-![Spring Boot 3](https://img.shields.io/badge/Spring_Boot-3-6DB33F)
-![Fineract 1.15.0-SNAPSHOT](https://img.shields.io/badge/Fineract-1.15.0--SNAPSHOT-orange)
+![Java 5](https://img.shields.io/badge/Java-25-blue)
+![Spring Boot 4](https://img.shields.io/badge/Spring_Boot-3-6DB33F)
+![Fineract 1.16.0-SNAPSHOT](https://img.shields.io/badge/Fineract-1.16.0--SNAPSHOT-orange)
 
 A Spring Boot plugin that extends [Apache Fineract](https://fineract.apache.org/) to provide **self-service banking capabilities** to end users. It lets customers register, authenticate, view their accounts, transfer funds, and manage their financial products — all without staff intervention.
 
@@ -85,15 +85,15 @@ Apache Fineract is an open-source core banking platform. Out of the box, its API
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Tech stack:** Java 21 · Spring Boot 3 · Spring Security (Basic Auth + OAuth2) · JAX-RS · JPA/EclipseLink · Liquibase · Lombok · Swagger/OpenAPI
+**Tech stack:** Java 25 · Spring Boot 4 · Spring Security (Basic Auth + OAuth2) · JAX-RS · JPA/EclipseLink · Liquibase · Lombok · Swagger/OpenAPI
 
 ## Prerequisites
 
 | Requirement | Version |
 |---|---|
-| Java (JDK) | **21** |
+| Java (JDK) | **25** |
 | Maven | 3.6+ (or use the included `./mvnw` wrapper) |
-| Apache Fineract | **1.15.0-SNAPSHOT** (`develop` branch) |
+| Apache Fineract | **1.16.0-SNAPSHOT** (`develop` branch) |
 | Database | PostgreSQL or MySQL (managed by Fineract) |
 
 > **Note:** You do *not* need to install Fineract from source to use the plugin. You just need a running Fineract instance (JAR or Docker) to deploy the plugin into.

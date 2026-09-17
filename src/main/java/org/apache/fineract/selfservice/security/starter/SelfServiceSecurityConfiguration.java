@@ -279,16 +279,16 @@ public class SelfServiceSecurityConfiguration {
   }
 
   @Bean(name = "selfServiceAuthenticationProvider")
-  public DaoAuthenticationProvider selfServiceAuthProvider() {
-    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-    authProvider.setUserDetailsService(userDetailsService);
-    authProvider.setPasswordEncoder(selfServicePasswordEncoder());
-    authProvider.setPreAuthenticationChecks(
-        new org.apache.fineract.selfservice.security.service.SelfServiceUserDetailsChecker(
-            platformUserDetailsChecker));
-    authProvider.setPostAuthenticationChecks(platformUserDetailsChecker);
-    return authProvider;
-  }
+    public DaoAuthenticationProvider selfServiceAuthProvider() {
+      // Spring Security 7: UserDetailsService is a required constructor arg
+      DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
+      authProvider.setPasswordEncoder(selfServicePasswordEncoder());
+      authProvider.setPreAuthenticationChecks(
+          new org.apache.fineract.selfservice.security.service.SelfServiceUserDetailsChecker(
+              platformUserDetailsChecker));
+      authProvider.setPostAuthenticationChecks(platformUserDetailsChecker);
+      return authProvider;
+    }
 
   public PasswordEncoder selfServicePasswordEncoder() {
     return PasswordEncoderFactories.createDelegatingPasswordEncoder();
