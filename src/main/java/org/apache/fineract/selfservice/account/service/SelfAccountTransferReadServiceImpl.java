@@ -196,6 +196,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     Map<String, Object> destinationCustomer =
             getDestinationCustomerInfoByAccount(audit.getToAccountIdentifier());
+    Map<String, Object> originCustomer =
+            getOriginCustomerInfoByAccount(audit.getFromAccountIdentifier());
 
     Map<String, String> bankDetails = resolveDestinationDetails(audit.getToAccountIdentifier());
     destinationCustomer.put("entityCode", bankDetails.getOrDefault("entityCode", ""));
@@ -212,6 +214,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put("toAccountIdentifier", audit.getToAccountIdentifier());
     customData.put("transferDescription", audit.getTransferDescription());
     customData.put("reference", audit.getReference());
+    customData.put("originCustomer", originCustomer);
     customData.put("destinationCustomer", destinationCustomer);
     rawData.put("customData", customData);
     return rawData;
@@ -323,12 +326,15 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destinationCustomer.put("id", bankDetails.getOrDefault("holderId", ""));
     }
 
+    String fromAccount = !fromIban.isEmpty() ? fromIban : String.valueOf(accountId);
+    Map<String, Object> originCustomer = getOriginCustomerInfoByAccount(fromAccount);
     Map<String, Object> customData = new HashMap<>();
     customData.put("fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
     customData.put("toAccountIdentifier", toAccountNumber);
     customData.put(
             "transferDescription", !paymentType.isEmpty() ? paymentType : "SAME_BANK");
     customData.put("reference", !checkNumber.isEmpty() ? checkNumber : internalRef);
+    customData.put("originCustomer", originCustomer);
     customData.put("destinationCustomer", destinationCustomer);
     customData.put("savingsTransactionId", satId);
     customData.put("paymentDetailId", rs.getObject("payment_detail_id"));
@@ -462,6 +468,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
   }
 
+  @SuppressWarnings("unchecked")
   @SuppressWarnings("unchecked")
   private Map<String, Object> homologateResponseData(
           Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency,
@@ -617,6 +624,19 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       customData.put("transferDescription", data.get("description"));
     }
 
+    // ---ORIGIN CUSTOMER ---
+    Map<String, Object> originCustomer = new HashMap<>();
+    if (customData.get("originCustomer") instanceof Map) {
+      originCustomer = new HashMap<>((Map<String, Object>) customData.get("originCustomer"));
+    } else if (data.get("originCustomer") instanceof Map) {
+      originCustomer = new HashMap<>((Map<String, Object>) data.get("originCustomer"));
+    } else {
+      String fromAccount = customData.getOrDefault("fromAccountIdentifier", "").toString();
+      originCustomer = getOriginCustomerInfoByAccount(fromAccount);
+    }
+    customData.put("originCustomer", originCustomer);
+    // ---------------------------------------------------------
+
     Map<String, Object> destCustomer = new HashMap<>();
     if (customData.get("destinationCustomer") instanceof Map) {
       destCustomer = new HashMap<>((Map<String, Object>) customData.get("destinationCustomer"));
@@ -674,8 +694,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     } else {
       // Preserve previous behaviour for SAME_BANK / Apolo (and any other type)
       data.put("internalRefNumber", internalRef != null ? internalRef : "");
-    }    
-    
+    }
+
     data.put("operationId", operationId);
     //data.put("internalRefNumber", internalRef);
     data.put("channelRefNumber", channelRef);
@@ -765,6 +785,58 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
     return destinationCustomer;
   }
+
+  private Map<String, Object> getOriginCustomerInfoByAccount(String accountIdentifier) {
+    Map<String, Object> originCustomer = new HashMap<>();
+    if (accountIdentifier == null || accountIdentifier.isBlank()) {
+      originCustomer.put("name", "");
+      originCustomer.put("email", "");
+      originCustomer.put("iban", "");
+      originCustomer.put("id", "");
+      originCustomer.put("idType", "");
+      originCustomer.put("idTypeDescription", "");
+      return originCustomer;
+    }
+
+    String sql =
+            "SELECT "
+                    + "c.display_name AS name, "
+                    + "COALESCE(c.email_address, '') AS email, "
+                    + "COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS iban, "
+                    + "COALESCE(ci.document_key, '') AS id, "
+                    + "COALESCE(CAST(cv.order_position AS VARCHAR), '') AS idType, "
+                    + "COALESCE(cv.code_value, '') AS idTypeDescription "
+                    + "FROM m_savings_account sa "
+                    + "INNER JOIN m_client c ON sa.client_id = c.id "
+                    + "LEFT JOIN m_client_identifier ci ON c.id = ci.client_id "
+                    + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
+                    + "WHERE (sa.external_id = ? OR sa.account_no = ? OR CAST(sa.id AS VARCHAR) = ?) "
+                    + "LIMIT 1";
+    try {
+      Map<String, Object> result =
+              this.jdbcTemplate.queryForMap(
+                      sql, accountIdentifier, accountIdentifier, accountIdentifier);
+      originCustomer.put("name", result.getOrDefault("name", ""));
+      originCustomer.put("email", result.getOrDefault("email", ""));
+      originCustomer.put("iban", result.getOrDefault("iban", accountIdentifier));
+      originCustomer.put("id", result.getOrDefault("id", ""));
+      originCustomer.put("idType", result.getOrDefault("idType", ""));
+      originCustomer.put("idTypeDescription", result.getOrDefault("idTypeDescription", ""));
+    } catch (Exception e) {
+      log.warn(
+              "Could not find origin customer info for accountIdentifier: {}",
+              accountIdentifier);
+      originCustomer.put("name", "");
+      originCustomer.put("email", "");
+      originCustomer.put("iban", accountIdentifier);
+      originCustomer.put("id", "");
+      originCustomer.put("idType", "");
+      originCustomer.put("idTypeDescription", "");
+    }
+    return originCustomer;
+  }
+
+
 
   private PlatformApiDataValidationException accountAccessValidationError(Long accountId) {
     final List<ApiParameterError> errors = new ArrayList<>();
