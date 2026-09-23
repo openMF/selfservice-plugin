@@ -137,7 +137,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String fallbackCurrency = rawData.getOrDefault("debitCurrencyCode", "CRC").toString();
 
     Map<String, Object> homologatedData =
-            homologateResponseData(rawData, fallbackAmount, fallbackCurrency);
+            homologateResponseData(rawData, fallbackAmount, fallbackCurrency, transferType);
 
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", transferType.toUpperCase());
@@ -464,7 +464,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> homologateResponseData(
-          Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency) {
+          Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency,
+          String transferType) {
 
     if (rawData == null) {
       rawData = new HashMap<>();
@@ -664,8 +665,19 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put("destinationCustomer", destCustomer);
 
     data.clear();
+    // For PIN / SINPE / SINPE_MOVIL only: populate sinpeRefNumber when a non-null value exists
+    if (("PIN".equalsIgnoreCase(transferType)
+            || "SINPE".equalsIgnoreCase(transferType)
+            || "SINPE_MOVIL".equalsIgnoreCase(transferType))
+            && sinpeRef != null) {
+      data.put("internalRefNumber", sinpeRef);
+    } else {
+      // Preserve previous behaviour for SAME_BANK / Apolo (and any other type)
+      data.put("internalRefNumber", internalRef != null ? internalRef : "");
+    }    
+    
     data.put("operationId", operationId);
-    data.put("internalRefNumber", internalRef);
+    //data.put("internalRefNumber", internalRef);
     data.put("channelRefNumber", channelRef);
     data.put("sinpeRefNumber", sinpeRef);
     data.put("debitedAmount", debitedAmount);
