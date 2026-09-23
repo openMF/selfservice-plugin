@@ -1,6 +1,5 @@
 package org.apache.fineract.selfservice.external.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.configuration.data.NationalIdCredentialsData;
@@ -15,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
 
 /**
  * HTTP client for the external identity verification system.

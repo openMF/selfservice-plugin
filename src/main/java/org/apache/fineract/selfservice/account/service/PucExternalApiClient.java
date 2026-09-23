@@ -8,8 +8,6 @@ package org.apache.fineract.selfservice.account.service;
  */
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -28,6 +26,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Client for interacting with the external KINDO / PUC API.
@@ -49,8 +50,10 @@ public class PucExternalApiClient {
     private static final String SERVICE_NAME = "PucService";
 
     // ObjectMapper configurado para ignorar campos nulos al serializar hacia KINDO/PUC
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+        .changeDefaultPropertyInclusion(incl -> 
+                incl.withValueInclusion(JsonInclude.Include.NON_NULL))
+        .build();
 
     /**
      * Fetches configuration properties for PucService from c_external_service_properties.

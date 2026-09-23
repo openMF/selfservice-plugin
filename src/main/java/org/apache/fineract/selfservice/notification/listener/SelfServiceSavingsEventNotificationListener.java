@@ -6,8 +6,6 @@
  */
 package org.apache.fineract.selfservice.notification.listener;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.jms.BytesMessage;
 import jakarta.jms.Message;
 import jakarta.jms.TextMessage;
@@ -48,6 +46,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Durable JMS topic listener that consumes Fineract external business events
