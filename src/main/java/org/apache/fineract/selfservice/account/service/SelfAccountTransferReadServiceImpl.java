@@ -469,7 +469,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   @SuppressWarnings("unchecked")
-  @SuppressWarnings("unchecked")
   private Map<String, Object> homologateResponseData(
           Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency,
           String transferType) {
