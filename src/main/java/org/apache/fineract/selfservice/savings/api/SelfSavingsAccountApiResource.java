@@ -131,7 +131,10 @@ public class SelfSavingsAccountApiResource {
           final Integer lastTransactions,
       @DefaultValue("false")
           @QueryParam("showReversed")
-          @Parameter(description = "When true, include reversed transactions. Default is false (hidden).")
+          @Parameter(
+              description =
+                  "When true, include reversed transactions in the 'transactions' collection. "
+                      + "Default is false (reversed transactions are hidden).")
           final boolean showReversed,
       @Context final UriInfo uriInfo) {
 
@@ -165,7 +168,7 @@ public class SelfSavingsAccountApiResource {
               .filter(t -> t.getPaymentDetailData() != null)
               .collect(Collectors.toList());
 
-      // Hide reversed transactions by default
+      // Hide reversed transactions by default (only affects the "transactions" collection)
       if (!showReversed) {
         filtered =
             filtered.stream()
@@ -217,6 +220,7 @@ public class SelfSavingsAccountApiResource {
       }
     }
 
+    // Note: savingsAccountTransactionsWithPivotConfig is intentionally left untouched
     return savingsAccountData;
   }
 

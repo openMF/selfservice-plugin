@@ -142,7 +142,6 @@ class SelfSavingsAccountApiResourceTest {
             eq(ACCOUNT_ID), eq(false), eq("all"), isNull(), eq(uriInfo)))
         .thenReturn(data);
 
-    // Added showReversed=false (default behaviour)
     SavingsAccountData result =
         resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, false, uriInfo);
 
@@ -154,11 +153,11 @@ class SelfSavingsAccountApiResourceTest {
   void retrieveSavings_unmappedAccount_throws() {
     mockSavingsNotMapped();
 
-    // Added showReversed=false
     assertThrows(
         SavingsAccountNotFoundException.class,
         () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, false, uriInfo));
   }
+
 
   // --- retrieveSavingsTransaction ---
 
