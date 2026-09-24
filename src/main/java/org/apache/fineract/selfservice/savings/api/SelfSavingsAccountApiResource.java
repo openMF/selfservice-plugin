@@ -104,7 +104,8 @@ public class SelfSavingsAccountApiResource {
               + "self/savingsaccounts/1?associations=transactions\n\n"
               + "self/savingsaccounts/1?associations=transactions&month=5&year=2026\n\n"
               + "self/savingsaccounts/1?associations=transactions&lastTransactions=10\n\n"
-              + "self/savingsaccounts/1?associations=transactions&month=5&year=2026&lastTransactions=5")
+              + "self/savingsaccounts/1?associations=transactions&month=5&year=2026&lastTransactions=5\n\n"
+              + "self/savingsaccounts/1?associations=transactions&showReversed=true")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -128,6 +129,10 @@ public class SelfSavingsAccountApiResource {
       @QueryParam("lastTransactions")
           @Parameter(description = "Return only the last N transactions (most recent)")
           final Integer lastTransactions,
+      @DefaultValue("false")
+          @QueryParam("showReversed")
+          @Parameter(description = "When true, include reversed transactions. Default is false (hidden).")
+          final boolean showReversed,
       @Context final UriInfo uriInfo) {
 
     this.dataValidator.validateRetrieveSavings(uriInfo);
@@ -153,11 +158,23 @@ public class SelfSavingsAccountApiResource {
     if (!CollectionUtils.isEmpty(transactions)) {
       List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
-      filtered = filtered.stream()
+      // Keep only transactions that have payment details
+      filtered =
+          filtered.stream()
               .filter(Objects::nonNull)
               .filter(t -> t.getPaymentDetailData() != null)
               .collect(Collectors.toList());
 
+      // Hide reversed transactions by default
+      if (!showReversed) {
+        filtered =
+            filtered.stream()
+                .filter(Objects::nonNull)
+                .filter(t -> !t.isReversed())
+                .collect(Collectors.toList());
+      }
+
+      // Optional month/year filter
       if (month != null && year != null) {
         filtered =
             filtered.stream()
@@ -175,6 +192,7 @@ public class SelfSavingsAccountApiResource {
                 .collect(Collectors.toList());
       }
 
+      // Optional "last N" limit (most recent first)
       if (lastTransactions != null && lastTransactions > 0) {
         filtered.sort(
             (t1, t2) -> {
