@@ -101,9 +101,9 @@ class SelfSavingsAccountApiResourceTest {
             savingsAccountTransactionsApiResource,
             dataValidator,
             selfServiceOwnershipGuard,
-            applicationEventPublisher, 
+            applicationEventPublisher,
             env,
-            notificationDeliveryModeUtil); 
+            notificationDeliveryModeUtil);
   }
 
   private void mockAuthenticatedUser() {
@@ -142,21 +142,22 @@ class SelfSavingsAccountApiResourceTest {
             eq(ACCOUNT_ID), eq(false), eq("all"), isNull(), eq(uriInfo)))
         .thenReturn(data);
 
+    // Added showReversed=false (default behaviour)
     SavingsAccountData result =
-        resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo);
+        resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, false, uriInfo);
 
     assertNotNull(result);
     verify(dataValidator).validateRetrieveSavings(uriInfo);
-
   }
 
   @Test
   void retrieveSavings_unmappedAccount_throws() {
     mockSavingsNotMapped();
 
+    // Added showReversed=false
     assertThrows(
         SavingsAccountNotFoundException.class,
-        () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, uriInfo));
+        () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, false, uriInfo));
   }
 
   // --- retrieveSavingsTransaction ---
@@ -261,10 +262,8 @@ class SelfSavingsAccountApiResourceTest {
     map.put(SelfSavingsAccountConstants.clientIdParameterName, CLIENT_ID);
     when(dataValidator.validateSavingsApplication(any())).thenReturn(map);
 
-    // FIXED: Changed "body" to "{}" to prevent JSON parsing warnings
     when(savingsAccountsApiResource.submitApplication("{}")).thenReturn("{}");
 
-    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     String result = resource.submitSavingsAccountApplication("create", uriInfo, "{}", httpRequest);
 
     assertNotNull(result);
@@ -278,7 +277,6 @@ class SelfSavingsAccountApiResourceTest {
     map.put(SelfSavingsAccountConstants.clientIdParameterName, CLIENT_ID);
     when(dataValidator.validateSavingsApplication(any())).thenReturn(map);
 
-    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     assertThrows(
         ClientNotFoundException.class,
         () -> resource.submitSavingsAccountApplication("create", uriInfo, "{}", httpRequest));
@@ -291,10 +289,8 @@ class SelfSavingsAccountApiResourceTest {
   void modifySavingsAccountApplication_mappedAccount_returnsData() {
     mockSavingsMapped();
 
-    // FIXED: Changed "body" to "{}" to match the actual call and prevent JSON parsing warnings
     when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", "update")).thenReturn("{}");
 
-    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     String result =
         resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest);
 
@@ -307,7 +303,6 @@ class SelfSavingsAccountApiResourceTest {
   void modifySavingsAccountApplication_unmappedAccount_throws() {
     mockSavingsNotMapped();
 
-    // FIXED: Added httpRequest parameter and changed "body" to "{}"
     assertThrows(
         SavingsAccountNotFoundException.class,
         () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest));
