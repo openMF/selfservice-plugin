@@ -147,6 +147,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   /** Steps completed after enrollment token confirmation. */
   private static final String ONBOARDING_UP_TO_CONFIRMATION = "CONFIRMATION_CODE";
 
+  /** Fineract legal form id for Entity (non-person). */
+  private static final int LEGAL_FORM_ENTITY = 2;
+
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
     Gson gson = new Gson();
@@ -422,14 +425,23 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
               true, // credentialsNonExpired
               true, // accountNonLocked
               authorities);
+
+      // Safe names for person and entity (entity clients often have null firstname/lastname)
+      String userFirstName =
+          StringUtils.isNotBlank(client.getFirstname())
+              ? client.getFirstname()
+              : StringUtils.defaultIfBlank(client.getDisplayName(), username);
+      String userLastName =
+          StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
+
       AppSelfServiceUser appUser =
           new AppSelfServiceUser(
               client.getOffice(),
               user,
               allRoles,
               selfServiceRegistration.getEmail(),
-              client.getFirstname(),
-              client.getLastname(),
+              userFirstName,
+              userLastName,
               null,
               passwordNeverExpire,
               isSelfServiceUser,
@@ -581,7 +593,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
     JsonObject originalJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
     // CRITICAL: normalize + force tenant dates (override any client-submitted submittedOnDate /
-    // activationDate)
+    // activationDate). Supports both Person (legalFormId=1) and Entity (legalFormId=2).
     JsonObject sanitizedJson = normalizeSelfEnrollmentClientPayload(originalJson);
     JsonElement parsedSanitizedElement = sanitizedJson;
 
@@ -621,14 +633,23 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           new SimpleGrantedAuthority("DUMMY_ROLE_NOT_USED_OR_PERSISTED_TO_AVOID_EXCEPTION"));
 
       User springConfigUser = new User(username, password, false, true, true, true, authorities);
+
+      // Safe names: entity clients (legalFormId=2) typically have null firstname/lastname
+      String userFirstName =
+          StringUtils.isNotBlank(client.getFirstname())
+              ? client.getFirstname()
+              : StringUtils.defaultIfBlank(client.getDisplayName(), username);
+      String userLastName =
+          StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
+
       AppSelfServiceUser appUser =
           new AppSelfServiceUser(
               client.getOffice(),
               springConfigUser,
               Collections.singleton(ssRole),
               email,
-              client.getFirstname(),
-              client.getLastname(),
+              userFirstName,
+              userLastName,
               null,
               true,
               true,
@@ -653,13 +674,22 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
       LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
 
+      // Prefer person names; fall back to displayName for entities
+      String regFirstName =
+          StringUtils.isNotBlank(client.getFirstname())
+              ? client.getFirstname()
+              : StringUtils.defaultIfBlank(client.getDisplayName(), username);
+      String regMiddleName = client.getMiddlename();
+      String regLastName =
+          StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
+
       SelfServiceRegistration registration =
           SelfServiceRegistration.instance(
               client,
               client.getAccountNumber(),
-              client.getFirstname(),
-              client.getMiddlename(),
-              client.getLastname(),
+              regFirstName,
+              regMiddleName,
+              regLastName,
               mobileNumber,
               email,
               authenticationToken,
@@ -783,26 +813,28 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
             try {
 
               OnboardingProgressData onboardingData =
-                      onboardingStepService.getOrInitProgress(appUser.getId());
+                  onboardingStepService.getOrInitProgress(appUser.getId());
 
               if (onboardingData != null && onboardingData.isOnboardingComplete()) {
                 applicationEventPublisher.publishEvent(
-                        new SelfServiceNotificationEvent(
-                                SelfServiceRegistrationWritePlatformServiceImpl.this,
-                                SelfServiceNotificationEvent.Type.USER_ACTIVATED,
-                                appUser.getId(),
-                                appUser.getFirstname(),
-                                appUser.getLastname(),
-                                appUser.getUsername(),
-                                request.getEmail(),
-                                request.getMobileNumber(),
-                                isEmailMode(request),
-                                null,
-                                LocaleContextHolder.getLocale(),
-                                tenantSnapshot,
-                                businessDatesSnapshot));
+                    new SelfServiceNotificationEvent(
+                        SelfServiceRegistrationWritePlatformServiceImpl.this,
+                        SelfServiceNotificationEvent.Type.USER_ACTIVATED,
+                        appUser.getId(),
+                        appUser.getFirstname(),
+                        appUser.getLastname(),
+                        appUser.getUsername(),
+                        request.getEmail(),
+                        request.getMobileNumber(),
+                        isEmailMode(request),
+                        null,
+                        LocaleContextHolder.getLocale(),
+                        tenantSnapshot,
+                        businessDatesSnapshot));
               } else {
-                log.info("USER_ACTIVATED notification skipped for userId={}: Onboarding is not complete", appUser.getId());
+                log.info(
+                    "USER_ACTIVATED notification skipped for userId={}: Onboarding is not complete",
+                    appUser.getId());
               }
             } catch (Exception e) {
               log.warn(
@@ -1063,6 +1095,43 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     return new SelfServiceEnrollmentConflictException(code, message, parameterName);
   }
 
+  /**
+   * Resolves an existing Fineract client id by externalId (person or entity). Used when entity
+   * self-enrollment hits a duplicate externalId so the API can return clientId for the legal
+   * representative and let the caller continue registration.
+   */
+  private Long resolveClientIdByExternalId(String externalId) {
+    if (StringUtils.isBlank(externalId)) {
+      return null;
+    }
+    try {
+      return jdbcTemplate.queryForObject(
+          "SELECT id FROM m_client WHERE external_id = ? LIMIT 1", Long.class, externalId.trim());
+    } catch (EmptyResultDataAccessException e) {
+      return null;
+    } catch (Exception e) {
+      log.warn(
+          "Self-enrollment: could not resolve client by externalId={} (non-fatal): {}",
+          externalId,
+          e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Builds a structured conflict for duplicate externalId, including the existing clientId when
+   * found (typical case: legal representative already registered as a person).
+   */
+  private SelfServiceEnrollmentConflictException buildDuplicateExternalIdConflict(
+      String externalId) {
+    Long clientId = resolveClientIdByExternalId(externalId);
+    log.info(
+        "Self-enrollment: duplicate externalId='{}' → existing clientId={} (legal representative / prior client)",
+        externalId,
+        clientId);
+    return SelfServiceEnrollmentConflictException.duplicateExternalId(externalId, clientId);
+  }
+
   private RuntimeException translateEnrollmentConflict(
       PlatformDataIntegrityException exception, String username) {
     String code = exception.getGlobalisationMessageCode();
@@ -1071,6 +1140,14 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
     if ("error.msg.client.duplicate.email".equals(code)) {
       return enrollmentConflict(code, exception.getDefaultUserMessage(), "email");
+    }
+    if ("error.msg.client.duplicate.externalId".equals(code)
+        || "error.msg.client.duplicate.externalid".equalsIgnoreCase(code)) {
+      String externalId = extractExternalIdFromIntegrityException(exception);
+      if (StringUtils.isBlank(externalId)) {
+        externalId = extractQuotedValue(exception.getDefaultUserMessage());
+      }
+      return buildDuplicateExternalIdConflict(externalId);
     }
     if ("error.msg.user.duplicate.username".equals(code)) {
       return buildDuplicateUsernameConflict(username);
@@ -1094,16 +1171,73 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return enrollmentConflict(
           "error.msg.client.duplicate.mobileNo", "Mobile number already exists", "mobileNo");
     }
-    if (normalized.contains("email")) {
+    if (normalized.contains("email")
+        && !normalized.contains("external_id")
+        && !normalized.contains("externalid")) {
       return enrollmentConflict(
           "error.msg.client.duplicate.email", "Email already exists", "email");
+    }
+    // Duplicate external_id — legal representative or prior client already exists
+    if (normalized.contains("external_id")
+        || normalized.contains("externalid")
+        || normalized.contains("external id")) {
+      String externalId = extractQuotedValue(message);
+      return buildDuplicateExternalIdConflict(externalId);
     }
     return ErrorHandler.getMappable(
         exception, "error.msg.unknown.data.integrity.issue", "Unknown data integrity issue");
   }
 
   /**
+   * Best-effort extraction of externalId from {@link PlatformDataIntegrityException}.
+   *
+   * <p>This Fineract build does not expose {@code getArgs()} on the exception type, so we parse the
+   * default user message (e.g. {@code Client with externalId `111050918` already exists}).
+   */
+  private String extractExternalIdFromIntegrityException(PlatformDataIntegrityException exception) {
+    if (exception == null) {
+      return null;
+    }
+    String fromMessage = extractQuotedValue(exception.getDefaultUserMessage());
+    if (StringUtils.isNotBlank(fromMessage)) {
+      return fromMessage;
+    }
+    // Some wrappers put the detail only in getMessage()
+    return extractQuotedValue(exception.getMessage());
+  }
+
+  /** Pulls the first backtick- or single-quoted token from a message, e.g. `111050918`. */
+  private String extractQuotedValue(String message) {
+    if (StringUtils.isBlank(message)) {
+      return null;
+    }
+    // Prefer backticks as used by Fineract: Client with externalId `111050918` already exists
+    int start = message.indexOf('`');
+    if (start >= 0) {
+      int end = message.indexOf('`', start + 1);
+      if (end > start) {
+        return message.substring(start + 1, end).trim();
+      }
+    }
+    start = message.indexOf('\'');
+    if (start >= 0) {
+      int end = message.indexOf('\'', start + 1);
+      if (end > start) {
+        return message.substring(start + 1, end).trim();
+      }
+    }
+    return null;
+  }
+
+  /**
    * Builds the Fineract client-create payload for self-enrollment.
+   *
+   * <p>Supports both:
+   *
+   * <ul>
+   *   <li><b>Person</b> ({@code legalFormId = 1}): firstname / middlename / lastname
+   *   <li><b>Entity</b> ({@code legalFormId = 2}): fullname + clientNonPersonDetails
+   * </ul>
    *
    * <p><b>Date policy (centralized, multi-tenant):</b>
    *
@@ -1116,24 +1250,73 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
    */
   private JsonObject normalizeSelfEnrollmentClientPayload(JsonObject originalJson) {
     JsonObject sanitizedJson = new JsonObject();
-    copyFirstPresent(
-        originalJson,
-        sanitizedJson,
-        SelfServiceApiConstants.firstnameParamName,
-        SelfServiceApiConstants.firstnameParamName,
-        SelfServiceApiConstants.firstNameParamName);
-    copyFirstPresent(
-        originalJson,
-        sanitizedJson,
-        SelfServiceApiConstants.middlenameParamName,
-        SelfServiceApiConstants.middlenameParamName,
-        SelfServiceApiConstants.middleNameParamName);
-    copyFirstPresent(
-        originalJson,
-        sanitizedJson,
-        SelfServiceApiConstants.lastnameParamName,
-        SelfServiceApiConstants.lastnameParamName,
-        SelfServiceApiConstants.lastNameParamName);
+
+    int legalFormId =
+        originalJson.has(SelfServiceApiConstants.legalFormIdParamName)
+            ? originalJson.get(SelfServiceApiConstants.legalFormIdParamName).getAsInt()
+            : Integer.parseInt(
+                env.getProperty("fineract.selfservice.enrollment.default-legal-form-id", "1"));
+    sanitizedJson.addProperty(SelfServiceApiConstants.legalFormIdParamName, legalFormId);
+
+    final boolean isEntity = legalFormId == LEGAL_FORM_ENTITY;
+
+    if (isEntity) {
+      // Entity / non-person: Fineract ClientDataValidator requires non-blank "fullname"
+      // and must NOT receive firstname/middlename/lastname (or it fails with
+      // .no.name.details.passed when both styles are mixed / neither is present).
+      String entityFullName =
+          firstNonBlankString(
+              originalJson,
+              SelfServiceApiConstants.fullnameParamName,
+              SelfServiceApiConstants.firstnameParamName,
+              SelfServiceApiConstants.firstNameParamName,
+              "displayName");
+      if (StringUtils.isBlank(entityFullName)) {
+        final List<ApiParameterError> nameErrors = new ArrayList<>();
+        nameErrors.add(
+            ApiParameterError.parameterError(
+                "validation.msg.client.fullname.cannot.be.blank",
+                "Entity self-enrollment requires non-blank fullname (company / sociedad name).",
+                SelfServiceApiConstants.fullnameParamName));
+        throw new PlatformApiDataValidationException(nameErrors);
+      }
+      sanitizedJson.addProperty(SelfServiceApiConstants.fullnameParamName, entityFullName.trim());
+      copyIfPresent(
+          originalJson,
+          sanitizedJson,
+          SelfServiceApiConstants.clientNonPersonDetailsParamName,
+          SelfServiceApiConstants.clientNonPersonDetailsParamName);
+      log.info(
+          "Self-enrollment ENTITY payload: legalFormId=2, fullname='{}', hasClientNonPersonDetails={}",
+          entityFullName.trim(),
+          originalJson.has(SelfServiceApiConstants.clientNonPersonDetailsParamName));
+    } else {
+      // Person: firstname required by Fineract; do not send fullname
+      copyFirstPresent(
+          originalJson,
+          sanitizedJson,
+          SelfServiceApiConstants.firstnameParamName,
+          SelfServiceApiConstants.firstnameParamName,
+          SelfServiceApiConstants.firstNameParamName);
+      copyFirstPresent(
+          originalJson,
+          sanitizedJson,
+          SelfServiceApiConstants.middlenameParamName,
+          SelfServiceApiConstants.middlenameParamName,
+          SelfServiceApiConstants.middleNameParamName);
+      copyFirstPresent(
+          originalJson,
+          sanitizedJson,
+          SelfServiceApiConstants.lastnameParamName,
+          SelfServiceApiConstants.lastnameParamName,
+          SelfServiceApiConstants.lastNameParamName);
+      log.info(
+          "Self-enrollment PERSON payload: legalFormId={}, firstname present={}, lastname present={}",
+          legalFormId,
+          sanitizedJson.has(SelfServiceApiConstants.firstnameParamName),
+          sanitizedJson.has(SelfServiceApiConstants.lastnameParamName));
+    }
+
     copyIfPresent(
         originalJson, sanitizedJson, "mobileNo", SelfServiceApiConstants.mobileNumberParamName);
     copyIfPresent(
@@ -1181,16 +1364,24 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         SelfServiceApiConstants.externalIdParamName,
         SelfServiceApiConstants.externalIDParamName);
 
-    long officeId =
-        Long.parseLong(env.getProperty("fineract.selfservice.enrollment.default-office-id", "1"));
+    // officeId: prefer request value, else configured default
+    long officeId;
+    if (originalJson.has(SelfServiceApiConstants.officeIdParamName)
+        && !originalJson.get(SelfServiceApiConstants.officeIdParamName).isJsonNull()) {
+      officeId = originalJson.get(SelfServiceApiConstants.officeIdParamName).getAsLong();
+    } else {
+      officeId =
+          Long.parseLong(env.getProperty("fineract.selfservice.enrollment.default-office-id", "1"));
+    }
     sanitizedJson.addProperty(SelfServiceApiConstants.officeIdParamName, officeId);
 
-    int legalFormId =
-        originalJson.has(SelfServiceApiConstants.legalFormIdParamName)
-            ? originalJson.get(SelfServiceApiConstants.legalFormIdParamName).getAsInt()
-            : Integer.parseInt(
-                env.getProperty("fineract.selfservice.enrollment.default-legal-form-id", "1"));
-    sanitizedJson.addProperty(SelfServiceApiConstants.legalFormIdParamName, legalFormId);
+    // isStaff defaults to false (self-service customers are never staff)
+    boolean isStaff = false;
+    if (originalJson.has(SelfServiceApiConstants.isStaffParamName)
+        && !originalJson.get(SelfServiceApiConstants.isStaffParamName).isJsonNull()) {
+      isStaff = originalJson.get(SelfServiceApiConstants.isStaffParamName).getAsBoolean();
+    }
+    sanitizedJson.addProperty(SelfServiceApiConstants.isStaffParamName, isStaff);
 
     String clientDateFormat =
         stringValueOrDefault(originalJson, SelfServiceApiConstants.dateFormatParamName, null);
@@ -1217,6 +1408,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     boolean isActive =
         Boolean.parseBoolean(
             env.getProperty("fineract.selfservice.enrollment.default-active", "false"));
+    if (originalJson.has(SelfServiceApiConstants.activeParamName)
+        && !originalJson.get(SelfServiceApiConstants.activeParamName).isJsonNull()) {
+      log.debug(
+          "Self-enrollment: client sent active={}, policy defaultActive={}",
+          originalJson.get(SelfServiceApiConstants.activeParamName),
+          isActive);
+    }
     sanitizedJson.addProperty(SelfServiceApiConstants.activeParamName, isActive);
 
     // --- Centralized date override (ignore any date submitted by the REST API) ---
@@ -1240,10 +1438,12 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
 
     log.info(
-        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}')",
+        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}', legalFormId={}, isEntity={})",
         tenantToday,
         clientDateFormat,
-        locale);
+        locale,
+        legalFormId,
+        isEntity);
 
     return sanitizedJson;
   }
@@ -1261,6 +1461,30 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         return;
       }
     }
+  }
+
+  /**
+   * Returns the first non-blank string value among the given keys on {@code json}, or null if none
+   * are present / blank. Used to resolve entity {@code fullname} from several aliases.
+   */
+  private String firstNonBlankString(JsonObject json, String... keys) {
+    if (json == null || keys == null) {
+      return null;
+    }
+    for (String key : keys) {
+      if (!json.has(key) || json.get(key).isJsonNull()) {
+        continue;
+      }
+      try {
+        String value = json.get(key).getAsString();
+        if (StringUtils.isNotBlank(value)) {
+          return value.trim();
+        }
+      } catch (Exception e) {
+        log.debug("firstNonBlankString: key={} not a string: {}", key, e.getMessage());
+      }
+    }
+    return null;
   }
 
   private String stringValueOrDefault(JsonObject json, String key, String defaultValue) {
