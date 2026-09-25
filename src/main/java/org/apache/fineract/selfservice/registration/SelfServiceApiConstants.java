@@ -43,7 +43,10 @@ public final class SelfServiceApiConstants {
   public static final String firstnameParamName = "firstname";
   public static final String middlenameParamName = "middlename";
   public static final String lastnameParamName = "lastname";
+  public static final String fullnameParamName = "fullname";
   public static final String officeIdParamName = "officeId";
+  public static final String isStaffParamName = "isStaff";
+  public static final String clientNonPersonDetailsParamName = "clientNonPersonDetails";
   public static final String clientTypeIdParamName = "clientTypeId";
   public static final String clientClassificationIdParamName = "clientClassificationId";
   public static final String dateOfBirthParamName = "dateOfBirth";
@@ -129,6 +132,12 @@ public final class SelfServiceApiConstants {
                   passwordParamName,
                   repeatPasswordParamName)));
 
+  /**
+   * Allowed parameters for POST /v1/self/registration/client-user.
+   *
+   * <p>Includes person fields (firstname/lastname) and entity fields (fullname,
+   * clientNonPersonDetails) so both legal forms can self-enroll.
+   */
   public static final Set<String> SELF_ENROLLMENT_DATA_PARAMETERS =
       Collections.unmodifiableSet(
           new HashSet<>(
@@ -141,9 +150,13 @@ public final class SelfServiceApiConstants {
                   firstnameParamName,
                   middlenameParamName,
                   lastnameParamName,
+                  fullnameParamName,
                   emailParamName,
                   mobileNumberParamName,
                   authenticationModeParamName,
+                  officeIdParamName,
+                  isStaffParamName,
+                  clientNonPersonDetailsParamName,
                   clientTypeIdParamName,
                   clientClassificationIdParamName,
                   dateOfBirthParamName,
@@ -158,6 +171,7 @@ public final class SelfServiceApiConstants {
                   localeParamName,
                   activeParamName,
                   submittedOnDateParamName,
+                  activationDateParamName,
                   documentTypeIdParamName,
                   documentKeyParamName)));
 
