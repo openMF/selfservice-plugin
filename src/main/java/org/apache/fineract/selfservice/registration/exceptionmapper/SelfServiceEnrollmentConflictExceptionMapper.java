@@ -17,11 +17,17 @@ import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceEnrollmentConflictException;
 import org.springframework.stereotype.Component;
 
+/**
+ * Maps {@link SelfServiceEnrollmentConflictException} to HTTP 409 with structured body.
+ *
+ * <p>When the conflict is a duplicate externalId (legal representative already exists), the body
+ * includes {@code clientId} and {@code externalId} so the caller can continue entity registration.
+ */
 @Provider
 @Component
 public class SelfServiceEnrollmentConflictExceptionMapper
     implements ExceptionMapper<SelfServiceEnrollmentConflictException> {
-    
+
   @Override
   public Response toResponse(SelfServiceEnrollmentConflictException exception) {
     ApiParameterError error =
@@ -29,16 +35,16 @@ public class SelfServiceEnrollmentConflictExceptionMapper
             exception.getUserMessageGlobalisationCode(),
             exception.getMessage(),
             exception.getParameterName(),
-            null); 
-            
+            exception.getExternalId() != null ? exception.getExternalId() : null);
+
     Map<String, Object> body = new HashMap<>();
-    
+
     body.put("developerMessage", exception.getMessage());
     body.put("httpStatusCode", "409");
     body.put("defaultUserMessage", exception.getMessage());
     body.put("userMessageGlobalisationCode", exception.getUserMessageGlobalisationCode());
     body.put("errors", List.of(error));
-    
+
     if (exception.getUserId() != null) {
       body.put("userId", exception.getUserId());
     }
@@ -48,7 +54,14 @@ public class SelfServiceEnrollmentConflictExceptionMapper
     if (exception.getOnboarding() != null) {
       body.put("onboarding", exception.getOnboarding());
     }
-    
+    // Legal representative / existing client identity for entity enrollment resume
+    if (exception.getClientId() != null) {
+      body.put("clientId", exception.getClientId());
+    }
+    if (exception.getExternalId() != null) {
+      body.put("externalId", exception.getExternalId());
+    }
+
     return Response.status(Response.Status.CONFLICT)
         .entity(body)
         .type(MediaType.APPLICATION_JSON)
