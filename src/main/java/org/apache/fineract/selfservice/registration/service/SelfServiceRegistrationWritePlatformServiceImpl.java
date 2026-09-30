@@ -6,10 +6,7 @@
  */
 package org.apache.fineract.selfservice.registration.service;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import jakarta.persistence.PersistenceException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -504,6 +501,12 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   @Override
   public SelfServiceRegistration selfEnroll(
       String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
+    try {
+      JsonObject prettyJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
+      log.info(">>> Self-Enrollment Payload (Pretty):\n{}", new GsonBuilder().setPrettyPrinting().create().toJson(prettyJson));
+    } catch (Exception e) {
+      log.info(">>> Self-Enrollment RAW Payload: {}", apiRequestBodyAsJson);
+    }
     Gson gson = new Gson();
     final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
     final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
