@@ -299,7 +299,7 @@ public class SelfAuthenticationApiResource {
                 .setRefreshToken(new String(base64RefreshKey, StandardCharsets.UTF_8))
                 .setTwoFactorAuthenticationRequired(isTwoFactorRequired)
                 .setClients(returnClientList ? clientList : null)
-                .setKycValidations(getKycStatusForUser(clientId))
+                .setKycValidations(getKycStatusForUser(clientId, onboarding))
                 .setCountry(country)
                 .setOnboarding(onboarding);
       }
@@ -499,8 +499,43 @@ public class SelfAuthenticationApiResource {
     }
   }
 
-  private SelfServiceAuthenticatedUserKycData getKycStatusForUser(final Long clientId) {
-    return kycFeatureStatusReadService.getKycFeatureStatus(clientId);
+  private SelfServiceAuthenticatedUserKycData getKycStatusForUser(
+      final Long clientId, final OnboardingProgressData onboarding) {
+    final boolean onboardingComplete =
+        onboarding != null && onboarding.isOnboardingComplete();
+    final boolean kycStepsComplete = isKycGroupComplete(onboarding);
+    return kycFeatureStatusReadService.getKycFeatureStatusOrOnboardingFallback(
+        clientId, onboardingComplete, kycStepsComplete);
+  }
+
+  /**
+   * True when every required onboarding step in group {@code KYC} is {@code COMPLETED}.
+   */
+  private boolean isKycGroupComplete(final OnboardingProgressData onboarding) {
+    if (onboarding == null || onboarding.getSteps() == null || onboarding.getSteps().isEmpty()) {
+      return false;
+    }
+    boolean sawKyc = false;
+    for (final var step : onboarding.getSteps()) {
+      if (step == null) {
+        continue;
+      }
+      final String group =
+          step.getGroupCode() != null ? step.getGroupCode() : "";
+      if (!"KYC".equalsIgnoreCase(group.trim())) {
+        continue;
+      }
+      sawKyc = true;
+      final boolean required = step.isRequired();
+      if (!required) {
+        continue;
+      }
+      final String status = step.getStatus() != null ? step.getStatus().trim() : "";
+      if (!"COMPLETED".equalsIgnoreCase(status)) {
+        return false;
+      }
+    }
+    return sawKyc;
   }
 
   private Long getClientId(Collection<Long> clientList) {
