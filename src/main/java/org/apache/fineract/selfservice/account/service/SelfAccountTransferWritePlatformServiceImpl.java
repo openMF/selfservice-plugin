@@ -1927,54 +1927,83 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   private void generateAndSendOtpForQuote(
-      AppSelfServiceUser user,
-      Client sourceClient,
-      String destinationTarget,
-      BigDecimal transferAmount) {
-    String otp = String.format("%06d", new SecureRandom().nextInt(999999));
-    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
+        AppSelfServiceUser user,
+        Client sourceClient,
+        String destinationTarget,
+        BigDecimal transferAmount) {
 
-    SelfServiceRegistration registration =
-        SelfServiceRegistration.instance(
-            sourceClient,
-            sourceClient.getAccountNumber(),
-            sourceClient.getFirstname(),
-            sourceClient.getMiddlename(),
-            sourceClient.getLastname(),
-            destinationTarget,
-            user.getEmail(),
-            otp,
-            otp,
-            user.getUsername(),
-            "TRANSFER_OTP",
-            SelfServiceRequestType.ACCOUNT_TRANSFER,
-            expiry);
+      String otp = String.format("%06d", new SecureRandom().nextInt(999999));
+      LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
 
-    this.registrationRepository.saveAndFlush(registration);
+      // ENTITY clients often have null firstname/lastname — resolve safe non-null values
+      String firstName = resolveNonBlank(
+          sourceClient != null ? sourceClient.getFirstname() : null,
+          user.getFirstname(),
+          sourceClient != null ? sourceClient.getDisplayName() : null,
+          sourceClient != null ? sourceClient.getFullname() : null,
+          "Entity");
 
-    Map<String, Object> contextData = new HashMap<>();
-    contextData.put("authCode", otp);
-    contextData.put("expirationMinutes", 10);
-    contextData.put("transferAmount", transferAmount != null ? transferAmount.toString() : "N/A");
+      String lastName = resolveNonBlank(
+          sourceClient != null ? sourceClient.getLastname() : null,
+          user.getLastname(),
+          "-");
 
-    this.applicationEventPublisher.publishEvent(
-        SelfServiceNotificationEvent.withTenantContext(
-            this,
-            SelfServiceNotificationEvent.Type.TRANSFER_OTP,
-            user.getId(),
-            user.getFirstname(),
-            user.getLastname(),
-            user.getUsername(),
-            user.getEmail(),
-            extractMobile(user, sourceClient),
-            notificationDeliveryModeUtil.determineMode(
-                user.getEmail(), extractMobile(user, sourceClient)),
-            "Unknown IP (Quote Phase)",
-            LocaleContextHolder.getLocale(),
-            contextData));
+      String middleName = sourceClient != null ? sourceClient.getMiddlename() : null;
 
-    log.info("QUOTE: OTP successfully registered and event published for destination target.");
-  }
+      SelfServiceRegistration registration =
+          SelfServiceRegistration.instance(
+              sourceClient,
+              sourceClient != null ? sourceClient.getAccountNumber() : null,
+              firstName,
+              middleName,
+              lastName,
+              destinationTarget,
+              user.getEmail(),
+              otp,
+              otp,
+              user.getUsername(),
+              "TRANSFER_OTP",
+              SelfServiceRequestType.ACCOUNT_TRANSFER,
+              expiry);
+
+      this.registrationRepository.saveAndFlush(registration);
+
+      Map<String, Object> contextData = new HashMap<>();
+      contextData.put("authCode", otp);
+      contextData.put("expirationMinutes", 10);
+      contextData.put("transferAmount", transferAmount != null ? transferAmount.toString() : "N/A");
+
+      this.applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_OTP,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              extractMobile(user, sourceClient),
+              notificationDeliveryModeUtil.determineMode(
+                  user.getEmail(), extractMobile(user, sourceClient)),
+              "Unknown IP (Quote Phase)",
+              LocaleContextHolder.getLocale(),
+              contextData));
+
+      log.info("QUOTE: OTP successfully registered and event published for destination target.");
+    }
+
+    /** Returns the first non-blank value, or the final fallback if everything is blank/null. */
+    private static String resolveNonBlank(String... candidates) {
+      if (candidates == null) {
+        return "N/A";
+      }
+      for (String c : candidates) {
+        if (StringUtils.isNotBlank(c)) {
+          return c.trim();
+        }
+      }
+      return "N/A";
+    }
 
   private void executeFeeTransaction(
       AccountTransferConfirmRequest request, SavingsAccount sourceSavingsAccount) {
