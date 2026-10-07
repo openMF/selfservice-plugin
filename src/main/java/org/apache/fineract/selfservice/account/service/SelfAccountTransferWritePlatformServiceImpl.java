@@ -324,6 +324,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, sourceClient);
         if (quote != null && quote.getFeeAmount() != null) {
           feeForBalanceCheck = quote.getFeeAmount();
+          request.setFeeAmount(feeAmountFromClient);
         }
       } catch (Exception e) {
         log.warn("CONFIRM: Could not re-calculate fee for balance check, using client value", e);
@@ -1075,6 +1076,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
       Map<String, Object> homologatedData =
           homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
 
+      if (request.getFeeAmount() != null) {
+        homologatedData.put("commissionAmount", request.getFeeAmount());
+      }
+
       Map<String, Object> response = new HashMap<>();
       response.put("transferType", "PIN");
       response.put("data", homologatedData);
@@ -1138,6 +1143,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     Map<String, Object> homologatedData =
         homologateResponseData(externalData, request.getTransferAmount(), "CRC");
+
+    if (request.getFeeAmount() != null) {
+      homologatedData.put("commissionAmount", request.getFeeAmount());
+    }
 
     Map<String, Object> response = new HashMap<>();
     response.put("transferType", "SINPE_MOVIL");
