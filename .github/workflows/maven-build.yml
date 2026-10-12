@@ -28,7 +28,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: surefire-reports
           path: target/surefire-reports/
@@ -37,7 +37,7 @@ jobs:
       # Upload the .exec binary so the coverage gate can merge it with IT data
       - name: Upload Unit Test Coverage Data
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: jacoco-unit-exec
           path: target/jacoco.exec
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload Failsafe Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: failsafe-reports
           path: target/failsafe-reports/
@@ -93,7 +93,7 @@ jobs:
       # Upload the IT .exec binary for the coverage merge step
       - name: Upload Integration Test Coverage Data
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: jacoco-it-exec
           path: target/jacoco-it.exec
@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload Merged Coverage Report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: jacoco-merged-report
           path: target/site/jacoco-merged/
