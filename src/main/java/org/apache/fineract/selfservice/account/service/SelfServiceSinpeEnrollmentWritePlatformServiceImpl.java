@@ -101,25 +101,31 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     log.info(
-            "requestEnrollment: resolved clientId={}, accountNumber={}",
-            client.getId(),
-            client.getAccountNumber());
+    "requestEnrollment: resolved clientId={}, accountNumber={}, legalForm={}, isEntity={}",
+    client.getId(),
+    client.getAccountNumber(),
+    client.getLegalForm(),
+    isEntity(client));
+
+    final String firstName  = resolveFirstName(client, user);
+    final String middleName = resolveMiddleName(client);
+    final String lastName   = resolveLastName(client, user);
 
     SelfServiceRegistration request =
-            SelfServiceRegistration.instance(
-                    client,
-                    client.getAccountNumber(),
-                    client.getFirstname(),
-                    client.getMiddlename(),
-                    client.getLastname(),
-                    mobileNumber,
-                    user.getEmail(),
-                    otp,
-                    otp,
-                    user.getUsername(),
-                    "SINPE_OTP",
-                    SelfServiceRequestType.SINPE_ENROLLMENT,
-                    expiry);
+        SelfServiceRegistration.instance(
+            client,
+            client.getAccountNumber(),
+            firstName,
+            middleName,
+            lastName,
+            mobileNumber,
+            user.getEmail(),
+            otp,
+            otp,
+            user.getUsername(),
+            "SINPE_OTP",
+            SelfServiceRequestType.SINPE_ENROLLMENT,
+            expiry);
 
     registrationRepository.saveAndFlush(request);
     log.info(
@@ -160,6 +166,88 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info("requestEnrollment END userId={}, mobileNumber={}", user.getId(), mobileNumber);
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
+  
+  // ----------------------------------------------------------------------
+// Helpers – PERSON vs ENTITY aware name resolution
+// ----------------------------------------------------------------------
+
+/**
+ * Resolves a non-blank value for the NOT-NULL {@code firstname} column.
+ *
+ * <p>Preference order:
+ * <ol>
+ *   <li>Client.firstname (PERSON)</li>
+ *   <li>Client.fullname / Client.displayName (ENTITY)</li>
+ *   <li>AppSelfServiceUser.firstname</li>
+ *   <li>Stable sentinel "N/A"</li>
+ * </ol>
+ */
+private static String resolveFirstName(Client client, AppSelfServiceUser user) {
+  if (client != null) {
+    if (StringUtils.isNotBlank(client.getFirstname())) {
+      return client.getFirstname().trim();
+    }
+    // ENTITY path – fullname / displayName hold the organisation name
+    if (StringUtils.isNotBlank(client.getFullname())) {
+      return client.getFullname().trim();
+    }
+    if (StringUtils.isNotBlank(client.getDisplayName())) {
+      return client.getDisplayName().trim();
+    }
+  }
+  if (user != null && StringUtils.isNotBlank(user.getFirstname())) {
+    return user.getFirstname().trim();
+  }
+  return "N/A";
+}
+
+/**
+ * Resolves a non-blank value for the NOT-NULL {@code lastname} column.
+ *
+ * <p>For an ENTITY we deliberately put a short sentinel so the column is never null
+ * while still making it obvious in audit reports that this is not a personal surname.
+ */
+private static String resolveLastName(Client client, AppSelfServiceUser user) {
+  if (client != null) {
+    if (StringUtils.isNotBlank(client.getLastname())) {
+      return client.getLastname().trim();
+    }
+    // ENTITY – no personal last name; keep a distinguishable non-null value
+    if (isEntity(client)) {
+      return "ENTITY";
+    }
+  }
+  if (user != null && StringUtils.isNotBlank(user.getLastname())) {
+    return user.getLastname().trim();
+  }
+  return "N/A";
+}
+
+private static String resolveMiddleName(Client client) {
+  if (client != null && StringUtils.isNotBlank(client.getMiddlename())) {
+    return client.getMiddlename().trim();
+  }
+  return null; // column is nullable
+}
+
+/**
+ * Fineract legal-form enum: 1 = PERSON, 2 = ENTITY (see LegalForm enum).
+ * Falls back to presence of fullname when legalForm is not set.
+ */
+private static boolean isEntity(Client client) {
+  if (client == null) {
+    return false;
+  }
+  Integer legalForm = client.getLegalForm();
+  if (legalForm != null) {
+    // LegalForm.ENTITY.getValue() == 2
+    return legalForm == 2;
+  }
+  // Heuristic when legal_form_enum is null
+  return StringUtils.isNotBlank(client.getFullname())
+      && StringUtils.isBlank(client.getFirstname())
+      && StringUtils.isBlank(client.getLastname());
+}
 
   @Override
   @Transactional
@@ -249,19 +337,20 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             emailMode);
 
     applicationEventPublisher.publishEvent(
-            SelfServiceNotificationEvent.withTenantContext(
-                    this,
-                    SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_SUCCESS,
-                    user.getId(),
-                    user.getFirstname(),
-                    user.getLastname(),
-                    user.getUsername(),
-                    user.getEmail(),
-                    mobileNumber,
-                    emailMode,
-                    null,
-                    LocaleContextHolder.getLocale(),
-                    contextData));
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_OTP,
+            user.getId(),
+            // prefer the resolved names (works for both PERSON and ENTITY)
+            firstName,
+            lastName,
+            user.getUsername(),
+            user.getEmail(),
+            mobileNumber,
+            emailMode,
+            null,
+            LocaleContextHolder.getLocale(),
+            contextData));
 
     log.info(
             "confirmEnrollment END userId={}, enrollmentId={}, mobileNumber={}",
