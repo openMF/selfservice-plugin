@@ -56,6 +56,92 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
+  // ----------------------------------------------------------------------
+  // Helpers – PERSON vs ENTITY aware name resolution
+  // ----------------------------------------------------------------------
+
+  /**
+   * Resolves a non-blank value for the NOT-NULL {@code firstname} column.
+   *
+   * <p>Preference order:
+   * <ol>
+   *   <li>Client.firstname (PERSON)</li>
+   *   <li>Client.fullname / Client.displayName (ENTITY)</li>
+   *   <li>AppSelfServiceUser.firstname</li>
+   *   <li>Stable sentinel "N/A"</li>
+   * </ol>
+   */
+  private static String resolveFirstName(Client client, AppSelfServiceUser user) {
+    if (client != null) {
+      if (StringUtils.isNotBlank(client.getFirstname())) {
+        return client.getFirstname().trim();
+      }
+      // ENTITY path – fullname / displayName hold the organisation name
+      if (StringUtils.isNotBlank(client.getFullname())) {
+        return client.getFullname().trim();
+      }
+      if (StringUtils.isNotBlank(client.getDisplayName())) {
+        return client.getDisplayName().trim();
+      }
+    }
+    if (user != null && StringUtils.isNotBlank(user.getFirstname())) {
+      return user.getFirstname().trim();
+    }
+    return "N/A";
+  }
+
+  /**
+   * Resolves a non-blank value for the NOT-NULL {@code lastname} column.
+   *
+   * <p>For an ENTITY we deliberately put a short sentinel so the column is never null
+   * while still making it obvious in audit reports that this is not a personal surname.
+   */
+  private static String resolveLastName(Client client, AppSelfServiceUser user) {
+    if (client != null) {
+      if (StringUtils.isNotBlank(client.getLastname())) {
+        return client.getLastname().trim();
+      }
+      // ENTITY – no personal last name; keep a distinguishable non-null value
+      if (isEntity(client)) {
+        return "ENTITY";
+      }
+    }
+    if (user != null && StringUtils.isNotBlank(user.getLastname())) {
+      return user.getLastname().trim();
+    }
+    return "N/A";
+  }
+
+  private static String resolveMiddleName(Client client) {
+    if (client != null && StringUtils.isNotBlank(client.getMiddlename())) {
+      return client.getMiddlename().trim();
+    }
+    return null; // column is nullable
+  }
+
+  /**
+   * Fineract legal-form enum: 1 = PERSON, 2 = ENTITY (see LegalForm enum).
+   * Falls back to presence of fullname when legalForm is not set.
+   */
+  private static boolean isEntity(Client client) {
+    if (client == null) {
+      return false;
+    }
+    Integer legalForm = client.getLegalForm();
+    if (legalForm != null) {
+      // LegalForm.ENTITY.getValue() == 2
+      return legalForm == 2;
+    }
+    // Heuristic when legal_form_enum is null
+    return StringUtils.isNotBlank(client.getFullname())
+        && StringUtils.isBlank(client.getFirstname())
+        && StringUtils.isBlank(client.getLastname());
+  }
+
+  // ----------------------------------------------------------------------
+  // requestEnrollment
+  // ----------------------------------------------------------------------
+
   @Override
   @Transactional
   public CommandProcessingResult requestEnrollment(String mobileNumber) {
@@ -101,31 +187,31 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     log.info(
-    "requestEnrollment: resolved clientId={}, accountNumber={}, legalForm={}, isEntity={}",
-    client.getId(),
-    client.getAccountNumber(),
-    client.getLegalForm(),
-    isEntity(client));
+            "requestEnrollment: resolved clientId={}, accountNumber={}, legalForm={}, isEntity={}",
+            client.getId(),
+            client.getAccountNumber(),
+            client.getLegalForm(),
+            isEntity(client));
 
     final String firstName  = resolveFirstName(client, user);
     final String middleName = resolveMiddleName(client);
     final String lastName   = resolveLastName(client, user);
 
     SelfServiceRegistration request =
-        SelfServiceRegistration.instance(
-            client,
-            client.getAccountNumber(),
-            firstName,
-            middleName,
-            lastName,
-            mobileNumber,
-            user.getEmail(),
-            otp,
-            otp,
-            user.getUsername(),
-            "SINPE_OTP",
-            SelfServiceRequestType.SINPE_ENROLLMENT,
-            expiry);
+            SelfServiceRegistration.instance(
+                    client,
+                    client.getAccountNumber(),
+                    firstName,
+                    middleName,
+                    lastName,
+                    mobileNumber,
+                    user.getEmail(),
+                    otp,
+                    otp,
+                    user.getUsername(),
+                    "SINPE_OTP",
+                    SelfServiceRequestType.SINPE_ENROLLMENT,
+                    expiry);
 
     registrationRepository.saveAndFlush(request);
     log.info(
@@ -153,8 +239,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
                     this,
                     SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_OTP,
                     user.getId(),
-                    user.getFirstname(),
-                    user.getLastname(),
+                    firstName,   // PERSON or ENTITY safe
+                    lastName,
                     user.getUsername(),
                     user.getEmail(),
                     mobileNumber,
@@ -166,88 +252,10 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
     log.info("requestEnrollment END userId={}, mobileNumber={}", user.getId(), mobileNumber);
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
-  
+
   // ----------------------------------------------------------------------
-// Helpers – PERSON vs ENTITY aware name resolution
-// ----------------------------------------------------------------------
-
-/**
- * Resolves a non-blank value for the NOT-NULL {@code firstname} column.
- *
- * <p>Preference order:
- * <ol>
- *   <li>Client.firstname (PERSON)</li>
- *   <li>Client.fullname / Client.displayName (ENTITY)</li>
- *   <li>AppSelfServiceUser.firstname</li>
- *   <li>Stable sentinel "N/A"</li>
- * </ol>
- */
-private static String resolveFirstName(Client client, AppSelfServiceUser user) {
-  if (client != null) {
-    if (StringUtils.isNotBlank(client.getFirstname())) {
-      return client.getFirstname().trim();
-    }
-    // ENTITY path – fullname / displayName hold the organisation name
-    if (StringUtils.isNotBlank(client.getFullname())) {
-      return client.getFullname().trim();
-    }
-    if (StringUtils.isNotBlank(client.getDisplayName())) {
-      return client.getDisplayName().trim();
-    }
-  }
-  if (user != null && StringUtils.isNotBlank(user.getFirstname())) {
-    return user.getFirstname().trim();
-  }
-  return "N/A";
-}
-
-/**
- * Resolves a non-blank value for the NOT-NULL {@code lastname} column.
- *
- * <p>For an ENTITY we deliberately put a short sentinel so the column is never null
- * while still making it obvious in audit reports that this is not a personal surname.
- */
-private static String resolveLastName(Client client, AppSelfServiceUser user) {
-  if (client != null) {
-    if (StringUtils.isNotBlank(client.getLastname())) {
-      return client.getLastname().trim();
-    }
-    // ENTITY – no personal last name; keep a distinguishable non-null value
-    if (isEntity(client)) {
-      return "ENTITY";
-    }
-  }
-  if (user != null && StringUtils.isNotBlank(user.getLastname())) {
-    return user.getLastname().trim();
-  }
-  return "N/A";
-}
-
-private static String resolveMiddleName(Client client) {
-  if (client != null && StringUtils.isNotBlank(client.getMiddlename())) {
-    return client.getMiddlename().trim();
-  }
-  return null; // column is nullable
-}
-
-/**
- * Fineract legal-form enum: 1 = PERSON, 2 = ENTITY (see LegalForm enum).
- * Falls back to presence of fullname when legalForm is not set.
- */
-private static boolean isEntity(Client client) {
-  if (client == null) {
-    return false;
-  }
-  Integer legalForm = client.getLegalForm();
-  if (legalForm != null) {
-    // LegalForm.ENTITY.getValue() == 2
-    return legalForm == 2;
-  }
-  // Heuristic when legal_form_enum is null
-  return StringUtils.isNotBlank(client.getFullname())
-      && StringUtils.isBlank(client.getFirstname())
-      && StringUtils.isBlank(client.getLastname());
-}
+  // confirmEnrollment
+  // ----------------------------------------------------------------------
 
   @Override
   @Transactional
@@ -261,7 +269,8 @@ private static boolean isEntity(Client client) {
             StringUtils.isNotBlank(otp),
             otp != null ? otp.length() : 0);
 
-    Long clientId = user.getAppUserClientMappings().iterator().next().getClient().getId();
+    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Long clientId = client.getId();
     log.info(
             "confirmEnrollment: looking up registration for clientId={}, requestType=SINPE_ENROLLMENT",
             clientId);
@@ -335,26 +344,25 @@ private static boolean isEntity(Client client) {
     log.info(
             "confirmEnrollment: publishing SINPE_ENROLLMENT_SUCCESS notification emailMode={}",
             emailMode);
-    
-    final String firstName  = resolveFirstName(client, user);
-    final String middleName = resolveMiddleName(client);
-    final String lastName   = resolveLastName(client, user);
+
+    // client is now in scope
+    final String firstName = resolveFirstName(client, user);
+    final String lastName  = resolveLastName(client, user);
 
     applicationEventPublisher.publishEvent(
-        SelfServiceNotificationEvent.withTenantContext(
-            this,
-            SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_OTP,
-            user.getId(),
-            // prefer the resolved names (works for both PERSON and ENTITY)
-            firstName,
-            lastName,
-            user.getUsername(),
-            user.getEmail(),
-            mobileNumber,
-            emailMode,
-            null,
-            LocaleContextHolder.getLocale(),
-            contextData));
+            SelfServiceNotificationEvent.withTenantContext(
+                    this,
+                    SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_SUCCESS,   // <-- correct type
+                    user.getId(),
+                    firstName,
+                    lastName,
+                    user.getUsername(),
+                    user.getEmail(),
+                    mobileNumber,
+                    emailMode,
+                    null,
+                    LocaleContextHolder.getLocale(),
+                    contextData));
 
     log.info(
             "confirmEnrollment END userId={}, enrollmentId={}, mobileNumber={}",
@@ -363,6 +371,10 @@ private static boolean isEntity(Client client) {
             mobileNumber);
     return new CommandProcessingResultBuilder().withEntityId(enrollment.getId()).build();
   }
+
+  // ----------------------------------------------------------------------
+  // createSubscription
+  // ----------------------------------------------------------------------
 
   @Override
   @Transactional
@@ -417,6 +429,10 @@ private static boolean isEntity(Client client) {
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
+  // ----------------------------------------------------------------------
+  // editSubscription
+  // ----------------------------------------------------------------------
+
   @Override
   @Transactional
   public CommandProcessingResult editSubscription(
@@ -461,6 +477,10 @@ private static boolean isEntity(Client client) {
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
 
+  // ----------------------------------------------------------------------
+  // requestDeleteSubscription  (also fixed for ENTITY)
+  // ----------------------------------------------------------------------
+
   @Override
   @Transactional
   public CommandProcessingResult requestDeleteSubscription(String phoneNumber) {
@@ -481,13 +501,17 @@ private static boolean isEntity(Client client) {
 
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
 
+    final String firstName  = resolveFirstName(client, user);
+    final String middleName = resolveMiddleName(client);
+    final String lastName   = resolveLastName(client, user);
+
     SelfServiceRegistration request =
             SelfServiceRegistration.instance(
                     client,
                     client.getAccountNumber(),
-                    client.getFirstname(),
-                    client.getMiddlename(),
-                    client.getLastname(),
+                    firstName,
+                    middleName,
+                    lastName,
                     phoneNumber,
                     user.getEmail(),
                     otp,
@@ -505,14 +529,13 @@ private static boolean isEntity(Client client) {
     contextData.put("action", "DELETE_SUBSCRIPTION");
 
     boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), phoneNumber);
-
     applicationEventPublisher.publishEvent(
             SelfServiceNotificationEvent.withTenantContext(
                     this,
                     SelfServiceNotificationEvent.Type.SINPE_ENROLLMENT_OTP,
                     user.getId(),
-                    user.getFirstname(),
-                    user.getLastname(),
+                    firstName,
+                    lastName,
                     user.getUsername(),
                     user.getEmail(),
                     phoneNumber,
@@ -524,6 +547,10 @@ private static boolean isEntity(Client client) {
     log.info("requestDeleteSubscription END userId={}, phoneNumber={}", user.getId(), phoneNumber);
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
+
+  // ----------------------------------------------------------------------
+  // deleteSubscription
+  // ----------------------------------------------------------------------
 
   @Override
   @Transactional
@@ -544,11 +571,12 @@ private static boolean isEntity(Client client) {
             "deleteSubscription: external API deleteSubscription completed for phone={}", phoneNumber);
 
     sinpeRepository
-            .findByAppSelfServiceUserIdAndMobileNumber(user.getId(),phoneNumber)
+            .findByAppSelfServiceUserIdAndMobileNumber(user.getId(), phoneNumber)
             .ifPresent(enrollment -> {
               sinpeRepository.delete(enrollment);
               sinpeRepository.flush();
-              log.info("deleteSubscription: local enrollment deleted for userId={}, mobileNumber={}", user.getId(), phoneNumber);
+              log.info("deleteSubscription: local enrollment deleted for userId={}, mobileNumber={}",
+                      user.getId(), phoneNumber);
             });
 
     Map<String, Object> contextData = new HashMap<>();
@@ -573,6 +601,10 @@ private static boolean isEntity(Client client) {
     log.info("deleteSubscription END userId={}, phoneNumber={}", user.getId(), phoneNumber);
     return new CommandProcessingResultBuilder().withEntityId(user.getId()).build();
   }
+
+  // ----------------------------------------------------------------------
+  // Private helpers
+  // ----------------------------------------------------------------------
 
   /**
    * Sanitiza y sobreescribe los valores de CustomerId, IBAN y PhoneNumber para asegurar
@@ -606,7 +638,6 @@ private static boolean isEntity(Client client) {
     if (StringUtils.isNotBlank(request.getIban())) {
       request.setIban(request.getIban().replaceAll("\\s+", "").toUpperCase());
     }
-
     if (StringUtils.isNotBlank(request.getPhoneNumber())) {
       request.setPhoneNumber(request.getPhoneNumber().replaceAll("\\s+", "").trim());
     }
@@ -672,7 +703,6 @@ private static boolean isEntity(Client client) {
             "validateOtp END OK registrationId={}, mobileNumber={}", request.getId(), mobileNumber);
   }
 
-
   private void validateAndConsumeOtp(String mobileNumber, String otp) {
     if (StringUtils.isBlank(otp)) {
       throw new IllegalArgumentException("OTP is required for this operation.");
@@ -691,7 +721,6 @@ private static boolean isEntity(Client client) {
     if (request.isConsumed() || expired) {
       throw new IllegalArgumentException("Invalid or expired OTP.");
     }
-
     if (!request.getMobileNumber().equals(mobileNumber)) {
       throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
     }
@@ -700,5 +729,4 @@ private static boolean isEntity(Client client) {
     request.markConsumed();
     registrationRepository.saveAndFlush(request);
   }
-
 }
