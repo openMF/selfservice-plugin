@@ -335,6 +335,10 @@ private static boolean isEntity(Client client) {
     log.info(
             "confirmEnrollment: publishing SINPE_ENROLLMENT_SUCCESS notification emailMode={}",
             emailMode);
+    
+    final String firstName  = resolveFirstName(client, user);
+    final String middleName = resolveMiddleName(client);
+    final String lastName   = resolveLastName(client, user);
 
     applicationEventPublisher.publishEvent(
         SelfServiceNotificationEvent.withTenantContext(
