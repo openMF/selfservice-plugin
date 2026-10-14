@@ -317,7 +317,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String targetAccount = !toAccountNumber.isEmpty() ? toAccountNumber : fromIban;
     Map<String, String> bankDetails = resolveDestinationDetails(targetAccount);
 
-    destinationCustomer.put("entityCode", !bankNumber.isEmpty() ? bankNumber : bankDetails.getOrDefault("entityCode", ""));
+    destinationCustomer.put(
+            "entityCode",
+            !bankNumber.isEmpty() ? bankNumber : bankDetails.getOrDefault("entityCode", ""));
     destinationCustomer.put("entityName", bankDetails.getOrDefault("entityName", ""));
     if (isStringBlank(destinationCustomer.get("name"))) {
       destinationCustomer.put("name", bankDetails.getOrDefault("holder", ""));
@@ -328,8 +330,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     String fromAccount = !fromIban.isEmpty() ? fromIban : String.valueOf(accountId);
     Map<String, Object> originCustomer = getOriginCustomerInfoByAccount(fromAccount);
+
     Map<String, Object> customData = new HashMap<>();
-    customData.put("fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
+    customData.put(
+            "fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
     customData.put("toAccountIdentifier", toAccountNumber);
     customData.put(
             "transferDescription", !paymentType.isEmpty() ? paymentType : "SAME_BANK");
@@ -380,10 +384,17 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       if (jsonResponse != null && !jsonResponse.contains("\"error\"")) {
         Map<String, Object> infoMap = this.gson.fromJson(jsonResponse, Map.class);
         if (infoMap != null) {
-          details.put("entityCode", infoMap.get("entityCode") != null ? infoMap.get("entityCode").toString() : "");
-          details.put("entityName", infoMap.get("entityName") != null ? infoMap.get("entityName").toString() : "");
-          details.put("holder", infoMap.get("holder") != null ? infoMap.get("holder").toString() : "");
-          details.put("holderId", infoMap.get("holderId") != null ? infoMap.get("holderId").toString() : "");
+          details.put(
+                  "entityCode",
+                  infoMap.get("entityCode") != null ? infoMap.get("entityCode").toString() : "");
+          details.put(
+                  "entityName",
+                  infoMap.get("entityName") != null ? infoMap.get("entityName").toString() : "");
+          details.put(
+                  "holder", infoMap.get("holder") != null ? infoMap.get("holder").toString() : "");
+          details.put(
+                  "holderId",
+                  infoMap.get("holderId") != null ? infoMap.get("holderId").toString() : "");
         }
       }
     } catch (Exception e) {
@@ -400,10 +411,24 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       if (jsonResponse != null && !jsonResponse.isBlank() && !jsonResponse.contains("\"error\"")) {
         Map<String, Object> phoneData = this.gson.fromJson(jsonResponse, Map.class);
         if (phoneData != null) {
-          details.put("entityCode", phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "");
-          details.put("entityName", phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "");
-          details.put("holder", phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
-          details.put("holderId", phoneData.get("holderId") != null ? phoneData.get("holderId").toString() : "");
+          details.put(
+                  "entityCode",
+                  phoneData.get("entityCode") != null
+                          ? phoneData.get("entityCode").toString()
+                          : "");
+          details.put(
+                  "entityName",
+                  phoneData.get("entityName") != null
+                          ? phoneData.get("entityName").toString()
+                          : "");
+          details.put(
+                  "holder",
+                  phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
+          details.put(
+                  "holderId",
+                  phoneData.get("holderId") != null
+                          ? phoneData.get("holderId").toString()
+                          : "");
         }
       }
     } catch (Exception e) {
@@ -420,20 +445,36 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return obj == null || obj.toString().trim().isEmpty();
   }
 
+  // ---------------------------------------------------------------------------
+  // EXTERNAL (PIN / SINPE / SINPE_MOVIL) – with internal Fineract fallback
+  // ---------------------------------------------------------------------------
+
   private Map<String, Object> processExternalTransfer(
           Long accountId, String txnId, String transferType) {
 
     String externalRef = getExternalReceiptNumber(accountId, txnId);
+
+    // No external reference stored at all → try pure internal ledger first
     if (externalRef == null || externalRef.isEmpty()) {
+      Map<String, Object> fromLedger =
+              loadExternalFromSavingsTransaction(accountId, txnId, transferType, null);
+      if (fromLedger != null) {
+        log.info(
+                "FETCH DETAILS: {} resolved from internal Fineract ledger (no external ref)"
+                        + " accountId={}, txnId={}",
+                transferType,
+                accountId,
+                txnId);
+        return fromLedger;
+      }
       throw new SelfAccountTransferTransactionNotFoundException(accountId, txnId, transferType);
     }
 
-    Map<String, Object> rawData;
     try {
       if ("PIN".equalsIgnoreCase(transferType)) {
         log.info("Querying PIN external service with receiptRef: {}", externalRef);
         String pinResponseJson = this.pinExternalTransferService.getTransactionDetail(externalRef);
-        rawData = this.gson.fromJson(pinResponseJson, Map.class);
+        return this.gson.fromJson(pinResponseJson, Map.class);
       } else {
         log.info("Querying SINPE external service with receiptRef: {}", externalRef);
         Object sinpeResponse = this.sinpeExternalApiClient.getTransactionDetail(externalRef);
@@ -441,36 +482,196 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                 sinpeResponse instanceof String
                         ? (String) sinpeResponse
                         : this.gson.toJson(sinpeResponse);
-        rawData = this.gson.fromJson(sinpeJson, Map.class);
+        return this.gson.fromJson(sinpeJson, Map.class);
       }
     } catch (SelfAccountTransferTransactionNotFoundException e) {
       throw e;
     } catch (Exception e) {
+      // External 404 / timeout / 5xx → fall back to internal Fineract ledger
+      log.warn(
+              "External {} lookup failed for ref={} ({}). Falling back to internal Fineract ledger."
+                      + " accountId={}, txnId={}",
+              transferType,
+              externalRef,
+              e.getMessage(),
+              accountId,
+              txnId);
+
+      Map<String, Object> fromLedger =
+              loadExternalFromSavingsTransaction(accountId, txnId, transferType, externalRef);
+      if (fromLedger != null) {
+        log.info(
+                "FETCH DETAILS: {} resolved from internal Fineract ledger after external failure"
+                        + " accountId={}, txnId={}, externalRef={}",
+                transferType,
+                accountId,
+                txnId,
+                externalRef);
+        return fromLedger;
+      }
+
       log.error("Error querying {} transaction detail for ref: {}", transferType, externalRef, e);
       throw externalServiceValidationError(transferType, externalRef, e);
     }
+  }
+
+  /**
+   * Internal Fineract fallback for PIN / SINPE / SINPE_MOVIL when the external provider returns 404
+   * or is unavailable. Uses the same ledger query shape as SAME_BANK.
+   */
+  private Map<String, Object> loadExternalFromSavingsTransaction(
+          Long accountId, String txnId, String transferType, String knownExternalRef) {
+
+    final String sql =
+            "SELECT "
+                    + "  sat.id                    AS sat_id, "
+                    + "  sat.amount                AS amount, "
+                    + "  sat.transaction_date      AS transaction_date, "
+                    + "  sat.created_date          AS created_date, "
+                    + "  sat.is_reversed           AS is_reversed, "
+                    + "  sat.ref_no                AS ref_no, "
+                    + "  sa.currency_code          AS currency_code, "
+                    + "  sa.account_no             AS from_account_no, "
+                    + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS from_iban, "
+                    + "  pd.id                     AS payment_detail_id, "
+                    + "  pd.account_number         AS account_number, "
+                    + "  pd.check_number           AS check_number, "
+                    + "  pd.routing_code           AS routing_code, "
+                    + "  pd.receipt_number         AS receipt_number, "
+                    + "  pd.bank_number            AS bank_number, "
+                    + "  pt.value                  AS payment_type_name "
+                    + "FROM m_savings_account_transaction sat "
+                    + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
+                    + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
+                    + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
+                    + "WHERE sat.savings_account_id = ? "
+                    + "  AND ( "
+                    + "        CAST(sat.id AS VARCHAR) = ? "
+                    + "     OR CAST(sat.id AS CHAR) = ? "
+                    + "     OR sat.ref_no = ? "
+                    + "     OR CAST(pd.id AS VARCHAR) = ? "
+                    + "     OR pd.receipt_number = ? "
+                    + "     OR pd.routing_code = ? "
+                    + "  ) "
+                    + "ORDER BY sat.id DESC "
+                    + "LIMIT 1";
+
+    try {
+      List<Map<String, Object>> rows =
+              this.jdbcTemplate.query(
+                      sql,
+                      (rs, rowNum) ->
+                              mapLedgerRowForExternal(rs, accountId, transferType, knownExternalRef),
+                      accountId,
+                      txnId,
+                      txnId,
+                      txnId,
+                      txnId,
+                      txnId,
+                      txnId);
+
+      if (rows == null || rows.isEmpty() || rows.get(0) == null) {
+        return null;
+      }
+      return rows.get(0);
+    } catch (Exception e) {
+      log.warn(
+              "{} internal ledger fallback failed for accountId={}, txnId={}: {}",
+              transferType,
+              accountId,
+              txnId,
+              e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Same shape as {@link #mapLedgerRow} but tags the response as an external transfer and prefers
+   * the known SINPE/PIN reference number when available.
+   */
+  private Map<String, Object> mapLedgerRowForExternal(
+          ResultSet rs, Long accountId, String transferType, String knownExternalRef)
+          throws SQLException {
+
+    Map<String, Object> rawData = mapLedgerRow(rs, accountId);
+
+    String routing = nullToEmpty(rs.getString("routing_code"));
+    String receipt = nullToEmpty(rs.getString("receipt_number"));
+    String refNo = nullToEmpty(rs.getString("ref_no"));
+    long satId = rs.getLong("sat_id");
+
+    String externalRef =
+            (knownExternalRef != null && !knownExternalRef.isBlank())
+                    ? knownExternalRef.trim()
+                    : (!routing.isEmpty()
+                            ? routing
+                            : (!receipt.isEmpty()
+                                    ? receipt
+                                    : (!refNo.isEmpty() ? refNo : String.valueOf(satId))));
+
+    rawData.put("internalRefNumber", externalRef);
+    rawData.put("channelRefNumber", externalRef);
+
+    if ("SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
+      rawData.put("sinpeRefNumber", externalRef);
+    } else {
+      rawData.put("sinpeRefNumber", "");
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> customData =
+            rawData.get("customData") instanceof Map
+                    ? (Map<String, Object>) rawData.get("customData")
+                    : new HashMap<>();
+
+    String paymentType = nullToEmpty(rs.getString("payment_type_name"));
+    customData.put(
+            "transferDescription",
+            !paymentType.isEmpty() ? paymentType : transferType.toUpperCase());
+    customData.put("reference", externalRef);
+    customData.put("source", "INTERNAL_FALLBACK");
+    rawData.put("customData", customData);
 
     return rawData;
   }
 
+  /**
+   * Broadened lookup: also match receipt_number / routing_code / payment_detail id so we still find
+   * the row even when the caller passes a different identifier.
+   */
   private String getExternalReceiptNumber(Long accountId, String txnId) {
     String sql =
-            "SELECT COALESCE(pd.routing_code, pd.receipt_number) AS external_ref "
+            "SELECT COALESCE(NULLIF(pd.routing_code, ''), NULLIF(pd.receipt_number, '')) AS external_ref "
                     + "FROM m_savings_account_transaction sat "
                     + "INNER JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id "
                     + "WHERE sat.savings_account_id = ? "
-                    + "AND (CAST(sat.id AS VARCHAR) = ? OR sat.ref_no = ?)";
+                    + "  AND ( "
+                    + "        CAST(sat.id AS VARCHAR) = ? "
+                    + "     OR sat.ref_no = ? "
+                    + "     OR CAST(pd.id AS VARCHAR) = ? "
+                    + "     OR pd.receipt_number = ? "
+                    + "     OR pd.routing_code = ? "
+                    + "  ) "
+                    + "ORDER BY sat.id DESC "
+                    + "LIMIT 1";
     try {
-      return this.jdbcTemplate.queryForObject(sql, String.class, accountId, txnId, txnId);
+      return this.jdbcTemplate.queryForObject(
+              sql, String.class, accountId, txnId, txnId, txnId, txnId, txnId);
     } catch (org.springframework.dao.EmptyResultDataAccessException e) {
       log.warn("No payment detail found for accountId: {} and txnId: {}", accountId, txnId);
       return null;
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Homologation + helpers (unchanged from original)
+  // ---------------------------------------------------------------------------
+
   @SuppressWarnings("unchecked")
   private Map<String, Object> homologateResponseData(
-          Map<String, Object> rawData, BigDecimal fallbackAmount, String fallbackCurrency,
+          Map<String, Object> rawData,
+          BigDecimal fallbackAmount,
+          String fallbackCurrency,
           String transferType) {
 
     if (rawData == null) {
@@ -489,16 +690,16 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     && !data.get("operationId").toString().isEmpty()
                     ? data.get("operationId").toString()
                     : (resultObj.get("cbTrxNumber") != null
-                    ? resultObj.get("cbTrxNumber").toString()
-                    : "");
+                            ? resultObj.get("cbTrxNumber").toString()
+                            : "");
 
     String internalRef =
             data.get("internalRefNumber") != null
                     && !data.get("internalRefNumber").toString().isEmpty()
                     ? data.get("internalRefNumber").toString()
                     : (data.get("channelRefNumber") != null
-                    ? data.get("channelRefNumber").toString()
-                    : "");
+                            ? data.get("channelRefNumber").toString()
+                            : "");
 
     String channelRef =
             data.get("channelRefNumber") != null
@@ -510,15 +711,15 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             resultObj.containsKey("sinpeRefNumber") && resultObj.get("sinpeRefNumber") != null
                     ? resultObj.get("sinpeRefNumber").toString()
                     : (data.get("sinpeRefNumber") != null
-                    ? data.get("sinpeRefNumber").toString()
-                    : "");
+                            ? data.get("sinpeRefNumber").toString()
+                            : "");
 
     Object rawDebited =
             resultObj.get("debitedAmount") != null
                     ? resultObj.get("debitedAmount")
                     : (data.get("debitedAmount") != null
-                    ? data.get("debitedAmount")
-                    : data.get("amount"));
+                            ? data.get("debitedAmount")
+                            : data.get("amount"));
     BigDecimal debitedAmount =
             rawDebited != null ? new BigDecimal(rawDebited.toString()) : fallbackAmount;
 
@@ -526,8 +727,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             data.get("debitCurrencyCode") != null
                     ? data.get("debitCurrencyCode").toString()
                     : (data.get("currency") != null
-                    ? data.get("currency").toString()
-                    : fallbackCurrency);
+                            ? data.get("currency").toString()
+                            : fallbackCurrency);
 
     Object rawCommission =
             resultObj.get("commissionAmount") != null
@@ -552,15 +753,15 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             resultObj.containsKey("registrationDate") && resultObj.get("registrationDate") != null
                     ? resultObj.get("registrationDate").toString()
                     : (data.get("registrationDate") != null
-                    ? data.get("registrationDate").toString()
-                    : "");
+                            ? data.get("registrationDate").toString()
+                            : "");
 
     String processingDate =
             resultObj.containsKey("processingDate") && resultObj.get("processingDate") != null
                     ? resultObj.get("processingDate").toString()
                     : (data.get("processingDate") != null
-                    ? data.get("processingDate").toString()
-                    : "");
+                            ? data.get("processingDate").toString()
+                            : "");
 
     Integer stateCode = 32;
     Object rawState =
@@ -576,8 +777,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             resultObj.containsKey("stateDescription") && resultObj.get("stateDescription") != null
                     ? resultObj.get("stateDescription").toString()
                     : (stateCode == 32
-                    ? "Completed"
-                    : (stateCode == 128 ? "Rejected" : "Pending"));
+                            ? "Completed"
+                            : (stateCode == 128 ? "Rejected" : "Pending"));
 
     Integer rejectCode = 0;
     Object rawReject =
@@ -593,8 +794,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             resultObj.containsKey("rejectDescription") && resultObj.get("rejectDescription") != null
                     ? resultObj.get("rejectDescription").toString()
                     : (data.get("rejectDescription") != null
-                    ? data.get("rejectDescription").toString()
-                    : "");
+                            ? data.get("rejectDescription").toString()
+                            : "");
 
     Map<String, Object> customData = new HashMap<>();
     if (data.get("customData") instanceof Map) {
@@ -623,7 +824,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       customData.put("transferDescription", data.get("description"));
     }
 
-    // ---ORIGIN CUSTOMER ---
+    // --- ORIGIN CUSTOMER ---
     Map<String, Object> originCustomer = new HashMap<>();
     if (customData.get("originCustomer") instanceof Map) {
       originCustomer = new HashMap<>((Map<String, Object>) customData.get("originCustomer"));
@@ -634,7 +835,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       originCustomer = getOriginCustomerInfoByAccount(fromAccount);
     }
     customData.put("originCustomer", originCustomer);
-    // ---------------------------------------------------------
 
     Map<String, Object> destCustomer = new HashMap<>();
     if (customData.get("destinationCustomer") instanceof Map) {
@@ -651,26 +851,28 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
 
     String target = "";
-    if (customData.get("toAccountIdentifier") != null && !customData.get("toAccountIdentifier").toString().isBlank()) {
+    if (customData.get("toAccountIdentifier") != null
+            && !customData.get("toAccountIdentifier").toString().isBlank()) {
       target = customData.get("toAccountIdentifier").toString().trim();
     } else if (destCustomer.get("iban") != null && !destCustomer.get("iban").toString().isBlank()) {
       target = destCustomer.get("iban").toString().trim();
     }
 
-    // Comprobar si faltan datos obligatorios (entityCode, entityName, name o id)
-    boolean needsResolution = isStringBlank(destCustomer.get("entityCode"))
-            || isStringBlank(destCustomer.get("entityName"))
-            || isStringBlank(destCustomer.get("name"))
-            || isStringBlank(destCustomer.get("id"));
+    boolean needsResolution =
+            isStringBlank(destCustomer.get("entityCode"))
+                    || isStringBlank(destCustomer.get("entityName"))
+                    || isStringBlank(destCustomer.get("name"))
+                    || isStringBlank(destCustomer.get("id"));
 
     if (needsResolution && !target.isBlank()) {
-      // Invocación a la función unificada
       Map<String, String> resolvedDetails = resolveDestinationDetails(target);
 
-      if (resolvedDetails.containsKey("entityCode") && !isStringBlank(resolvedDetails.get("entityCode"))) {
+      if (resolvedDetails.containsKey("entityCode")
+              && !isStringBlank(resolvedDetails.get("entityCode"))) {
         destCustomer.put("entityCode", resolvedDetails.get("entityCode"));
       }
-      if (resolvedDetails.containsKey("entityName") && !isStringBlank(resolvedDetails.get("entityName"))) {
+      if (resolvedDetails.containsKey("entityName")
+              && !isStringBlank(resolvedDetails.get("entityName"))) {
         destCustomer.put("entityName", resolvedDetails.get("entityName"));
       }
       if (isStringBlank(destCustomer.get("name")) && resolvedDetails.containsKey("holder")) {
@@ -691,12 +893,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             && sinpeRef != null) {
       data.put("internalRefNumber", sinpeRef);
     } else {
-      // Preserve previous behaviour for SAME_BANK / Apolo (and any other type)
       data.put("internalRefNumber", internalRef != null ? internalRef : "");
     }
-
     data.put("operationId", operationId);
-    //data.put("internalRefNumber", internalRef);
     data.put("channelRefNumber", channelRef);
     data.put("sinpeRefNumber", sinpeRef);
     data.put("debitedAmount", debitedAmount);
@@ -717,7 +916,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   private static final class SelfAccountTemplateMapper
           implements RowMapper<SelfAccountTemplateData> {
-
     @Override
     public SelfAccountTemplateData mapRow(
             final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
@@ -823,8 +1021,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       originCustomer.put("idTypeDescription", result.getOrDefault("idTypeDescription", ""));
     } catch (Exception e) {
       log.warn(
-              "Could not find origin customer info for accountIdentifier: {}",
-              accountIdentifier);
+              "Could not find origin customer info for accountIdentifier: {}", accountIdentifier);
       originCustomer.put("name", "");
       originCustomer.put("email", "");
       originCustomer.put("iban", accountIdentifier);
@@ -834,8 +1031,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
     return originCustomer;
   }
-
-
 
   private PlatformApiDataValidationException accountAccessValidationError(Long accountId) {
     final List<ApiParameterError> errors = new ArrayList<>();
