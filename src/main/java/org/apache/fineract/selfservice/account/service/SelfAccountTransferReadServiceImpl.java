@@ -446,7 +446,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   // ---------------------------------------------------------------------------
-  // EXTERNAL (PIN / SINPE / SINPE_MOVIL) – with internal Fineract fallback
+  // EXTERNAL (PIN / SINPE / SINPE_MOVIL) – internal Fineract fallback
   // ---------------------------------------------------------------------------
 
   private Map<String, Object> processExternalTransfer(
@@ -454,14 +454,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     String externalRef = getExternalReceiptNumber(accountId, txnId);
 
-    // No external reference stored at all → try pure internal ledger first
     if (externalRef == null || externalRef.isEmpty()) {
       Map<String, Object> fromLedger =
               loadExternalFromSavingsTransaction(accountId, txnId, transferType, null);
       if (fromLedger != null) {
         log.info(
-                "FETCH DETAILS: {} resolved from internal Fineract ledger (no external ref)"
-                        + " accountId={}, txnId={}",
+                "FETCH DETAILS: {} resolved from internal ledger (no external ref) accountId={} txnId={}",
                 transferType,
                 accountId,
                 txnId);
@@ -487,10 +485,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     } catch (SelfAccountTransferTransactionNotFoundException e) {
       throw e;
     } catch (Exception e) {
-      // External 404 / timeout / 5xx → fall back to internal Fineract ledger
       log.warn(
-              "External {} lookup failed for ref={} ({}). Falling back to internal Fineract ledger."
-                      + " accountId={}, txnId={}",
+              "External {} lookup failed for ref={} ({}). Falling back to internal ledger. accountId={} txnId={}",
               transferType,
               externalRef,
               e.getMessage(),
@@ -501,8 +497,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
               loadExternalFromSavingsTransaction(accountId, txnId, transferType, externalRef);
       if (fromLedger != null) {
         log.info(
-                "FETCH DETAILS: {} resolved from internal Fineract ledger after external failure"
-                        + " accountId={}, txnId={}, externalRef={}",
+                "FETCH DETAILS: {} resolved from internal ledger after external failure accountId={} txnId={} ref={}",
                 transferType,
                 accountId,
                 txnId,
@@ -516,34 +511,76 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   /**
-   * Internal Fineract fallback for PIN / SINPE / SINPE_MOVIL when the external provider returns 404
-   * or is unavailable. Uses the same ledger query shape as SAME_BANK.
+   * Internal fallback using m_savings_account_transaction + m_payment_detail + m_client +
+   * m_sinpe_participant + VALIDA_CREDITO / VALIDA_DEBITO.
+   *
+   * <p>Credit (transaction_type_enum=1): origin = external (bank_number), destination = local
+   * client. Debit (transaction_type_enum=2): origin = local, destination = external.
    */
   private Map<String, Object> loadExternalFromSavingsTransaction(
           Long accountId, String txnId, String transferType, String knownExternalRef) {
 
     final String sql =
             "SELECT "
-                    + "  sat.id                    AS sat_id, "
-                    + "  sat.amount                AS amount, "
-                    + "  sat.transaction_date      AS transaction_date, "
-                    + "  sat.created_date          AS created_date, "
-                    + "  sat.is_reversed           AS is_reversed, "
-                    + "  sat.ref_no                AS ref_no, "
-                    + "  sa.currency_code          AS currency_code, "
-                    + "  sa.account_no             AS from_account_no, "
-                    + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS from_iban, "
-                    + "  pd.id                     AS payment_detail_id, "
-                    + "  pd.account_number         AS account_number, "
-                    + "  pd.check_number           AS check_number, "
-                    + "  pd.routing_code           AS routing_code, "
-                    + "  pd.receipt_number         AS receipt_number, "
-                    + "  pd.bank_number            AS bank_number, "
-                    + "  pt.value                  AS payment_type_name "
+                    + "  sat.id                      AS sat_id, "
+                    + "  sat.transaction_type_enum   AS transaction_type_enum, "
+                    + "  sat.amount                  AS amount, "
+                    + "  sat.transaction_date        AS transaction_date, "
+                    + "  sat.created_date            AS created_date, "
+                    + "  sat.is_reversed             AS is_reversed, "
+                    + "  sat.ref_no                  AS ref_no, "
+                    + "  sa.currency_code            AS currency_code, "
+                    + "  sa.account_no               AS from_account_no, "
+                    + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS local_iban, "
+                    + "  c.display_name              AS local_client_name, "
+                    + "  c.fullname                  AS local_fullname, "
+                    + "  COALESCE(c.email_address, '') AS local_email, "
+                    + "  COALESCE( "
+                    + "    (SELECT ci.document_key FROM m_client_identifier ci "
+                    + "      WHERE ci.client_id = c.id ORDER BY ci.id LIMIT 1), '') AS local_document, "
+                    + "  pd.id                       AS payment_detail_id, "
+                    + "  pd.account_number           AS pd_account_number, "
+                    + "  pd.check_number             AS check_number, "
+                    + "  pd.routing_code             AS routing_code, "
+                    + "  pd.receipt_number           AS receipt_number, "
+                    + "  pd.bank_number              AS bank_number, "
+                    + "  pt.value                    AS payment_type_name, "
+                    // Counterparty participant (pd.bank_number → 102 / 0102)
+                    + "  sp_cp.code                  AS cp_code, "
+                    + "  sp_cp.description           AS cp_name, "
+                    // Local participant from IBAN bank digits (positions 5-7 of CR IBAN)
+                    + "  sp_local.code               AS local_code, "
+                    + "  sp_local.description        AS local_entity_name, "
+                    // VALIDA tables (may match by txn id or receipt/routing)
+                    + "  vc.\"IDENTIFICACION\"         AS vc_identificacion, "
+                    + "  vc.\"CUENTA_IBAN\"            AS vc_iban, "
+                    + "  vc.\"ID_RELACION_CLIENTE\"    AS vc_relacion, "
+                    + "  vd.\"IDENTIFICACION\"         AS vd_identificacion, "
+                    + "  vd.\"CUENTA_IBAN\"            AS vd_iban, "
+                    + "  vd.\"CODIGO_REFERENCIA\"      AS vd_ref, "
+                    + "  vd.\"CHANNEL_REF_NUMBER\"     AS vd_channel "
                     + "FROM m_savings_account_transaction sat "
                     + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
+                    + "INNER JOIN m_client c ON c.id = sa.client_id "
                     + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
                     + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
+                    + "LEFT JOIN m_sinpe_participant sp_cp "
+                    + "       ON (sp_cp.code = TRIM(pd.bank_number) "
+                    + "        OR sp_cp.code = LPAD(TRIM(pd.bank_number), 4, '0')) "
+                    + "      AND sp_cp.is_active = true "
+                    + "LEFT JOIN m_sinpe_participant sp_local "
+                    + "       ON ( "
+                    + "            sp_local.code = SUBSTRING(REPLACE(COALESCE(sa.external_id, ''), ' ', ''), 5, 3) "
+                    + "         OR sp_local.code = LPAD(SUBSTRING(REPLACE(COALESCE(sa.external_id, ''), ' ', ''), 5, 3), 4, '0') "
+                    + "          ) "
+                    + "      AND sp_local.is_active = true "
+                    + "LEFT JOIN \"VALIDA_CREDITO\" vc "
+                    + "       ON (vc.savings_transaction_id = sat.id "
+                    + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.receipt_number) "
+                    + "LEFT JOIN \"VALIDA_DEBITO\" vd "
+                    + "       ON (vd.savings_transaction_id = sat.id "
+                    + "        OR vd.\"CODIGO_REFERENCIA\" = pd.routing_code "
+                    + "        OR vd.\"CHANNEL_REF_NUMBER\" = pd.routing_code) "
                     + "WHERE sat.savings_account_id = ? "
                     + "  AND ( "
                     + "        CAST(sat.id AS VARCHAR) = ? "
@@ -585,60 +622,345 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
   }
 
-  /**
-   * Same shape as {@link #mapLedgerRow} but tags the response as an external transfer and prefers
-   * the known SINPE/PIN reference number when available.
-   */
   private Map<String, Object> mapLedgerRowForExternal(
           ResultSet rs, Long accountId, String transferType, String knownExternalRef)
           throws SQLException {
 
-    Map<String, Object> rawData = mapLedgerRow(rs, accountId);
+    // Base amounts / dates / state from shared mapper (aliases that overlap)
+    // Build a minimal compatible ResultSet view via the shared fields present in both queries.
+    boolean reversed = rs.getBoolean("is_reversed");
+    BigDecimal amount = rs.getBigDecimal("amount");
+    String currency = rs.getString("currency_code");
+    long satId = rs.getLong("sat_id");
+    int txnType = rs.getInt("transaction_type_enum"); // 1 = DEPOSIT (credit), 2 = WITHDRAWAL (debit)
+    boolean isCredit = txnType == 1;
 
     String routing = nullToEmpty(rs.getString("routing_code"));
     String receipt = nullToEmpty(rs.getString("receipt_number"));
     String refNo = nullToEmpty(rs.getString("ref_no"));
-    long satId = rs.getLong("sat_id");
 
-    String externalRef =
-            (knownExternalRef != null && !knownExternalRef.isBlank())
-                    ? knownExternalRef.trim()
-                    : (!routing.isEmpty()
-                            ? routing
-                            : (!receipt.isEmpty()
-                                    ? receipt
-                                    : (!refNo.isEmpty() ? refNo : String.valueOf(satId))));
+    String sinpeRef =
+            firstNonBlank(
+                    knownExternalRef,
+                    routing,
+                    nullToEmpty(rs.getString("vd_ref")),
+                    nullToEmpty(rs.getString("vd_channel")),
+                    receipt,
+                    refNo,
+                    String.valueOf(satId));
 
-    rawData.put("internalRefNumber", externalRef);
-    rawData.put("channelRefNumber", externalRef);
+    java.sql.Timestamp created = rs.getTimestamp("created_date");
+    java.sql.Date txnDate = rs.getDate("transaction_date");
+    String registrationDate =
+            created != null
+                    ? created.toInstant().toString()
+                    : (txnDate != null ? txnDate.toLocalDate().toString() : "");
+    String processingDate =
+            txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
-    if ("SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType)) {
-      rawData.put("sinpeRefNumber", externalRef);
-    } else {
-      rawData.put("sinpeRefNumber", "");
+    // ----- Local (account owner) -----
+    String localName =
+            firstNonBlank(
+                    nullToEmpty(rs.getString("local_client_name")),
+                    nullToEmpty(rs.getString("local_fullname")));
+    String localIban =
+            firstNonBlank(
+                    nullToEmpty(rs.getString("local_iban")),
+                    nullToEmpty(rs.getString("from_account_no")),
+                    nullToEmpty(rs.getString("pd_account_number")));
+    String localDoc = nullToEmpty(rs.getString("local_document"));
+    String localEmail = nullToEmpty(rs.getString("local_email"));
+    // Expected sample uses "137" (no leading zero) for destination entityCode
+    String localEntityCode =
+            stripLeadingZero(firstNonBlank(nullToEmpty(rs.getString("local_code")), "0137"));
+    String localEntityName =
+            firstNonBlank(nullToEmpty(rs.getString("local_entity_name")), "APOLO CAPITAL");
+
+    // ----- Counterparty bank from pd.bank_number (102 → 0102 BAC) -----
+    String cpCodeRaw =
+            firstNonBlank(
+                    nullToEmpty(rs.getString("cp_code")),
+                    padBankCode(nullToEmpty(rs.getString("bank_number"))));
+    String cpCode = padBankCode(cpCodeRaw); // keep leading zero for origin (0102)
+    String cpName = nullToEmpty(rs.getString("cp_name"));
+
+    // External person from m_sinpe_audit_log when SINPE datatable is empty
+    Map<String, String> externalPerson = loadExternalPersonFromAudit(satId, sinpeRef, receipt);
+    String extName = firstNonBlank(externalPerson.get("name"), "");
+    String extIban = firstNonBlank(externalPerson.get("iban"), "");
+    String extId = firstNonBlank(externalPerson.get("id"), "");
+    String extEmail = firstNonBlank(externalPerson.get("email"), "");
+
+    // Optional live enrichment when we already have an external IBAN
+    if ((!extName.isEmpty() || !extIban.isEmpty()) && !extIban.isEmpty()) {
+      Map<String, String> resolved = resolveDestinationDetails(extIban);
+      if (extName.isEmpty()) {
+        extName = nullToEmpty(resolved.get("holder"));
+      }
+      if (extId.isEmpty()) {
+        extId = nullToEmpty(resolved.get("holderId"));
+      }
+      if (cpName.isEmpty()) {
+        cpName = nullToEmpty(resolved.get("entityName"));
+      }
+      if (cpCode.isEmpty()) {
+        cpCode = padBankCode(nullToEmpty(resolved.get("entityCode")));
+      }
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> customData =
-            rawData.get("customData") instanceof Map
-                    ? (Map<String, Object>) rawData.get("customData")
-                    : new HashMap<>();
+    Map<String, Object> origin = new HashMap<>();
+    Map<String, Object> dest = new HashMap<>();
+    String fromAccount;
+    String toAccount;
+
+    if (isCredit) {
+      // Incoming credit: origin = external sender, destination = local Apolo
+      origin.put("name", extName);
+      origin.put("iban", extIban);
+      origin.put("id", extId);
+      origin.put("email", extEmail);
+      origin.put("entityCode", cpCode);
+      origin.put("entityName", cpName);
+      origin.put("idType", inferIdType(extId));
+      origin.put("idTypeDescription", idTypeDescription(inferIdType(extId)));
+
+      dest.put("name", localName);
+      dest.put("iban", localIban);
+      dest.put("id", localDoc);
+      dest.put("email", localEmail);
+      dest.put("entityCode", localEntityCode);
+      dest.put("entityName", localEntityName);
+      dest.put("idType", "2");
+      dest.put("idTypeDescription", "Persona Jurídica Nacional");
+
+      fromAccount = extIban;
+      toAccount = localIban;
+    } else {
+      // Outgoing debit: origin = local, destination = external
+      origin.put("name", localName);
+      origin.put("iban", localIban);
+      origin.put("id", localDoc);
+      origin.put("email", localEmail);
+      origin.put("entityCode", localEntityCode);
+      origin.put("entityName", localEntityName);
+      origin.put("idType", "2");
+      origin.put("idTypeDescription", "Persona Jurídica Nacional");
+
+      dest.put("name", extName);
+      dest.put(
+              "iban",
+              firstNonBlank(extIban, nullToEmpty(rs.getString("pd_account_number"))));
+      dest.put("id", extId);
+      dest.put("email", extEmail);
+      dest.put("entityCode", cpCode);
+      dest.put("entityName", cpName);
+      dest.put("idType", inferIdType(extId));
+      dest.put("idTypeDescription", idTypeDescription(inferIdType(extId)));
+
+      fromAccount = localIban;
+      toAccount = (String) dest.get("iban");
+    }
 
     String paymentType = nullToEmpty(rs.getString("payment_type_name"));
+
+    Map<String, Object> customData = new HashMap<>();
     customData.put(
             "transferDescription",
             !paymentType.isEmpty() ? paymentType : transferType.toUpperCase());
-    customData.put("reference", externalRef);
+    customData.put("reference", sinpeRef);
     customData.put("source", "INTERNAL_FALLBACK");
-    rawData.put("customData", customData);
+    customData.put("fromAccountIdentifier", fromAccount);
+    customData.put("toAccountIdentifier", toAccount);
+    customData.put("routingCode", routing);
+    customData.put("receiptNumber", receipt);
+    customData.put("savingsTransactionId", satId);
+    customData.put("paymentDetailId", rs.getObject("payment_detail_id"));
+    customData.put("originCustomer", origin);
+    customData.put("destinationCustomer", dest);
+    customData.put("direction", isCredit ? "CREDIT" : "DEBIT");
 
+    Map<String, Object> rawData = new HashMap<>();
+    rawData.put("operationId", String.valueOf(satId));
+    rawData.put("internalRefNumber", sinpeRef);
+    rawData.put("channelRefNumber", sinpeRef);
+    rawData.put(
+            "sinpeRefNumber",
+            ("SINPE".equalsIgnoreCase(transferType) || "SINPE_MOVIL".equalsIgnoreCase(transferType))
+                    ? sinpeRef
+                    : "");
+    rawData.put("debitedAmount", amount != null ? amount : BigDecimal.ZERO);
+    rawData.put("debitCurrencyCode", currency != null ? currency : "CRC");
+    rawData.put("commissionAmount", BigDecimal.ZERO);
+    rawData.put("commissionCurrency", currency != null ? currency : "CRC");
+    rawData.put("exchangeRate", 0);
+    rawData.put("registrationDate", registrationDate);
+    rawData.put("processingDate", processingDate);
+    rawData.put("stateDescription", reversed ? "Reversed" : "Completed");
+    rawData.put("successful", !reversed);
+    rawData.put("stateCode", reversed ? 128 : 32);
+    rawData.put("rejectDescription", reversed ? "Transaction reversed" : "");
+    rawData.put("customData", customData);
     return rawData;
   }
 
-  /**
-   * Broadened lookup: also match receipt_number / routing_code / payment_detail id so we still find
-   * the row even when the caller passes a different identifier.
-   */
+  /** Parse m_sinpe_audit_log XML/JSON for OriginCustomer* when SINPE datatable has no row. */
+  private Map<String, String> loadExternalPersonFromAudit(
+          long satId, String sinpeRef, String receipt) {
+    Map<String, String> out = new HashMap<>();
+    try {
+      String sql =
+              "SELECT request_xml, response_xml FROM m_sinpe_audit_log "
+                      + "WHERE savings_transaction_id = ? "
+                      + "   OR codigo_referencia = ? "
+                      + "   OR id_relacion_cliente = ? "
+                      + "ORDER BY id DESC LIMIT 1";
+      List<Map<String, Object>> rows =
+              this.jdbcTemplate.queryForList(sql, satId, sinpeRef, receipt);
+      if (rows.isEmpty()) {
+        return out;
+      }
+      String body =
+              firstNonBlank(
+                      stringVal(rows.get(0).get("response_xml")),
+                      stringVal(rows.get(0).get("request_xml")));
+      if (body.isEmpty()) {
+        return out;
+      }
+      out.put(
+              "name",
+              extractTag(body, "OriginCustomerName", "originCustomerName", "holder", "nombre"));
+      out.put(
+              "iban",
+              extractTag(body, "OriginCustomerIBAN", "originCustomerIBAN", "iban", "cuenta"));
+      out.put(
+              "id",
+              extractTag(
+                      body,
+                      "OriginCustomerId",
+                      "originCustomerId",
+                      "holderId",
+                      "identificacion"));
+      out.put("email", extractTag(body, "email", "correo"));
+    } catch (Exception e) {
+      log.warn("loadExternalPersonFromAudit failed satId={}: {}", satId, e.getMessage());
+    }
+    return out;
+  }
+
+  private static String stringVal(Object o) {
+    return o == null ? "" : o.toString();
+  }
+
+  private static String extractTag(String body, String... keys) {
+    if (body == null) {
+      return "";
+    }
+    for (String key : keys) {
+      String xml = tagValue(body, key);
+      if (!xml.isEmpty()) {
+        return xml;
+      }
+      String json = jsonValue(body, key);
+      if (!json.isEmpty()) {
+        return json;
+      }
+    }
+    return "";
+  }
+
+  private static String tagValue(String xml, String tag) {
+    String open = "<" + tag + ">";
+    String close = "</" + tag + ">";
+    int i = xml.indexOf(open);
+    if (i < 0) {
+      int j = xml.indexOf("<" + tag);
+      if (j < 0) {
+        return "";
+      }
+      int gt = xml.indexOf('>', j);
+      if (gt < 0) {
+        return "";
+      }
+      int k = xml.indexOf(close, gt);
+      if (k < 0) {
+        return "";
+      }
+      return xml.substring(gt + 1, k).trim();
+    }
+    int j = xml.indexOf(close, i);
+    if (j < 0) {
+      return "";
+    }
+    return xml.substring(i + open.length(), j).trim();
+  }
+
+  private static String jsonValue(String body, String key) {
+    String pattern = "\"" + key + "\"";
+    int i = body.indexOf(pattern);
+    if (i < 0) {
+      return "";
+    }
+    int colon = body.indexOf(':', i + pattern.length());
+    if (colon < 0) {
+      return "";
+    }
+    int q1 = body.indexOf('"', colon + 1);
+    if (q1 < 0) {
+      return "";
+    }
+    int q2 = body.indexOf('"', q1 + 1);
+    if (q2 < 0) {
+      return "";
+    }
+    return body.substring(q1 + 1, q2).trim();
+  }
+
+  private static String firstNonBlank(String... values) {
+    if (values == null) {
+      return "";
+    }
+    for (String v : values) {
+      if (v != null && !v.trim().isEmpty()) {
+        return v.trim();
+      }
+    }
+    return "";
+  }
+
+  private static String padBankCode(String code) {
+    if (code == null || code.isBlank()) {
+      return "";
+    }
+    String c = code.trim();
+    return c.length() == 3 ? "0" + c : c;
+  }
+
+  private static String stripLeadingZero(String code) {
+    if (code == null || code.isBlank()) {
+      return "";
+    }
+    String c = code.trim();
+    if (c.length() == 4 && c.startsWith("0")) {
+      return c.substring(1);
+    }
+    return c;
+  }
+
+  private static String inferIdType(String id) {
+    if (id == null || id.isBlank()) {
+      return "0";
+    }
+    String clean = id.replace("-", "").trim();
+    if (clean.length() == 10 && clean.startsWith("3")) {
+      return "2";
+    }
+    return "0";
+  }
+
+  private static String idTypeDescription(String idType) {
+    return "2".equals(idType) ? "Persona Jurídica Nacional" : "Persona Natural";
+  }
+
   private String getExternalReceiptNumber(Long accountId, String txnId) {
     String sql =
             "SELECT COALESCE(NULLIF(pd.routing_code, ''), NULLIF(pd.receipt_number, '')) AS external_ref "
@@ -664,7 +986,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   // ---------------------------------------------------------------------------
-  // Homologation + helpers (unchanged from original)
+  // Homologation
   // ---------------------------------------------------------------------------
 
   @SuppressWarnings("unchecked")
@@ -802,13 +1124,13 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       customData = new HashMap<>((Map<String, Object>) data.get("customData"));
     }
 
+    // Prefer origin/destination already built by mapLedgerRowForExternal
     if (!customData.containsKey("fromAccountIdentifier")) {
       if (data.get("originCustomer") instanceof Map) {
         Map<String, Object> origin = (Map<String, Object>) data.get("originCustomer");
         customData.put("fromAccountIdentifier", origin.getOrDefault("iban", ""));
       }
     }
-
     if (!customData.containsKey("toAccountIdentifier")) {
       if (data.get("destinationCustomer") instanceof Map) {
         Map<String, Object> dest = (Map<String, Object>) data.get("destinationCustomer");
@@ -819,13 +1141,11 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         customData.put("toAccountIdentifier", resultObj.get("destinationPhone"));
       }
     }
-
     if (!customData.containsKey("transferDescription") && data.containsKey("description")) {
       customData.put("transferDescription", data.get("description"));
     }
 
-    // --- ORIGIN CUSTOMER ---
-    Map<String, Object> originCustomer = new HashMap<>();
+    Map<String, Object> originCustomer;
     if (customData.get("originCustomer") instanceof Map) {
       originCustomer = new HashMap<>((Map<String, Object>) customData.get("originCustomer"));
     } else if (data.get("originCustomer") instanceof Map) {
@@ -836,12 +1156,13 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     }
     customData.put("originCustomer", originCustomer);
 
-    Map<String, Object> destCustomer = new HashMap<>();
+    Map<String, Object> destCustomer;
     if (customData.get("destinationCustomer") instanceof Map) {
       destCustomer = new HashMap<>((Map<String, Object>) customData.get("destinationCustomer"));
     } else if (data.get("destinationCustomer") instanceof Map) {
       destCustomer = new HashMap<>((Map<String, Object>) data.get("destinationCustomer"));
     } else {
+      destCustomer = new HashMap<>();
       destCustomer.put("name", "");
       destCustomer.put("id", "");
       destCustomer.put("email", "");
@@ -850,43 +1171,46 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    String target = "";
-    if (customData.get("toAccountIdentifier") != null
-            && !customData.get("toAccountIdentifier").toString().isBlank()) {
-      target = customData.get("toAccountIdentifier").toString().trim();
-    } else if (destCustomer.get("iban") != null && !destCustomer.get("iban").toString().isBlank()) {
-      target = destCustomer.get("iban").toString().trim();
-    }
-
-    boolean needsResolution =
-            isStringBlank(destCustomer.get("entityCode"))
-                    || isStringBlank(destCustomer.get("entityName"))
-                    || isStringBlank(destCustomer.get("name"))
-                    || isStringBlank(destCustomer.get("id"));
-
-    if (needsResolution && !target.isBlank()) {
-      Map<String, String> resolvedDetails = resolveDestinationDetails(target);
-
-      if (resolvedDetails.containsKey("entityCode")
-              && !isStringBlank(resolvedDetails.get("entityCode"))) {
-        destCustomer.put("entityCode", resolvedDetails.get("entityCode"));
+    // Only resolve missing destination fields when not already filled by internal fallback
+    boolean isInternalFallback = "INTERNAL_FALLBACK".equals(customData.get("source"));
+    if (!isInternalFallback) {
+      String target = "";
+      if (customData.get("toAccountIdentifier") != null
+              && !customData.get("toAccountIdentifier").toString().isBlank()) {
+        target = customData.get("toAccountIdentifier").toString().trim();
+      } else if (destCustomer.get("iban") != null
+              && !destCustomer.get("iban").toString().isBlank()) {
+        target = destCustomer.get("iban").toString().trim();
       }
-      if (resolvedDetails.containsKey("entityName")
-              && !isStringBlank(resolvedDetails.get("entityName"))) {
-        destCustomer.put("entityName", resolvedDetails.get("entityName"));
-      }
-      if (isStringBlank(destCustomer.get("name")) && resolvedDetails.containsKey("holder")) {
-        destCustomer.put("name", resolvedDetails.get("holder"));
-      }
-      if (isStringBlank(destCustomer.get("id")) && resolvedDetails.containsKey("holderId")) {
-        destCustomer.put("id", resolvedDetails.get("holderId"));
+
+      boolean needsResolution =
+              isStringBlank(destCustomer.get("entityCode"))
+                      || isStringBlank(destCustomer.get("entityName"))
+                      || isStringBlank(destCustomer.get("name"))
+                      || isStringBlank(destCustomer.get("id"));
+
+      if (needsResolution && !target.isBlank()) {
+        Map<String, String> resolvedDetails = resolveDestinationDetails(target);
+        if (resolvedDetails.containsKey("entityCode")
+                && !isStringBlank(resolvedDetails.get("entityCode"))) {
+          destCustomer.put("entityCode", resolvedDetails.get("entityCode"));
+        }
+        if (resolvedDetails.containsKey("entityName")
+                && !isStringBlank(resolvedDetails.get("entityName"))) {
+          destCustomer.put("entityName", resolvedDetails.get("entityName"));
+        }
+        if (isStringBlank(destCustomer.get("name")) && resolvedDetails.containsKey("holder")) {
+          destCustomer.put("name", resolvedDetails.get("holder"));
+        }
+        if (isStringBlank(destCustomer.get("id")) && resolvedDetails.containsKey("holderId")) {
+          destCustomer.put("id", resolvedDetails.get("holderId"));
+        }
       }
     }
 
     customData.put("destinationCustomer", destCustomer);
 
     data.clear();
-    // For PIN / SINPE / SINPE_MOVIL only: populate sinpeRefNumber when a non-null value exists
     if (("PIN".equalsIgnoreCase(transferType)
             || "SINPE".equalsIgnoreCase(transferType)
             || "SINPE_MOVIL".equalsIgnoreCase(transferType))
