@@ -50,14 +50,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.portfolio.client.domain.Client;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
-import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
-import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
@@ -88,7 +85,7 @@ public class SelfSavingsAccountApiResource {
 
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
-  
+
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
   @GET
@@ -161,11 +158,16 @@ public class SelfSavingsAccountApiResource {
     if (!CollectionUtils.isEmpty(transactions)) {
       List<SavingsAccountTransactionData> filtered = new ArrayList<>(transactions);
 
-      // Keep only transactions that have payment details
+      // Keep money-movement (payment details) AND fee/charge AND hold/release rows.
+      // Fee postings usually have no paymentDetailData; core Fineract still returns them.
       filtered =
           filtered.stream()
               .filter(Objects::nonNull)
-              .filter(t -> t.getPaymentDetailData() != null)
+              .filter(
+                  t ->
+                      t.getPaymentDetailData() != null
+                          || isFeeOrChargeTransaction(t)
+                          || isHoldOrReleaseTransaction(t))
               .collect(Collectors.toList());
 
       // Hide reversed transactions by default (only affects the "transactions" collection)
@@ -203,6 +205,15 @@ public class SelfSavingsAccountApiResource {
                   t1.getTransactionDate() != null ? t1.getTransactionDate() : t1.getDate();
               LocalDate d2 =
                   t2.getTransactionDate() != null ? t2.getTransactionDate() : t2.getDate();
+              if (d1 == null && d2 == null) {
+                return 0;
+              }
+              if (d1 == null) {
+                return 1;
+              }
+              if (d2 == null) {
+                return -1;
+              }
               return d2.compareTo(d1);
             });
 
@@ -222,6 +233,69 @@ public class SelfSavingsAccountApiResource {
 
     // Note: savingsAccountTransactionsWithPivotConfig is intentionally left untouched
     return savingsAccountData;
+  }
+
+  /**
+   * Fee / charge postings usually have no paymentDetailData; core Fineract still returns them.
+   * Covers PAY_CHARGE, WITHDRAWAL_FEE, ANNUAL_FEE, and related feeDeduction types.
+   */
+  private static boolean isFeeOrChargeTransaction(SavingsAccountTransactionData t) {
+    if (t == null || t.getTransactionType() == null) {
+      return false;
+    }
+    var type = t.getTransactionType();
+    try {
+      if (Boolean.TRUE.equals(type.isFeeDeduction())
+          || Boolean.TRUE.equals(type.isPayCharge())
+          || Boolean.TRUE.equals(type.isWithdrawalFee())
+          || Boolean.TRUE.equals(type.isAnnualFee())
+          || Boolean.TRUE.equals(type.isOverdraftFee())) {
+        return true;
+      }
+    } catch (Exception ignored) {
+      // fall through to id/code checks for older DTOs
+    }
+    Integer id = type.getId().intValue();
+    // Typical SavingsAccountTransactionType ids: PAY_CHARGE=3, WITHDRAWAL_FEE=4, ANNUAL_FEE=5, ...
+    if (id != null && (id == 3 || id == 4 || id == 5 || id == 6 || id == 7 || id == 16)) {
+      return true;
+    }
+    String code = type.getCode();
+    if (code == null) {
+      return false;
+    }
+    String c = code.toLowerCase();
+    return c.contains("fee")
+        || c.contains("charge")
+        || c.contains("paycharge")
+        || c.contains("fee_deduction")
+        || c.contains("feededuction");
+  }
+
+  /** Amount on hold / release (ids 20 / 21) also lack paymentDetailData. */
+  private static boolean isHoldOrReleaseTransaction(SavingsAccountTransactionData t) {
+    if (t == null || t.getTransactionType() == null) {
+      return false;
+    }
+    var type = t.getTransactionType();
+    try {
+      if (Boolean.TRUE.equals(type.isAmountHold())
+          || Boolean.TRUE.equals(type.isAmountRelease())) {
+        return true;
+      }
+    } catch (Exception ignored) {
+      // ignore
+    }
+    Integer id = type.getId().intValue();
+    if (id != null && (id == 20 || id == 21)) {
+      return true;
+    }
+    String code = type.getCode();
+    if (code == null) {
+      return false;
+    }
+    String c = code.toLowerCase();
+    return c.contains("hold") || c.contains("release");
   }
 
   private int getLastDayOfMonth(int year, int month) {
@@ -358,7 +432,7 @@ public class SelfSavingsAccountApiResource {
       @QueryParam("command") final String commandParam,
       @Context final UriInfo uriInfo,
       final String apiRequestBodyAsJson,
-      @Context HttpServletRequest httpRequest) { // ADDED httpRequest
+      @Context HttpServletRequest httpRequest) {
 
     HashMap<String, Object> parameterMap =
         this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
@@ -398,7 +472,7 @@ public class SelfSavingsAccountApiResource {
       @PathParam("accountId") final Long accountId,
       @QueryParam("command") final String commandParam,
       final String apiRequestBodyAsJson,
-      @Context HttpServletRequest httpRequest) { // ADDED httpRequest
+      @Context HttpServletRequest httpRequest) {
 
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
     this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
@@ -406,7 +480,6 @@ public class SelfSavingsAccountApiResource {
     String responseJson =
         this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
 
-    // In Fineract, "withdrawnByApplicant" is passed as a command to the update endpoint
     SelfServiceNotificationEvent.Type eventType =
         "withdrawnByApplicant".equalsIgnoreCase(commandParam)
             ? SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN
@@ -431,8 +504,6 @@ public class SelfSavingsAccountApiResource {
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
     this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
-
-  // --- Helper Methods for Notifications ---
 
   private void publishSavingsEvent(
       SelfServiceNotificationEvent.Type type,
