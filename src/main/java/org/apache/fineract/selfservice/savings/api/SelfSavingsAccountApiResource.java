@@ -166,6 +166,7 @@ public class SelfSavingsAccountApiResource {
               .filter(
                   t ->
                       t.getPaymentDetailData() != null
+                          || t.getTransfer() != null // account-transfer deposit/withdrawal (e.g. commission credit)
                           || isFeeOrChargeTransaction(t)
                           || isHoldOrReleaseTransaction(t))
               .collect(Collectors.toList());
