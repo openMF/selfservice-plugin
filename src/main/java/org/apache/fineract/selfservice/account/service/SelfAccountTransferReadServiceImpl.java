@@ -513,8 +513,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
    * Internal fallback using ledger + m_sinpe_participant + VALIDA_CREDITO / VALIDA_DEBITO.
    *
    * <p>Credit (transaction_type_enum=1): origin = external sender from VALIDA_CREDITO
-   * (NOMBRE_ORIGEN, IDENTIFICACION) + bank from pd.bank_number; destination = local client.
-   * Debit (transaction_type_enum=2): origin = local; destination = external.
+   * (NOMBRE_ORIGEN, IDENTIFICACION, DESCRIPCION) + bank from pd.bank_number; destination = local
+   * client. Debit (transaction_type_enum=2): origin = local; destination = external.
    */
   private Map<String, Object> loadExternalFromSavingsTransaction(
           Long accountId, String txnId, String transferType, String knownExternalRef) {
@@ -552,6 +552,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "  vc.\"CUENTA_IBAN\"            AS vc_iban, "
                     + "  vc.\"ID_RELACION_CLIENTE\"    AS vc_relacion, "
                     + "  vc.\"NOMBRE_ORIGEN\"          AS vc_nombre_origen, "
+                    + "  vc.\"DESCRIPCION\"            AS vc_descripcion, "
                     + "  vd.\"IDENTIFICACION\"         AS vd_identificacion, "
                     + "  vd.\"CUENTA_IBAN\"            AS vd_iban, "
                     + "  vd.\"CODIGO_REFERENCIA\"      AS vd_ref "
@@ -572,7 +573,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "            sp_local.code = substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3) "
                     + "         OR sp_local.code = lpad(substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3), 4, '0') "
                     + "          ) "
-                    // Match VALIDA by txn id OR receipt/routing (sibling txn 174 vs sat 173)
                     + "LEFT JOIN \"VALIDA_CREDITO\" vc "
                     + "       ON (vc.savings_transaction_id = sat.id "
                     + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.receipt_number "
@@ -630,7 +630,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     BigDecimal amount = rs.getBigDecimal("amount");
     String currency = rs.getString("currency_code");
     long satId = rs.getLong("sat_id");
-    int txnType = rs.getInt("transaction_type_enum"); // 1=DEPOSIT/credit, 2=WITHDRAWAL/debit
+    int txnType = rs.getInt("transaction_type_enum");
     boolean isCredit = txnType == 1;
 
     String routing = nullToEmpty(rs.getString("routing_code"));
@@ -655,7 +655,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String processingDate =
             txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
-    // Local (account owner)
     String localName =
             firstNonBlank(
                     nullToEmpty(rs.getString("local_client_name")),
@@ -672,7 +671,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String localEntityName =
             firstNonBlank(nullToEmpty(rs.getString("local_entity_name")), "APOLO CAPITAL");
 
-    // Counterparty bank (pd.bank_number 102 → 0102 BAC)
     String cpCodeRaw =
             firstNonBlank(
                     nullToEmpty(rs.getString("cp_code")),
@@ -680,23 +678,21 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String cpCode = padBankCode(cpCodeRaw);
     String cpName = nullToEmpty(rs.getString("cp_name"));
 
-    // VALIDA_CREDITO / VALIDA_DEBITO (priority for origin person on credits)
     String vcName = nullToEmpty(rs.getString("vc_nombre_origen"));
     String vcId = nullToEmpty(rs.getString("vc_identificacion"));
     String vcIban = nullToEmpty(rs.getString("vc_iban"));
+    String vcDescripcion = nullToEmpty(rs.getString("vc_descripcion"));
     String vdId = nullToEmpty(rs.getString("vd_identificacion"));
     String vdIban = nullToEmpty(rs.getString("vd_iban"));
 
     Map<String, String> externalPerson = loadExternalPersonFromAudit(satId, sinpeRef, receipt);
 
-    String extName =
-            firstNonBlank(vcName, externalPerson.get("name"), "");
+    String extName = firstNonBlank(vcName, externalPerson.get("name"), "");
     String extId =
             firstNonBlank(
                     isCredit ? vcId : firstNonBlank(vdId, vcId),
                     externalPerson.get("id"),
                     "");
-    // Origin IBAN is often unknown on incoming credits; do not use local CUENTA_IBAN as origin
     String extIban =
             firstNonBlank(
                     isCredit ? "" : firstNonBlank(vdIban, vcIban),
@@ -726,7 +722,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String toAccount;
 
     if (isCredit) {
-      // Incoming: origin = external sender, destination = local
       origin.put("name", extName);
       origin.put("iban", extIban);
       origin.put("id", extId);
@@ -748,7 +743,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       fromAccount = extIban;
       toAccount = localIban;
     } else {
-      // Outgoing: origin = local, destination = external
       origin.put("name", localName);
       origin.put("iban", localIban);
       origin.put("id", localDoc);
@@ -776,9 +770,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String paymentType = nullToEmpty(rs.getString("payment_type_name"));
 
     Map<String, Object> customData = new HashMap<>();
+    // Prefer VALIDA_CREDITO.DESCRIPCION ("Traspaso_______") over payment type / transferType
     customData.put(
             "transferDescription",
-            !paymentType.isEmpty() ? paymentType : transferType.toUpperCase());
+            firstNonBlank(vcDescripcion, paymentType, transferType.toUpperCase()));
     customData.put("reference", sinpeRef);
     customData.put("source", "INTERNAL_FALLBACK");
     customData.put("fromAccountIdentifier", fromAccount);
@@ -815,7 +810,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return rawData;
   }
 
-  /** Parse m_sinpe_audit_log when VALIDA has no person fields. */
   private Map<String, String> loadExternalPersonFromAudit(
           long satId, String sinpeRef, String receipt) {
     Map<String, String> out = new HashMap<>();
@@ -963,7 +957,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return "0";
     }
     String clean = id.replace("-", "").trim();
-    // Costa Rica jurídica often 10 digits starting with 3; keep natural as default for cédulas with dashes
     if (clean.length() == 10 && clean.startsWith("3") && !id.contains("-")) {
       return "2";
     }
@@ -997,10 +990,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return null;
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Homologation
-  // ---------------------------------------------------------------------------
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> homologateResponseData(
