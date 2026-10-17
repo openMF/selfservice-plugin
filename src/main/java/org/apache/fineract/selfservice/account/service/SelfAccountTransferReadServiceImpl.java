@@ -246,7 +246,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "WHERE sat.savings_account_id = ? "
                     + "  AND ( "
                     + "        CAST(sat.id AS VARCHAR) = ? "
-                    + "     OR CAST(sat.id AS CHAR) = ? "
                     + "     OR sat.ref_no = ? "
                     + "     OR CAST(pd.id AS VARCHAR) = ? "
                     + "     OR pd.receipt_number = ? "
@@ -261,7 +260,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                       sql,
                       (rs, rowNum) -> mapLedgerRow(rs, accountId),
                       accountId,
-                      txnId,
                       txnId,
                       txnId,
                       txnId,
@@ -299,7 +297,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String internalRef =
             !receipt.isEmpty()
                     ? receipt
-                    : (!routing.isEmpty() ? routing : (!refNo.isEmpty() ? refNo : String.valueOf(satId)));
+                    : (!routing.isEmpty()
+                            ? routing
+                            : (!refNo.isEmpty() ? refNo : String.valueOf(satId)));
 
     java.sql.Timestamp created = rs.getTimestamp("created_date");
     java.sql.Date txnDate = rs.getDate("transaction_date");
@@ -372,9 +372,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String cleanIdentifier = identifier.trim();
     if (cleanIdentifier.toUpperCase().startsWith("CR")) {
       return resolveBankDetailsFromAccount(cleanIdentifier);
-    } else {
-      return resolveBankDetailsFromPhone(cleanIdentifier);
     }
+    return resolveBankDetailsFromPhone(cleanIdentifier);
   }
 
   private Map<String, String> resolveBankDetailsFromAccount(String accountIdentifier) {
@@ -511,11 +510,11 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   /**
-   * Internal fallback using m_savings_account_transaction + m_payment_detail + m_client +
-   * m_sinpe_participant + VALIDA_CREDITO / VALIDA_DEBITO.
+   * Internal fallback using ledger + m_sinpe_participant + VALIDA_CREDITO / VALIDA_DEBITO.
    *
-   * <p>Credit (transaction_type_enum=1): origin = external (bank_number), destination = local
-   * client. Debit (transaction_type_enum=2): origin = local, destination = external.
+   * <p>Credit (transaction_type_enum=1): origin = external sender from VALIDA_CREDITO
+   * (NOMBRE_ORIGEN, IDENTIFICACION) + bank from pd.bank_number; destination = local client.
+   * Debit (transaction_type_enum=2): origin = local; destination = external.
    */
   private Map<String, Object> loadExternalFromSavingsTransaction(
           Long accountId, String txnId, String transferType, String knownExternalRef) {
@@ -545,38 +544,40 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "  pd.receipt_number           AS receipt_number, "
                     + "  pd.bank_number              AS bank_number, "
                     + "  pt.value                    AS payment_type_name, "
-                    // Counterparty participant (pd.bank_number → 102 / 0102)
                     + "  sp_cp.code                  AS cp_code, "
                     + "  sp_cp.description           AS cp_name, "
-                    // Local participant from IBAN bank digits (positions 5-7 of CR IBAN)
                     + "  sp_local.code               AS local_code, "
                     + "  sp_local.description        AS local_entity_name, "
-                    // VALIDA tables (may match by txn id or receipt/routing)
                     + "  vc.\"IDENTIFICACION\"         AS vc_identificacion, "
                     + "  vc.\"CUENTA_IBAN\"            AS vc_iban, "
                     + "  vc.\"ID_RELACION_CLIENTE\"    AS vc_relacion, "
+                    + "  vc.\"NOMBRE_ORIGEN\"          AS vc_nombre_origen, "
                     + "  vd.\"IDENTIFICACION\"         AS vd_identificacion, "
                     + "  vd.\"CUENTA_IBAN\"            AS vd_iban, "
-                    + "  vd.\"CODIGO_REFERENCIA\"      AS vd_ref, "
-                    + "  vd.\"CHANNEL_REF_NUMBER\"     AS vd_channel "
+                    + "  vd.\"CODIGO_REFERENCIA\"      AS vd_ref "
                     + "FROM m_savings_account_transaction sat "
                     + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
                     + "INNER JOIN m_client c ON c.id = sa.client_id "
                     + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
                     + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
                     + "LEFT JOIN m_sinpe_participant sp_cp "
-                    + "       ON (sp_cp.code = TRIM(pd.bank_number) "
-                    + "        OR sp_cp.code = LPAD(TRIM(pd.bank_number), 4, '0')) "
-                    + "      AND sp_cp.is_active = true "
-                    + "LEFT JOIN m_sinpe_participant sp_local "
-                    + "       ON ( "
-                    + "            sp_local.code = SUBSTRING(REPLACE(COALESCE(sa.external_id, ''), ' ', ''), 5, 3) "
-                    + "         OR sp_local.code = LPAD(SUBSTRING(REPLACE(COALESCE(sa.external_id, ''), ' ', ''), 5, 3), 4, '0') "
+                    + "       ON sp_cp.is_active = true "
+                    + "      AND ( "
+                    + "            sp_cp.code = TRIM(COALESCE(pd.bank_number, '')) "
+                    + "         OR sp_cp.code = lpad(TRIM(COALESCE(pd.bank_number, '')), 4, '0') "
                     + "          ) "
-                    + "      AND sp_local.is_active = true "
+                    + "LEFT JOIN m_sinpe_participant sp_local "
+                    + "       ON sp_local.is_active = true "
+                    + "      AND ( "
+                    + "            sp_local.code = substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3) "
+                    + "         OR sp_local.code = lpad(substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3), 4, '0') "
+                    + "          ) "
+                    // Match VALIDA by txn id OR receipt/routing (sibling txn 174 vs sat 173)
                     + "LEFT JOIN \"VALIDA_CREDITO\" vc "
                     + "       ON (vc.savings_transaction_id = sat.id "
-                    + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.receipt_number) "
+                    + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.receipt_number "
+                    + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.routing_code "
+                    + "        OR vc.\"CHANNEL_REF_NUMBER\" = pd.routing_code) "
                     + "LEFT JOIN \"VALIDA_DEBITO\" vd "
                     + "       ON (vd.savings_transaction_id = sat.id "
                     + "        OR vd.\"CODIGO_REFERENCIA\" = pd.routing_code "
@@ -584,7 +585,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     + "WHERE sat.savings_account_id = ? "
                     + "  AND ( "
                     + "        CAST(sat.id AS VARCHAR) = ? "
-                    + "     OR CAST(sat.id AS CHAR) = ? "
                     + "     OR sat.ref_no = ? "
                     + "     OR CAST(pd.id AS VARCHAR) = ? "
                     + "     OR pd.receipt_number = ? "
@@ -604,7 +604,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                       txnId,
                       txnId,
                       txnId,
-                      txnId,
                       txnId);
 
       if (rows == null || rows.isEmpty() || rows.get(0) == null) {
@@ -613,11 +612,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return rows.get(0);
     } catch (Exception e) {
       log.warn(
-              "{} internal ledger fallback failed for accountId={}, txnId={}: {}",
+              "{} internal ledger fallback failed for accountId={}, txnId={}: {} | cause={}",
               transferType,
               accountId,
               txnId,
-              e.getMessage());
+              e.getMessage(),
+              e.getCause() != null ? e.getCause().getMessage() : "n/a");
       return null;
     }
   }
@@ -626,13 +626,11 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
           ResultSet rs, Long accountId, String transferType, String knownExternalRef)
           throws SQLException {
 
-    // Base amounts / dates / state from shared mapper (aliases that overlap)
-    // Build a minimal compatible ResultSet view via the shared fields present in both queries.
     boolean reversed = rs.getBoolean("is_reversed");
     BigDecimal amount = rs.getBigDecimal("amount");
     String currency = rs.getString("currency_code");
     long satId = rs.getLong("sat_id");
-    int txnType = rs.getInt("transaction_type_enum"); // 1 = DEPOSIT (credit), 2 = WITHDRAWAL (debit)
+    int txnType = rs.getInt("transaction_type_enum"); // 1=DEPOSIT/credit, 2=WITHDRAWAL/debit
     boolean isCredit = txnType == 1;
 
     String routing = nullToEmpty(rs.getString("routing_code"));
@@ -644,7 +642,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     knownExternalRef,
                     routing,
                     nullToEmpty(rs.getString("vd_ref")),
-                    nullToEmpty(rs.getString("vd_channel")),
                     receipt,
                     refNo,
                     String.valueOf(satId));
@@ -658,7 +655,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String processingDate =
             txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
-    // ----- Local (account owner) -----
+    // Local (account owner)
     String localName =
             firstNonBlank(
                     nullToEmpty(rs.getString("local_client_name")),
@@ -670,29 +667,44 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                     nullToEmpty(rs.getString("pd_account_number")));
     String localDoc = nullToEmpty(rs.getString("local_document"));
     String localEmail = nullToEmpty(rs.getString("local_email"));
-    // Expected sample uses "137" (no leading zero) for destination entityCode
     String localEntityCode =
             stripLeadingZero(firstNonBlank(nullToEmpty(rs.getString("local_code")), "0137"));
     String localEntityName =
             firstNonBlank(nullToEmpty(rs.getString("local_entity_name")), "APOLO CAPITAL");
 
-    // ----- Counterparty bank from pd.bank_number (102 → 0102 BAC) -----
+    // Counterparty bank (pd.bank_number 102 → 0102 BAC)
     String cpCodeRaw =
             firstNonBlank(
                     nullToEmpty(rs.getString("cp_code")),
                     padBankCode(nullToEmpty(rs.getString("bank_number"))));
-    String cpCode = padBankCode(cpCodeRaw); // keep leading zero for origin (0102)
+    String cpCode = padBankCode(cpCodeRaw);
     String cpName = nullToEmpty(rs.getString("cp_name"));
 
-    // External person from m_sinpe_audit_log when SINPE datatable is empty
+    // VALIDA_CREDITO / VALIDA_DEBITO (priority for origin person on credits)
+    String vcName = nullToEmpty(rs.getString("vc_nombre_origen"));
+    String vcId = nullToEmpty(rs.getString("vc_identificacion"));
+    String vcIban = nullToEmpty(rs.getString("vc_iban"));
+    String vdId = nullToEmpty(rs.getString("vd_identificacion"));
+    String vdIban = nullToEmpty(rs.getString("vd_iban"));
+
     Map<String, String> externalPerson = loadExternalPersonFromAudit(satId, sinpeRef, receipt);
-    String extName = firstNonBlank(externalPerson.get("name"), "");
-    String extIban = firstNonBlank(externalPerson.get("iban"), "");
-    String extId = firstNonBlank(externalPerson.get("id"), "");
+
+    String extName =
+            firstNonBlank(vcName, externalPerson.get("name"), "");
+    String extId =
+            firstNonBlank(
+                    isCredit ? vcId : firstNonBlank(vdId, vcId),
+                    externalPerson.get("id"),
+                    "");
+    // Origin IBAN is often unknown on incoming credits; do not use local CUENTA_IBAN as origin
+    String extIban =
+            firstNonBlank(
+                    isCredit ? "" : firstNonBlank(vdIban, vcIban),
+                    externalPerson.get("iban"),
+                    "");
     String extEmail = firstNonBlank(externalPerson.get("email"), "");
 
-    // Optional live enrichment when we already have an external IBAN
-    if ((!extName.isEmpty() || !extIban.isEmpty()) && !extIban.isEmpty()) {
+    if (!extIban.isEmpty()) {
       Map<String, String> resolved = resolveDestinationDetails(extIban);
       if (extName.isEmpty()) {
         extName = nullToEmpty(resolved.get("holder"));
@@ -714,7 +726,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String toAccount;
 
     if (isCredit) {
-      // Incoming credit: origin = external sender, destination = local Apolo
+      // Incoming: origin = external sender, destination = local
       origin.put("name", extName);
       origin.put("iban", extIban);
       origin.put("id", extId);
@@ -736,7 +748,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       fromAccount = extIban;
       toAccount = localIban;
     } else {
-      // Outgoing debit: origin = local, destination = external
+      // Outgoing: origin = local, destination = external
       origin.put("name", localName);
       origin.put("iban", localIban);
       origin.put("id", localDoc);
@@ -803,7 +815,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     return rawData;
   }
 
-  /** Parse m_sinpe_audit_log XML/JSON for OriginCustomer* when SINPE datatable has no row. */
+  /** Parse m_sinpe_audit_log when VALIDA has no person fields. */
   private Map<String, String> loadExternalPersonFromAudit(
           long satId, String sinpeRef, String receipt) {
     Map<String, String> out = new HashMap<>();
@@ -951,7 +963,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return "0";
     }
     String clean = id.replace("-", "").trim();
-    if (clean.length() == 10 && clean.startsWith("3")) {
+    // Costa Rica jurídica often 10 digits starting with 3; keep natural as default for cédulas with dashes
+    if (clean.length() == 10 && clean.startsWith("3") && !id.contains("-")) {
       return "2";
     }
     return "0";
@@ -1124,7 +1137,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       customData = new HashMap<>((Map<String, Object>) data.get("customData"));
     }
 
-    // Prefer origin/destination already built by mapLedgerRowForExternal
     if (!customData.containsKey("fromAccountIdentifier")) {
       if (data.get("originCustomer") instanceof Map) {
         Map<String, Object> origin = (Map<String, Object>) data.get("originCustomer");
@@ -1171,7 +1183,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    // Only resolve missing destination fields when not already filled by internal fallback
     boolean isInternalFallback = "INTERNAL_FALLBACK".equals(customData.get("source"));
     if (!isInternalFallback) {
       String target = "";
