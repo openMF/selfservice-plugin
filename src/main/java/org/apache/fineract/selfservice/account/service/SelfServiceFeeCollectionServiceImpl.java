@@ -66,6 +66,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollectionService {
 
+  /** Default payment type id used when no tenant-specific FEE payment type is configured. */
+  private static final long DEFAULT_FEE_PAYMENT_TYPE_ID = 1L;
+
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
   private final SelfServiceTransferFeeRepository feeRepository;
   private final BccrExchangeRateService bccrExchangeRateService;
@@ -239,6 +242,9 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       // Resolve source account INSIDE this fresh persistence context
       Long fromAccountId = resolveAccountId(req.getFromAccount(), req.getFromAccountType());
 
+      // Resolve payment type for FEE (config-driven, with safe fallback)
+      Long feePaymentTypeId = resolveFeePaymentTypeId(feeCfg);
+
       Map<String, Object> cmd = new HashMap<>();
       cmd.put("fromOfficeId", req.getFromOfficeId());
       cmd.put("fromClientId", req.getClientId());
@@ -253,11 +259,17 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       cmd.put("transferDescription", feeDescription);
       cmd.put("locale", req.getLocale());
       cmd.put("dateFormat", req.getDateFormat());
+      // Ensure fee transactions carry the FEE payment type in paymentDetailData
+      cmd.put("paymentTypeId", feePaymentTypeId);
 
       String json = gson.toJson(cmd);
       JsonCommand command = createJsonCommand(json);
 
-      log.info("FEE_COLLECT: Executing commission transfer of {} {}", feeAmount, currency);
+      log.info(
+          "FEE_COLLECT: Executing commission transfer of {} {} (paymentTypeId={})",
+          feeAmount,
+          currency,
+          feePaymentTypeId);
       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
       if (result != null && result.getResourceId() != null) {
@@ -299,6 +311,39 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   //  PRIVATE HELPERS  (self-contained — no shared state with caller)
   // ===================================================================
 
+  /**
+   * Resolves the payment type id that should be attached to fee transfers.
+   *
+   * <p>Priority:
+   * <ol>
+   *   <li>{@code fee_payment_type_id} from {@code SELF_SERVICE_FEE_CONFIG} (tenant-specific)
+   *   <li>Hard-coded default {@value #DEFAULT_FEE_PAYMENT_TYPE_ID} (matches the "FEE" payment type
+   *       commonly used in existing tenants)
+   * </ol>
+   */
+  private Long resolveFeePaymentTypeId(Map<String, String> feeCfg) {
+    String configured = feeCfg != null ? feeCfg.get("fee_payment_type_id") : null;
+    if (StringUtils.isNotBlank(configured)) {
+      try {
+        long id = Long.parseLong(configured.trim());
+        if (id > 0) {
+          log.debug("FEE_COLLECT: Using configured fee_payment_type_id={}", id);
+          return id;
+        }
+        log.warn(
+            "FEE_COLLECT: Invalid fee_payment_type_id='{}'. Falling back to default {}.",
+            configured,
+            DEFAULT_FEE_PAYMENT_TYPE_ID);
+      } catch (NumberFormatException e) {
+        log.warn(
+            "FEE_COLLECT: Non-numeric fee_payment_type_id='{}'. Falling back to default {}.",
+            configured,
+            DEFAULT_FEE_PAYMENT_TYPE_ID);
+      }
+    }
+    return DEFAULT_FEE_PAYMENT_TYPE_ID;
+  }
+
   private FeeCollectionResult skipped(String reason) {
     return FeeCollectionResult.builder()
         .successful(true)
@@ -336,7 +381,6 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
     String trimmed = accountIdentifier.trim();
-
     try {
       Long numericId = Long.valueOf(trimmed);
       return resolveNumericAccountId(numericId, accountType);
