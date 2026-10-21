@@ -150,7 +150,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   private Map<String, Object> processApoloTransfer(
       Long clientId, Long accountId, String txnId, String transferType) {
 
-    // FEE: pure ledger + account-transfer link → destination is institution fee account
     if ("FEE".equalsIgnoreCase(transferType)) {
       Map<String, Object> feeData = loadFeeFromSavingsTransaction(accountId, txnId);
       if (feeData != null) {
@@ -185,8 +184,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   /**
    * FEE postings are internal account transfers. Destination comes from
-   * m_account_transfer_details.to_savings_account_id (institution fee GL), not from
-   * payment_detail.account_number (which is empty for FEE).
+   * m_account_transfer_details.to_savings_account_id. Reference prefers payment-detail
+   * routing/receipt (SINPE-like from fee write path), else parent PIN/SINPE routing + 1.
    */
   private Map<String, Object> loadFeeFromSavingsTransaction(Long accountId, String txnId) {
     final String sql =
@@ -201,6 +200,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             + "  sa.account_no             AS from_account_no, "
             + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS from_iban, "
             + "  pd.id                     AS payment_detail_id, "
+            + "  pd.routing_code           AS routing_code, "
+            + "  pd.receipt_number         AS receipt_number, "
             + "  pt.value                  AS payment_type_name, "
             + "  att.id                    AS transfer_txn_id, "
             + "  att.description           AS transfer_description, "
@@ -264,6 +265,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String paymentType = nullToEmpty(rs.getString("payment_type_name"));
     long satId = rs.getLong("sat_id");
     String refNo = nullToEmpty(rs.getString("ref_no"));
+    String routingCode = nullToEmpty(rs.getString("routing_code"));
+    String receiptNumber = nullToEmpty(rs.getString("receipt_number"));
 
     String toIban = nullToEmpty(rs.getString("to_iban"));
     String toAccountNo = nullToEmpty(rs.getString("to_account_no"));
@@ -273,7 +276,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String transferDescription =
         firstNonBlank(nullToEmpty(rs.getString("transfer_description")), paymentType, "FEE");
 
+    // internalRef / channelRef keep sat.ref_no (UUID) when present
     String internalRef = !refNo.isEmpty() ? refNo : String.valueOf(satId);
+
+    // Display reference: prefer stored SINPE-like payment detail, else parent PIN + 1
+    String displayReference =
+        resolveFeeDisplayReference(accountId, satId, rs.getDate("transaction_date"), routingCode, receiptNumber);
 
     java.sql.Timestamp created = rs.getTimestamp("created_date");
     java.sql.Date txnDate = rs.getDate("transaction_date");
@@ -287,7 +295,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String fromAccount = !fromIban.isEmpty() ? fromIban : String.valueOf(accountId);
     Map<String, Object> originCustomer = getOriginCustomerInfoByAccount(fromAccount);
 
-    // Destination = institution fee account from m_account_transfer_details
     Map<String, Object> destinationCustomer = new HashMap<>();
     if (!toIban.isEmpty() || !toClientName.isEmpty()) {
       destinationCustomer.put(
@@ -300,7 +307,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destinationCustomer.put("idType", "2");
       destinationCustomer.put("idTypeDescription", "Persona Jurídica Nacional");
 
-      // Prefer real client data from DB when available
       if (!toIban.isEmpty()) {
         Map<String, Object> resolved = getDestinationCustomerInfoByAccount(toIban);
         if (!isStringBlank(resolved.get("name"))) {
@@ -323,7 +329,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         }
       }
     } else {
-      // Transfer join missed — leave empty rather than wrong origin client
       destinationCustomer.put("name", "");
       destinationCustomer.put("iban", "");
       destinationCustomer.put("id", "");
@@ -336,17 +341,16 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     Map<String, Object> customData = new HashMap<>();
     customData.put("fromAccountIdentifier", fromAccount);
-    customData.put(
-        "toAccountIdentifier", !toIban.isEmpty() ? toIban : toAccountNo);
+    customData.put("toAccountIdentifier", !toIban.isEmpty() ? toIban : toAccountNo);
     customData.put("transferDescription", transferDescription);
-    customData.put("reference", internalRef);
+    customData.put("reference", displayReference);
     customData.put("originCustomer", originCustomer);
     customData.put("destinationCustomer", destinationCustomer);
     customData.put("savingsTransactionId", satId);
     customData.put("paymentDetailId", rs.getObject("payment_detail_id"));
     customData.put("paymentTypeName", !paymentType.isEmpty() ? paymentType : "FEE");
-    customData.put("routingCode", "");
-    customData.put("receiptNumber", "");
+    customData.put("routingCode", routingCode);
+    customData.put("receiptNumber", receiptNumber);
     if (rs.getObject("transfer_txn_id") != null) {
       customData.put("accountTransferTransactionId", rs.getLong("transfer_txn_id"));
     }
@@ -358,7 +362,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     rawData.put("sinpeRefNumber", "");
     rawData.put("debitedAmount", amount != null ? amount : BigDecimal.ZERO);
     rawData.put("debitCurrencyCode", currency != null ? currency : "CRC");
-    // For pure FEE the debit IS the commission
     rawData.put("commissionAmount", amount != null ? amount : BigDecimal.ZERO);
     rawData.put("commissionCurrency", currency != null ? currency : "CRC");
     rawData.put("exchangeRate", 0);
@@ -370,6 +373,111 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     rawData.put("rejectDescription", reversed ? "Transaction reversed" : "");
     rawData.put("customData", customData);
     return rawData;
+  }
+
+  /**
+   * Prefer payment-detail routing/receipt when it looks SINPE-like (from fee write path).
+   * Else parent PIN/SINPE routing on same account/day with sequence + 1.
+   * Else fall back to internal ref.
+   */
+  private String resolveFeeDisplayReference(
+      Long accountId,
+      long feeSatId,
+      java.sql.Date feeTxnDate,
+      String routingCode,
+      String receiptNumber) {
+
+    if (looksLikeSinpeReference(routingCode)) {
+      return routingCode;
+    }
+    if (looksLikeSinpeReference(receiptNumber)) {
+      return receiptNumber;
+    }
+
+    String fromParent =
+        resolveFeeSinpeLikeReferenceFromParent(accountId, feeSatId, feeTxnDate);
+    if (!fromParent.isEmpty()) {
+      return fromParent;
+    }
+
+    return !routingCode.isEmpty()
+        ? routingCode
+        : (!receiptNumber.isEmpty() ? receiptNumber : String.valueOf(feeSatId));
+  }
+
+  private static boolean looksLikeSinpeReference(String value) {
+    if (value == null || value.isBlank()) {
+      return false;
+    }
+    String v = value.trim();
+    // UUID → not SINPE-like
+    if (v.contains("-") && v.length() >= 32) {
+      return false;
+    }
+    // Typical live pattern: yyyyMMdd + entity + channel + sequence (digits, length >= 20)
+    return v.matches("\\d{20,}");
+  }
+
+  private String resolveFeeSinpeLikeReferenceFromParent(
+      Long accountId, long feeSatId, java.sql.Date feeTxnDate) {
+    if (accountId == null || feeTxnDate == null) {
+      return "";
+    }
+    final String sql =
+        "SELECT pd.routing_code "
+            + "FROM m_savings_account_transaction sat "
+            + "INNER JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
+            + "INNER JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
+            + "WHERE sat.savings_account_id = ? "
+            + "  AND sat.id < ? "
+            + "  AND sat.transaction_date = ? "
+            + "  AND UPPER(pt.value) IN ('PIN', 'SINPE', 'SINPE_MOVIL') "
+            + "  AND pd.routing_code IS NOT NULL "
+            + "  AND TRIM(pd.routing_code) <> '' "
+            + "ORDER BY sat.id DESC "
+            + "LIMIT 1";
+    try {
+      String parentRouting =
+          this.jdbcTemplate.queryForObject(
+              sql, String.class, accountId, feeSatId, feeTxnDate);
+      return incrementSinpeSequence(nullToEmpty(parentRouting));
+    } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+      log.debug(
+          "FEE: no parent PIN/SINPE routing for accountId={} satId={}", accountId, feeSatId);
+      return "";
+    } catch (Exception e) {
+      log.warn(
+          "FEE: resolveFeeSinpeLikeReferenceFromParent failed accountId={} satId={}: {}",
+          accountId,
+          feeSatId,
+          e.getMessage());
+      return "";
+    }
+  }
+
+  /** {@code 2026102137322010000004900} → {@code 2026102137322010000004901} */
+  private static String incrementSinpeSequence(String routingCode) {
+    if (routingCode == null || routingCode.isBlank()) {
+      return "";
+    }
+    String code = routingCode.trim();
+    int i = code.length() - 1;
+    while (i >= 0 && Character.isDigit(code.charAt(i))) {
+      i--;
+    }
+    String prefix = code.substring(0, i + 1);
+    String seqStr = code.substring(i + 1);
+    if (seqStr.isEmpty()) {
+      return code;
+    }
+    try {
+      long seq = Long.parseLong(seqStr);
+      long next = seq + 1L;
+      String nextStr = String.format("%0" + seqStr.length() + "d", next);
+      return prefix + nextStr;
+    } catch (NumberFormatException e) {
+      return code;
+    }
   }
 
   private Map<String, Object> mapAuditToRawData(SelfServiceSameBankTransferAudit audit) {
@@ -1369,7 +1477,6 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       destCustomer.put("idTypeDescription", "Persona Física Nacional (Cédula)");
     }
 
-    // Do not overwrite FEE destination with external resolution (already set from transfer)
     boolean isFee = "FEE".equalsIgnoreCase(transferType);
     boolean isInternalFallback = "INTERNAL_FALLBACK".equals(customData.get("source"));
     if (!isInternalFallback && !isFee) {
