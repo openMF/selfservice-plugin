@@ -104,6 +104,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       Map<String, String> feeCfg =
           externalServicePropertiesRepository.getProperties("SELF_SERVICE_FEE_CONFIG");
 
+      log.info("FEE_COLLECT [DEBUG]: SELF_SERVICE_FEE_CONFIG = {}", feeCfg);
+
       boolean enabled = Boolean.parseBoolean(feeCfg.getOrDefault("transfer_fee_enabled", "false"));
       if (!enabled) {
         log.info("FEE_COLLECT: Disabled in tenant configuration. Skipping.");
@@ -115,6 +117,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       // ---------------------------------------------------------------
       Map<String, String> instCfg =
           externalServicePropertiesRepository.getProperties("INSTITUTION_ACCOUNT_FOR_FEES");
+
+      log.info("FEE_COLLECT [DEBUG]: INSTITUTION_ACCOUNT_FOR_FEES = {}", instCfg);
 
       // ---------------------------------------------------------------
       // 3. Resolve fee row
@@ -138,6 +142,13 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       }
 
       SelfServiceTransferFee feeConfig = feeOpt.get();
+      log.info(
+          "FEE_COLLECT [DEBUG]: feeConfig id={}, type={}, feeType={}, feeValue={}, feeCurrency={}",
+          feeConfig.getId(),
+          feeConfig.getTransferType(),
+          feeConfig.getFeeType(),
+          feeConfig.getFeeValue(),
+          feeConfig.getFeeCurrency());
 
       // ---------------------------------------------------------------
       // 4. Calculate concrete fee amount
@@ -244,9 +255,18 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
 
       // Resolve source account INSIDE this fresh persistence context
       Long fromAccountId = resolveAccountId(req.getFromAccount(), req.getFromAccountType());
+      log.info(
+          "FEE_COLLECT [DEBUG]: Resolved fromAccountId={} from identifier={} (type={})",
+          fromAccountId,
+          req.getFromAccount(),
+          req.getFromAccountType());
 
       // Resolve payment type that must appear as "FEE" in paymentDetailData
       Long feePaymentTypeId = resolveFeePaymentTypeId(feeCfg);
+      log.info(
+          "FEE_COLLECT [DEBUG]: Resolved feePaymentTypeId={} (source config key 'fee_payment_type_id' or default {})",
+          feePaymentTypeId,
+          DEFAULT_FEE_PAYMENT_TYPE_ID);
 
       Map<String, Object> cmd = new HashMap<>();
       cmd.put("fromOfficeId", req.getFromOfficeId());
@@ -262,12 +282,34 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       cmd.put("transferDescription", feeDescription);
       cmd.put("locale", req.getLocale());
       cmd.put("dateFormat", req.getDateFormat());
-
       // ★ Force the FEE payment type (instead of the default SAME_BANK)
       cmd.put("paymentTypeId", feePaymentTypeId);
 
+      // ---- DEBUG: dump the exact payload that will be sent ----
+      log.info("FEE_COLLECT [DEBUG]: Full command map before serialization = {}", cmd);
+      log.info(
+          "FEE_COLLECT [DEBUG]: paymentTypeId present in map? {} → value={}",
+          cmd.containsKey("paymentTypeId"),
+          cmd.get("paymentTypeId"));
+
       String json = gson.toJson(cmd);
+      log.info("FEE_COLLECT [DEBUG]: Serialized JSON payload = {}", json);
+
       JsonCommand command = createJsonCommand(json);
+
+      // Extra verification that JsonCommand actually carries the parameter
+      boolean hasPaymentTypeId =
+          command.parameterExists("paymentTypeId")
+              || (command.json() != null && command.json().contains("\"paymentTypeId\""));
+      log.info(
+          "FEE_COLLECT [DEBUG]: JsonCommand contains paymentTypeId? {} | raw json snippet check={}",
+          command.parameterExists("paymentTypeId"),
+          hasPaymentTypeId);
+      if (command.parameterExists("paymentTypeId")) {
+        log.info(
+            "FEE_COLLECT [DEBUG]: JsonCommand.longValueOfParameterNamed(\"paymentTypeId\") = {}",
+            command.longValueOfParameterNamed("paymentTypeId"));
+      }
 
       log.info(
           "FEE_COLLECT: Executing commission transfer of {} {} (paymentTypeId={})",
@@ -279,10 +321,11 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
 
       if (result != null && result.getResourceId() != null) {
         log.info(
-            "FEE_COLLECT: Commission collected. txnId={}, amount={} {}",
+            "FEE_COLLECT: Commission collected. txnId={}, amount={} {} | paymentTypeId used={}",
             result.getResourceId(),
             feeAmount,
-            currency);
+            currency,
+            feePaymentTypeId);
         persistAudit(req, feeAmount, "COMPLETED");
         return FeeCollectionResult.builder()
             .successful(true)
@@ -328,12 +371,14 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
    */
   private Long resolveFeePaymentTypeId(Map<String, String> feeCfg) {
     String configured = feeCfg != null ? feeCfg.get("fee_payment_type_id") : null;
+    log.info(
+        "FEE_COLLECT [DEBUG]: resolveFeePaymentTypeId → raw config value='{}'", configured);
 
     if (StringUtils.isNotBlank(configured)) {
       try {
         long id = Long.parseLong(configured.trim());
         if (id > 0) {
-          log.debug("FEE_COLLECT: Using configured fee_payment_type_id={}", id);
+          log.info("FEE_COLLECT: Using configured fee_payment_type_id={}", id);
           return id;
         }
         log.warn(
@@ -347,11 +392,10 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
             DEFAULT_FEE_PAYMENT_TYPE_ID);
       }
     } else {
-      log.debug(
+      log.info(
           "FEE_COLLECT: fee_payment_type_id not configured. Using default {}.",
           DEFAULT_FEE_PAYMENT_TYPE_ID);
     }
-
     return DEFAULT_FEE_PAYMENT_TYPE_ID;
   }
 
@@ -392,7 +436,6 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
     String trimmed = accountIdentifier.trim();
-
     try {
       Long numericId = Long.valueOf(trimmed);
       return resolveNumericAccountId(numericId, accountType);
