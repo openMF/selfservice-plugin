@@ -120,7 +120,11 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             transferType);
 
     Map<String, Object> rawData;
-    if ("Apolo".equalsIgnoreCase(transferType) || "SAME_BANK".equalsIgnoreCase(transferType)) {
+    // FEE is an internal commission transfer posted via AccountTransfersWritePlatformService.
+    // It lives on the savings ledger the same way SAME_BANK / Apolo does.
+    if ("Apolo".equalsIgnoreCase(transferType)
+            || "SAME_BANK".equalsIgnoreCase(transferType)
+            || "FEE".equalsIgnoreCase(transferType)) {
       rawData = processApoloTransfer(client.getId(), accountId, txnId, transferType);
     } else if ("PIN".equalsIgnoreCase(transferType)
             || "SINPE".equalsIgnoreCase(transferType)
@@ -148,24 +152,62 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   private Map<String, Object> processApoloTransfer(
           Long clientId, Long accountId, String txnId, String transferType) {
 
-    Optional<SelfServiceSameBankTransferAudit> auditOpt =
-            this.sameBankTransferAuditRepository.findAuditDetail(clientId, accountId, txnId);
+    // FEE transactions are pure ledger postings — skip SAME_BANK audit table
+    if (!"FEE".equalsIgnoreCase(transferType)) {
+      Optional<SelfServiceSameBankTransferAudit> auditOpt =
+              this.sameBankTransferAuditRepository.findAuditDetail(clientId, accountId, txnId);
 
-    if (auditOpt.isPresent()) {
-      return mapAuditToRawData(auditOpt.get());
+      if (auditOpt.isPresent()) {
+        return mapAuditToRawData(auditOpt.get());
+      }
     }
 
     Map<String, Object> fromLedger = loadSameBankFromSavingsTransaction(accountId, txnId);
     if (fromLedger != null) {
+      if ("FEE".equalsIgnoreCase(transferType)) {
+        enrichFeeRawData(fromLedger);
+      }
       log.info(
-              "FETCH DETAILS: SAME_BANK resolved from savings transaction (no audit row)"
+              "FETCH DETAILS: {} resolved from savings transaction (no audit row)"
                       + " accountId={}, txnId={}",
+              transferType,
               accountId,
               txnId);
       return fromLedger;
     }
 
     throw new SelfAccountTransferTransactionNotFoundException(accountId, txnId, transferType);
+  }
+
+  /**
+   * For pure FEE ledger rows the debited amount <em>is</em> the commission. Ensure the response
+   * surface carries that clearly so the UI can display "Comisión" correctly.
+   */
+  private void enrichFeeRawData(Map<String, Object> rawData) {
+    Object debited = rawData.get("debitedAmount");
+    if (debited != null) {
+      BigDecimal amount = new BigDecimal(debited.toString());
+      Object existingCommission = rawData.get("commissionAmount");
+      boolean commissionIsZero =
+              existingCommission == null
+                      || BigDecimal.ZERO.compareTo(new BigDecimal(existingCommission.toString()))
+                              == 0;
+      if (commissionIsZero) {
+        rawData.put("commissionAmount", amount);
+        rawData.put(
+                "commissionCurrency",
+                rawData.getOrDefault("debitCurrencyCode", "CRC"));
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> customData =
+            rawData.get("customData") instanceof Map
+                    ? (Map<String, Object>) rawData.get("customData")
+                    : new HashMap<>();
+    customData.put("transferDescription", "FEE");
+    customData.put("paymentTypeName", "FEE");
+    rawData.put("customData", customData);
   }
 
   private Map<String, Object> mapAuditToRawData(SelfServiceSameBankTransferAudit audit) {
@@ -344,6 +386,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put("paymentDetailId", rs.getObject("payment_detail_id"));
     customData.put("routingCode", routing);
     customData.put("receiptNumber", receipt);
+    customData.put("paymentTypeName", paymentType);
 
     Map<String, Object> rawData = new HashMap<>();
     rawData.put("operationId", String.valueOf(satId));
