@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright since 2026 Mifos Initiative
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+    <!--
+        MX-488 (US-E12-02): per-tenant step-up configuration, read through StepUpSettingsProvider
+        (same convention as SELF_SERVICE_RATE_LIMIT, see 075). Step-up ships DISABLED so existing
+        deployments behave exactly as before; operators opt in per tenant by setting enabled=true.
+
+        Keys (values outside the allowed range fall back to the defaults below):
+          enabled                       true|false                             (default false)
+          otpLength                     4..8                                   (6)
+          otpTtlSeconds                 60..900                                (300)
+          maxAttempts                   1..10                                  (5)
+          lockoutSeconds                60..86400                              (900)
+          resendCooldownSeconds         10..600                                (60)
+          maxResends                    0..10                                  (3)
+          grantTtlSeconds               30..600                                (120)
+          protectedActions              CSV of TPT_TRANSFER, OWN_TRANSFER,
+                                        CONFIRM_TRANSFER, CHANGE_PASSWORD
+          channels                      CSV of SMS, EMAIL
+          challengeRateLimit            1..50  challenges per user per window  (5)
+          challengeRateWindowSeconds    60..86400                              (900)
+          retentionDays                 1..365 days challenges are kept         (30)
+          invalidateSessionsOnPasswordChange  true|false (defaults to 'enabled')
+
+        The HMAC secret used to hash OTPs is NOT stored here (it must not live in the database):
+        set mifos.self.service.stepup.hmac-secret (>= 32 chars) in the application environment.
+    -->
+
+    <changeSet id="ss-0083-1-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <insert tableName="c_external_service">
+            <column name="name" value="SELF_SERVICE_STEP_UP"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0083-1-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="enabled"/>
+            <column name="value" value="false"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="otpLength"/>
+            <column name="value" value="6"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="otpTtlSeconds"/>
+            <column name="value" value="300"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="maxAttempts"/>
+            <column name="value" value="5"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="lockoutSeconds"/>
+            <column name="value" value="900"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="resendCooldownSeconds"/>
+            <column name="value" value="60"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="maxResends"/>
+            <column name="value" value="3"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="grantTtlSeconds"/>
+            <column name="value" value="120"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="protectedActions"/>
+            <column name="value" value="TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="channels"/>
+            <column name="value" value="SMS,EMAIL"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="challengeRateLimit"/>
+            <column name="value" value="5"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="challengeRateWindowSeconds"/>
+            <column name="value" value="900"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="retentionDays"/>
+            <column name="value" value="30"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
