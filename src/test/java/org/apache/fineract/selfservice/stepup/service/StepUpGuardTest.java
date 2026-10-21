@@ -54,7 +54,12 @@ class StepUpGuardTest {
 
   @BeforeEach
   void setUp() {
-    guard = new StepUpGuard(settingsProvider, challengeService, securityContext);
+    guard =
+        new StepUpGuard(
+            settingsProvider,
+            challengeService,
+            securityContext,
+            new AuthorizationHeaderStepUpSessionResolver());
     final AppSelfServiceUser user = mock(AppSelfServiceUser.class);
     when(user.getId()).thenReturn(7L);
     when(securityContext.authenticatedSelfServiceUser()).thenReturn(user);
@@ -177,20 +182,5 @@ class StepUpGuardTest {
             StepUpException.class,
             () -> guard.requireIfProtected(StepUpAction.TPT_TRANSFER, request, () -> "d"));
     assertEquals("error.msg.selfservice.stepup.invalid", ex.getErrorCode());
-  }
-
-  @Test
-  void requestSupport_parsesSessionAndRejectsMalformedHeaders() {
-    when(request.getHeader("Authorization")).thenReturn("Basic !!!not-base64!!!");
-    assertTrue(StepUpRequestSupport.sessionHash(request).isEmpty());
-
-    when(request.getHeader("Authorization")).thenReturn("Bearer abc");
-    assertTrue(StepUpRequestSupport.sessionHash(request).isEmpty());
-
-    // the "Basic" scheme name is matched case-insensitively
-    when(request.getHeader("Authorization"))
-        .thenReturn("basic " + basic(SESSION_TOKEN).substring(6));
-    assertEquals(
-        StepUpCrypto.sha256Hex(SESSION_TOKEN), StepUpRequestSupport.sessionHash(request).get());
   }
 }

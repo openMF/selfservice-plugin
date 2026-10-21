@@ -32,6 +32,7 @@ import org.apache.fineract.selfservice.stepup.data.StepUpGrantData;
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.domain.StepUpChannel;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.service.AuthorizationHeaderStepUpSessionResolver;
 import org.apache.fineract.selfservice.stepup.service.StepUpChallengeService;
 import org.apache.fineract.selfservice.stepup.service.StepUpContact;
 import org.apache.fineract.selfservice.stepup.service.StepUpCrypto;
@@ -73,7 +74,8 @@ class SelfStepUpApiResourceTest {
             context,
             challengeService,
             settingsProvider,
-            new StepUpDataValidator(new FromJsonHelper()));
+            new StepUpDataValidator(new FromJsonHelper()),
+            new AuthorizationHeaderStepUpSessionResolver());
     when(context.authenticatedSelfServiceUser()).thenReturn(user);
     when(user.getId()).thenReturn(7L);
     when(user.getUsername()).thenReturn("ana");

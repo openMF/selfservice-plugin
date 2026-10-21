@@ -35,6 +35,7 @@ import org.apache.fineract.selfservice.stepup.exception.StepUpException;
 import org.apache.fineract.selfservice.stepup.service.StepUpChallengeService;
 import org.apache.fineract.selfservice.stepup.service.StepUpContact;
 import org.apache.fineract.selfservice.stepup.service.StepUpRequestSupport;
+import org.apache.fineract.selfservice.stepup.service.StepUpSessionResolver;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettings;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
@@ -66,6 +67,7 @@ public class SelfStepUpApiResource {
   private final StepUpChallengeService challengeService;
   private final StepUpSettingsProvider settingsProvider;
   private final StepUpDataValidator dataValidator;
+  private final StepUpSessionResolver sessionResolver;
 
   @GET
   @Path("/config")
@@ -103,7 +105,7 @@ public class SelfStepUpApiResource {
             settings.resendCooldownSeconds(),
             settings.maxResends(),
             settings.grantTtlSeconds(),
-            StepUpRequestSupport.sessionHash(httpRequest).isPresent());
+            sessionResolver.sessionHash(httpRequest).isPresent());
     return GSON.toJson(data);
   }
 
@@ -142,7 +144,7 @@ public class SelfStepUpApiResource {
       @Context final HttpServletRequest httpRequest) {
     final AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     final String sessionHash =
-        StepUpRequestSupport.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
+        sessionResolver.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
     final StepUpDataValidator.CreateChallengeRequest request =
         dataValidator.validateCreateChallenge(apiRequestBodyAsJson);
 
@@ -197,7 +199,7 @@ public class SelfStepUpApiResource {
       @Context final HttpServletRequest httpRequest) {
     final AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     final String sessionHash =
-        StepUpRequestSupport.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
+        sessionResolver.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
     final String otp = dataValidator.validateVerify(apiRequestBodyAsJson);
 
     final StepUpGrantData grant =
@@ -233,7 +235,7 @@ public class SelfStepUpApiResource {
       @Context final HttpServletRequest httpRequest) {
     final AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     final String sessionHash =
-        StepUpRequestSupport.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
+        sessionResolver.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
 
     final StepUpChallengeData data =
         challengeService.resend(

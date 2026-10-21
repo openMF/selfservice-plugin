@@ -7,8 +7,6 @@
 package org.apache.fineract.selfservice.stepup.service;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Locale;
 import java.util.Optional;
 import org.apache.commons.lang3.StringUtils;
@@ -28,38 +26,6 @@ public final class StepUpRequestSupport {
   private static final int MAX_IP_LENGTH = 45;
 
   private StepUpRequestSupport() {}
-
-  /**
-   * The raw session (access) token of this request, if the client authenticated with a session
-   * token ({@code Authorization: Basic base64(token)}). Credential based Basic auth ({@code
-   * user:password}) contains a colon and has no session, so it yields {@link Optional#empty()}.
-   */
-  static Optional<String> sessionToken(final HttpServletRequest request) {
-    if (request == null) {
-      return Optional.empty();
-    }
-    final String header = request.getHeader("Authorization");
-    if (header == null || !header.regionMatches(true, 0, "Basic ", 0, 6)) {
-      return Optional.empty();
-    }
-    final String decoded;
-    try {
-      decoded =
-          new String(
-              Base64.getDecoder().decode(header.substring(6).trim()), StandardCharsets.UTF_8);
-    } catch (IllegalArgumentException e) {
-      return Optional.empty();
-    }
-    if (decoded.isEmpty() || decoded.indexOf(':') >= 0) {
-      return Optional.empty();
-    }
-    return Optional.of(decoded);
-  }
-
-  /** SHA-256 of the session token: the only form in which the session is stored or compared. */
-  public static Optional<String> sessionHash(final HttpServletRequest request) {
-    return sessionToken(request).map(StepUpCrypto::sha256Hex);
-  }
 
   /** The step-up grant token sent by the client, if any. */
   public static Optional<String> grantToken(final HttpServletRequest request) {

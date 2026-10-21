@@ -214,7 +214,7 @@ Sensitive operations can require a fresh one-time code (SMS or e-mail) before th
 
 ### Flow
 
-The client must use a **session token** (`Authorization: Basic base64(accessToken)`, the `base64EncodedAuthenticationKey` returned by login). `user:password` Basic auth has no session and is rejected (`stepup.session.required`).
+The client must authenticate with the **session token** returned by login, not with the user name and password. The self-service API treats that token as a bearer-like credential and, for compatibility, currently carries it in the `Authorization` header wrapped as `Basic base64(<token>)` (the `base64EncodedAuthenticationKey` of the login response). Step-up only needs a stable identifier of the session, resolved through `StepUpSessionResolver`: it already also recognises `Authorization: Bearer <token>`, so the planned OIDC based security model only has to plug in its own resolver. `user:password` Basic auth has no session and is rejected (`stepup.session.required`).
 
 | Step | Request |
 |---|---|

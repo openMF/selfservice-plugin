@@ -33,6 +33,7 @@ public class StepUpGuard {
   private final StepUpSettingsProvider settingsProvider;
   private final StepUpChallengeService challengeService;
   private final PlatformSelfServiceSecurityContext securityContext;
+  private final StepUpSessionResolver sessionResolver;
 
   /** {@code true} when step-up is on for this tenant and protects {@code action}. */
   public boolean isProtected(final StepUpAction action) {
@@ -56,7 +57,7 @@ public class StepUpGuard {
       return;
     }
     final String sessionHash =
-        StepUpRequestSupport.sessionHash(request).orElseThrow(StepUpException::sessionRequired);
+        sessionResolver.sessionHash(request).orElseThrow(StepUpException::sessionRequired);
     final String grantToken =
         StepUpRequestSupport.grantToken(request)
             .orElseThrow(() -> StepUpException.required(action));
