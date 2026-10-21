@@ -24,6 +24,10 @@ import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
+import java.util.function.Supplier;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -68,6 +72,11 @@ import org.apache.fineract.selfservice.notification.util.NotificationDeliveryMod
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
+import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
+import org.apache.fineract.selfservice.stepup.service.StepUpTransferPayloads;
+import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -131,6 +140,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   @Mock private TransactionDateManagementService transactionDateManagementService;
   @Mock private HttpServletRequest httpRequest;
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  @Mock private StepUpGuard stepUpGuard;
 
   @InjectMocks private SelfAccountTransferWritePlatformServiceImpl service;
 
@@ -716,6 +726,185 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     for (int i = expectedPrefix.length(); i < paddedValue.length(); i++) {
       assertEquals(' ', paddedValue.charAt(i));
     }
+  }
+
+  // ===================================================================================
+  // MX-488: step-up (OTP) enforcement
+  // ===================================================================================
+
+  private void stepUpProtectsConfirmation(boolean protectedByStepUp) {
+    lenient()
+        .when(stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER))
+        .thenReturn(protectedByStepUp);
+  }
+
+  @Test
+  void quoteTransfer_withStepUpProtectingConfirm_doesNotSendTheLegacyOtp() throws Exception {
+    stepUpProtectsConfirmation(true);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
+
+    Object response =
+        assertDoesNotThrow(() -> service.quoteTransfer(prepareRequest(String.valueOf(SAVINGS_ID))));
+
+    verify(quoteService).calculateFee(any(AccountTransferPrepareRequest.class), eq(ownClient));
+    assertTrue(response.toString().contains("feeAmount"));
+    verifyNoInteractions(registrationRepository, applicationEventPublisher);
+  }
+
+  @Test
+  void quoteTransfer_withoutStepUp_stillSendsTheLegacyOtp() throws Exception {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
+
+    assertDoesNotThrow(() -> service.quoteTransfer(prepareRequest(String.valueOf(SAVINGS_ID))));
+
+    verify(registrationRepository).saveAndFlush(any(SelfServiceRegistration.class));
+    verify(applicationEventPublisher).publishEvent(any());
+  }
+
+  @Test
+  void confirmTransfer_withStepUp_rejectsAMissingTokenBeforeAnyMoneyMovesOrOtpIsChecked()
+      throws Exception {
+    stepUpProtectsConfirmation(true);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    org.mockito.Mockito.doThrow(StepUpException.required(StepUpAction.CONFIRM_TRANSFER))
+        .when(stepUpGuard)
+        .requireIfProtected(eq(StepUpAction.CONFIRM_TRANSFER), any(), any());
+
+    StepUpException ex =
+        assertThrows(
+            StepUpException.class,
+            () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    assertEquals("error.msg.selfservice.stepup.required", ex.getErrorCode());
+    verifyNoInteractions(
+        registrationRepository,
+        pinExternalTransferService,
+        sinpeExternalApiClient,
+        feeCollectionService,
+        accountTransfersWritePlatformService,
+        applicationEventPublisher);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void confirmTransfer_withStepUp_bindsTheTokenToTheExactTransferBeingConfirmed() throws Exception {
+    stepUpProtectsConfirmation(true);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    org.mockito.Mockito.doThrow(StepUpException.invalid())
+        .when(stepUpGuard)
+        .requireIfProtected(any(), any(), any());
+
+    assertThrows(
+        StepUpException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    ArgumentCaptor<Supplier<String>> hash = ArgumentCaptor.forClass(Supplier.class);
+    verify(stepUpGuard)
+        .requireIfProtected(eq(StepUpAction.CONFIRM_TRANSFER), eq(httpRequest), hash.capture());
+    assertEquals(
+        StepUpPayloadHasher.hash(
+            StepUpAction.CONFIRM_TRANSFER,
+            StepUpTransferPayloads.forConfirm(
+                String.valueOf(SAVINGS_ID), 2, "DEST-IBAN", 2, null, "PIN", "CRC", BigDecimal.TEN)),
+        hash.getValue().get());
+  }
+
+  @Test
+  void confirmTransfer_withStepUp_afterTheGuardPasses_executesWithoutTheLegacyOtp()
+      throws Exception {
+    stepUpProtectsConfirmation(true);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
+    when(pinExternalTransferService.getAccountInfo("DEST-IBAN"))
+        .thenReturn(
+            "{\"holder\":\"Receiver\",\"holderId\":\"1\",\"holderIdType\":1,\"currencyCode\":\"CRC\"}");
+    when(pinExternalTransferService.executePinTransfer(any()))
+        .thenReturn(
+            "{\"operationId\":\"op-1\",\"amount\":10,\"currency\":\"CRC\",\"stateCode\":32}");
+    when(feeCollectionService.collectFee(any()))
+        .thenReturn(
+            FeeCollectionResult.builder()
+                .successful(true)
+                .status(FeeCollectionResult.Status.SKIPPED)
+                .feeAmount(BigDecimal.ZERO)
+                .currency("CRC")
+                .build());
+
+    assertDoesNotThrow(() -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verify(stepUpGuard).requireIfProtected(eq(StepUpAction.CONFIRM_TRANSFER), any(), any());
+    verify(pinExternalTransferService).executePinTransfer(any());
+    // the legacy in-line OTP is not consulted at all
+    verifyNoInteractions(registrationRepository);
+  }
+
+  @Test
+  void resendTransferOtp_withStepUp_isReplacedByTheStepUpEndpoint() {
+    stepUpProtectsConfirmation(true);
+
+    StepUpException ex =
+        assertThrows(
+            StepUpException.class,
+            () -> service.resendTransferOtp(new ResendOtpRequest(), httpRequest));
+
+    assertEquals("error.msg.selfservice.stepup.legacy.otp.disabled", ex.getErrorCode());
+    verifyNoInteractions(registrationRepository, applicationEventPublisher);
+  }
+
+  private Map<String, Object> transferParams(Long fromId, Long toId, String amount) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("fromAccount", new SelfAccountTemplateData(fromId, 2, 5L, 1L));
+    params.put("toAccount", new SelfAccountTemplateData(toId, 2, 6L, 1L));
+    params.put("transactionAmount", new BigDecimal(amount));
+    return params;
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void createTransfer_tpt_requiresStepUpBoundToTheValidatedTransfer_beforeCreatingIt() {
+    when(dataValidator.validateCreate(eq("tpt"), anyString()))
+        .thenReturn(transferParams(1L, 2L, "100.00"));
+    org.mockito.Mockito.doThrow(StepUpException.required(StepUpAction.TPT_TRANSFER))
+        .when(stepUpGuard)
+        .requireIfProtected(any(), any(), any());
+
+    assertThrows(StepUpException.class, () -> service.createTransfer("tpt", "{}", httpRequest));
+
+    ArgumentCaptor<Supplier<String>> hash = ArgumentCaptor.forClass(Supplier.class);
+    verify(stepUpGuard)
+        .requireIfProtected(eq(StepUpAction.TPT_TRANSFER), eq(httpRequest), hash.capture());
+    assertEquals(
+        StepUpPayloadHasher.hash(
+            StepUpAction.TPT_TRANSFER,
+            StepUpTransferPayloads.forTransfer(1L, 2, 2L, 2, new BigDecimal("100"))),
+        hash.getValue().get());
+    verifyNoInteractions(accountTransfersWritePlatformService, applicationEventPublisher);
+  }
+
+  @Test
+  void createTransfer_betweenOwnAccounts_usesTheOwnTransferAction() {
+    when(dataValidator.validateCreate(eq(""), anyString())).thenReturn(transferParams(1L, 3L, "5"));
+    org.mockito.Mockito.doThrow(StepUpException.invalid())
+        .when(stepUpGuard)
+        .requireIfProtected(any(), any(), any());
+
+    assertThrows(StepUpException.class, () -> service.createTransfer("", "{}", httpRequest));
+
+    verify(stepUpGuard).requireIfProtected(eq(StepUpAction.OWN_TRANSFER), any(), any());
+    verifyNoInteractions(accountTransfersWritePlatformService);
   }
 
   private AccountTransferPrepareRequest prepareRequest(String fromAccount) {

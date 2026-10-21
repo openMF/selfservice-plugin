@@ -65,7 +65,7 @@ public class SelfUserPasswordChangeService {
    */
   @Transactional
   public String changePassword(final AppSelfServiceUser authenticatedUser, final String json) {
-    final String password = validate(json);
+    final String password = validateRequest(json);
     passwordPolicyValidator.validatePasswordAgainstPolicy(
         password, passwordValidationPolicyRepository.findActivePasswordValidationPolicy());
 
@@ -86,8 +86,11 @@ public class SelfUserPasswordChangeService {
     return GSON.toJson(response);
   }
 
-  /** Returns the new password once the body is known to be well formed. */
-  private String validate(final String json) {
+  /**
+   * Checks that the body is well formed and returns the new password. Public so a caller can reject
+   * a bad request before it spends a one-time step-up token.
+   */
+  public String validateRequest(final String json) {
     if (StringUtils.isBlank(json)) {
       throw new InvalidJsonException();
     }

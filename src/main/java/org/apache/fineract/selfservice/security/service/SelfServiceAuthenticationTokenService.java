@@ -158,6 +158,17 @@ public class SelfServiceAuthenticationTokenService {
         .orElse(null);
   }
 
+  /**
+   * Revokes every access and refresh token of the user, forcing a new login (used after a password
+   * change).
+   */
+  @Transactional
+  public void invalidateAllForUser(Long userId) {
+    if (userId != null) {
+      repository.deleteByUserId(userId);
+    }
+  }
+
   @Transactional
   public void invalidateToken(String token) {
     if (StringUtils.isNotBlank(token)) {
