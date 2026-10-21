@@ -1,6 +1,7 @@
 package org.apache.fineract.selfservice.notification;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +22,19 @@ public class SelfServiceTemplateService {
   // Inject the core Fineract repository instead of a custom one
   private final TemplateRepository templateRepository;
 
+  /**
+   * Merges the template {@code SELF_SERVICE_<TYPE>_<CHANNEL>} with {@code params}.
+   *
+   * <p>Locale support: when {@code params} carries a {@code locale} (e.g. {@code es_MX}, {@code
+   * en}), a language specific variant {@code SELF_SERVICE_<TYPE>_<CHANNEL>_<LANG>} (e.g. {@code
+   * ..._EN}) is preferred and the unsuffixed template is the fallback. Templates without a variant
+   * behave exactly as before.
+   */
   @Transactional(readOnly = true)
   public String mergeTemplate(
       SelfServiceNotificationEvent.Type type, String channel, Map<String, Object> params) {
     String templateName = "SELF_SERVICE_" + type.name() + "_" + channel;
+    List<String> candidateNames = candidateTemplateNames(templateName, params);
 
     // Fetch all templates for CLIENT entity (0) and SMS type (0).
     // We use this combination because EMAIL is commented out in Fineract's TemplateType enum.
@@ -32,8 +42,13 @@ public class SelfServiceTemplateService {
     List<Template> templates =
         templateRepository.findByEntityAndType(TemplateEntity.CLIENT, TemplateType.SMS);
 
-    Optional<Template> templateOpt =
-        templates.stream().filter(t -> templateName.equals(t.getName())).findFirst();
+    Optional<Template> templateOpt = Optional.empty();
+    for (String candidate : candidateNames) {
+      templateOpt = templates.stream().filter(t -> candidate.equals(t.getName())).findFirst();
+      if (templateOpt.isPresent()) {
+        break;
+      }
+    }
 
     if (templateOpt.isEmpty()) {
       log.warn("Template not found for name: {}. Using default message.", templateName);
@@ -43,6 +58,18 @@ public class SelfServiceTemplateService {
     Template template = templateOpt.get();
 
     return mergeTemplateText(template.getText(), template.getMappers(), params);
+  }
+
+  /** Language specific name first (if the locale is known), then the base name. */
+  static List<String> candidateTemplateNames(String baseName, Map<String, Object> params) {
+    Object locale = params != null ? params.get("locale") : null;
+    if (locale != null) {
+      String language = locale.toString().trim().split("[_-]")[0];
+      if (!language.isEmpty()) {
+        return List.of(baseName + "_" + language.toUpperCase(Locale.ROOT), baseName);
+      }
+    }
+    return List.of(baseName);
   }
 
   private String mergeTemplateText(

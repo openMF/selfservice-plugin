@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright since 2026 Mifos Initiative
+
+ <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!--
+        MX-488: step-up OTP messages (event STEP_UP_OTP).
+        The unsuffixed template is Spanish (es-MX, the product default); the "_EN" variant is used
+        when the request locale is English (SelfServiceTemplateService language lookup).
+        Placeholders: ${firstname} ${authCode} ${actionLabel} ${expirationMinutes}
+    -->
+
+    <!-- ============================ Spanish (default) ============================ -->
+
+    <changeSet author="fineract" id="ss-0084-1-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_EMAIL_SUBJECT'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_EMAIL_SUBJECT"/>
+            <column name="text" value="Código de verificación"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0084-1-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_EMAIL'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_EMAIL"/>
+            <column name="text" value="&lt;p&gt;Hola ${firstname},&lt;/p&gt;&lt;p&gt;Tu código de verificación (${actionLabel}) es: &lt;strong&gt;${authCode}&lt;/strong&gt;.&lt;/p&gt;&lt;p&gt;Vence en ${expirationMinutes} minutos. No compartas este código con nadie. Si no solicitaste esta operación, ignora este mensaje y comunícate con tu institución.&lt;/p&gt;"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0084-1-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_SMS'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_SMS"/>
+            <column name="text" value="Tu código de verificación (${actionLabel}) es ${authCode}. Vence en ${expirationMinutes} min. No lo compartas con nadie."/>
+        </insert>
+    </changeSet>
+
+    <!-- ================================ English ================================== -->
+
+    <changeSet author="fineract" id="ss-0084-2-1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_EMAIL_SUBJECT_EN'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_EMAIL_SUBJECT_EN"/>
+            <column name="text" value="Verification code"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0084-2-2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_EMAIL_EN'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_EMAIL_EN"/>
+            <column name="text" value="&lt;p&gt;Hello ${firstname},&lt;/p&gt;&lt;p&gt;Your verification code (${actionLabel}) is: &lt;strong&gt;${authCode}&lt;/strong&gt;.&lt;/p&gt;&lt;p&gt;It expires in ${expirationMinutes} minutes. Do not share this code with anyone. If you did not request this operation, ignore this message and contact your institution.&lt;/p&gt;"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0084-2-3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM m_template WHERE name = 'SELF_SERVICE_STEP_UP_OTP_SMS_EN'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_template">
+            <column name="entity" valueNumeric="0"/>
+            <column name="type" valueNumeric="1"/>
+            <column name="name" value="SELF_SERVICE_STEP_UP_OTP_SMS_EN"/>
+            <column name="text" value="Your verification code (${actionLabel}) is ${authCode}. It expires in ${expirationMinutes} min. Do not share it with anyone."/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

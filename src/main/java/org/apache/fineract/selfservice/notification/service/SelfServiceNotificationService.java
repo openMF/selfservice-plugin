@@ -100,6 +100,12 @@ public class SelfServiceNotificationService {
 
       Map<String, Object> params = buildTemplateParams(event);
 
+      // Sensitive events (e.g. step-up OTPs) must only travel over the chosen e-mail/SMS channel,
+      // never fan out to WhatsApp / in-app notifications of the external gateway.
+      final boolean sensitive =
+          event.getContextData() != null
+              && Boolean.TRUE.equals(event.getContextData().get("sensitive"));
+
       // 1. Resolve External Notification Configuration from Database
       NotificationCredentialsData credentials = null;
       boolean isExternalEnabled = false;
@@ -164,6 +170,7 @@ public class SelfServiceNotificationService {
       // --- WHATSAPP ---
       if (isExternalEnabled
           && credentials != null
+          && !sensitive
           && credentials.isWhatsapp()
           && StringUtils.isNotBlank(event.getMobileNumber())) {
         sendExternalWhatsapp(event, credentials, params);
@@ -172,6 +179,7 @@ public class SelfServiceNotificationService {
       // --- IN-APP ---
       if (isExternalEnabled
           && credentials != null
+          && !sensitive
           && credentials.isInApp()
           && StringUtils.isNotBlank(event.getMobileNumber())) {
         sendExternalInApp(event, credentials, params);

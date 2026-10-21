@@ -95,5 +95,6 @@
   <include file="parts/081-add-notification-message-payment-link.xml" relativeToChangelogFile="true"/>
   <include file="parts/082-create-stepup-challenge-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/083-add-stepup-config.xml" relativeToChangelogFile="true"/>
+  <include file="parts/084-add-notification-messages-stepup.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

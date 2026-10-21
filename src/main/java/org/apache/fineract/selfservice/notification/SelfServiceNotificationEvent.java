@@ -52,7 +52,8 @@ public class SelfServiceNotificationEvent extends ApplicationEvent {
     SAVINGS_DEPOSIT("savings-deposit"),
     LOGIN_UNKNOWN_DEVICE("login-unknown-device"),
     SAVINGS_WITHDRAWAL("savings-withdrawal"),
-    PAYMENT_LINK_CREATED("payment-link-created");
+    PAYMENT_LINK_CREATED("payment-link-created"),
+    STEP_UP_OTP("step-up-otp");
 
     private final String templatePrefix;
 
