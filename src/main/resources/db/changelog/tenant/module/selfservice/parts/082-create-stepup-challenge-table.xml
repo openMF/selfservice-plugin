@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MULTI-TENANT NOTE: included from the TENANT changelog master, executed against every
+        tenant schema.
+
+        MX-488 (US-E12-02): step-up / OTP challenges for sensitive self-service operations.
+        The OTP is stored only as a salted HMAC; the one-time grant token is stored only as a
+        SHA-256 digest; the session is referenced by a SHA-256 digest of the access token.
+        No secret is ever persisted in clear text. Rows double as the audit trail (US-E12-05).
+    -->
+
+    <changeSet id="ss-0082-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_stepup_challenge"/>
+            </not>
+        </preConditions>
+        <comment>Creates the step-up challenge table (hashed OTP, session/action/payload binding).</comment>
+        <createTable tableName="m_selfservice_stepup_challenge">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_code" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="channel" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="otp_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="otp_salt" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_attempts" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resend_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_sent_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locked_until" type="DATETIME"/>
+            <column name="verified_at" type="DATETIME"/>
+            <column name="grant_hash" type="VARCHAR(64)"/>
+            <column name="grant_expires_at" type="DATETIME"/>
+            <column name="consumed_at" type="DATETIME"/>
+            <column name="ip_address" type="VARCHAR(45)"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="ss-0082-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_stepup_challenge"/>
+            <not>
+                <indexExists tableName="m_selfservice_stepup_challenge"
+                             indexName="uq_ss_stepup_grant_hash"/>
+            </not>
+        </preConditions>
+        <comment>A grant digest identifies at most one challenge (NULLs are allowed many times).</comment>
+        <createIndex tableName="m_selfservice_stepup_challenge"
+                     indexName="uq_ss_stepup_grant_hash"
+                     unique="true">
+            <column name="grant_hash"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0082-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_stepup_challenge"/>
+            <not>
+                <indexExists tableName="m_selfservice_stepup_challenge"
+                             indexName="idx_ss_stepup_user_action_status"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="m_selfservice_stepup_challenge"
+                     indexName="idx_ss_stepup_user_action_status">
+            <column name="appuser_id"/>
+            <column name="action_code"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0082-4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_stepup_challenge"/>
+            <not>
+                <indexExists tableName="m_selfservice_stepup_challenge"
+                             indexName="idx_ss_stepup_user_created"/>
+            </not>
+        </preConditions>
+        <comment>Supports the per-user challenge creation rate limit and the retention purge.</comment>
+        <createIndex tableName="m_selfservice_stepup_challenge"
+                     indexName="idx_ss_stepup_user_created">
+            <column name="appuser_id"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0082-5" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_stepup_challenge"/>
+            <not>
+                <indexExists tableName="m_selfservice_stepup_challenge"
+                             indexName="idx_ss_stepup_created_at"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="m_selfservice_stepup_challenge"
+                     indexName="idx_ss_stepup_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- No foreign key to m_appuser on purpose: self-service users live in
+         m_appselfservice_user (see 067 / 076 which dropped the same FK for the same reason). -->
+</databaseChangeLog>

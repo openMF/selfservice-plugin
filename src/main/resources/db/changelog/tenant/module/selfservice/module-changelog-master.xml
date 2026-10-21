@@ -93,5 +93,6 @@
   <include file="parts/079-add-external-remittance-system.xml" relativeToChangelogFile="true"/>
   <include file="parts/080-create-remittance-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/081-add-notification-message-payment-link.xml" relativeToChangelogFile="true"/>
+  <include file="parts/082-create-stepup-challenge-table.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>
