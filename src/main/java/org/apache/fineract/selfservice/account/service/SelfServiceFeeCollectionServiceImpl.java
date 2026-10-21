@@ -66,7 +66,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollectionService {
 
-  /** Default payment type id used when no tenant-specific FEE payment type is configured. */
+  /**
+   * Fallback payment type id used only when {@code fee_payment_type_id} is not configured in
+   * {@code SELF_SERVICE_FEE_CONFIG}. Prefer configuring the real ID of the payment type named "FEE".
+   */
   private static final long DEFAULT_FEE_PAYMENT_TYPE_ID = 1L;
 
   private final SelfServiceAccountForFeesRepository externalServicePropertiesRepository;
@@ -242,7 +245,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       // Resolve source account INSIDE this fresh persistence context
       Long fromAccountId = resolveAccountId(req.getFromAccount(), req.getFromAccountType());
 
-      // Resolve payment type for FEE (config-driven, with safe fallback)
+      // Resolve payment type that must appear as "FEE" in paymentDetailData
       Long feePaymentTypeId = resolveFeePaymentTypeId(feeCfg);
 
       Map<String, Object> cmd = new HashMap<>();
@@ -259,7 +262,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       cmd.put("transferDescription", feeDescription);
       cmd.put("locale", req.getLocale());
       cmd.put("dateFormat", req.getDateFormat());
-      // Ensure fee transactions carry the FEE payment type in paymentDetailData
+
+      // ★ Force the FEE payment type (instead of the default SAME_BANK)
       cmd.put("paymentTypeId", feePaymentTypeId);
 
       String json = gson.toJson(cmd);
@@ -270,6 +274,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
           feeAmount,
           currency,
           feePaymentTypeId);
+
       CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
       if (result != null && result.getResourceId() != null) {
@@ -312,17 +317,18 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   // ===================================================================
 
   /**
-   * Resolves the payment type id that should be attached to fee transfers.
+   * Resolves the payment type id that should be attached to fee transfers so that
+   * {@code paymentDetailData.paymentType.name} becomes {@code "FEE"}.
    *
    * <p>Priority:
    * <ol>
-   *   <li>{@code fee_payment_type_id} from {@code SELF_SERVICE_FEE_CONFIG} (tenant-specific)
-   *   <li>Hard-coded default {@value #DEFAULT_FEE_PAYMENT_TYPE_ID} (matches the "FEE" payment type
-   *       commonly used in existing tenants)
+   *   <li>{@code fee_payment_type_id} from tenant property set {@code SELF_SERVICE_FEE_CONFIG}
+   *   <li>Hard-coded fallback {@value #DEFAULT_FEE_PAYMENT_TYPE_ID}
    * </ol>
    */
   private Long resolveFeePaymentTypeId(Map<String, String> feeCfg) {
     String configured = feeCfg != null ? feeCfg.get("fee_payment_type_id") : null;
+
     if (StringUtils.isNotBlank(configured)) {
       try {
         long id = Long.parseLong(configured.trim());
@@ -340,7 +346,12 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
             configured,
             DEFAULT_FEE_PAYMENT_TYPE_ID);
       }
+    } else {
+      log.debug(
+          "FEE_COLLECT: fee_payment_type_id not configured. Using default {}.",
+          DEFAULT_FEE_PAYMENT_TYPE_ID);
     }
+
     return DEFAULT_FEE_PAYMENT_TYPE_ID;
   }
 
@@ -381,6 +392,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       throw new IllegalArgumentException("Account identifier cannot be null or blank.");
     }
     String trimmed = accountIdentifier.trim();
+
     try {
       Long numericId = Long.valueOf(trimmed);
       return resolveNumericAccountId(numericId, accountType);
