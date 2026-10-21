@@ -3150,6 +3150,437 @@
           ]
         },
         {
+          "name": "STEP-UP (OTP)",
+          "description": "MX-488 / US-E12-02. Run in order: 00 login (stores {{sessionKey}}), 01 config, 02 or 03 challenge (stores {{challengeId}}), 04 verify with the code received by e-mail/SMS (stores {{stepUpToken}}), then send the protected request with the X-Step-Up-Token header (05, 06). Step-up must be enabled for the tenant: see README.",
+          "item": [
+            {
+              "name": "00. LOGIN (stores the session key)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/authentication",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "authentication"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"username\": \"REPLACE_ME\",\n    \"password\": \"REPLACE_ME\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Step-up needs a session token: later requests send 'Authorization: Basic <base64EncodedAuthenticationKey>', NOT user:password."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const json = pm.response.json();",
+                      "pm.collectionVariables.set('sessionKey', json.base64EncodedAuthenticationKey);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "01. STEP-UP CONFIG",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/config",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "config"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "02. REQUEST CHALLENGE - THIRD PARTY TRANSFER",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"action\": \"TPT_TRANSFER\",\n    \"channel\": \"EMAIL\",\n    \"payload\": {\n        \"fromAccountId\": 1,\n        \"fromAccountType\": 2,\n        \"toAccountId\": 2,\n        \"toAccountType\": 2,\n        \"transferAmount\": 15.36\n    }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "The payload is what you are about to confirm; the token only works for it."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('challengeId', pm.response.json().challengeId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03. REQUEST CHALLENGE - CHANGE PASSWORD",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"action\": \"CHANGE_PASSWORD\",\n    \"channel\": \"EMAIL\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('challengeId', pm.response.json().challengeId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04. VERIFY CODE (stores the one-time token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges/{{challengeId}}/verify",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges",
+                    "{{challengeId}}",
+                    "verify"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"otp\": \"123456\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  pm.collectionVariables.set('stepUpToken', pm.response.json().stepUpToken);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04b. RESEND CODE",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges/{{challengeId}}/resend",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges",
+                    "{{challengeId}}",
+                    "resend"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "05. TRANSFER TO THIRD PARTY (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/accounttransfers?type=tpt",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "accounttransfers"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "tpt"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"fromOfficeId\": 1,\n    \"fromClientId\": 1,\n    \"fromAccountId\": 1,\n    \"fromAccountType\": 2,\n    \"toOfficeId\": 1,\n    \"toClientId\": 2,\n    \"toAccountId\": 2,\n    \"toAccountType\": 2,\n    \"transferAmount\": 15.36,\n    \"transferDate\": \"11 April 2026\",\n    \"transferDescription\": \"BILL PAYMENT\",\n    \"dateFormat\": \"dd MMMM yyyy\",\n    \"locale\": \"en\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "transferAmount must be the amount approved in step 02."
+              },
+              "response": []
+            },
+            {
+              "name": "06. CHANGE PASSWORD (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/user",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "user"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"password\": \"REPLACE_ME\",\n    \"repeatPassword\": \"REPLACE_ME\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Succeeds once; all sessions of the user are then revoked (log in again)."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "SHARES",
           "item": [
             {
@@ -3672,6 +4103,20 @@
           "item": []
         }
       ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "sessionKey",
+      "value": ""
+    },
+    {
+      "key": "challengeId",
+      "value": ""
+    },
+    {
+      "key": "stepUpToken",
+      "value": ""
     }
   ]
 }

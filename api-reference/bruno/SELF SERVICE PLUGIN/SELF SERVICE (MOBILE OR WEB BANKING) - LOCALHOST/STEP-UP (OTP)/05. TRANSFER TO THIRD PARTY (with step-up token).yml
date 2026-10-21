@@ -1,0 +1,44 @@
+info:
+  name: 05. TRANSFER TO THIRD PARTY (with step-up token)
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/accounttransfers?type=tpt
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic {{sessionKey}}
+    - name: X-Step-Up-Token
+      value: "{{stepUpToken}}"
+  params:
+    - name: type
+      value: tpt
+      type: query
+  body:
+    type: json
+    data: |-
+      {
+          "fromOfficeId": 1,
+          "fromClientId": 1,
+          "fromAccountId": 1,
+          "fromAccountType": 2,
+          "toOfficeId": 1,
+          "toClientId": 2,
+          "toAccountId": 2,
+          "toAccountType": 2,
+          "transferAmount": 15.36,
+          "transferDate": "11 April 2026",
+          "transferDescription": "BILL PAYMENT",
+          "dateFormat": "dd MMMM yyyy",
+          "locale": "en"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

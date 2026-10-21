@@ -150,13 +150,14 @@ All endpoints live under `/v1/self/`. Here's a summary of the available resource
 | `/v1/self/registration` | Self-Registration & Enrollment | `POST` |
 | `/v1/self/authentication` | Login (HTTP Basic) | `POST` |
 | `/v1/self/password` | Forgot Password / Reset | `POST` |
-| `/v1/self/user` | Current User Profile | `GET`, `PUT` |
+| `/v1/self/user` | Current User Profile (password change; step-up protected when enabled) | `PUT` |
 | `/v1/self/userdetails` | Current User Details | `GET` |
 | `/v1/self/clients` | Client Profile, Images, Charges, Transactions | `GET`, `POST`, `PUT`, `DELETE` |
 | `/v1/self/savingsaccounts` | Savings Accounts & Transactions | `GET`, `POST` |
 | `/v1/self/loans` | Loan Accounts, Charges, Guarantors | `GET`, `POST`, `PUT` |
 | `/v1/self/shareaccounts` | Share Accounts | `GET`, `POST` |
 | `/v1/self/accounttransfers` | Fund Transfers (Own + TPT) | `GET`, `POST` |
+| `/v1/self/stepup` | Step-up (OTP) authentication for sensitive operations | `GET`, `POST` |
 | `/v1/self/beneficiaries/tpt` | Third-Party Transfer Beneficiaries | `GET`, `POST`, `PUT`, `DELETE` |
 | `/v1/self/loanproducts` | Loan Products Catalog | `GET` |
 | `/v1/self/savingsproducts` | Savings Products Catalog | `GET` |
@@ -167,7 +168,90 @@ All endpoints live under `/v1/self/`. Here's a summary of the available resource
 
 Full OpenAPI/Swagger documentation is available at runtime via the Fineract Swagger UI when the plugin is loaded.
 
-A [Postman collection](postman/) is also included for hands-on API exploration.
+A [Postman collection](api-reference/postman/) and a [Bruno collection](api-reference/bruno/) are also included for hands-on API exploration.
+
+## Step-up (OTP) authentication
+
+Sensitive operations can require a fresh one-time code (SMS or e-mail) before they are executed, so a stolen session cannot move money or change the password (US-E12-02). It is **disabled by default**: with the defaults the API behaves exactly as before.
+
+### Enable it for a tenant
+
+1. Set an HMAC secret (at least 32 characters) in the application environment. It is used to hash the OTPs and is **never stored in the database**:
+
+   ```bash
+   MIFOS_SELF_SERVICE_STEPUP_HMAC_SECRET=<long random value>
+   # or the property  mifos.self.service.stepup.hmac-secret
+   ```
+
+   If step-up is enabled without a usable secret, challenges are refused (`error.msg.selfservice.stepup.misconfigured`).
+
+2. Turn it on in the tenant database (the properties are seeded, disabled, by Liquibase):
+
+   ```sql
+   UPDATE c_external_service_properties SET value = 'true'
+   WHERE name = 'enabled'
+     AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP');
+   ```
+
+   Other keys of the `SELF_SERVICE_STEP_UP` service (values outside the range fall back to the default):
+
+   | Key | Default | Meaning |
+   |---|---|---|
+   | `enabled` | `false` | master switch |
+   | `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | also available: `OWN_TRANSFER` (transfers between own accounts) |
+   | `channels` | `SMS,EMAIL` | channels offered to the user |
+   | `otpLength` | `6` (4-8) | digits of the code |
+   | `otpTtlSeconds` | `300` (60-900) | validity of a code |
+   | `maxAttempts` | `5` (1-10) | wrong codes before the challenge is locked |
+   | `lockoutSeconds` | `900` | how long a locked user/action must wait |
+   | `resendCooldownSeconds` / `maxResends` | `60` / `3` | resend limits |
+   | `grantTtlSeconds` | `120` (30-600) | validity of the token returned after verification |
+   | `challengeRateLimit` / `challengeRateWindowSeconds` | `5` / `900` | challenges per user per window |
+   | `retentionDays` | `30` | challenges are kept this long (audit trail) |
+   | `invalidateSessionsOnPasswordChange` | follows `enabled` | revoke all sessions after a password change |
+
+3. Make sure e-mail (SMTP) and/or SMS delivery works for the tenant: codes are sent through the self-service notification module (template `STEP_UP_OTP`, es-MX by default, English with an English `Accept-Language`).
+
+### Flow
+
+The client must use a **session token** (`Authorization: Basic base64(accessToken)`, the `base64EncodedAuthenticationKey` returned by login). `user:password` Basic auth has no session and is rejected (`stepup.session.required`).
+
+| Step | Request |
+|---|---|
+| 0 | `GET /v1/self/stepup/config` - enabled? protected actions, channels this user can use |
+| 1 | `POST /v1/self/stepup/challenges` `{ "action": "TPT_TRANSFER", "channel": "SMS", "payload": { ...the operation about to be confirmed... } }` -> `201` with `challengeId`, `maskedDestination`, `expiresAt`, `attemptsRemaining`, `resendAvailableAt` (never the code) |
+| 2 | `POST /v1/self/stepup/challenges/{id}/verify` `{ "otp": "123456" }` -> `200 { "stepUpToken": "...", "expiresAt": "..." }` |
+| 2b | `POST /v1/self/stepup/challenges/{id}/resend` (cooldown and maximum apply; attempts are not reset) |
+| 3 | the protected request with the header `X-Step-Up-Token: <stepUpToken>` |
+
+The token works **once**, only for the same user, the same session, the same action and the **same payload**: the server recomputes the digest from the real request, so an approved code cannot execute a different transfer.
+
+| Action | Protected request | Payload bound into the token |
+|---|---|---|
+| `TPT_TRANSFER` | `POST /v1/self/accounttransfers?type=tpt` | `fromAccountId, fromAccountType, toAccountId, toAccountType, transferAmount` |
+| `OWN_TRANSFER` | `POST /v1/self/accounttransfers` | same as above |
+| `CONFIRM_TRANSFER` | `POST /v1/self/accounttransfers/confirm` | `fromAccount, fromAccountType, toAccount, toAccountType, toPhoneNumber, transferType, currencyCode, transferAmount` |
+| `CHANGE_PASSWORD` | `PUT /v1/self/user` | the action only (the password is never hashed or stored); all sessions are revoked afterwards |
+
+When step-up protects `CONFIRM_TRANSFER`, the older in-line transfer OTP is replaced: `/quote` no longer sends a code, `/confirm` expects the step-up token instead of `otp`, and `/otp/resend` answers `stepup.legacy.otp.disabled`.
+
+### Errors
+
+Errors use the usual Fineract body (`userMessageGlobalisationCode`, `defaultUserMessage`, `errors[]`) plus machine readable fields.
+
+| Code (`error.msg.selfservice.stepup.`) | HTTP | Extra fields |
+|---|---|---|
+| `required` | 403 | `action` |
+| `invalid` (unknown, expired, used, other user/session/action/payload) | 403 | |
+| `session.required` | 403 | |
+| `otp.invalid` | 400 | `attemptsRemaining` |
+| `otp.expired`, `disabled`, `action.not.protected`, `channel.unavailable`, `legacy.otp.disabled` | 400 | |
+| `locked`, `resend.cooldown`, `resend.limit`, `rate.limited` | 429 | `retryAfterSeconds` (+ `Retry-After` header) |
+| `misconfigured` | 500 | |
+
+Browser clients served from another origin must allow the `X-Step-Up-Token` request header in the Fineract CORS configuration (`fineract.security.cors.allowed-headers`).
+
+Step-up events (`ISSUED, RESENT, VERIFIED, FAILED, LOCKED, CONSUMED, REJECTED`) are published as Spring `StepUpEvent`s and the challenge rows are kept for `retentionDays`, so an activity feed can consume them.
 
 ## Contributing
 
