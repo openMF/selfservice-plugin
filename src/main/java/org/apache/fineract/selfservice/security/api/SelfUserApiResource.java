@@ -85,7 +85,8 @@ public class SelfUserApiResource {
         httpRequest,
         () -> StepUpPayloadHasher.hash(StepUpAction.CHANGE_PASSWORD, java.util.Map.of()));
 
-    final String response = this.passwordChangeService.changePassword(appUser, apiRequestBodyAsJson);
+    final String response =
+        this.passwordChangeService.changePassword(appUser, apiRequestBodyAsJson);
 
     // US-E01-03: the password change forces a re-login. All sessions of the user are revoked so a
     // stolen session cannot outlive the change.

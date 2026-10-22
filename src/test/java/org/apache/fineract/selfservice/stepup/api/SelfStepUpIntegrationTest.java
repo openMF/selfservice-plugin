@@ -387,6 +387,17 @@ class SelfStepUpIntegrationTest extends SelfServiceIntegrationTestBase {
     // US-E01-03: the old session is gone, the user must log in again.
     int afterChange = given(sessionSpec(session)).get(CP + "/self/clients").statusCode();
     assertTrue(afterChange == 401 || afterChange == 403, "old session still valid: " + afterChange);
+
+    // The password really changed on the self-service user: only the new one logs in.
+    assertEquals(
+        401,
+        SelfServiceTestUtils.authenticate(getFineractPort(), session.username(), "password")
+            .statusCode());
+    assertEquals(
+        200,
+        SelfServiceTestUtils.authenticate(
+                getFineractPort(), session.username(), "N3w-Pa5w0rd-2026!")
+            .statusCode());
   }
 
   // ---------------------------------------------------------------------------------------------

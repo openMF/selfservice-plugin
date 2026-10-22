@@ -9,7 +9,6 @@ package org.apache.fineract.selfservice.security.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -21,10 +20,10 @@ import static org.mockito.Mockito.when;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.function.Supplier;
-import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterException;
-import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.security.service.SelfUserPasswordChangeService;
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
 import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
@@ -32,7 +31,6 @@ import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettings;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
-import org.apache.fineract.useradministration.api.UsersApiResource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +49,7 @@ class SelfUserApiResourceStepUpTest {
   private static final String BODY =
       "{\"password\":\"N3w-Passw0rd!\",\"repeatPassword\":\"N3w-Passw0rd!\"}";
 
-  @Mock private UsersApiResource usersApiResource;
+  @Mock private SelfUserPasswordChangeService passwordChangeService;
   @Mock private PlatformSelfServiceSecurityContext context;
   @Mock private StepUpGuard stepUpGuard;
   @Mock private StepUpSettingsProvider settingsProvider;
@@ -65,15 +63,10 @@ class SelfUserApiResourceStepUpTest {
   void setUp() {
     resource =
         new SelfUserApiResource(
-            usersApiResource,
-            context,
-            new FromJsonHelper(),
-            stepUpGuard,
-            settingsProvider,
-            tokenService);
+            context, passwordChangeService, stepUpGuard, settingsProvider, tokenService);
     when(context.authenticatedSelfServiceUser()).thenReturn(user);
     when(user.getId()).thenReturn(7L);
-    when(usersApiResource.update(eq(7L), anyString())).thenReturn("{\"resourceId\":7}");
+    when(passwordChangeService.changePassword(user, BODY)).thenReturn("{\"resourceId\":7}");
     when(settingsProvider.current())
         .thenReturn(StepUpSettings.fromProperties(Map.of("enabled", "true")));
   }
@@ -83,11 +76,12 @@ class SelfUserApiResourceStepUpTest {
     final String response = resource.update(BODY, request);
 
     assertEquals("{\"resourceId\":7}", response);
-    final InOrder order = inOrder(stepUpGuard, usersApiResource);
+    final InOrder order = inOrder(passwordChangeService, stepUpGuard);
+    order.verify(passwordChangeService).validateRequest(BODY);
     order
         .verify(stepUpGuard)
         .requireIfProtected(eq(StepUpAction.CHANGE_PASSWORD), eq(request), any());
-    order.verify(usersApiResource).update(7L, BODY);
+    order.verify(passwordChangeService).changePassword(user, BODY);
   }
 
   @Test
@@ -112,7 +106,8 @@ class SelfUserApiResourceStepUpTest {
         assertThrows(StepUpException.class, () -> resource.update(BODY, request));
 
     assertEquals("error.msg.selfservice.stepup.required", ex.getErrorCode());
-    verifyNoInteractions(usersApiResource, tokenService);
+    verify(passwordChangeService, never()).changePassword(any(), any());
+    verifyNoInteractions(tokenService);
   }
 
   @Test
@@ -124,7 +119,8 @@ class SelfUserApiResourceStepUpTest {
 
   @Test
   void ifTheUpdateFails_sessionsAreKept() {
-    when(usersApiResource.update(eq(7L), anyString())).thenThrow(new IllegalStateException("boom"));
+    when(passwordChangeService.changePassword(user, BODY))
+        .thenThrow(new IllegalStateException("boom"));
 
     assertThrows(IllegalStateException.class, () -> resource.update(BODY, request));
 
@@ -137,7 +133,7 @@ class SelfUserApiResourceStepUpTest {
 
     resource.update(BODY, request);
 
-    verify(usersApiResource).update(7L, BODY);
+    verify(passwordChangeService).changePassword(user, BODY);
     verify(tokenService, never()).invalidateAllForUser(any());
   }
 
@@ -154,11 +150,13 @@ class SelfUserApiResourceStepUpTest {
   }
 
   @Test
-  void anUnsupportedParameter_isRejectedBeforeStepUpIsConsumed() {
-    assertThrows(
-        UnsupportedParameterException.class,
-        () -> resource.update("{\"password\":\"a\",\"newPassword\":\"b\"}", request));
+  void aMalformedRequest_isRejectedBeforeStepUpIsConsumed() {
+    doThrow(new InvalidJsonException()).when(passwordChangeService).validateRequest(any());
 
-    verifyNoInteractions(stepUpGuard, usersApiResource, tokenService);
+    assertThrows(
+        InvalidJsonException.class, () -> resource.update("{\"password\":\"a\"}", request));
+
+    verifyNoInteractions(stepUpGuard, tokenService);
+    verify(passwordChangeService, never()).changePassword(any(), any());
   }
 }
