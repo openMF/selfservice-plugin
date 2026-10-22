@@ -14,7 +14,6 @@
  */
 package org.apache.fineract.selfservice.security.api;
 
-import com.google.gson.reflect.TypeToken;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -25,18 +24,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
-import java.lang.reflect.Type;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
-import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.security.service.SelfUserPasswordChangeService;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
-import org.apache.fineract.useradministration.api.UsersApiResource;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/user")
@@ -45,11 +36,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SelfUserApiResource {
 
-  private final UsersApiResource usersApiResource;
   private final PlatformSelfServiceSecurityContext context;
-  private final FromJsonHelper fromApiJsonHelper;
-  private static final Set<String> SUPPORTED_PARAMETERS =
-      new HashSet<>(Arrays.asList("password", "repeatPassword"));
+  private final SelfUserPasswordChangeService passwordChangeService;
 
   @PUT
   @Operation(
@@ -73,15 +61,7 @@ public class SelfUserApiResource {
                     @Schema(implementation = SelfUserApiResourceSwagger.PutSelfUserResponse.class)))
   })
   public String update(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
-    if (StringUtils.isBlank(apiRequestBodyAsJson)) {
-      throw new InvalidJsonException();
-    }
-
-    final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-    this.fromApiJsonHelper.checkForUnsupportedParameters(
-        typeOfMap, apiRequestBodyAsJson, SUPPORTED_PARAMETERS);
-
     final AppSelfServiceUser appUser = this.context.authenticatedSelfServiceUser();
-    return this.usersApiResource.update(appUser.getId(), apiRequestBodyAsJson);
+    return this.passwordChangeService.changePassword(appUser, apiRequestBodyAsJson);
   }
 }

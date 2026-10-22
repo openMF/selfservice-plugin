@@ -42,8 +42,8 @@ final class SelfUserApiResourceSwagger {
 
       private PutSelfUserChanges() {}
 
-      @Schema(example = "6a72a630795be86fe926ce540fc45b6b922fe5ba130f185fe806a26b5e5efcdd")
-      public String passwordEncoded;
+      @Schema(example = "true")
+      public Boolean password;
     }
 
     @Schema(example = "1")
