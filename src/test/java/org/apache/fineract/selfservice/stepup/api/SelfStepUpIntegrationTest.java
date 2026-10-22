@@ -374,6 +374,13 @@ class SelfStepUpIntegrationTest extends SelfServiceIntegrationTestBase {
     Map<String, Object> change =
         Map.of("password", "N3w-Pa5w0rd-2026!", "repeatPassword", "N3w-Pa5w0rd-2026!");
 
+    // A password the policy rejects is refused before step-up is asked for (no code is wasted).
+    Response weak =
+        given(sessionSpec(session))
+            .body(Map.of("password", "weak", "repeatPassword", "weak"))
+            .put(CP + "/self/user");
+    assertEquals(400, weak.statusCode(), weak.asString());
+
     Response withoutToken = given(sessionSpec(session)).body(change).put(CP + "/self/user");
     assertEquals(403, withoutToken.statusCode(), withoutToken.asString());
     assertEquals(

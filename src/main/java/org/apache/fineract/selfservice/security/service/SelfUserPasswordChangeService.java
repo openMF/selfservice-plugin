@@ -66,8 +66,6 @@ public class SelfUserPasswordChangeService {
   @Transactional
   public String changePassword(final AppSelfServiceUser authenticatedUser, final String json) {
     final String password = validateRequest(json);
-    passwordPolicyValidator.validatePasswordAgainstPolicy(
-        password, passwordValidationPolicyRepository.findActivePasswordValidationPolicy());
 
     // The authenticated user may be detached: always change the persisted row.
     final AppSelfServiceUser user =
@@ -87,8 +85,9 @@ public class SelfUserPasswordChangeService {
   }
 
   /**
-   * Checks that the body is well formed and returns the new password. Public so a caller can reject
-   * a bad request before it spends a one-time step-up token.
+   * Checks that the body is well formed and that the new password satisfies the active password
+   * policy, and returns the new password. Public so a caller can reject a bad request before it
+   * spends a one-time step-up token.
    */
   public String validateRequest(final String json) {
     if (StringUtils.isBlank(json)) {
@@ -127,6 +126,8 @@ public class SelfUserPasswordChangeService {
     if (!errors.isEmpty()) {
       throw new PlatformApiDataValidationException(errors);
     }
+    passwordPolicyValidator.validatePasswordAgainstPolicy(
+        password, passwordValidationPolicyRepository.findActivePasswordValidationPolicy());
     return password;
   }
 }
