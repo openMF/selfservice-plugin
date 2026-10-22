@@ -30,6 +30,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.testing.support.SelfServiceIntegrationTestBase;
 import org.apache.fineract.selfservice.testing.support.SelfServiceTestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -82,6 +83,18 @@ class SelfStepUpIntegrationTest extends SelfServiceIntegrationTestBase {
     disableDailyTptLimit();
 
     receiver = seedClient("receiver", false);
+  }
+
+  /**
+   * All integration test classes share one Fineract container and one tenant database, so this class
+   * must leave the step-up settings as it found them (disabled). Otherwise every test that runs
+   * after it and uses a protected endpoint is refused with "step-up required".
+   */
+  @AfterAll
+  static void restoreStepUpDefaults() {
+    setStepUpProperty("enabled", "false");
+    setStepUpProperty("challengeRateLimit", "5");
+    setStepUpProperty("hmacSecret", "change-me-before-enabling");
   }
 
   @BeforeEach
