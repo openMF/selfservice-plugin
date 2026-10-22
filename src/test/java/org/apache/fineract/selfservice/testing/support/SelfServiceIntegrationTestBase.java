@@ -128,31 +128,53 @@ public abstract class SelfServiceIntegrationTestBase {
   }
 
   /**
-   * Locates the plugin jar built by the {@code package} phase. The file name carries the project
-   * version, which changes with every release, so it is resolved instead of hard-coded.
+   * Locates the plugin jar built by the {@code package} phase for the CURRENT build. The file name
+   * carries the project version, which changes with every release, so it is not hard-coded: the
+   * exact name comes from the {@code maven-archiver/pom.properties} written by that phase. Without
+   * it, exactly one candidate must exist; with leftovers of other versions the test fails instead
+   * of silently running against a stale jar.
    */
   private static String findPluginJar(String buildDir) {
-    try (java.util.stream.Stream<java.nio.file.Path> files =
-        java.nio.file.Files.list(java.nio.file.Path.of(buildDir))) {
-      return files
-          .filter(
-              path -> {
-                String name = path.getFileName().toString();
-                return name.startsWith("selfservice-plugin-")
-                    && name.endsWith(".jar")
-                    && !name.endsWith("-sources.jar")
-                    && !name.endsWith("-javadoc.jar")
-                    && !name.endsWith("-tests.jar")
-                    && !name.endsWith(".original");
-              })
-          .findFirst()
-          .map(java.nio.file.Path::toString)
-          .orElseThrow(
-              () ->
-                  new IllegalStateException(
-                      "Plugin jar not found in " + buildDir + ". Run the package phase first."));
+    final java.nio.file.Path dir = java.nio.file.Path.of(buildDir);
+    try {
+      final java.nio.file.Path pomProperties = dir.resolve("maven-archiver/pom.properties");
+      if (java.nio.file.Files.isRegularFile(pomProperties)) {
+        final java.util.Properties properties = new java.util.Properties();
+        try (java.io.InputStream in = java.nio.file.Files.newInputStream(pomProperties)) {
+          properties.load(in);
+        }
+        final java.nio.file.Path current =
+            dir.resolve(
+                properties.getProperty("artifactId") + "-" + properties.getProperty("version")
+                    + ".jar");
+        if (java.nio.file.Files.isRegularFile(current)) {
+          return current.toString();
+        }
+      }
+      try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
+        final java.util.List<String> candidates =
+            files
+                .map(path -> path.getFileName().toString())
+                .filter(
+                    name ->
+                        name.startsWith("selfservice-plugin-")
+                            && name.endsWith(".jar")
+                            && !name.endsWith("-sources.jar")
+                            && !name.endsWith("-javadoc.jar")
+                            && !name.endsWith("-tests.jar"))
+                .toList();
+        if (candidates.size() != 1) {
+          throw new IllegalStateException(
+              "Expected exactly one plugin jar in "
+                  + buildDir
+                  + " but found "
+                  + candidates
+                  + ". Run 'mvn clean package' first.");
+        }
+        return dir.resolve(candidates.get(0)).toString();
+      }
     } catch (java.io.IOException e) {
-      throw new IllegalStateException("Cannot list " + buildDir + " to find the plugin jar", e);
+      throw new IllegalStateException("Cannot look for the plugin jar in " + buildDir, e);
     }
   }
 
