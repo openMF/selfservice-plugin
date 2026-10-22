@@ -87,7 +87,7 @@ public abstract class SelfServiceIntegrationTestBase {
             .withEnv("FINERACT_SERVER_SSL_ENABLED", "true")
             .withEnv("FINERACT_SERVER_PORT", "8443")
             .withCopyFileToContainer(
-                MountableFile.forHostPath(buildDir + "/selfservice-plugin-1.15.0-SNAPSHOT.jar"),
+                MountableFile.forHostPath(findPluginJar(buildDir)),
                 "/app/plugins/selfservice-plugin.jar")
             .withCopyFileToContainer(
                 MountableFile.forHostPath(testPluginsPath + "/"), "/app/test-plugins/")
@@ -124,6 +124,62 @@ public abstract class SelfServiceIntegrationTestBase {
           fineract.getDockerImageName(),
           containerLogs);
       throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  /**
+   * Locates the plugin jar built by the {@code package} phase for the CURRENT build. The file name
+   * carries the project version, which changes with every release, so it is not hard-coded. It
+   * never falls back to another version: stale jars must not be tested by accident.
+   */
+  private static String findPluginJar(String buildDir) {
+    final java.nio.file.Path dir = java.nio.file.Path.of(buildDir);
+    try {
+      final java.nio.file.Path pomProperties = dir.resolve("maven-archiver/pom.properties");
+      return java.nio.file.Files.isRegularFile(pomProperties)
+          ? jarNamedBy(pomProperties, dir)
+          : onlyPluginJarIn(dir);
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException("Cannot look for the plugin jar in " + buildDir, e);
+    }
+  }
+
+  /** The jar that the package phase says it built; it must exist. */
+  private static String jarNamedBy(java.nio.file.Path pomProperties, java.nio.file.Path dir)
+      throws java.io.IOException {
+    final java.util.Properties properties = new java.util.Properties();
+    try (java.io.InputStream in = java.nio.file.Files.newInputStream(pomProperties)) {
+      properties.load(in);
+    }
+    final java.nio.file.Path jar =
+        dir.resolve(properties.getProperty("artifactId") + "-" + properties.getProperty("version") + ".jar");
+    if (!java.nio.file.Files.isRegularFile(jar)) {
+      throw new IllegalStateException(
+          "The build metadata names " + jar + " but it does not exist. Run 'mvn clean package' first.");
+    }
+    return jar.toString();
+  }
+
+  /** Without build metadata exactly one candidate must exist. */
+  private static String onlyPluginJarIn(java.nio.file.Path dir) throws java.io.IOException {
+    try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
+      final java.util.List<String> candidates =
+          files
+              .map(path -> path.getFileName().toString())
+              .filter(
+                  name ->
+                      name.startsWith("selfservice-plugin-")
+                          && name.endsWith(".jar")
+                          && !name.endsWith("-sources.jar")
+                          && !name.endsWith("-javadoc.jar")
+                          && !name.endsWith("-tests.jar"))
+              .toList();
+      if (candidates.size() != 1) {
+        throw new IllegalStateException(
+            "Expected exactly one plugin jar in " + dir + " but found " + candidates
+                + ". Run 'mvn clean package' first.");
+      }
+      return dir.resolve(candidates.get(0)).toString();
     }
   }
 
