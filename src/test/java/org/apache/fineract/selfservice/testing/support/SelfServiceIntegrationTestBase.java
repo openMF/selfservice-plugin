@@ -22,6 +22,9 @@ import org.testcontainers.utility.MountableFile;
 
 public abstract class SelfServiceIntegrationTestBase {
 
+  /** Tenant HMAC secret the step-up integration test writes into the tenant settings (test value only). */
+  protected static final String STEP_UP_HMAC_SECRET = "it-stepup-hmac-secret-it-stepup-hmac-1234";
+
   private static final Logger LOG = LoggerFactory.getLogger(SelfServiceIntegrationTestBase.class);
 
   private static final Network network = Network.newNetwork();

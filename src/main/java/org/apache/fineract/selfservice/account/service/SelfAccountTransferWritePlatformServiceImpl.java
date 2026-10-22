@@ -82,6 +82,11 @@ import org.apache.fineract.selfservice.notification.util.NotificationDeliveryMod
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
+import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
+import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
+import org.apache.fineract.selfservice.stepup.service.StepUpTransferPayloads;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
@@ -124,6 +129,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
 
   private final SelfServiceSameBankTransferAuditRepository sameBankTransferAuditRepository;
+
+  /** MX-488: step-up (OTP) enforcement; a no-op unless enabled for the tenant. */
+  private final StepUpGuard stepUpGuard;
 
   private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -249,11 +257,16 @@ public class SelfAccountTransferWritePlatformServiceImpl
             ? request.getToPhoneNumber()
             : request.getToAccount();
 
-    cleanupOldOtpRegistrations(sourceClient);
-    releaseOtpCooldown(currentUser);
+    // MX-488: when step-up protects the confirmation, the OTP is requested explicitly through
+    // /v1/self/stepup/challenges (bound to this payload) instead of being sent as a side effect of
+    // a quote.
+    if (!stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER)) {
+      cleanupOldOtpRegistrations(sourceClient);
+      releaseOtpCooldown(currentUser);
 
-    generateAndSendOtpForQuote(
-        currentUser, sourceClient, destinationTarget, request.getTransferAmount());
+      generateAndSendOtpForQuote(
+          currentUser, sourceClient, destinationTarget, request.getTransferAmount());
+    }
     return this.gson.toJson(quote);
   }
 
@@ -308,7 +321,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
             user, request.getFromAccount(), request.getFromAccountType());
 
     Client sourceClient = sourceSavingsAccount.getClient();
-    validateOtp(request, sourceClient);
+    // MX-488: with step-up enabled for CONFIRM_TRANSFER the in-line OTP is replaced by a
+    // single-use step-up token bound to this exact transfer; otherwise the legacy OTP applies.
+    if (stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER)) {
+      requireStepUpForConfirm(request, httpRequest);
+    } else {
+      validateOtp(request, sourceClient);
+    }
 
     BigDecimal feeAmountFromClient =
         request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
@@ -368,6 +387,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     if ("tpt".equals(type)) {
       checkForLimits(params);
     }
+    requireStepUpForTransfer(type, params, httpRequest);
 
     JsonCommand command = createJsonCommand(apiRequestBodyAsJson);
     CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
@@ -2160,6 +2180,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
   @Override
   @Transactional
   public Object resendTransferOtp(ResendOtpRequest resendRequest, HttpServletRequest httpRequest) {
+    if (stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER)) {
+      // The transfer OTP is now issued and resent by /v1/self/stepup/challenges.
+      throw StepUpException.legacyOtpDisabled();
+    }
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     SavingsAccount sourceSavingsAccount =
         validateSourceAccountOwnership(user, resendRequest.getFromAccount(), null);
@@ -2202,6 +2226,52 @@ public class SelfAccountTransferWritePlatformServiceImpl
     dummy.setTransferDescription(resendRequest.getTransferDescription());
     dummy.setTransferAmount(BigDecimal.ZERO);
     return generateAndSendOtp(dummy, user, sourceClient, httpRequest);
+  }
+
+  /**
+   * Step-up (MX-488) for {@code POST /accounttransfers}: third-party ({@code type=tpt}) or own
+   * account transfers. The digest is computed from the validated request, never from the client.
+   */
+  private void requireStepUpForTransfer(
+      String type, Map<String, Object> params, HttpServletRequest httpRequest) {
+    final StepUpAction action =
+        "tpt".equals(type) ? StepUpAction.TPT_TRANSFER : StepUpAction.OWN_TRANSFER;
+    stepUpGuard.requireIfProtected(
+        action,
+        httpRequest,
+        () -> {
+          final SelfAccountTemplateData from = (SelfAccountTemplateData) params.get("fromAccount");
+          final SelfAccountTemplateData to = (SelfAccountTemplateData) params.get("toAccount");
+          final BigDecimal amount = (BigDecimal) params.get("transactionAmount");
+          return StepUpPayloadHasher.hash(
+              action,
+              StepUpTransferPayloads.forTransfer(
+                  from.getAccountId(),
+                  from.getAccountType(),
+                  to.getAccountId(),
+                  to.getAccountType(),
+                  amount));
+        });
+  }
+
+  /** Step-up (MX-488) for {@code POST /accounttransfers/confirm}. */
+  private void requireStepUpForConfirm(
+      AccountTransferConfirmRequest request, HttpServletRequest httpRequest) {
+    stepUpGuard.requireIfProtected(
+        StepUpAction.CONFIRM_TRANSFER,
+        httpRequest,
+        () ->
+            StepUpPayloadHasher.hash(
+                StepUpAction.CONFIRM_TRANSFER,
+                StepUpTransferPayloads.forConfirm(
+                    request.getFromAccount(),
+                    request.getFromAccountType(),
+                    request.getToAccount(),
+                    request.getToAccountType(),
+                    request.getToPhoneNumber(),
+                    request.getTransferType(),
+                    request.getCurrencyCode(),
+                    request.getTransferAmount())));
   }
 
   private void markAsExpired(SelfServiceRegistration reg) {

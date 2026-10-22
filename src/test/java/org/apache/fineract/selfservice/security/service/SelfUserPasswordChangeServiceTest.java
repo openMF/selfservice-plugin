@@ -188,4 +188,18 @@ class SelfUserPasswordChangeServiceTest {
     assertThrows(NoAuthorizationException.class, () -> service.changePassword(authenticated, BODY));
     verify(repository, never()).saveAndFlush(any());
   }
+
+  @Test
+  void validateRequest_appliesThePolicyWithoutTouchingTheUser() {
+    final PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn("^(?=.*[0-9]).{12,}$");
+    when(policy.getDescription()).thenReturn("12 characters and a digit");
+    when(policyRepository.findActivePasswordValidationPolicy()).thenReturn(policy);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.validateRequest("{\"password\":\"short\",\"repeatPassword\":\"short\"}"));
+    assertEquals(NEW_PASSWORD, service.validateRequest(BODY));
+    verifyNoInteractions(repository);
+  }
 }
