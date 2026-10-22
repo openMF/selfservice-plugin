@@ -87,7 +87,7 @@ public abstract class SelfServiceIntegrationTestBase {
             .withEnv("FINERACT_SERVER_SSL_ENABLED", "true")
             .withEnv("FINERACT_SERVER_PORT", "8443")
             .withCopyFileToContainer(
-                MountableFile.forHostPath(buildDir + "/selfservice-plugin-1.15.0-SNAPSHOT.jar"),
+                MountableFile.forHostPath(findPluginJar(buildDir)),
                 "/app/plugins/selfservice-plugin.jar")
             .withCopyFileToContainer(
                 MountableFile.forHostPath(testPluginsPath + "/"), "/app/test-plugins/")
@@ -124,6 +124,35 @@ public abstract class SelfServiceIntegrationTestBase {
           fineract.getDockerImageName(),
           containerLogs);
       throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  /**
+   * Locates the plugin jar built by the {@code package} phase. The file name carries the project
+   * version, which changes with every release, so it is resolved instead of hard-coded.
+   */
+  private static String findPluginJar(String buildDir) {
+    try (java.util.stream.Stream<java.nio.file.Path> files =
+        java.nio.file.Files.list(java.nio.file.Path.of(buildDir))) {
+      return files
+          .filter(
+              path -> {
+                String name = path.getFileName().toString();
+                return name.startsWith("selfservice-plugin-")
+                    && name.endsWith(".jar")
+                    && !name.endsWith("-sources.jar")
+                    && !name.endsWith("-javadoc.jar")
+                    && !name.endsWith("-tests.jar")
+                    && !name.endsWith(".original");
+              })
+          .findFirst()
+          .map(java.nio.file.Path::toString)
+          .orElseThrow(
+              () ->
+                  new IllegalStateException(
+                      "Plugin jar not found in " + buildDir + ". Run the package phase first."));
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException("Cannot list " + buildDir + " to find the plugin jar", e);
     }
   }
 
