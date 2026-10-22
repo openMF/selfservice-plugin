@@ -32,7 +32,7 @@ import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUserRe
 import org.apache.fineract.selfservice.security.service.TenantAwareJpaPlatformSelfServiceUserDetailsService;
 import org.apache.fineract.selfservice.security.starter.SelfServiceSecurityConfiguration;
 import org.apache.fineract.selfservice.useradministration.service.SelfServiceRoleReadPlatformService;
-import org.springframework.boot.web.server.autoconfigure.ServerProperties;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
