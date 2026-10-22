@@ -25,6 +25,20 @@ class StepUpCryptoTest {
   private final StepUpCrypto crypto = new StepUpCrypto(SECRET, new SecureRandom());
 
   @Test
+  void theSecretIsLookedUpOnEveryCall_soATenantSwitchChangesTheKey() {
+    final String[] current = {"tenant-a-secret-tenant-a-secret-123456"};
+    final StepUpCrypto crypto = new StepUpCrypto(new SecureRandom(), () -> current[0]);
+
+    final String asA = crypto.hashOtp("123456", "salt");
+    current[0] = "tenant-b-secret-tenant-b-secret-123456";
+    final String asB = crypto.hashOtp("123456", "salt");
+    current[0] = null;
+
+    assertNotEquals(asA, asB);
+    assertFalse(crypto.hasUsableSecret());
+  }
+
+  @Test
   void generateOtp_hasRequestedLengthAndOnlyDigits() {
     for (int length = 4; length <= 8; length++) {
       final String otp = crypto.generateOtp(length);

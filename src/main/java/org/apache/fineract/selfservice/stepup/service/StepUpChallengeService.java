@@ -107,9 +107,10 @@ public class StepUpChallengeService {
     }
     if (!crypto.hasUsableSecret()) {
       log.error(
-          "Step-up is enabled but {} is missing or shorter than {} characters; refusing to issue"
-              + " challenges.",
-          StepUpCrypto.SECRET_PROPERTY,
+          "Step-up is enabled but the tenant property '{}' of '{}' is missing or shorter than {}"
+              + " characters; refusing to issue challenges.",
+          StepUpSettings.HMAC_SECRET_PROPERTY,
+          StepUpSettings.SERVICE_NAME,
           StepUpCrypto.MIN_SECRET_LENGTH);
       throw StepUpException.misconfigured();
     }

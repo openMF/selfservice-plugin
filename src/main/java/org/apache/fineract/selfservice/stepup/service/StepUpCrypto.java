@@ -13,11 +13,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,44 +26,56 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>OTP: digits drawn from a {@link SecureRandom} (leading zeros preserved).
  *   <li>OTP at rest: {@code HMAC-SHA256(secret, "otp:" + salt + ":" + otp)} hex-encoded, with a
- *       random per-challenge salt. The HMAC key comes from {@code
- *       mifos.self.service.stepup.hmac-secret} (environment / property, never the database).
+ *       random per-challenge salt. The HMAC key is the tenant property {@value
+ *       StepUpSettings#HMAC_SECRET_PROPERTY} of the {@value StepUpSettings#SERVICE_NAME} external
+ *       service: every tenant has its own key and nothing is shared through the environment.
  *   <li>Comparisons are constant time ({@link MessageDigest#isEqual}).
  *   <li>Grant token: 256 random bits, handed to the client once; only its SHA-256 is stored.
  * </ul>
  *
- * <p>A 6-digit OTP has only 10^6 values, so hashing alone cannot stop offline guessing if both the
- * database and the secret leak; that is why the secret lives outside the database and online
- * guessing is capped by the attempt limit.
+ * <p>A 6-digit OTP has only 10^6 values, so anybody who can read both the salt and the secret can
+ * guess a code offline. The exposure is small (a code lives a few minutes and online guessing is
+ * capped by the attempt limit), but the secret must be protected like the other external-service
+ * secrets (SMTP, SMS): restrict who may read the external service configuration.
  */
 @Component
 public class StepUpCrypto {
 
-  public static final String SECRET_PROPERTY = "mifos.self.service.stepup.hmac-secret";
   static final int MIN_SECRET_LENGTH = 32;
 
   private static final String HMAC_ALGORITHM = "HmacSHA256";
 
   private final SecureRandom secureRandom;
-  private final byte[] secret;
+  private final Supplier<String> secretSource;
 
-  // Two constructors exist (the second one is for tests): tell Spring which one to use.
+  // Several constructors exist (the others are for tests): tell Spring which one to use.
   @Autowired
-  public StepUpCrypto(final Environment env) {
-    this(env.getProperty(SECRET_PROPERTY), new SecureRandom());
+  public StepUpCrypto(final StepUpSettingsProvider settingsProvider) {
+    this(new SecureRandom(), () -> settingsProvider.current().hmacSecret());
   }
 
+  /** A fixed secret, for tests. */
   StepUpCrypto(final String secret, final SecureRandom secureRandom) {
-    this.secureRandom = secureRandom;
-    this.secret =
-        secret != null && secret.length() >= MIN_SECRET_LENGTH
-            ? secret.getBytes(StandardCharsets.UTF_8)
-            : null;
+    this(secureRandom, () -> secret);
   }
 
-  /** {@code true} when a sufficiently long HMAC secret is configured. */
+  /** The secret is looked up on every call, so it always belongs to the tenant of the request. */
+  StepUpCrypto(final SecureRandom secureRandom, final Supplier<String> secretSource) {
+    this.secureRandom = secureRandom;
+    this.secretSource = secretSource;
+  }
+
+  /** The key of the current tenant, or {@code null} when none (or a too short one) is set. */
+  private byte[] secret() {
+    final String value = secretSource.get();
+    return value != null && value.length() >= MIN_SECRET_LENGTH
+        ? value.getBytes(StandardCharsets.UTF_8)
+        : null;
+  }
+
+  /** {@code true} when the current tenant has a sufficiently long HMAC secret. */
   public boolean hasUsableSecret() {
-    return secret != null;
+    return secret() != null;
   }
 
   /** A numeric OTP of exactly {@code length} digits (leading zeros allowed). */
@@ -84,6 +96,7 @@ public class StepUpCrypto {
 
   /** Salted HMAC of the OTP, hex encoded (64 chars). Fails closed without a secret. */
   public String hashOtp(final String otp, final String salt) {
+    final byte[] secret = secret();
     if (secret == null) {
       throw StepUpException.misconfigured();
     }

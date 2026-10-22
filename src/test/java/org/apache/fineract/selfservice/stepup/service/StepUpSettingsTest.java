@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.stepup.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.EnumSet;
@@ -131,5 +132,26 @@ class StepUpSettingsTest {
     assertTrue(
         StepUpSettings.fromProperties(Map.of("invalidateSessionsOnPasswordChange", "true"))
             .invalidateSessionsOnPasswordChange());
+  }
+
+  @Test
+  void hmacSecret_isReadPerTenantFromTheProperties() {
+    assertEquals(
+        "a-long-secret-a-long-secret-a-long-1",
+        StepUpSettings.fromProperties(Map.of("hmacSecret", "a-long-secret-a-long-secret-a-long-1"))
+            .hmacSecret());
+    assertNull(StepUpSettings.fromProperties(Map.of()).hmacSecret());
+    assertNull(StepUpSettings.fromProperties(Map.of("hmacSecret", "  ")).hmacSecret());
+  }
+
+  @Test
+  void toString_neverPrintsTheSecret() {
+    final String text =
+        StepUpSettings.fromProperties(Map.of("hmacSecret", "top-secret-value-top-secret-value-12"))
+            .toString();
+
+    assertFalse(text.contains("top-secret"));
+    assertTrue(text.contains("hmacSecret=set"));
+    assertTrue(StepUpSettings.defaults().toString().contains("hmacSecret=not set"));
   }
 }

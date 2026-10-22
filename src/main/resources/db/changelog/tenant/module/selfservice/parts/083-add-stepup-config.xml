@@ -32,8 +32,11 @@
           retentionDays                 1..365 days challenges are kept         (30)
           invalidateSessionsOnPasswordChange  true|false (defaults to 'enabled')
 
-        The HMAC secret used to hash OTPs is NOT stored here (it must not live in the database):
-        set mifos.self.service.stepup.hmac-secret (>= 32 chars) in the application environment.
+          hmacSecret                    key used to hash this tenant's OTPs, at least 32 characters.
+                                        Seeded with a placeholder that is too short to be used, so
+                                        step-up cannot be switched on by accident without a real key.
+                                        Every tenant has its own key; nothing is read from the
+                                        application environment.
     -->
 
     <changeSet id="ss-0083-1-1" author="fineract">
@@ -61,6 +64,11 @@
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
             <column name="name" value="enabled"/>
             <column name="value" value="false"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="hmacSecret"/>
+            <column name="value" value="change-me-before-enabling"/>
         </insert>
         <insert tableName="c_external_service_properties">
             <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>

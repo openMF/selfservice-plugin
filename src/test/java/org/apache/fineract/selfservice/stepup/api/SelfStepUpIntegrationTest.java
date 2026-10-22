@@ -86,6 +86,7 @@ class SelfStepUpIntegrationTest extends SelfServiceIntegrationTestBase {
 
   @BeforeEach
   void stepUpOnWithGenerousRateLimit() {
+    setStepUpProperty("hmacSecret", STEP_UP_HMAC_SECRET);
     setStepUpProperty("enabled", "true");
     setStepUpProperty("challengeRateLimit", "50");
   }

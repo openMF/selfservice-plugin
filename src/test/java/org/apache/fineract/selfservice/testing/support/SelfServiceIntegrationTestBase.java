@@ -22,7 +22,7 @@ import org.testcontainers.utility.MountableFile;
 
 public abstract class SelfServiceIntegrationTestBase {
 
-  /** HMAC secret handed to the Fineract container for step-up OTP hashing (test value only). */
+  /** Tenant HMAC secret the step-up integration test writes into the tenant settings (test value only). */
   protected static final String STEP_UP_HMAC_SECRET = "it-stepup-hmac-secret-it-stepup-hmac-1234";
 
   private static final Logger LOG = LoggerFactory.getLogger(SelfServiceIntegrationTestBase.class);
@@ -85,8 +85,6 @@ public abstract class SelfServiceIntegrationTestBase {
             .withEnv("FINERACT_MODULE_SELFSERVICE_ENABLED", "true")
             .withEnv("SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING", "true")
             .withEnv("FINERACT_MODULES_SELFSERVICE_RUNREPORTS_ALLOWLIST", "Client Details")
-            // MX-488: HMAC key used to hash step-up OTPs (never stored in the database).
-            .withEnv("MIFOS_SELF_SERVICE_STEPUP_HMAC_SECRET", STEP_UP_HMAC_SECRET)
             .withEnv("TZ", "UTC")
             .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2G")
             .withEnv("FINERACT_SERVER_SSL_ENABLED", "true")

@@ -35,9 +35,13 @@ public record StepUpSettings(
     int challengeRateLimit,
     int challengeRateWindowSeconds,
     int retentionDays,
-    boolean invalidateSessionsOnPasswordChange) {
+    boolean invalidateSessionsOnPasswordChange,
+    String hmacSecret) {
 
   public static final String SERVICE_NAME = "SELF_SERVICE_STEP_UP";
+
+  /** Tenant property that holds the key used to hash the OTPs of this tenant. */
+  public static final String HMAC_SECRET_PROPERTY = "hmacSecret";
 
   static final Set<StepUpAction> DEFAULT_PROTECTED_ACTIONS =
       EnumSet.of(
@@ -74,7 +78,28 @@ public record StepUpSettings(
         parseInt(properties.get("challengeRateLimit"), 5, 1, 50),
         parseInt(properties.get("challengeRateWindowSeconds"), 900, 60, 86_400),
         parseInt(properties.get("retentionDays"), 30, 1, 365),
-        parseBoolean(properties.get("invalidateSessionsOnPasswordChange"), enabled));
+        parseBoolean(properties.get("invalidateSessionsOnPasswordChange"), enabled),
+        blankToNull(properties.get(HMAC_SECRET_PROPERTY)));
+  }
+
+  private static String blankToNull(final String raw) {
+    return raw == null || raw.isBlank() ? null : raw;
+  }
+
+  /** Never prints the HMAC secret. */
+  @Override
+  public String toString() {
+    return "StepUpSettings[enabled="
+        + enabled
+        + ", otpLength="
+        + otpLength
+        + ", protectedActions="
+        + protectedActions
+        + ", channels="
+        + channels
+        + ", hmacSecret="
+        + (hmacSecret == null ? "not set" : "set")
+        + "]";
   }
 
   private static boolean parseBoolean(final String raw, final boolean fallback) {

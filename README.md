@@ -176,16 +176,19 @@ Sensitive operations can require a fresh one-time code (SMS or e-mail) before th
 
 ### Enable it for a tenant
 
-1. Set an HMAC secret (at least 32 characters) in the application environment. It is used to hash the OTPs and is **never stored in the database**:
+Everything is configured **per tenant** in the external service `SELF_SERVICE_STEP_UP` (tables `c_external_service` / `c_external_service_properties`, seeded and disabled by Liquibase). Nothing is read from environment variables, so enabling it for one tenant never changes another tenant.
 
-   ```bash
-   MIFOS_SELF_SERVICE_STEPUP_HMAC_SECRET=<long random value>
-   # or the property  mifos.self.service.stepup.hmac-secret
+1. Give the tenant its own HMAC key (at least 32 characters, random). It is used to hash the OTPs. Treat it like the other external-service secrets (SMTP, SMS): only administrators should be able to read the external service configuration.
+
+   ```sql
+   UPDATE c_external_service_properties SET value = '<long random value>'
+   WHERE name = 'hmacSecret'
+     AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP');
    ```
 
-   If step-up is enabled without a usable secret, challenges are refused (`error.msg.selfservice.stepup.misconfigured`).
+   Until a usable key is set (the seeded placeholder is too short on purpose), challenges are refused with `error.msg.selfservice.stepup.misconfigured`.
 
-2. Turn it on in the tenant database (the properties are seeded, disabled, by Liquibase):
+2. Turn it on for the tenant:
 
    ```sql
    UPDATE c_external_service_properties SET value = 'true'
@@ -198,6 +201,7 @@ Sensitive operations can require a fresh one-time code (SMS or e-mail) before th
    | Key | Default | Meaning |
    |---|---|---|
    | `enabled` | `false` | master switch |
+   | `hmacSecret` | placeholder | key used to hash this tenant's OTPs (at least 32 characters) |
    | `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | also available: `OWN_TRANSFER` (transfers between own accounts) |
    | `channels` | `SMS,EMAIL` | channels offered to the user |
    | `otpLength` | `6` (4-8) | digits of the code |
