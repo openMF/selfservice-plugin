@@ -276,12 +276,13 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String transferDescription =
         firstNonBlank(nullToEmpty(rs.getString("transfer_description")), paymentType, "FEE");
 
-    // internalRef / channelRef keep sat.ref_no (UUID) when present
-    String internalRef = !refNo.isEmpty() ? refNo : String.valueOf(satId);
+    // UUID from sat.ref_no → channelRefNumber only
+    String channelUuid = !refNo.isEmpty() ? refNo : String.valueOf(satId);
 
-    // Display reference: prefer stored SINPE-like payment detail, else parent PIN + 1
+    // SINPE-like reference for internalRefNumber + customData.reference
     String displayReference =
-        resolveFeeDisplayReference(accountId, satId, rs.getDate("transaction_date"), routingCode, receiptNumber);
+        resolveFeeDisplayReference(
+            accountId, satId, rs.getDate("transaction_date"), routingCode, receiptNumber);
 
     java.sql.Timestamp created = rs.getTimestamp("created_date");
     java.sql.Date txnDate = rs.getDate("transaction_date");
@@ -357,8 +358,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     Map<String, Object> rawData = new HashMap<>();
     rawData.put("operationId", String.valueOf(satId));
-    rawData.put("internalRefNumber", internalRef);
-    rawData.put("channelRefNumber", internalRef);
+    // ★ internalRefNumber = SINPE-like (matches expected payload)
+    rawData.put("internalRefNumber", displayReference);
+    // channelRefNumber keeps ledger UUID
+    rawData.put("channelRefNumber", channelUuid);
     rawData.put("sinpeRefNumber", "");
     rawData.put("debitedAmount", amount != null ? amount : BigDecimal.ZERO);
     rawData.put("debitCurrencyCode", currency != null ? currency : "CRC");
@@ -410,11 +413,9 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return false;
     }
     String v = value.trim();
-    // UUID → not SINPE-like
     if (v.contains("-") && v.length() >= 32) {
       return false;
     }
-    // Typical live pattern: yyyyMMdd + entity + channel + sequence (digits, length >= 20)
     return v.matches("\\d{20,}");
   }
 
@@ -1517,10 +1518,13 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put("destinationCustomer", destCustomer);
 
     data.clear();
+    // For FEE, internalRefNumber already carries the SINPE-like value from mapFeeLedgerRow.
+    // Do not overwrite with channel UUID.
     if (("PIN".equalsIgnoreCase(transferType)
             || "SINPE".equalsIgnoreCase(transferType)
             || "SINPE_MOVIL".equalsIgnoreCase(transferType))
-        && sinpeRef != null) {
+        && sinpeRef != null
+        && !sinpeRef.isEmpty()) {
       data.put("internalRefNumber", sinpeRef);
     } else {
       data.put("internalRefNumber", internalRef != null ? internalRef : "");
