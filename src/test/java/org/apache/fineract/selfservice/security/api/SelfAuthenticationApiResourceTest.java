@@ -148,7 +148,6 @@ class SelfAuthenticationApiResourceTest {
     when(clientReadPlatformService.retrieveSelfServiceUserClients(any()))
         .thenReturn(Collections.emptyList());
     when(officeAddressReadPlatformService.retrieveOfficeCountryByClientId(any())).thenReturn("US");
-    when(kycFeatureStatusReadService.getKycFeatureStatus(any())).thenReturn(null);
 
     String result = resource.authenticate(requestBody, true, httpServletRequest);
     assertNotNull(result);
