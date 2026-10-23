@@ -6,16 +6,17 @@
  */
 package org.apache.fineract.selfservice.activity.service;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
 import org.apache.fineract.selfservice.activity.domain.ActivityType;
 import org.apache.fineract.selfservice.activity.domain.SelfServiceActivity;
 import org.apache.fineract.selfservice.activity.domain.SelfServiceActivityRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,9 +30,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * exception is caught and logged (the same rule as the access audit). The row is written in its own
  * transaction, so it does not depend on, and cannot roll back, the caller's transaction.
  *
- * <p>What is stored is decided here, not by the caller: the IP address is masked, {@code details}
- * comes from a per-type whitelist ({@link ActivityDetails}), and a tenant that switched the log off
- * gets nothing written.
+ * <p>What is stored is decided here, not by the caller: the IP address is the one of the connection
+ * (never a header) and is masked, {@code details} comes from a per-type whitelist ({@link
+ * ActivityDetails}), and a tenant that switched the log off gets nothing written.
  */
 @Service
 @Slf4j
@@ -44,12 +45,30 @@ public class ActivityLogService {
   private final ActivitySettingsProvider settingsProvider;
   private final TransactionDateUtil transactionDateUtil;
   private final TransactionTemplate newTransaction;
+  private final Supplier<String> clientIp;
 
+  @Autowired
   public ActivityLogService(
       final SelfServiceActivityRepository repository,
       final ActivitySettingsProvider settingsProvider,
       final TransactionDateUtil transactionDateUtil,
       final TransactionTemplate transactionTemplate) {
+    this(
+        repository,
+        settingsProvider,
+        transactionDateUtil,
+        transactionTemplate,
+        ActivityLogService::connectionAddress);
+  }
+
+  /** The address source is a parameter so that tests can say where the request came from. */
+  ActivityLogService(
+      final SelfServiceActivityRepository repository,
+      final ActivitySettingsProvider settingsProvider,
+      final TransactionDateUtil transactionDateUtil,
+      final TransactionTemplate transactionTemplate,
+      final Supplier<String> clientIp) {
+    this.clientIp = clientIp;
     this.repository = repository;
     this.settingsProvider = settingsProvider;
     this.transactionDateUtil = transactionDateUtil;
@@ -58,37 +77,9 @@ public class ActivityLogService {
   }
 
   /**
-   * Like {@link #record} for code that has no {@code HttpServletRequest} at hand: the caller's IP
-   * is read from the request bound to the current thread (none, for example in a batch job, simply
-   * means no IP).
-   */
-  public void recordForCurrentRequest(
-      final ActivityType type,
-      final ActivityOutcome outcome,
-      final Long userId,
-      final Long clientId,
-      final Map<String, Object> source) {
-    record(type, outcome, userId, clientId, currentRequestIp(), source);
-  }
-
-  private static String currentRequestIp() {
-    try {
-      if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
-        final HttpServletRequest request = attrs.getRequest();
-        final String forwarded = request.getHeader("X-Forwarded-For");
-        return forwarded != null && !forwarded.isBlank() ? forwarded : request.getRemoteAddr();
-      }
-    } catch (RuntimeException e) {
-      log.debug("No request available to read the IP address from: {}", e.getMessage());
-    }
-    return null;
-  }
-
-  /**
    * Records one activity.
    *
    * @param clientId the client the user acted for, or {@code null} when not known
-   * @param rawIp the caller's IP address; only the masked form is stored
    * @param source raw facts about the action (for example an event's context data); only the
    *     whitelisted keys of {@code type} are read
    */
@@ -97,7 +88,6 @@ public class ActivityLogService {
       final ActivityOutcome outcome,
       final Long userId,
       final Long clientId,
-      final String rawIp,
       final Map<String, Object> source) {
     if (type == null || outcome == null || userId == null) {
       return;
@@ -119,7 +109,7 @@ public class ActivityLogService {
                     clientId,
                     type,
                     outcome,
-                    IpAddressMasker.mask(rawIp),
+                    IpAddressMasker.mask(clientIp.get()),
                     ActivityDetails.toJson(type, source),
                     now));
           });
@@ -127,5 +117,25 @@ public class ActivityLogService {
       // Never let a failure of the history break the action it describes.
       log.warn("Could not record activity {} for user {}: {}", type, userId, e.getMessage());
     }
+  }
+
+  /**
+   * The address of the connection of the current request, or {@code null} outside a request.
+   *
+   * <p>Never read from {@code X-Forwarded-For}: a client can write anything in that header, and the
+   * history exists to show where an action really came from. Behind a reverse proxy the operator
+   * configures the trusted proxies of the server (for example {@code
+   * server.forward-headers-strategy=native}), and then {@code getRemoteAddr()} already is the real
+   * client address.
+   */
+  static String connectionAddress() {
+    try {
+      if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
+        return attrs.getRequest().getRemoteAddr();
+      }
+    } catch (RuntimeException e) {
+      log.debug("No request available to read the IP address from: {}", e.getMessage());
+    }
+    return null;
   }
 }

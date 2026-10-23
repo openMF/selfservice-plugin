@@ -34,6 +34,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * transaction committed, so a transfer that rolled back never shows up as confirmed. Events
  * published outside a transaction (a login) are recorded at once ({@code fallbackExecution}). It
  * runs on the publishing thread, so the tenant is already bound.
+ *
+ * <p>The IP address of an event is ignored on purpose: the publishers read it from {@code
+ * X-Forwarded-For}, which a client can forge. {@link ActivityLogService} takes the address of the
+ * connection instead.
  */
 @Component
 @RequiredArgsConstructor
@@ -57,12 +61,7 @@ public class ActivityEventListener {
       final Map<String, Object> source = new HashMap<>(event.getContextData());
       source.putAll(mapped.get().extra());
       activityLogService.record(
-          mapped.get().type(),
-          mapped.get().outcome(),
-          event.getUserId(),
-          null,
-          event.getIpAddress(),
-          source);
+          mapped.get().type(), mapped.get().outcome(), event.getUserId(), null, source);
     } catch (Exception e) {
       log.warn("Could not turn event {} into an activity: {}", event.getType(), e.getMessage());
     } finally {
@@ -89,7 +88,6 @@ public class ActivityEventListener {
           mapped.get().outcome(),
           event.userId(),
           null,
-          event.ipAddress(),
           event.action() == null ? Map.of() : Map.of("action", event.action().name()));
     } catch (Exception e) {
       log.warn(

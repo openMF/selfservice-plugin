@@ -280,7 +280,7 @@ class SelfClientsApiResourceTest {
     resource.addNewClientImage(CLIENT_ID, 123L, mock(InputStream.class), fileDetails, filePart);
 
     verify(activityLogService)
-        .recordForCurrentRequest(
+        .record(
             ActivityType.PROFILE_IMAGE_CHANGED, ActivityOutcome.SUCCESS, USER_ID, CLIENT_ID, null);
   }
 
@@ -296,7 +296,7 @@ class SelfClientsApiResourceTest {
     when(imageWritePlatformService.createImage(any(ImageCreateRequest.class))).thenReturn(response);
     doThrow(new IllegalStateException("history down"))
         .when(activityLogService)
-        .recordForCurrentRequest(any(), any(), any(), any(), any());
+        .record(any(), any(), any(), any(), any());
 
     ImageCreateResponse result =
         resource.addNewClientImage(CLIENT_ID, 123L, mock(InputStream.class), fileDetails, filePart);
@@ -313,7 +313,7 @@ class SelfClientsApiResourceTest {
     resource.deleteClientImage(CLIENT_ID);
 
     verify(activityLogService)
-        .recordForCurrentRequest(
+        .record(
             ActivityType.PROFILE_IMAGE_REMOVED, ActivityOutcome.SUCCESS, USER_ID, CLIENT_ID, null);
   }
 
@@ -332,7 +332,7 @@ class SelfClientsApiResourceTest {
         NoAuthorizationException.class,
         () -> resource.addNewClientImage(CLIENT_ID, 123L, is, fileDetails, filePart));
     verify(imageWritePlatformService, never()).createImage(any());
-    verify(activityLogService, never()).recordForCurrentRequest(any(), any(), any(), any(), any());
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
   }
 
   // --- deleteClientImage ---

@@ -32,9 +32,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -48,6 +51,7 @@ class ActivityLogServiceTest {
   @Mock private PlatformTransactionManager transactionManager;
 
   private ActivityLogService service;
+  private String address = "203.0.113.9";
 
   @BeforeEach
   void setUp() {
@@ -58,7 +62,8 @@ class ActivityLogServiceTest {
             repository,
             settingsProvider,
             transactionDateUtil,
-            new TransactionTemplate(transactionManager));
+            new TransactionTemplate(transactionManager),
+            () -> address);
   }
 
   private SelfServiceActivity saved() {
@@ -70,7 +75,7 @@ class ActivityLogServiceTest {
 
   @Test
   void savesTheActivityWithTheMaskedIpAndTheTenantClock() {
-    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, 3L, "203.0.113.9", Map.of());
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, 3L, Map.of());
 
     final SelfServiceActivity row = saved();
     assertEquals(7L, row.getAppUserId());
@@ -84,8 +89,7 @@ class ActivityLogServiceTest {
 
   @Test
   void theFullIpAddressIsNeverStored() {
-    service.record(
-        ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, "203.0.113.9, 10.0.0.1", null);
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null);
 
     assertEquals("203.0.x.x", saved().getIpMasked());
   }
@@ -98,8 +102,7 @@ class ActivityLogServiceTest {
     source.put("email", "ana@example.org");
     source.put("authCode", "123456");
 
-    service.record(
-        ActivityType.TRANSFER_CONFIRMED, ActivityOutcome.SUCCESS, 7L, null, null, source);
+    service.record(ActivityType.TRANSFER_CONFIRMED, ActivityOutcome.SUCCESS, 7L, null, source);
 
     final String details = saved().getDetails();
     assertEquals("{\"amount\":\"10.00\",\"currency\":\"USD\"}", details);
@@ -110,16 +113,16 @@ class ActivityLogServiceTest {
     when(settingsProvider.current())
         .thenReturn(ActivitySettings.fromProperties(Map.of("enabled", "false")));
 
-    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, "1.2.3.4", null);
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null);
 
     verifyNoInteractions(repository);
   }
 
   @Test
   void missingUserTypeOrOutcome_isIgnored() {
-    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, null, null, "1.2.3.4", null);
-    service.record(null, ActivityOutcome.SUCCESS, 7L, null, "1.2.3.4", null);
-    service.record(ActivityType.LOGIN, null, 7L, null, "1.2.3.4", null);
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, null, null, null);
+    service.record(null, ActivityOutcome.SUCCESS, 7L, null, null);
+    service.record(ActivityType.LOGIN, null, 7L, null, null);
 
     verifyNoInteractions(repository);
   }
@@ -128,7 +131,7 @@ class ActivityLogServiceTest {
   void failedLogins_areLimitedToOnePerMinutePerUser() {
     when(repository.countSince(eq(7L), eq(ActivityType.LOGIN_FAILED), any())).thenReturn(1L);
 
-    service.record(ActivityType.LOGIN_FAILED, ActivityOutcome.FAILURE, 7L, null, "1.2.3.4", null);
+    service.record(ActivityType.LOGIN_FAILED, ActivityOutcome.FAILURE, 7L, null, null);
 
     verify(repository, never()).save(any());
     verify(repository)
@@ -140,14 +143,14 @@ class ActivityLogServiceTest {
   void aFirstFailedLogin_isRecorded() {
     when(repository.countSince(eq(7L), eq(ActivityType.LOGIN_FAILED), any())).thenReturn(0L);
 
-    service.record(ActivityType.LOGIN_FAILED, ActivityOutcome.FAILURE, 7L, null, "1.2.3.4", null);
+    service.record(ActivityType.LOGIN_FAILED, ActivityOutcome.FAILURE, 7L, null, null);
 
     assertEquals(ActivityOutcome.FAILURE, saved().getOutcome());
   }
 
   @Test
   void otherTypesAreNotThrottled() {
-    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, "1.2.3.4", null);
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null);
 
     verify(repository, never()).countSince(any(), any(), any());
   }
@@ -157,8 +160,7 @@ class ActivityLogServiceTest {
     when(repository.save(any())).thenThrow(new IllegalStateException("database down"));
 
     assertDoesNotThrow(
-        () ->
-            service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, "1.2.3.4", null));
+        () -> service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null));
   }
 
   @Test
@@ -167,14 +169,13 @@ class ActivityLogServiceTest {
         .thenThrow(new IllegalStateException("no tenant"));
 
     assertDoesNotThrow(
-        () ->
-            service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, "1.2.3.4", null));
+        () -> service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null));
     verify(repository, never()).save(any());
   }
 
   @Test
   void theRowIsWrittenInItsOwnTransaction() {
-    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null, null);
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null);
 
     final ArgumentCaptor<TransactionDefinition> definition =
         ArgumentCaptor.forClass(TransactionDefinition.class);
@@ -182,5 +183,35 @@ class ActivityLogServiceTest {
     assertEquals(
         TransactionDefinition.PROPAGATION_REQUIRES_NEW,
         definition.getValue().getPropagationBehavior());
+  }
+
+  @Test
+  void noAddressMeansNoIp() {
+    address = null;
+
+    service.record(ActivityType.LOGIN, ActivityOutcome.SUCCESS, 7L, null, null);
+
+    assertNull(saved().getIpMasked());
+  }
+
+  @Test
+  void theAddressIsTheOneOfTheConnection_aForgedForwardedForHeaderIsIgnored() {
+    final MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setRemoteAddr("198.51.100.7");
+    request.addHeader("X-Forwarded-For", "203.0.113.9, 10.0.0.1");
+    request.addHeader("X-Real-Ip", "203.0.113.10");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    try {
+      assertEquals("198.51.100.7", ActivityLogService.connectionAddress());
+    } finally {
+      RequestContextHolder.resetRequestAttributes();
+    }
+  }
+
+  @Test
+  void outsideARequestThereIsNoAddress() {
+    RequestContextHolder.resetRequestAttributes();
+
+    assertNull(ActivityLogService.connectionAddress());
   }
 }

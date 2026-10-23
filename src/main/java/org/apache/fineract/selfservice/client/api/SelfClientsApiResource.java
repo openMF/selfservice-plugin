@@ -590,7 +590,7 @@ public class SelfClientsApiResource {
   /** The history line for a profile picture change; it never affects the upload itself. */
   private void recordProfileImage(final ActivityType type, final Long clientId) {
     try {
-      this.activityLogService.recordForCurrentRequest(
+      this.activityLogService.record(
           type,
           ActivityOutcome.SUCCESS,
           this.context.authenticatedSelfServiceUser().getId(),

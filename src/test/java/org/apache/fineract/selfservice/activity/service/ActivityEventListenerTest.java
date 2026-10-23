@@ -129,7 +129,7 @@ class ActivityEventListenerTest {
       listener.onNotificationEvent(event(type, 7L, Map.of()));
     }
 
-    verify(activityLogService, never()).record(any(), any(), any(), any(), any(), any());
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
   }
 
   @Test
@@ -146,7 +146,6 @@ class ActivityEventListenerTest {
             eq(ActivityOutcome.SUCCESS),
             eq(7L),
             isNull(),
-            eq("203.0.113.9"),
             source.capture());
     assertEquals("10", source.getValue().get("transactionAmount"));
   }
@@ -163,7 +162,6 @@ class ActivityEventListenerTest {
             eq(ActivityOutcome.SUCCESS),
             eq(7L),
             isNull(),
-            any(),
             source.capture());
     assertEquals("deleted", source.getValue().get("action"));
   }
@@ -173,14 +171,14 @@ class ActivityEventListenerTest {
     listener.onNotificationEvent(
         event(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS, null, Map.of()));
 
-    verify(activityLogService, never()).record(any(), any(), any(), any(), any(), any());
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
   }
 
   @Test
   void aFailureInsideTheLog_neverReachesThePublisher() {
     doThrow(new IllegalStateException("boom"))
         .when(activityLogService)
-        .record(any(), any(), any(), any(), any(), any());
+        .record(any(), any(), any(), any(), any());
 
     assertDoesNotThrow(
         () ->
@@ -229,7 +227,7 @@ class ActivityEventListenerTest {
       listener.onStepUpEvent(stepUp(type));
     }
 
-    verify(activityLogService, never()).record(any(), any(), any(), any(), any(), any());
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
   }
 
   @Test
@@ -243,7 +241,6 @@ class ActivityEventListenerTest {
             eq(ActivityOutcome.SUCCESS),
             eq(7L),
             isNull(),
-            eq("203.0.113.9"),
             source.capture());
     assertEquals(Map.of("action", "TPT_TRANSFER"), source.getValue());
   }
@@ -252,8 +249,25 @@ class ActivityEventListenerTest {
   void stepUp_aFailureInsideTheLog_neverReachesThePublisher() {
     doThrow(new IllegalStateException("boom"))
         .when(activityLogService)
-        .record(any(), any(), any(), any(), any(), any());
+        .record(any(), any(), any(), any(), any());
 
     assertDoesNotThrow(() -> listener.onStepUpEvent(stepUp(StepUpEvent.Type.ISSUED)));
+  }
+
+  @Test
+  void theIpAddressOfAnEventIsNeverUsed_itComesFromAHeaderAClientCanForge() {
+    listener.onNotificationEvent(
+        event(SelfServiceNotificationEvent.Type.LOGIN_SUCCESS, 7L, Map.of("ipAddress", "6.6.6.6")));
+
+    final ArgumentCaptor<Map<String, Object>> source = ArgumentCaptor.forClass(Map.class);
+    verify(activityLogService)
+        .record(
+            eq(ActivityType.LOGIN),
+            eq(ActivityOutcome.SUCCESS),
+            eq(7L),
+            isNull(),
+            source.capture());
+    // the whole context is handed over, but only whitelisted keys can ever be stored
+    assertEquals(null, ActivityDetails.toJson(ActivityType.LOGIN, source.getValue()));
   }
 }

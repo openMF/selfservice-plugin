@@ -180,7 +180,6 @@ class SelfUserApiResourceStepUpTest {
             eq(ActivityOutcome.SUCCESS),
             eq(7L),
             isNull(),
-            any(),
             isNull());
   }
 

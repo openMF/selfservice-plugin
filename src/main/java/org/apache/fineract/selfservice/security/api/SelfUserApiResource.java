@@ -36,7 +36,6 @@ import org.apache.fineract.selfservice.security.service.SelfUserPasswordChangeSe
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
-import org.apache.fineract.selfservice.stepup.service.StepUpRequestSupport;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Component;
@@ -97,7 +96,6 @@ public class SelfUserApiResource {
         ActivityOutcome.SUCCESS,
         appUser.getId(),
         null,
-        StepUpRequestSupport.clientIp(httpRequest),
         null);
 
     // US-E01-03: the password change forces a re-login. All sessions of the user are revoked so a
