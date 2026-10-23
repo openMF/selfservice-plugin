@@ -82,6 +82,9 @@ import org.apache.fineract.portfolio.client.service.ClientChargeReadPlatformServ
 import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorReadPlatformService;
+import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
+import org.apache.fineract.selfservice.activity.domain.ActivityType;
+import org.apache.fineract.selfservice.activity.service.ActivityLogService;
 import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
@@ -125,6 +128,7 @@ public class SelfClientsApiResource {
   private final DataUrlDecoderContentProcessor dataUrlDecoderContentProcessor;
   private final SizeContentProcessor sizeContentProcessor;
   private final ContentDetectorManager contentDetectorManager;
+  private final ActivityLogService activityLogService;
 
   @GET
   @Consumes({MediaType.APPLICATION_JSON})
@@ -517,15 +521,18 @@ public class SelfClientsApiResource {
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.createImage(
-        ImageCreateRequest.builder()
-            .entityId(clientId)
-            .entityType(ClientApiConstants.clientEntityName)
-            .fileName(fileDetails.getFileName())
-            .size(fileSize)
-            .type(filePart.getMediaType().toString())
-            .stream(is)
-            .build());
+    final ImageCreateResponse created =
+        this.imageWritePlatformService.createImage(
+            ImageCreateRequest.builder()
+                .entityId(clientId)
+                .entityType(ClientApiConstants.clientEntityName)
+                .fileName(fileDetails.getFileName())
+                .size(fileSize)
+                .type(filePart.getMediaType().toString())
+                .stream(is)
+                .build());
+    recordProfileImage(ActivityType.PROFILE_IMAGE_CHANGED, clientId);
+    return created;
   }
 
   @POST
@@ -547,15 +554,18 @@ public class SelfClientsApiResource {
 
     this.context.validateHasCreatePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.createImage(
-        ImageCreateRequest.builder()
-            .entityId(clientId)
-            .entityType(ClientApiConstants.clientEntityName)
-            .fileName(UUID.randomUUID().toString() + ".jpg")
-            .size(size)
-            .type(contentType)
-            .stream(ctx.getInputStream())
-            .build());
+    final ImageCreateResponse created =
+        this.imageWritePlatformService.createImage(
+            ImageCreateRequest.builder()
+                .entityId(clientId)
+                .entityType(ClientApiConstants.clientEntityName)
+                .fileName(UUID.randomUUID().toString() + ".jpg")
+                .size(size)
+                .type(contentType)
+                .stream(ctx.getInputStream())
+                .build());
+    recordProfileImage(ActivityType.PROFILE_IMAGE_CHANGED, clientId);
+    return created;
   }
 
   @DELETE
@@ -567,11 +577,28 @@ public class SelfClientsApiResource {
 
     this.context.validateHasDeletePermission("CLIENTIMAGE");
 
-    return this.imageWritePlatformService.deleteImage(
-        ImageDeleteRequest.builder()
-            .entityId(clientId)
-            .entityType(ClientApiConstants.clientEntityName)
-            .build());
+    final ImageDeleteResponse deleted =
+        this.imageWritePlatformService.deleteImage(
+            ImageDeleteRequest.builder()
+                .entityId(clientId)
+                .entityType(ClientApiConstants.clientEntityName)
+                .build());
+    recordProfileImage(ActivityType.PROFILE_IMAGE_REMOVED, clientId);
+    return deleted;
+  }
+
+  /** The history line for a profile picture change; it never affects the upload itself. */
+  private void recordProfileImage(final ActivityType type, final Long clientId) {
+    try {
+      this.activityLogService.record(
+          type,
+          ActivityOutcome.SUCCESS,
+          this.context.authenticatedSelfServiceUser().getId(),
+          clientId,
+          null);
+    } catch (RuntimeException e) {
+      // The picture is already saved: the history must never turn that into an error.
+    }
   }
 
   @GET

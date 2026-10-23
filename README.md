@@ -158,6 +158,7 @@ All endpoints live under `/v1/self/`. Here's a summary of the available resource
 | `/v1/self/shareaccounts` | Share Accounts | `GET`, `POST` |
 | `/v1/self/accounttransfers` | Fund Transfers (Own + TPT) | `GET`, `POST` |
 | `/v1/self/stepup` | Step-up (OTP) authentication for sensitive operations | `GET`, `POST` |
+| `/v1/self/activity` | Activity history of the logged-in user (logins, transfers, beneficiary / profile / password changes, step-up) | `GET` |
 | `/v1/self/beneficiaries/tpt` | Third-Party Transfer Beneficiaries | `GET`, `POST`, `PUT`, `DELETE` |
 | `/v1/self/loanproducts` | Loan Products Catalog | `GET` |
 | `/v1/self/savingsproducts` | Savings Products Catalog | `GET` |
@@ -256,6 +257,40 @@ Errors use the usual Fineract body (`userMessageGlobalisationCode`, `defaultUser
 Browser clients served from another origin must allow the `X-Step-Up-Token` request header in the Fineract CORS configuration (`fineract.security.cors.allowed-headers`).
 
 Step-up events (`ISSUED, RESENT, VERIFIED, FAILED, LOCKED, CONSUMED, REJECTED`) are published as Spring `StepUpEvent`s and the challenge rows are kept for `retentionDays`, so an activity feed can consume them.
+
+## Activity history
+
+A client can see the logins and sensitive actions of their own account and spot unauthorised use (US-E12-05).
+
+```
+GET /v1/self/activity?limit=20&offset=0&type=LOGIN,TRANSFER_CONFIRMED
+```
+
+- Newest first, only the **logged-in user's own** events. There is no user id parameter.
+- `limit` defaults to 20 and is capped by the tenant setting `maxPageSize`. `type` is an optional list. The answer is `{ "totalFilteredRecords": n, "pageItems": [ { "id", "type", "outcome", "occurredAt", "ipAddress", "details" } ] }`.
+- `type`: `LOGIN`, `LOGIN_FAILED`, `LOGIN_NEW_DEVICE`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET`, `TRANSFER_CONFIRMED`, `BENEFICIARY_ADDED`, `BENEFICIARY_UPDATED`, `BENEFICIARY_DELETED`, `PROFILE_IMAGE_CHANGED`, `PROFILE_IMAGE_REMOVED`, `SINPE_SUBSCRIPTION_CHANGED`, `STEP_UP_REQUESTED`, `STEP_UP_VERIFIED`, `STEP_UP_LOCKED`. The client translates the code; no text is stored.
+- **Where the address comes from:** the address of the connection (`getRemoteAddr()`). The plugin never reads `X-Forwarded-For` itself, because any client can write anything in that header and the history exists to show where an action really came from. Behind a reverse proxy, configure the trusted proxies of the server (for example `server.forward-headers-strategy=native` and `server.tomcat.remoteip.internal-proxies=<your proxies>`); then `getRemoteAddr()` is the real client. Without a trusted proxy the address of the proxy is shown. The same rule applies to the address kept with step-up challenges.
+- **Privacy:** the IP address is stored and returned **masked** (`203.0.x.x`, IPv6 `2001:db8:x:x:x:x:x:x`); the full address is never kept. `details` is built from a whitelist per type (for a transfer: amount, currency when known, destination name, last 4 digits of the destination account). A password, OTP, token, e-mail, phone number or full account number never reaches the history.
+- A wrong-password login is recorded at most **once per minute per user**, so a guessing attack cannot flood the feed. Wrong step-up codes are not listed one by one; the request, the successful verification and a lock-out are.
+- Recording never breaks the action it describes: a failure to write is only logged. A transfer is listed only after it was committed.
+
+### Configure it per tenant
+
+The external service `SELF_SERVICE_ACTIVITY` (tables `c_external_service` / `c_external_service_properties`, seeded by Liquibase). Nothing is read from environment variables.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | `false` stops recording (existing rows stay until purged) |
+| `retentionDays` | `90` | how long the history is kept, `1`..`3650` (some regions need longer) |
+| `maxPageSize` | `100` | largest page a client may ask for, `10`..`500` |
+
+```sql
+UPDATE c_external_service_properties SET value = '365'
+WHERE name = 'retentionDays'
+  AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_ACTIVITY');
+```
+
+A nightly job (batch instances only, `mifos.self.service.activity.purge.enabled` / `.cron`) deletes older rows of every tenant using that tenant's own `retentionDays`.
 
 ## Contributing
 

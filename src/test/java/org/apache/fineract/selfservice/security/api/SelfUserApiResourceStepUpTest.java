@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -21,6 +22,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
+import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
+import org.apache.fineract.selfservice.activity.domain.ActivityType;
+import org.apache.fineract.selfservice.activity.service.ActivityLogService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.security.service.SelfUserPasswordChangeService;
@@ -54,6 +58,7 @@ class SelfUserApiResourceStepUpTest {
   @Mock private StepUpGuard stepUpGuard;
   @Mock private StepUpSettingsProvider settingsProvider;
   @Mock private SelfServiceAuthenticationTokenService tokenService;
+  @Mock private ActivityLogService activityLogService;
   @Mock private HttpServletRequest request;
   @Mock private AppSelfServiceUser user;
 
@@ -63,7 +68,12 @@ class SelfUserApiResourceStepUpTest {
   void setUp() {
     resource =
         new SelfUserApiResource(
-            context, passwordChangeService, stepUpGuard, settingsProvider, tokenService);
+            context,
+            passwordChangeService,
+            stepUpGuard,
+            settingsProvider,
+            tokenService,
+            activityLogService);
     when(context.authenticatedSelfServiceUser()).thenReturn(user);
     when(user.getId()).thenReturn(7L);
     when(passwordChangeService.changePassword(user, BODY)).thenReturn("{\"resourceId\":7}");
@@ -158,5 +168,29 @@ class SelfUserApiResourceStepUpTest {
 
     verifyNoInteractions(stepUpGuard, tokenService);
     verify(passwordChangeService, never()).changePassword(any(), any());
+  }
+
+  @Test
+  void aSuccessfulChange_isRecordedInTheActivityHistory_withoutThePassword() {
+    resource.update(BODY, request);
+
+    verify(activityLogService)
+        .record(
+            eq(ActivityType.PASSWORD_CHANGED),
+            eq(ActivityOutcome.SUCCESS),
+            eq(7L),
+            isNull(),
+            isNull());
+  }
+
+  @Test
+  void aRefusedChange_isNotRecordedAsDone() {
+    doThrow(StepUpException.required(StepUpAction.CHANGE_PASSWORD))
+        .when(stepUpGuard)
+        .requireIfProtected(any(), any(), any());
+
+    assertThrows(StepUpException.class, () -> resource.update(BODY, request));
+
+    verifyNoInteractions(activityLogService);
   }
 }
