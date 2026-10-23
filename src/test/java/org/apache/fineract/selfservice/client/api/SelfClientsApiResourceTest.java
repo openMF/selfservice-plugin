@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.client.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +30,7 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageCreateRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageCreateResponse;
+import org.apache.fineract.infrastructure.documentmanagement.data.ImageDeleteResponse;
 import org.apache.fineract.infrastructure.documentmanagement.service.ImageReadPlatformService;
 import org.apache.fineract.infrastructure.documentmanagement.service.ImageWritePlatformService;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
@@ -42,6 +44,9 @@ import org.apache.fineract.portfolio.client.service.ClientChargeReadPlatformServ
 import org.apache.fineract.portfolio.client.service.ClientTransactionReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.ObligeeData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorReadPlatformService;
+import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
+import org.apache.fineract.selfservice.activity.domain.ActivityType;
+import org.apache.fineract.selfservice.activity.service.ActivityLogService;
 import org.apache.fineract.selfservice.client.data.SelfClientDataValidator;
 import org.apache.fineract.selfservice.client.service.SelfServiceClientReadPlatformService;
 import org.apache.fineract.selfservice.client.service.SelfServiceSearchParameters;
@@ -76,6 +81,7 @@ class SelfClientsApiResourceTest {
   @Mock private SelfClientDataValidator dataValidator;
   @Mock private ImageReadPlatformService imageReadPlatformService;
   @Mock private ImageWritePlatformService imageWritePlatformService;
+  @Mock private ActivityLogService activityLogService;
   @Mock private UriInfo uriInfo;
 
   private SelfClientsApiResource resource;
@@ -109,8 +115,8 @@ class SelfClientsApiResourceTest {
             null, // dataUrlEncoderContentProcessor
             null, // dataUrlDecoderContentProcessor
             null, // sizeContentProcessor
-            null // contentDetectorManager
-            );
+            null, // contentDetectorManager
+            activityLogService);
 
     org.mockito.Mockito.lenient()
         .when(uriInfo.getQueryParameters())
@@ -261,6 +267,57 @@ class SelfClientsApiResourceTest {
   }
 
   @Test
+  void addNewClientImage_isRecordedInTheActivityHistory() {
+    mockClientMapped();
+    mockAuthenticatedUser();
+    FormDataContentDisposition fileDetails = mock(FormDataContentDisposition.class);
+    FormDataBodyPart filePart = mock(FormDataBodyPart.class);
+    when(fileDetails.getFileName()).thenReturn("image.png");
+    when(filePart.getMediaType()).thenReturn(MediaType.valueOf("image/png"));
+    when(imageWritePlatformService.createImage(any(ImageCreateRequest.class)))
+        .thenReturn(new ImageCreateResponse(CLIENT_ID, "image-id"));
+
+    resource.addNewClientImage(CLIENT_ID, 123L, mock(InputStream.class), fileDetails, filePart);
+
+    verify(activityLogService)
+        .recordForCurrentRequest(
+            ActivityType.PROFILE_IMAGE_CHANGED, ActivityOutcome.SUCCESS, USER_ID, CLIENT_ID, null);
+  }
+
+  @Test
+  void addNewClientImage_aFailingHistory_doesNotFailTheUpload() {
+    mockClientMapped();
+    mockAuthenticatedUser();
+    FormDataContentDisposition fileDetails = mock(FormDataContentDisposition.class);
+    FormDataBodyPart filePart = mock(FormDataBodyPart.class);
+    when(fileDetails.getFileName()).thenReturn("image.png");
+    when(filePart.getMediaType()).thenReturn(MediaType.valueOf("image/png"));
+    ImageCreateResponse response = new ImageCreateResponse(CLIENT_ID, "image-id");
+    when(imageWritePlatformService.createImage(any(ImageCreateRequest.class))).thenReturn(response);
+    doThrow(new IllegalStateException("history down"))
+        .when(activityLogService)
+        .recordForCurrentRequest(any(), any(), any(), any(), any());
+
+    ImageCreateResponse result =
+        resource.addNewClientImage(CLIENT_ID, 123L, mock(InputStream.class), fileDetails, filePart);
+
+    assertEquals(response, result);
+  }
+
+  @Test
+  void deleteClientImage_isRecordedInTheActivityHistory() {
+    mockClientMapped();
+    mockAuthenticatedUser();
+    when(imageWritePlatformService.deleteImage(any())).thenReturn(mock(ImageDeleteResponse.class));
+
+    resource.deleteClientImage(CLIENT_ID);
+
+    verify(activityLogService)
+        .recordForCurrentRequest(
+            ActivityType.PROFILE_IMAGE_REMOVED, ActivityOutcome.SUCCESS, USER_ID, CLIENT_ID, null);
+  }
+
+  @Test
   void addNewClientImage_throwsIfNoCreatePermissionAndDoesNotWrite() {
     mockClientMapped();
     InputStream is = mock(InputStream.class);
@@ -275,6 +332,7 @@ class SelfClientsApiResourceTest {
         NoAuthorizationException.class,
         () -> resource.addNewClientImage(CLIENT_ID, 123L, is, fileDetails, filePart));
     verify(imageWritePlatformService, never()).createImage(any());
+    verify(activityLogService, never()).recordForCurrentRequest(any(), any(), any(), any(), any());
   }
 
   // --- deleteClientImage ---

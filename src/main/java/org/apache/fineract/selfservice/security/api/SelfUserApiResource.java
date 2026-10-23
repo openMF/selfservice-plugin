@@ -27,12 +27,16 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Context;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
+import org.apache.fineract.selfservice.activity.domain.ActivityType;
+import org.apache.fineract.selfservice.activity.service.ActivityLogService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.security.service.SelfUserPasswordChangeService;
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
+import org.apache.fineract.selfservice.stepup.service.StepUpRequestSupport;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Component;
@@ -48,6 +52,7 @@ public class SelfUserApiResource {
   private final StepUpGuard stepUpGuard;
   private final StepUpSettingsProvider stepUpSettingsProvider;
   private final SelfServiceAuthenticationTokenService tokenService;
+  private final ActivityLogService activityLogService;
 
   @PUT
   @Operation(
@@ -87,6 +92,13 @@ public class SelfUserApiResource {
 
     final String response =
         this.passwordChangeService.changePassword(appUser, apiRequestBodyAsJson);
+    this.activityLogService.record(
+        ActivityType.PASSWORD_CHANGED,
+        ActivityOutcome.SUCCESS,
+        appUser.getId(),
+        null,
+        StepUpRequestSupport.clientIp(httpRequest),
+        null);
 
     // US-E01-03: the password change forces a re-login. All sessions of the user are revoked so a
     // stolen session cannot outlive the change.

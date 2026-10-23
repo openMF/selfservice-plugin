@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MX-491 (US-E12-05): per-tenant activity log configuration, read through
+        ActivitySettingsProvider (same convention as SELF_SERVICE_STEP_UP, see 083). Nothing is
+        read from environment variables, so one tenant can never change another one.
+
+        Keys (values outside the allowed range fall back to the defaults below):
+          enabled         true|false                              (default true)
+          retentionDays   1..3650 days the history is kept        (90)
+                          (longer periods may be required in some regions)
+          maxPageSize     10..500 largest page a client may ask   (100)
+    -->
+
+    <changeSet id="ss-0086-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_ACTIVITY'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <insert tableName="c_external_service">
+            <column name="name" value="SELF_SERVICE_ACTIVITY"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0086-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_ACTIVITY')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_ACTIVITY')"/>
+            <column name="name" value="enabled"/>
+            <column name="value" value="true"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_ACTIVITY')"/>
+            <column name="name" value="retentionDays"/>
+            <column name="value" value="90"/>
+        </insert>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_ACTIVITY')"/>
+            <column name="name" value="maxPageSize"/>
+            <column name="value" value="100"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

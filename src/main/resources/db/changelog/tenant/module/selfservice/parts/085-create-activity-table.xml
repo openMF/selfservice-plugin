@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MULTI-TENANT NOTE: included from the TENANT changelog master, executed against every
+        tenant schema.
+
+        MX-491 (US-E12-05): the activity history that a client can read to detect unauthorised
+        use (logins, transfers, beneficiary / profile / password changes, step-up).
+
+        Privacy: only the MASKED IP address is stored (ip_masked), never the full one. "details"
+        is a small JSON object built from a whitelist per activity type; it never holds a
+        password, OTP, token, e-mail, phone or a full account number.
+    -->
+
+    <changeSet id="ss-0085-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_activity"/>
+            </not>
+        </preConditions>
+        <comment>Creates the user activity table (US-E12-05).</comment>
+        <createTable tableName="m_selfservice_activity">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT" remarks="Self-service user the activity belongs to">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT" remarks="Client the user acted for, when known"/>
+            <column name="activity_type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="outcome" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ip_masked" type="VARCHAR(45)" remarks="Masked IP address, e.g. 203.0.x.x"/>
+            <column name="details" type="TEXT" remarks="Small JSON object, whitelisted per type"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="ss-0085-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_activity"/>
+            <not>
+                <indexExists tableName="m_selfservice_activity" indexName="idx_ss_activity_user_created"/>
+            </not>
+        </preConditions>
+        <comment>Serves the feed: newest first for one user, optionally filtered by type.</comment>
+        <createIndex tableName="m_selfservice_activity" indexName="idx_ss_activity_user_created">
+            <column name="appuser_id"/>
+            <column name="created_at"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0085-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_activity"/>
+            <not>
+                <indexExists tableName="m_selfservice_activity" indexName="idx_ss_activity_created_at"/>
+            </not>
+        </preConditions>
+        <comment>Serves the retention purge.</comment>
+        <createIndex tableName="m_selfservice_activity" indexName="idx_ss_activity_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- No foreign key to a user table on purpose: the history must outlive a deleted user until
+         the retention purge removes it (same reasoning as m_selfservice_access_audit). -->
+</databaseChangeLog>
