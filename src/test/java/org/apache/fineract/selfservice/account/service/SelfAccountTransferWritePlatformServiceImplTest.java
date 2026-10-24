@@ -397,6 +397,66 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     verify(applicationEventPublisher).publishEvent(any());
   }
 
+  /**
+   * MX-503: once the gateway accepted the transfer, an answer that is not JSON must not fail the
+   * confirm, or the rollback would free the consumed OTP for a second send.
+   */
+  @Test
+  void confirmTransfer_pinGatewayAcceptsWithNonJsonAnswer_completesAndKeepsTheOtpConsumed()
+      throws Exception {
+    SelfServiceRegistration registration = ownSourceWithValidOtp();
+    when(pinExternalTransferService.getAccountInfo("DEST-IBAN"))
+        .thenReturn(
+            "{\"holder\":\"Receiver\",\"holderId\":\"1\",\"holderIdType\":1,\"currencyCode\":\"CRC\"}");
+    when(pinExternalTransferService.executePinTransfer(any())).thenReturn("OK");
+
+    Object result = service.confirmTransfer(confirmRequest("PIN"), httpRequest);
+
+    assertEquals("PIN", ((Map<?, ?>) result).get("transferType"));
+    Map<?, ?> data = (Map<?, ?>) ((Map<?, ?>) result).get("data");
+    assertEquals(0, BigDecimal.TEN.compareTo((BigDecimal) data.get("debitedAmount")));
+    verify(registration).markConsumed();
+    verify(pinExternalTransferService).executePinTransfer(any());
+    verify(applicationEventPublisher).publishEvent(any());
+  }
+
+  @Test
+  void confirmTransfer_sinpeGatewayAcceptsWithNonJsonAnswer_completesAndKeepsTheOtpConsumed()
+      throws Exception {
+    SelfServiceRegistration registration = ownSourceWithValidOtp();
+    when(sinpeExternalApiClient.transferToPhone(any())).thenReturn("<html>OK</html>");
+
+    Object result = service.confirmTransfer(confirmRequest("SINPE_MOVIL"), httpRequest);
+
+    assertEquals("SINPE_MOVIL", ((Map<?, ?>) result).get("transferType"));
+    verify(registration).markConsumed();
+    verify(sinpeExternalApiClient).transferToPhone(any());
+    verify(applicationEventPublisher).publishEvent(any());
+  }
+
+  /** The caller owns the source account, the legacy OTP is valid and no fee is charged. */
+  private SelfServiceRegistration ownSourceWithValidOtp() {
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    SelfServiceRegistration registration = validOtpRegistration();
+    when(registrationRepository
+            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(Optional.of(registration));
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
+    when(feeCollectionService.collectFee(any()))
+        .thenReturn(
+            FeeCollectionResult.builder()
+                .successful(true)
+                .status(FeeCollectionResult.Status.SKIPPED)
+                .feeAmount(BigDecimal.ZERO)
+                .currency("CRC")
+                .build());
+    return registration;
+  }
+
   @Test
   void confirmTransfer_acceptsSourceMappedToSecondClientAndUsesSecondClientDownstream()
       throws Exception {
