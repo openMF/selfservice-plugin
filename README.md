@@ -203,7 +203,7 @@ Everything is configured **per tenant** in the external service `SELF_SERVICE_ST
    |---|---|---|
    | `enabled` | `false` | master switch |
    | `hmacSecret` | placeholder | key used to hash this tenant's OTPs (at least 32 characters) |
-   | `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | also available: `OWN_TRANSFER` (transfers between own accounts) |
+   | `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | also available: `OWN_TRANSFER` (transfers between own accounts), `APPROVE_SECOND_SIGNATURE` (required for [dual approval](#dual-approval-entity-clients)) |
    | `channels` | `SMS,EMAIL` | channels offered to the user (the authenticator app has its own switch, see below) |
    | `otpLength` | `6` (4-8) | digits of the code |
    | `otpTtlSeconds` | `300` (60-900) | validity of a code |
@@ -237,6 +237,7 @@ The token works **once**, only for the same user, the same session, the same act
 | `OWN_TRANSFER` | `POST /v1/self/accounttransfers` | same as above |
 | `CONFIRM_TRANSFER` | `POST /v1/self/accounttransfers/confirm` | `fromAccount, fromAccountType, toAccount, toAccountType, toPhoneNumber, transferType, currencyCode, transferAmount` |
 | `CHANGE_PASSWORD` | `PUT /v1/self/user` | the action only (the password is never hashed or stored); all sessions are revoked afterwards |
+| `APPROVE_SECOND_SIGNATURE` | `POST /v1/self/accounttransfers/approvals/{approvalId}?command=approve` | `approvalId` |
 
 When step-up protects `CONFIRM_TRANSFER`, the older in-line transfer OTP is replaced: `/quote` no longer sends a code, `/confirm` expects the step-up token instead of `otp`, and `/otp/resend` answers `stepup.legacy.otp.disabled`.
 
@@ -382,6 +383,30 @@ WHERE name = 'retentionDays'
 ```
 
 A nightly job (batch instances only, `mifos.self.service.activity.purge.enabled` / `.cron`) deletes older rows of every tenant using that tenant's own `retentionDays`.
+
+## Dual approval (ENTITY clients)
+
+A business (ENTITY) client can require a second signatory for large transfers (MX-489). It is off unless a threshold row exists for the client, so every other client keeps the single-user flow.
+
+- **Threshold:** set per client and currency in `m_selfservice_client_approval_threshold`. A transfer is held when its amount, **excluding the fee**, is **greater than or equal to** the threshold for the source account's currency. The currency is read from the account, not from the request. There is no tenant-wide threshold.
+- **Signatories:** self-service users who may approve for a client are listed in `m_selfservice_entity_signatory` (`is_active = false` revokes them). The one-owner-per-client mapping (`unique_self_client`) is unchanged.
+- **Approver OTP:** the tenant must have step-up enabled with `APPROVE_SECOND_SIGNATURE` in `protectedActions`. Otherwise a transfer that needs approval is refused (`validation.msg.transferapproval.approvalId.otp.not.configured`) instead of being held where nobody could approve it.
+
+```sql
+INSERT INTO m_selfservice_client_approval_threshold (client_id, currency_code, threshold_amount)
+VALUES (<entityClientId>, 'CRC', 1000000);
+INSERT INTO m_selfservice_entity_signatory (client_id, appuser_id, is_active, created_at)
+VALUES (<entityClientId>, <selfServiceUserId>, true, CURRENT_TIMESTAMP);
+```
+
+| Step | Who | Request |
+|---|---|---|
+| 1 | initiator | the usual prepare, quote and confirm. At or above the threshold, `/confirm` answers `{ "status": "PENDING_APPROVAL", "approvalId": 5 }` and no money moves |
+| 2 | approver | `GET /v1/self/accounttransfers/approvals` lists pending transfers of the clients where they are an active signatory (`canDecide` is false for their own) |
+| 3 | approver | step-up challenge for `APPROVE_SECOND_SIGNATURE` with `payload: { "approvalId": 5 }`, then verify |
+| 4 | approver | `POST /v1/self/accounttransfers/approvals/5?command=approve` with `X-Step-Up-Token`, or `?command=reject` (no OTP) |
+
+On approval the funds are checked again and the initiator's request is executed through the normal confirm path, as the initiator. The approval is committed before any money moves, so a transfer is sent **at most once**: if execution fails (for example after a PIN or SINPE gateway has already accepted it), the approval ends as `FAILED` and can never be approved again. Reconcile it against the gateway before the initiator submits a new transfer. The initiator cannot decide on their own transfer, a non-signatory gets the same `not.found` error as a missing approval, and a transfer can be decided only once, even under concurrent requests. The legacy `POST /v1/self/accounttransfers` refuses transfers that need a second signature (`dual.approval.required`).
 
 ## Contributing
 

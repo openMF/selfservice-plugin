@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -44,12 +45,14 @@ import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
+import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.portfolio.client.domain.LegalForm;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -67,6 +70,8 @@ import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValid
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApproval;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApprovalRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -82,6 +87,7 @@ import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -96,6 +102,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -143,6 +151,10 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   @Mock private HttpServletRequest httpRequest;
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   @Mock private StepUpGuard stepUpGuard;
+  @Mock private SelfServiceTransferApprovalRepository transferApprovalRepository;
+  @Mock private AppSelfServiceUserRepository appSelfServiceUserRepository;
+  @Mock private TransactionTemplate transactionTemplate;
+  @Mock private PlatformTransactionManager transactionManager;
 
   @InjectMocks private SelfAccountTransferWritePlatformServiceImpl service;
 
@@ -172,6 +184,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
         .when(transactionDateUtil.getCurrentDateForFineract(anyString(), anyString()))
         .thenReturn(TEST_FINERACT_DATE);
     lenient().when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
+    lenient().when(transactionTemplate.getTransactionManager()).thenReturn(transactionManager);
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }
@@ -240,6 +253,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
     when(registrationRepository.markOldOtpsAsConsumed(
             eq(OWN_CLIENT_ID),
+            eq("selfuser"),
             eq(SelfServiceRequestType.ACCOUNT_TRANSFER),
             any(LocalDateTime.class)))
         .thenReturn(0);
@@ -265,6 +279,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
     when(registrationRepository.markOldOtpsAsConsumed(
             eq(SECOND_CLIENT_ID),
+            eq("selfuser"),
             eq(SelfServiceRequestType.ACCOUNT_TRANSFER),
             any(LocalDateTime.class)))
         .thenReturn(0);
@@ -275,11 +290,13 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     verify(registrationRepository)
         .markOldOtpsAsConsumed(
             eq(SECOND_CLIENT_ID),
+            eq("selfuser"),
             eq(SelfServiceRequestType.ACCOUNT_TRANSFER),
             any(LocalDateTime.class));
     verify(registrationRepository, never())
         .markOldOtpsAsConsumed(
             eq(OWN_CLIENT_ID),
+            eq("selfuser"),
             eq(SelfServiceRequestType.ACCOUNT_TRANSFER),
             any(LocalDateTime.class));
     ArgumentCaptor<SelfServiceRegistration> registrationCaptor =
@@ -350,6 +367,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
     when(registrationRepository.markOldOtpsAsConsumed(
             eq(SECOND_CLIENT_ID),
+            eq("selfuser"),
             eq(SelfServiceRequestType.ACCOUNT_TRANSFER),
             any(LocalDateTime.class)))
         .thenReturn(0);
@@ -368,10 +386,9 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
     numericSourceAccount(SAVINGS_ID, ownSavings);
     SelfServiceRegistration registration = validOtpRegistration();
-    when(registrationRepository
-            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
-        .thenReturn(Optional.of(registration));
+    when(registrationRepository.findUserOtps(
+            OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(List.of(registration));
     when(quoteService.calculateFee(any(), any(Client.class)))
         .thenReturn(
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
@@ -467,10 +484,9 @@ class SelfAccountTransferWritePlatformServiceImplTest {
         savingsAccount(SAVINGS_ID, secondClient, new BigDecimal("100.00"));
     numericSourceAccount(SAVINGS_ID, secondClientSavings);
     SelfServiceRegistration registration = validOtpRegistration();
-    when(registrationRepository
-            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                SECOND_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
-        .thenReturn(Optional.of(registration));
+    when(registrationRepository.findUserOtps(
+            SECOND_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(List.of(registration));
     when(quoteService.calculateFee(any(), any(Client.class)))
         .thenReturn(
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
@@ -493,11 +509,9 @@ class SelfAccountTransferWritePlatformServiceImplTest {
 
     verify(quoteService).calculateFee(any(AccountTransferPrepareRequest.class), eq(secondClient));
     verify(registrationRepository)
-        .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-            SECOND_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+        .findUserOtps(SECOND_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
     verify(registrationRepository, never())
-        .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-            OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
     verify(registration).markConsumed();
     verify(registrationRepository).saveAndFlush(registration);
     verify(secondClientSavings).getWithdrawableBalance();
@@ -585,16 +599,17 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
     numericSourceAccount(SAVINGS_ID, ownSavings);
     IllegalStateException otpLookupReached = new IllegalStateException("otp lookup reached");
-    when(registrationRepository.findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER))
+    when(registrationRepository
+            .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+                OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER))
         .thenThrow(otpLookupReached);
 
     assertThrows(
         IllegalStateException.class, () -> service.resendTransferOtp(resendRequest(), httpRequest));
 
     verify(registrationRepository)
-        .findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER);
+        .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+            OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER);
     verifyNoInteractions(applicationEventPublisher);
   }
 
@@ -605,18 +620,19 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     SavingsAccount secondClientSavings =
         savingsAccount(SAVINGS_ID, secondClient, new BigDecimal("100.00"));
     numericSourceAccount(SAVINGS_ID, secondClientSavings);
-    when(registrationRepository.findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            SECOND_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER))
+    when(registrationRepository
+            .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+                SECOND_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER))
         .thenReturn(List.of());
 
     assertDoesNotThrow(() -> service.resendTransferOtp(resendRequest(), httpRequest));
 
     verify(registrationRepository)
-        .findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            SECOND_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER);
+        .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+            SECOND_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER);
     verify(registrationRepository, never())
-        .findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER);
+        .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+            OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER);
     ArgumentCaptor<SelfServiceRegistration> registrationCaptor =
         ArgumentCaptor.forClass(SelfServiceRegistration.class);
     verify(registrationRepository, times(2)).saveAndFlush(registrationCaptor.capture());
@@ -939,6 +955,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void createTransfer_tpt_requiresStepUpBoundToTheValidatedTransfer_beforeCreatingIt() {
     when(dataValidator.validateCreate(eq("tpt"), anyString()))
         .thenReturn(transferParams(1L, 2L, "100.00"));
+    numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
     org.mockito.Mockito.doThrow(StepUpException.required(StepUpAction.TPT_TRANSFER))
         .when(stepUpGuard)
         .requireIfProtected(any(), any(), any());
@@ -959,6 +976,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   @Test
   void createTransfer_betweenOwnAccounts_usesTheOwnTransferAction() {
     when(dataValidator.validateCreate(eq(""), anyString())).thenReturn(transferParams(1L, 3L, "5"));
+    numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
     org.mockito.Mockito.doThrow(StepUpException.invalid())
         .when(stepUpGuard)
         .requireIfProtected(any(), any(), any());
@@ -1109,5 +1127,610 @@ class SelfAccountTransferWritePlatformServiceImplTest {
               return mapping;
             })
         .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  // ===================================================================================
+  // MX-489: user-scoped legacy OTPs
+  // ===================================================================================
+
+  @Test
+  void confirmTransfer_legacyOtp_isLookedUpForTheCallerOnly_soAnotherUsersOtpIsRejected()
+      throws Exception {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    // An OTP for the same client issued to "otheruser" is invisible to "selfuser".
+    SelfServiceRegistration othersOtp = validOtpRegistration();
+    when(registrationRepository.findUserOtps(
+            OWN_CLIENT_ID, "otheruser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(List.of(othersOtp));
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verify(registrationRepository)
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+    verifyNoInteractions(pinExternalTransferService, transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_legacyOtp_rejectsExpiredAndAlreadyUsedOtps() throws Exception {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    SelfServiceRegistration expired = mock(SelfServiceRegistration.class);
+    when(expired.isExpired(any(LocalDateTime.class))).thenReturn(true);
+    SelfServiceRegistration used = mock(SelfServiceRegistration.class);
+    when(used.isConsumed()).thenReturn(true);
+
+    for (SelfServiceRegistration otp : List.of(expired, used)) {
+      when(registrationRepository.findUserOtps(
+              OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+          .thenReturn(List.of(otp));
+      assertThrows(
+          PlatformApiDataValidationException.class,
+          () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+      verify(otp, never()).markConsumed();
+    }
+    verifyNoInteractions(pinExternalTransferService);
+  }
+
+  @Test
+  void resendTransferOtp_expiresOnlyTheCallersOtps() throws Exception {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    SelfServiceRegistration mine = mock(SelfServiceRegistration.class);
+    when(registrationRepository
+            .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+                OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER))
+        .thenReturn(List.of(mine));
+
+    assertDoesNotThrow(() -> service.resendTransferOtp(resendRequest(), httpRequest));
+
+    verify(mine).markConsumed();
+    verify(registrationRepository, never())
+        .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+            eq(OWN_CLIENT_ID), eq("otheruser"), any());
+  }
+
+  // ===================================================================================
+  // MX-489: client-level threshold and holding the transfer
+  // ===================================================================================
+
+  private static final Long APPROVAL_ID = 5L;
+  private static final Long INITIATOR_ID = 77L;
+
+  /** Makes the own client an ENTITY whose CRC account has the given threshold (null = none). */
+  private SavingsAccount entitySourceAccount(String threshold) {
+    when(ownClient.getLegalForm()).thenReturn(LegalForm.ENTITY.getValue());
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("1000.00"));
+    MonetaryCurrency crc = mock(MonetaryCurrency.class);
+    lenient().when(crc.getCode()).thenReturn("CRC");
+    lenient().when(ownSavings.getCurrency()).thenReturn(crc);
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    lenient()
+        .when(
+            jdbcTemplate.queryForList(
+                contains("m_selfservice_client_approval_threshold"),
+                eq(BigDecimal.class),
+                eq(OWN_CLIENT_ID),
+                eq("CRC")))
+        .thenReturn(threshold == null ? List.of() : List.of(new BigDecimal(threshold)));
+    return ownSavings;
+  }
+
+  private void approverOtpProtected(boolean isProtected) {
+    lenient()
+        .when(stepUpGuard.isProtected(StepUpAction.APPROVE_SECOND_SIGNATURE))
+        .thenReturn(isProtected);
+  }
+
+  /**
+   * The PIN channel's first external call; the PIN path rewraps its failure, so tests assert that
+   * execution was reached by verifying this call rather than by the exception type.
+   */
+  private void verifyExecutionReached() throws Exception {
+    verify(pinExternalTransferService).getAccountInfo("DEST-IBAN");
+  }
+
+  private void validLegacyOtp() {
+    stepUpProtectsConfirmation(false);
+    SelfServiceRegistration otp = validOtpRegistration();
+    when(registrationRepository.findUserOtps(
+            OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(List.of(otp));
+  }
+
+  @Test
+  void confirmTransfer_entityBelowThreshold_executesImmediately() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.01");
+
+    assertThrows(
+        RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyExecutionReached();
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_entityWithoutThresholdForTheCurrency_executesImmediately() throws Exception {
+    validLegacyOtp();
+    entitySourceAccount(null);
+
+    assertThrows(
+        RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyExecutionReached();
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_personClient_neverReadsThresholds() throws Exception {
+    validLegacyOtp();
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+
+    assertThrows(
+        RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyExecutionReached();
+    verify(jdbcTemplate, never())
+        .queryForList(contains("approval_threshold"), eq(BigDecimal.class), any(), any());
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_entityAtThreshold_isHeldWithoutMovingMoney() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    when(transferApprovalRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    Object response = service.confirmTransfer(confirmRequest("PIN"), httpRequest);
+
+    assertTrue(response.toString().contains("PENDING_APPROVAL"));
+    ArgumentCaptor<SelfServiceTransferApproval> held =
+        ArgumentCaptor.forClass(SelfServiceTransferApproval.class);
+    verify(transferApprovalRepository).saveAndFlush(held.capture());
+    assertEquals(OWN_CLIENT_ID, held.getValue().getClientId());
+    assertEquals(USER_ID, held.getValue().getRequestedBy());
+    assertEquals(SelfServiceTransferApproval.Status.PENDING, held.getValue().getStatus());
+    assertEquals(0, BigDecimal.TEN.compareTo(held.getValue().getTransferAmount()));
+    assertEquals("CRC", held.getValue().getCurrencyCode());
+    assertFalse(held.getValue().getRequestJson().contains(OTP), "the OTP must not be stored");
+    verifyNoInteractions(
+        pinExternalTransferService,
+        sinpeExternalApiClient,
+        feeCollectionService,
+        accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void confirmTransfer_entityAtThresholdWithoutFee_isRefusedWhenTheQuotedFeeExceedsTheBalance() {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(
+                new BigDecimal("995.00"), new BigDecimal("1005.00"), "CRC", "fee"));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    assertTrue(errorCodes(ex).contains("insufficient.account.balance"));
+    verify(transferApprovalRepository, never()).saveAndFlush(any());
+    verifyNoInteractions(pinExternalTransferService);
+  }
+
+  @Test
+  void confirmTransfer_thresholdUsesTheAccountCurrency_notTheRequestedOne() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    when(transferApprovalRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setCurrencyCode("USD");
+
+    Object response = service.confirmTransfer(request, httpRequest);
+
+    assertTrue(response.toString().contains("PENDING_APPROVAL"));
+  }
+
+  @Test
+  void confirmTransfer_heldTransfer_failsClosedWhenTheApproverOtpIsNotConfigured()
+      throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(false);
+    entitySourceAccount("10.00");
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    assertTrue(errorCodes(ex).contains("otp.not.configured"));
+    verifyNoInteractions(transferApprovalRepository, pinExternalTransferService);
+  }
+
+  @Test
+  void createTransfer_legacyPath_refusesATransferThatNeedsASecondSignature() {
+    entitySourceAccount("50");
+    when(dataValidator.validateCreate(eq(""), anyString()))
+        .thenReturn(transferParams(SAVINGS_ID, 3L, "50"));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.createTransfer("", "{}", httpRequest));
+
+    assertTrue(errorCodes(ex).contains("dual.approval.required"));
+    verifyNoInteractions(accountTransfersWritePlatformService, stepUpGuard);
+  }
+
+  // ===================================================================================
+  // MX-489: second signature
+  // ===================================================================================
+
+  private SelfServiceTransferApproval pendingApproval(Long requestedBy) {
+    return approval(requestedBy, SelfServiceTransferApproval.Status.PENDING);
+  }
+
+  private SelfServiceTransferApproval approval(
+      Long requestedBy, SelfServiceTransferApproval.Status status) {
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setOtp(null);
+    return SelfServiceTransferApproval.builder()
+        .id(APPROVAL_ID)
+        .clientId(OWN_CLIENT_ID)
+        .requestedBy(requestedBy)
+        .status(status)
+        .transferAmount(BigDecimal.TEN)
+        .currencyCode("CRC")
+        .requestJson(new com.google.gson.Gson().toJson(request))
+        .createdAt(TEST_NOW)
+        .build();
+  }
+
+  private void approvalExists(SelfServiceTransferApproval approval) {
+    when(transferApprovalRepository.findById(approval.getId())).thenReturn(Optional.of(approval));
+  }
+
+  private void callerIsActiveSignatory(boolean isSignatory) {
+    lenient()
+        .when(
+            jdbcTemplate.queryForObject(
+                contains("m_selfservice_entity_signatory"),
+                eq(Integer.class),
+                eq(OWN_CLIENT_ID),
+                eq(USER_ID),
+                eq(true)))
+        .thenReturn(isSignatory ? 1 : 0);
+  }
+
+  private AppSelfServiceUser initiator(boolean enabled) {
+    AppSelfServiceUser initiator = mock(AppSelfServiceUser.class);
+    lenient().when(initiator.getId()).thenReturn(INITIATOR_ID);
+    lenient().when(initiator.isEnabled()).thenReturn(enabled);
+    Set<AppSelfServiceUserClientMapping> initiatorMappings = mappings(ownClient);
+    lenient().when(initiator.getAppUserClientMappings()).thenReturn(initiatorMappings);
+    when(appSelfServiceUserRepository.findById(INITIATOR_ID)).thenReturn(Optional.of(initiator));
+    return initiator;
+  }
+
+  /** The initiator is active and still owns the source account. */
+  private void initiatorCanStillTransfer() {
+    initiator(true);
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+  }
+
+  private void decisionWins(boolean wins) {
+    lenient()
+        .when(transferApprovalRepository.decide(eq(APPROVAL_ID), any(), any(), any(), any()))
+        .thenReturn(wins ? 1 : 0);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void approveTransfer_bySignatory_consumesAnOtpBoundToThisApproval_andExecutesAsTheInitiator()
+      throws Exception {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    AppSelfServiceUser initiator = initiator(true);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+
+    assertThrows(RuntimeException.class, () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    verifyExecutionReached();
+
+    ArgumentCaptor<Supplier<String>> hash = ArgumentCaptor.forClass(Supplier.class);
+    verify(stepUpGuard)
+        .requireIfProtected(
+            eq(StepUpAction.APPROVE_SECOND_SIGNATURE), eq(httpRequest), hash.capture());
+    assertEquals(
+        StepUpPayloadHasher.hash(StepUpAction.APPROVE_SECOND_SIGNATURE, Map.of("approvalId", "5")),
+        hash.getValue().get());
+    assertFalse(
+        StepUpPayloadHasher.hash(StepUpAction.APPROVE_SECOND_SIGNATURE, Map.of("approvalId", "6"))
+            .equals(hash.getValue().get()),
+        "an OTP verified for another approval must not match");
+    verify(transferApprovalRepository)
+        .decide(
+            eq(APPROVAL_ID),
+            eq(SelfServiceTransferApproval.Status.PENDING),
+            eq(SelfServiceTransferApproval.Status.APPROVED),
+            eq(USER_ID),
+            any());
+    // Checked before the claim and again when the transfer executes.
+    verify(initiator, times(2)).validateHasCreatePermission("ACCOUNTTRANSFER");
+  }
+
+  @Test
+  void approveTransfer_withAnInvalidOrForeignOtp_neverDecidesOrMovesMoney() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    initiatorCanStillTransfer();
+    org.mockito.Mockito.doThrow(StepUpException.invalid())
+        .when(stepUpGuard)
+        .requireIfProtected(eq(StepUpAction.APPROVE_SECOND_SIGNATURE), any(), any());
+
+    assertThrows(StepUpException.class, () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+    verifyNoInteractions(pinExternalTransferService);
+  }
+
+  @Test
+  void approveTransfer_byNonOrInactiveSignatory_looksLikeAMissingApproval() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(false);
+
+    PlatformApiDataValidationException foreign =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+    PlatformApiDataValidationException missing =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(999L, httpRequest));
+
+    assertEquals(errorCodes(missing), errorCodes(foreign));
+    assertTrue(errorCodes(foreign).contains("not.found"));
+    verifyNoInteractions(stepUpGuard, pinExternalTransferService);
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void approveTransfer_byTheInitiator_isRefusedEvenIfTheyAreASignatory() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(USER_ID));
+    callerIsActiveSignatory(true);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("initiator.cannot.decide"));
+    verifyNoInteractions(stepUpGuard, pinExternalTransferService);
+  }
+
+  @Test
+  void approveTransfer_alreadyDecided_isRefused() {
+    approverOtpProtected(true);
+    approvalExists(approval(INITIATOR_ID, SelfServiceTransferApproval.Status.APPROVED));
+    callerIsActiveSignatory(true);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("already.decided"));
+    verifyNoInteractions(stepUpGuard, pinExternalTransferService);
+  }
+
+  @Test
+  void approveTransfer_losingAConcurrentDecision_neverExecutes() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    initiatorCanStillTransfer();
+    decisionWins(false);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("already.decided"));
+    verifyNoInteractions(pinExternalTransferService);
+    verify(transferApprovalRepository, never())
+        .decide(any(), any(), eq(SelfServiceTransferApproval.Status.FAILED), any(), any());
+  }
+
+  @Test
+  void approveTransfer_failsClosedWhenTheApproverOtpIsNotConfigured() {
+    approverOtpProtected(false);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("otp.not.configured"));
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void approveTransfer_whenTheInitiatorIsDisabled_isRefusedBeforeTheApprovalOrOtpIsUsed() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    initiator(false);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("initiator.inactive"));
+    verifyNoInteractions(pinExternalTransferService);
+    verify(stepUpGuard, never()).requireIfProtected(any(), any(), any());
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void approveTransfer_whenFundsDroppedSinceConfirm_isRefusedBeforeTheApprovalOrOtpIsUsed() {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    initiator(true);
+    numericSourceAccount(SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, BigDecimal.ONE));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("insufficient.account.balance"));
+    verifyNoInteractions(pinExternalTransferService);
+    verify(stepUpGuard, never()).requireIfProtected(any(), any(), any());
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void approveTransfer_commitsTheApprovalBeforeMoneyMoves_andAFailedExecutionEndsAsFailed()
+      throws Exception {
+    approverOtpProtected(true);
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    initiatorCanStillTransfer();
+    when(transferApprovalRepository.decide(
+            eq(APPROVAL_ID),
+            eq(SelfServiceTransferApproval.Status.APPROVED),
+            eq(SelfServiceTransferApproval.Status.FAILED),
+            any(),
+            any()))
+        .thenReturn(1);
+    when(pinExternalTransferService.getAccountInfo("DEST-IBAN"))
+        .thenThrow(new IllegalStateException("gateway timeout"));
+
+    assertThrows(RuntimeException.class, () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    org.mockito.InOrder order =
+        org.mockito.Mockito.inOrder(
+            transferApprovalRepository, transactionManager, pinExternalTransferService);
+    order
+        .verify(transferApprovalRepository)
+        .decide(
+            eq(APPROVAL_ID),
+            eq(SelfServiceTransferApproval.Status.PENDING),
+            eq(SelfServiceTransferApproval.Status.APPROVED),
+            eq(USER_ID),
+            any());
+    order.verify(transactionManager).commit(any());
+    order.verify(pinExternalTransferService).getAccountInfo("DEST-IBAN");
+    order
+        .verify(transferApprovalRepository)
+        .decide(
+            eq(APPROVAL_ID),
+            eq(SelfServiceTransferApproval.Status.APPROVED),
+            eq(SelfServiceTransferApproval.Status.FAILED),
+            eq(USER_ID),
+            any());
+    verify(transferApprovalRepository, never())
+        .decide(any(), any(), eq(SelfServiceTransferApproval.Status.PENDING), any(), any());
+  }
+
+  @Test
+  void approveTransfer_ofAFailedApproval_isRefused_soItCanNeverBeSentTwice() {
+    approverOtpProtected(true);
+    approvalExists(approval(INITIATOR_ID, SelfServiceTransferApproval.Status.FAILED));
+    callerIsActiveSignatory(true);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("already.decided"));
+    verifyNoInteractions(stepUpGuard, pinExternalTransferService);
+  }
+
+  @Test
+  void rejectTransfer_bySignatory_closesItWithoutMovingMoney() {
+    approvalExists(pendingApproval(INITIATOR_ID));
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+
+    Object response = service.rejectTransfer(APPROVAL_ID);
+
+    assertTrue(response.toString().contains("REJECTED"));
+    verify(transferApprovalRepository)
+        .decide(
+            eq(APPROVAL_ID),
+            eq(SelfServiceTransferApproval.Status.PENDING),
+            eq(SelfServiceTransferApproval.Status.REJECTED),
+            eq(USER_ID),
+            any());
+    verifyNoInteractions(pinExternalTransferService, accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void rejectTransfer_byTheInitiator_isRefused() {
+    approvalExists(pendingApproval(USER_ID));
+    callerIsActiveSignatory(true);
+
+    assertThrows(
+        PlatformApiDataValidationException.class, () -> service.rejectTransfer(APPROVAL_ID));
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void retrievePendingApprovals_showsOnlyTheCallersSignatoryClients() {
+    when(jdbcTemplate.queryForList(
+            contains("m_selfservice_entity_signatory"), eq(Long.class), eq(USER_ID), eq(true)))
+        .thenReturn(List.of(OWN_CLIENT_ID));
+    when(transferApprovalRepository.findByClientIdInAndStatusOrderByIdAsc(
+            List.of(OWN_CLIENT_ID), SelfServiceTransferApproval.Status.PENDING))
+        .thenReturn(List.of(pendingApproval(INITIATOR_ID), pendingApproval(USER_ID)));
+
+    String json = (String) service.retrievePendingApprovals();
+
+    assertTrue(json.contains("\"canDecide\":true"));
+    assertTrue(json.contains("\"canDecide\":false"));
+    assertFalse(json.contains(OTP));
+  }
+
+  @Test
+  void retrievePendingApprovals_forANonSignatory_isEmpty() {
+    assertEquals("[]", service.retrievePendingApprovals());
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  private static String errorCodes(PlatformApiDataValidationException ex) {
+    return ex.getErrors().stream()
+        .map(error -> error.getUserMessageGlobalisationCode())
+        .collect(Collectors.joining(","));
   }
 }

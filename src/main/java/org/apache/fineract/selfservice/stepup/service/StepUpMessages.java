@@ -24,6 +24,8 @@ final class StepUpMessages {
       case CHANGE_PASSWORD -> english ? "password change" : "cambio de contraseña";
       case MANAGE_AUTHENTICATOR ->
           english ? "authenticator app change" : "cambio de la app de autenticación";
+      case APPROVE_SECOND_SIGNATURE ->
+          english ? "transfer approval" : "aprobación de transferencia";
     };
   }
 }

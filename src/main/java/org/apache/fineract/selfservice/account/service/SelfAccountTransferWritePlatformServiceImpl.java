@@ -45,6 +45,7 @@ import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatfor
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.portfolio.client.domain.LegalForm;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
@@ -72,6 +73,8 @@ import org.apache.fineract.selfservice.account.data.SinpeTransferRequest;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApproval;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApprovalRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
@@ -91,12 +94,15 @@ import org.apache.fineract.selfservice.stepup.service.StepUpTransferPayloads;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -133,6 +139,14 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
   /** MX-488: step-up (OTP) enforcement; a no-op unless enabled for the tenant. */
   private final StepUpGuard stepUpGuard;
+
+  /** MX-489: transfers held for a second signatory. */
+  private final SelfServiceTransferApprovalRepository transferApprovalRepository;
+
+  private final AppSelfServiceUserRepository appSelfServiceUserRepository;
+
+  /** Lets an approval commit before the transfer executes (at most once). */
+  private final TransactionTemplate transactionTemplate;
 
   private static final DateTimeFormatter REF_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -262,7 +276,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     // /v1/self/stepup/challenges (bound to this payload) instead of being sent as a side effect of
     // a quote.
     if (!stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER)) {
-      cleanupOldOtpRegistrations(sourceClient);
+      cleanupOldOtpRegistrations(sourceClient, currentUser);
       releaseOtpCooldown(currentUser);
 
       generateAndSendOtpForQuote(
@@ -271,12 +285,13 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return this.gson.toJson(quote);
   }
 
-  private void cleanupOldOtpRegistrations(Client client) {
+  /** Consumes this user's transfer OTPs older than 10 minutes; other signatories' are untouched. */
+  private void cleanupOldOtpRegistrations(Client client, AppSelfServiceUser user) {
     try {
       LocalDateTime cutoff = transactionDateUtil.getCurrentTenantLocalDateTime().minusMinutes(10);
       int updated =
           registrationRepository.markOldOtpsAsConsumed(
-              client.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, cutoff);
+              client.getId(), user.getUsername(), SelfServiceRequestType.ACCOUNT_TRANSFER, cutoff);
       if (updated > 0) {
         log.info("QUOTE: Cleaned up {} stale OTP records for client {}", updated, client.getId());
       }
@@ -327,36 +342,33 @@ public class SelfAccountTransferWritePlatformServiceImpl
     if (stepUpGuard.isProtected(StepUpAction.CONFIRM_TRANSFER)) {
       requireStepUpForConfirm(request, httpRequest);
     } else {
-      validateOtp(request, sourceClient);
+      validateOtp(request, sourceClient, user);
     }
 
-    BigDecimal feeAmountFromClient =
-        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
-
-    BigDecimal feeForBalanceCheck = feeAmountFromClient;
-    if (feeForBalanceCheck.compareTo(BigDecimal.ZERO) <= 0) {
-      try {
-        AccountTransferPrepareRequest quoteReq = new AccountTransferPrepareRequest();
-        quoteReq.setTransferType(request.getTransferType());
-        quoteReq.setCurrencyCode(request.getCurrencyCode());
-        quoteReq.setTransferMode(request.getTransferMode());
-        quoteReq.setTransferAmount(request.getTransferAmount());
-        AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, sourceClient);
-        if (quote != null && quote.getFeeAmount() != null) {
-          feeForBalanceCheck = quote.getFeeAmount();
-          request.setFeeAmount(feeAmountFromClient);
-        }
-      } catch (Exception e) {
-        log.warn("CONFIRM: Could not re-calculate fee for balance check, using client value", e);
-      }
+    if (requiresDualApproval(sourceSavingsAccount, request.getTransferAmount())) {
+      return holdForApproval(request, user, sourceSavingsAccount);
     }
+    return executeConfirmedTransfer(request, user, sourceSavingsAccount, httpRequest);
+  }
 
-    validateSufficientFunds(sourceSavingsAccount, request.getTransferAmount(), feeForBalanceCheck);
+  /**
+   * Funds check and channel dispatch of a confirmed transfer. Shared by {@link #confirmTransfer}
+   * and {@link #approveTransfer}, which replays the initiator's request as the initiator.
+   */
+  private Object executeConfirmedTransfer(
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      SavingsAccount sourceSavingsAccount,
+      HttpServletRequest httpRequest) {
+    validateSufficientFunds(
+        sourceSavingsAccount,
+        request.getTransferAmount(),
+        feeForBalanceCheck(request, sourceSavingsAccount.getClient()));
 
     log.info(
         "CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
         request.getTransferType(),
-        feeAmountFromClient);
+        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO);
 
     String cleanDestination =
         request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
@@ -377,6 +389,358 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
   }
 
+  /** The client's fee, or a recalculated quote when the client sent none. */
+  private BigDecimal feeForBalanceCheck(AccountTransferConfirmRequest request, Client client) {
+    BigDecimal feeAmountFromClient =
+        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
+    if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
+      return feeAmountFromClient;
+    }
+    try {
+      AccountTransferPrepareRequest quoteReq = new AccountTransferPrepareRequest();
+      quoteReq.setTransferType(request.getTransferType());
+      quoteReq.setCurrencyCode(request.getCurrencyCode());
+      quoteReq.setTransferMode(request.getTransferMode());
+      quoteReq.setTransferAmount(request.getTransferAmount());
+      AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, client);
+      if (quote != null && quote.getFeeAmount() != null) {
+        request.setFeeAmount(feeAmountFromClient);
+        return quote.getFeeAmount();
+      }
+    } catch (Exception e) {
+      log.warn("CONFIRM: Could not re-calculate fee for balance check, using client value", e);
+    }
+    return feeAmountFromClient;
+  }
+
+  // =====================================================================
+  //  DUAL APPROVAL (MX-489)
+  // =====================================================================
+
+  /**
+   * True when the source client is an ENTITY with an approval threshold for the source account's
+   * currency and {@code amount} (fee excluded) is greater than or equal to it. The currency comes
+   * from the account, never from the request, so it cannot be changed to dodge the threshold. No
+   * threshold row means no dual approval, which keeps the existing flow for every other client.
+   */
+  private boolean requiresDualApproval(SavingsAccount sourceSavingsAccount, BigDecimal amount) {
+    Client client = sourceSavingsAccount.getClient();
+    if (client == null || !LegalForm.ENTITY.getValue().equals(client.getLegalForm())) {
+      return false;
+    }
+    List<BigDecimal> thresholds =
+        jdbcTemplate.queryForList(
+            "SELECT threshold_amount FROM m_selfservice_client_approval_threshold"
+                + " WHERE client_id = ? AND currency_code = ?",
+            BigDecimal.class,
+            client.getId(),
+            sourceSavingsAccount.getCurrency().getCode());
+    return !thresholds.isEmpty() && amount != null && amount.compareTo(thresholds.get(0)) >= 0;
+  }
+
+  /**
+   * The legacy {@code POST /accounttransfers} path cannot hold a transfer, so it refuses one that
+   * needs a second signature instead of letting it bypass the approval.
+   */
+  private void rejectIfDualApprovalRequired(Map<String, Object> params) {
+    SelfAccountTemplateData from = (SelfAccountTemplateData) params.get("fromAccount");
+    if (from == null || !PortfolioAccountType.SAVINGS.getValue().equals(from.getAccountType())) {
+      return;
+    }
+    SavingsAccount source =
+        savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(from.getAccountId());
+    if (requiresDualApproval(source, (BigDecimal) params.get("transactionAmount"))) {
+      throw approvalError(
+          "dual.approval.required",
+          "This transfer needs a second signature. Use the transfer confirm endpoint.");
+    }
+  }
+
+  /**
+   * Stores the confirmed request (without its OTP) as a PENDING approval instead of executing it.
+   * Refuses up front what the approval would refuse later: no approver OTP, or too little funds.
+   */
+  private Object holdForApproval(
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser initiator,
+      SavingsAccount sourceSavingsAccount) {
+    requireApproverOtpAvailable();
+    validateSufficientFunds(
+        sourceSavingsAccount,
+        request.getTransferAmount(),
+        feeForBalanceCheck(request, sourceSavingsAccount.getClient()));
+
+    request.setOtp(null);
+    SelfServiceTransferApproval approval =
+        transferApprovalRepository.saveAndFlush(
+            SelfServiceTransferApproval.builder()
+                .clientId(sourceSavingsAccount.getClient().getId())
+                .requestedBy(initiator.getId())
+                .status(SelfServiceTransferApproval.Status.PENDING)
+                .transferAmount(request.getTransferAmount())
+                .currencyCode(sourceSavingsAccount.getCurrency().getCode())
+                .requestJson(gson.toJson(request))
+                .createdAt(transactionDateUtil.getCurrentTenantLocalDateTime())
+                .build());
+
+    log.info(
+        "CONFIRM: transfer held for a second signature, approvalId={}, clientId={}",
+        approval.getId(),
+        approval.getClientId());
+
+    Map<String, Object> response = new HashMap<>();
+    response.put("status", "PENDING_APPROVAL");
+    response.put("approvalId", approval.getId());
+    response.put("message", "The transfer is waiting for the approval of a second signatory.");
+    return gson.toJson(response);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Object retrievePendingApprovals() {
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    List<Long> clientIds = signatoryClientIds(user.getId());
+    if (clientIds.isEmpty()) {
+      return gson.toJson(List.of());
+    }
+    List<Map<String, Object>> items =
+        transferApprovalRepository
+            .findByClientIdInAndStatusOrderByIdAsc(
+                clientIds, SelfServiceTransferApproval.Status.PENDING)
+            .stream()
+            .map(approval -> toApprovalView(approval, user))
+            .toList();
+    return gson.toJson(items);
+  }
+
+  /**
+   * Second signature, executed at most once. The approval is committed on its own before any money
+   * moves: PIN and SINPE send funds through an external gateway that a local rollback cannot undo,
+   * so a failure must never put the approval back to PENDING where it could be approved again. A
+   * failed execution ends as FAILED, to be reconciled before the initiator submits a new transfer.
+   */
+  @Override
+  public Object approveTransfer(Long approvalId, HttpServletRequest httpRequest) {
+    AppSelfServiceUser approver = context.authenticatedSelfServiceUser();
+    approver.validateHasCreatePermission("ACCOUNTTRANSFER");
+
+    Long claimedId =
+        newTransaction().execute(status -> claimApproval(approvalId, approver, httpRequest));
+
+    try {
+      return newTransaction()
+          .execute(
+              status -> {
+                ApprovedTransfer transfer = resolveApprovedTransfer(claimedId);
+                log.info(
+                    "APPROVAL: approvalId={} approved by userId={}, executing for userId={}",
+                    claimedId,
+                    approver.getId(),
+                    transfer.initiator().getId());
+                return executeConfirmedTransfer(
+                    transfer.request(), transfer.initiator(), transfer.source(), httpRequest);
+              });
+    } catch (RuntimeException e) {
+      log.error(
+          "APPROVAL: approvalId={} failed after approval; marked FAILED for reconciliation",
+          claimedId,
+          e);
+      newTransaction()
+          .executeWithoutResult(
+              status ->
+                  transferApprovalRepository.decide(
+                      claimedId,
+                      SelfServiceTransferApproval.Status.APPROVED,
+                      SelfServiceTransferApproval.Status.FAILED,
+                      approver.getId(),
+                      transactionDateUtil.getCurrentTenantLocalDateTime()));
+      throw e;
+    }
+  }
+
+  /**
+   * Checks everything that can be rejected up front (so a predictable refusal never burns the
+   * approval or the OTP), consumes the step-up grant and moves PENDING to APPROVED.
+   */
+  private Long claimApproval(
+      Long approvalId, AppSelfServiceUser approver, HttpServletRequest httpRequest) {
+    SelfServiceTransferApproval approval = requireDecidableBy(approvalId, approver);
+    requireApproverOtpAvailable();
+    ApprovedTransfer transfer = resolveApprovedTransfer(approval.getId());
+    validateSufficientFunds(
+        transfer.source(),
+        transfer.request().getTransferAmount(),
+        feeForBalanceCheck(transfer.request(), transfer.source().getClient()));
+    stepUpGuard.requireIfProtected(
+        StepUpAction.APPROVE_SECOND_SIGNATURE,
+        httpRequest,
+        () ->
+            StepUpPayloadHasher.hash(
+                StepUpAction.APPROVE_SECOND_SIGNATURE,
+                Map.of("approvalId", String.valueOf(approval.getId()))));
+    decide(approval, SelfServiceTransferApproval.Status.APPROVED, approver);
+    return approval.getId();
+  }
+
+  /** The held request, replayed as its initiator from the initiator's source account. */
+  private record ApprovedTransfer(
+      AppSelfServiceUser initiator, SavingsAccount source, AccountTransferConfirmRequest request) {}
+
+  /** The initiator must still be active, allowed to transfer and own the source account. */
+  private ApprovedTransfer resolveApprovedTransfer(Long approvalId) {
+    SelfServiceTransferApproval approval =
+        transferApprovalRepository.findById(approvalId).orElseThrow();
+    AppSelfServiceUser initiator =
+        appSelfServiceUserRepository.findById(approval.getRequestedBy()).orElse(null);
+    if (initiator == null || initiator.isDeleted() || !initiator.isEnabled()) {
+      throw approvalError("initiator.inactive", "The user who requested the transfer is inactive.");
+    }
+    initiator.validateHasCreatePermission("ACCOUNTTRANSFER");
+
+    AccountTransferConfirmRequest request =
+        gson.fromJson(approval.getRequestJson(), AccountTransferConfirmRequest.class);
+    SavingsAccount source =
+        validateSourceAccountOwnership(
+            initiator, request.getFromAccount(), request.getFromAccountType());
+    return new ApprovedTransfer(initiator, source, request);
+  }
+
+  /** A REQUIRES_NEW transaction, so what it commits survives a later failure of the caller. */
+  private TransactionTemplate newTransaction() {
+    TransactionTemplate template =
+        new TransactionTemplate(transactionTemplate.getTransactionManager());
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return template;
+  }
+
+  @Override
+  @Transactional
+  public Object rejectTransfer(Long approvalId) {
+    AppSelfServiceUser approver = context.authenticatedSelfServiceUser();
+    approver.validateHasCreatePermission("ACCOUNTTRANSFER");
+    SelfServiceTransferApproval approval = requireDecidableBy(approvalId, approver);
+    decide(approval, SelfServiceTransferApproval.Status.REJECTED, approver);
+
+    log.info("APPROVAL: approvalId={} rejected by userId={}", approval.getId(), approver.getId());
+    Map<String, Object> response = new HashMap<>();
+    response.put("status", "REJECTED");
+    response.put("approvalId", approval.getId());
+    return gson.toJson(response);
+  }
+
+  /**
+   * The caller must be an active signatory of the approval's client, must not be its initiator, and
+   * the approval must still be pending. A missing approval and one of another client give the same
+   * error, so approval ids cannot be probed.
+   */
+  private SelfServiceTransferApproval requireDecidableBy(
+      Long approvalId, AppSelfServiceUser approver) {
+    SelfServiceTransferApproval approval =
+        approvalId == null ? null : transferApprovalRepository.findById(approvalId).orElse(null);
+    if (approval == null || !isActiveSignatory(approval.getClientId(), approver.getId())) {
+      throw approvalError("not.found", "Transfer approval not found.");
+    }
+    if (approval.getRequestedBy().equals(approver.getId())) {
+      throw approvalError(
+          "initiator.cannot.decide", "The initiator cannot approve or reject their own transfer.");
+    }
+    if (approval.getStatus() != SelfServiceTransferApproval.Status.PENDING) {
+      throw alreadyDecided();
+    }
+    return approval;
+  }
+
+  /** Atomic PENDING to final status; the loser of a concurrent decision gets "already decided". */
+  private void decide(
+      SelfServiceTransferApproval approval,
+      SelfServiceTransferApproval.Status decision,
+      AppSelfServiceUser approver) {
+    int updated =
+        transferApprovalRepository.decide(
+            approval.getId(),
+            SelfServiceTransferApproval.Status.PENDING,
+            decision,
+            approver.getId(),
+            transactionDateUtil.getCurrentTenantLocalDateTime());
+    if (updated != 1) {
+      throw alreadyDecided();
+    }
+  }
+
+  /**
+   * Fails closed: without step-up protecting {@code APPROVE_SECOND_SIGNATURE} the approver would
+   * approve without an OTP, and no challenge could be issued for it either.
+   */
+  private void requireApproverOtpAvailable() {
+    if (!stepUpGuard.isProtected(StepUpAction.APPROVE_SECOND_SIGNATURE)) {
+      throw approvalError(
+          "otp.not.configured",
+          "Dual approval needs step-up enabled for APPROVE_SECOND_SIGNATURE on this tenant.");
+    }
+  }
+
+  /** Clients where the self-service user is an active signatory. */
+  private List<Long> signatoryClientIds(Long appUserId) {
+    return jdbcTemplate.queryForList(
+        "SELECT client_id FROM m_selfservice_entity_signatory WHERE appuser_id = ? AND is_active ="
+            + " ?",
+        Long.class,
+        appUserId,
+        true);
+  }
+
+  /** Whether the self-service user is an active signatory of the client. */
+  private boolean isActiveSignatory(Long clientId, Long appUserId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM m_selfservice_entity_signatory"
+                + " WHERE client_id = ? AND appuser_id = ? AND is_active = ?",
+            Integer.class,
+            clientId,
+            appUserId,
+            true);
+    return count != null && count > 0;
+  }
+
+  /**
+   * The approval as listed to a signatory. {@code canDecide} is false for the initiator, who sees
+   * their own held transfer but cannot approve it.
+   */
+  private Map<String, Object> toApprovalView(
+      SelfServiceTransferApproval approval, AppSelfServiceUser viewer) {
+    AccountTransferConfirmRequest request =
+        gson.fromJson(approval.getRequestJson(), AccountTransferConfirmRequest.class);
+    Map<String, Object> view = new HashMap<>();
+    view.put("approvalId", approval.getId());
+    view.put("clientId", approval.getClientId());
+    view.put("requestedBy", approval.getRequestedBy());
+    view.put("transferAmount", approval.getTransferAmount());
+    view.put("currencyCode", approval.getCurrencyCode());
+    view.put("transferType", request.getTransferType());
+    view.put("fromAccount", request.getFromAccount());
+    view.put("toAccount", request.getToAccount());
+    view.put("toPhoneNumber", request.getToPhoneNumber());
+    view.put("createdAt", String.valueOf(approval.getCreatedAt()));
+    view.put("canDecide", !approval.getRequestedBy().equals(viewer.getId()));
+    return view;
+  }
+
+  /** The approval is no longer PENDING. */
+  private PlatformApiDataValidationException alreadyDecided() {
+    return approvalError("already.decided", "This transfer was already approved or rejected.");
+  }
+
+  /** A 400 with code {@code validation.msg.transferapproval.approvalId.<code>}. */
+  private PlatformApiDataValidationException approvalError(String code, String message) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    new DataValidatorBuilder(errors)
+        .resource("transferapproval")
+        .reset()
+        .parameter("approvalId")
+        .failWithCode(code, message);
+    return new PlatformApiDataValidationException(errors);
+  }
+
   // =====================================================================
   //  CREATE TRANSFER  (legacy TPT path)
   // =====================================================================
@@ -388,6 +752,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     if ("tpt".equals(type)) {
       checkForLimits(params);
     }
+    rejectIfDualApprovalRequired(params);
     requireStepUpForTransfer(type, params, httpRequest);
 
     JsonCommand command = createJsonCommand(apiRequestBodyAsJson);
@@ -1710,11 +2075,18 @@ public class SelfAccountTransferWritePlatformServiceImpl
     return gson.toJson(response);
   }
 
-  private void validateOtp(AccountTransferConfirmRequest request, Client sourceClient) {
+  /** Checks and consumes the legacy transfer OTP, which must have been issued to {@code user}. */
+  private void validateOtp(
+      AccountTransferConfirmRequest request, Client sourceClient, AppSelfServiceUser user) {
     SelfServiceRegistration registration =
         registrationRepository
-            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                sourceClient.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER, request.getOtp())
+            .findUserOtps(
+                sourceClient.getId(),
+                user.getUsername(),
+                SelfServiceRequestType.ACCOUNT_TRANSFER,
+                request.getOtp())
+            .stream()
+            .findFirst()
             .orElse(null);
 
     if (registration == null
@@ -2239,8 +2611,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
     log.info("RESEND OTP: Starting for userId={}, clientId={}", user.getId(), sourceClient.getId());
 
     List<SelfServiceRegistration> activeOtps =
-        registrationRepository.findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-            sourceClient.getId(), SelfServiceRequestType.ACCOUNT_TRANSFER);
+        registrationRepository
+            .findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+                sourceClient.getId(), user.getUsername(), SelfServiceRequestType.ACCOUNT_TRANSFER);
 
     if (!activeOtps.isEmpty()) {
       log.info(

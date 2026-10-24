@@ -28,6 +28,7 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
@@ -197,6 +198,48 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     ResendOtpRequest request = new Gson().fromJson(apiRequestBodyAsJson, ResendOtpRequest.class);
     Object result = transferWritePlatformService.resendTransferOtp(request, httpRequest);
+    return result instanceof String ? (String) result : new Gson().toJson(result);
+  }
+
+  /** Transfers waiting for a second signature that the caller can see as a signatory. */
+  @GET
+  @Path("/approvals")
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "List transfers waiting for a second signature",
+      description =
+          "Pending transfers of the ENTITY clients where the caller is an active signatory.")
+  public String retrievePendingApprovals() {
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    return (String) transferWritePlatformService.retrievePendingApprovals();
+  }
+
+  /**
+   * Approves ({@code command=approve}) or rejects ({@code command=reject}) a held transfer. Any
+   * other command is refused with {@link UnrecognizedQueryParamException}.
+   */
+  @POST
+  @Path("/approvals/{approvalId}")
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Approve or reject a held transfer",
+      description =
+          "command=approve executes the transfer and needs an X-Step-Up-Token for action"
+              + " APPROVE_SECOND_SIGNATURE bound to this approvalId. command=reject closes it."
+              + " The initiator cannot decide on their own transfer.")
+  public String decideApproval(
+      @PathParam("approvalId") final Long approvalId,
+      @QueryParam("command") final String command,
+      @Context HttpServletRequest httpRequest) {
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    Object result;
+    if ("approve".equals(command)) {
+      result = transferWritePlatformService.approveTransfer(approvalId, httpRequest);
+    } else if ("reject".equals(command)) {
+      result = transferWritePlatformService.rejectTransfer(approvalId);
+    } else {
+      throw new UnrecognizedQueryParamException("command", command);
+    }
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
 
