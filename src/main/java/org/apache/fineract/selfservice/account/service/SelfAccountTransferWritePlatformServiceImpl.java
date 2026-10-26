@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.account.service;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -1091,7 +1092,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       executeFeeTransaction(request, sourceSavingsAccount);
 
-      Map<String, Object> externalData = gson.fromJson(pinServiceResponse, Map.class);
+      Map<String, Object> externalData = readAcceptedGatewayResponse("PIN", pinServiceResponse);
 
       Map<String, Object> homologatedData =
           homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
@@ -1159,7 +1160,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     executeFeeTransaction(request, sourceSavingsAccount);
 
-    Map<String, Object> externalData = gson.fromJson(sinpeServiceResponse, Map.class);
+    Map<String, Object> externalData =
+        readAcceptedGatewayResponse("SINPE_MOVIL", sinpeServiceResponse);
 
     Map<String, Object> homologatedData =
         homologateResponseData(externalData, request.getTransferAmount(), "CRC");
@@ -2279,6 +2281,25 @@ public class SelfAccountTransferWritePlatformServiceImpl
     reg.markConsumed();
     registrationRepository.saveAndFlush(reg);
     log.info("Marked OTP registration {} as expired/consumed", reg.getId());
+  }
+
+  /**
+   * Reads the answer of a gateway that has already accepted the transfer (MX-503). It must not
+   * throw: the money has left, and an exception here would roll back the confirm together with the
+   * consumed OTP or step-up token, so the same code could send the transfer a second time. A body
+   * that is not JSON is treated like an empty one; the response then uses the request's data.
+   */
+  private Map<String, Object> readAcceptedGatewayResponse(String channel, String body) {
+    try {
+      return gson.fromJson(body, Map.class);
+    } catch (JsonParseException e) {
+      log.warn(
+          "CONFIRM {}: the gateway accepted the transfer but its answer is not JSON; using the"
+              + " request data. Answer (truncated): {}",
+          channel,
+          StringUtils.abbreviate(body, 200));
+      return null;
+    }
   }
 
   private Map<String, Object> homologateResponseData(
