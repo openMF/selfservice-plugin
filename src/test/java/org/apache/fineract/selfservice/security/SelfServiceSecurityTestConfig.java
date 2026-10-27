@@ -20,6 +20,8 @@ import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer
 import org.apache.fineract.infrastructure.core.service.MDCWrapper;
 import org.apache.fineract.infrastructure.jobs.filter.ProgressiveLoanModelCheckerFilter;
 import org.apache.fineract.infrastructure.jobs.filter.ProgressiveLoanModelCheckerHelper;
+import org.apache.fineract.infrastructure.jobs.filter.WorkingCapitalLoanModelCheckerFilter;
+import org.apache.fineract.infrastructure.jobs.filter.WorkingCapitalLoanModelCheckerHelper;
 import org.apache.fineract.infrastructure.security.data.PlatformRequestLog;
 import org.apache.fineract.infrastructure.security.domain.PlatformUserRepository;
 import org.apache.fineract.infrastructure.security.service.AuthTenantDetailsService;
@@ -28,6 +30,7 @@ import org.apache.fineract.infrastructure.security.service.TenantAwareJpaPlatfor
 import org.apache.fineract.notification.service.UserNotificationService;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanModelProcessingService;
+import org.apache.fineract.portfolio.workingcapitalloan.service.WorkingCapitalLoanModelProcessingService;
 import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUserRepository;
 import org.apache.fineract.selfservice.security.service.TenantAwareJpaPlatformSelfServiceUserDetailsService;
 import org.apache.fineract.selfservice.security.starter.SelfServiceSecurityConfiguration;
@@ -136,6 +139,24 @@ public class SelfServiceSecurityTestConfig {
   @Bean
   public ProgressiveLoanModelCheckerHelper progressiveLoanModelCheckerHelper() {
     return mock(ProgressiveLoanModelCheckerHelper.class);
+  }
+
+  @Bean
+  public WorkingCapitalLoanModelCheckerHelper workingCapitalLoanModelCheckerHelper() {
+    return mock(WorkingCapitalLoanModelCheckerHelper.class);
+  }
+
+  @Bean
+  public WorkingCapitalLoanModelProcessingService workingCapitalLoanModelProcessingService() {
+    return mock(WorkingCapitalLoanModelProcessingService.class);
+  }
+
+  @Bean
+  public WorkingCapitalLoanModelCheckerFilter workingCapitalLoanModelCheckerFilter(
+      WorkingCapitalLoanModelProcessingService workingCapitalLoanModelProcessingService,
+      WorkingCapitalLoanModelCheckerHelper workingCapitalLoanModelCheckerHelper) {
+    return new WorkingCapitalLoanModelCheckerFilter(
+        workingCapitalLoanModelProcessingService, workingCapitalLoanModelCheckerHelper);
   }
 
   @Bean
