@@ -14,6 +14,7 @@
  */
 package org.apache.fineract.selfservice.client.starter;
 
+import org.apache.fineract.infrastructure.contentstore.processor.SizeContentProcessor;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadServiceImpl;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
@@ -30,5 +31,11 @@ public class SelfClientConfiguration {
   public AppSelfServiceUserClientMapperReadService appuserClientMapperReadService(
       JdbcTemplate jdbcTemplate, PlatformSelfServiceSecurityContext context) {
     return new AppSelfServiceUserClientMapperReadServiceImpl(jdbcTemplate, context);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean(SizeContentProcessor.class)
+  public SizeContentProcessor sizeContentProcessor() {
+    return new SizeContentProcessor();
   }
 }
