@@ -393,8 +393,53 @@ public class SelfAccountTransferWritePlatformServiceImpl
     JsonCommand command = createJsonCommand(apiRequestBodyAsJson);
     CommandProcessingResult result = accountTransfersWritePlatformService.create(command);
 
-    publishTransferEvent(result, params, params, httpRequest);
+    publishTransferEvent(result, legacyTransferEventParams(params, command), params, httpRequest);
     return result;
+  }
+
+  /**
+   * The validated params of a legacy transfer only hold the account objects, so the keys the
+   * transfer notification reads (account numbers, client ids, description) are added here.
+   */
+  private Map<String, Object> legacyTransferEventParams(
+      Map<String, Object> params, JsonCommand command) {
+    Map<String, Object> eventParams = new HashMap<>(params);
+    addAccountDetails(eventParams, "from", params.get("fromAccount"));
+    addAccountDetails(eventParams, "to", params.get("toAccount"));
+    eventParams.put(
+        "transferDescription", command.stringValueOfParameterNamed("transferDescription"));
+    return eventParams;
+  }
+
+  private void addAccountDetails(Map<String, Object> eventParams, String prefix, Object value) {
+    if (!(value instanceof SelfAccountTemplateData account) || account.getAccountId() == null) {
+      return;
+    }
+    // No AccountId key: publishTransferEvent falls back to it for the account number, and an
+    // internal id must never be shown as one. An unresolved number shows as N/A instead.
+    eventParams.put(prefix + "ClientId", account.getClientId());
+    String accountNumber = findAccountNumber(account);
+    if (StringUtils.isNotBlank(accountNumber)) {
+      eventParams.put(prefix + "AccountNumber", accountNumber);
+    }
+  }
+
+  private String findAccountNumber(SelfAccountTemplateData account) {
+    String table =
+        PortfolioAccountType.fromInt(account.getAccountType()) == PortfolioAccountType.LOAN
+            ? "m_loan"
+            : "m_savings_account";
+    try {
+      List<String> numbers =
+          jdbcTemplate.queryForList(
+              "SELECT account_no FROM " + table + " WHERE id = ?",
+              String.class,
+              account.getAccountId());
+      return numbers.isEmpty() ? null : numbers.get(0);
+    } catch (Exception e) {
+      log.debug("Could not resolve account number for account {}", account.getAccountId(), e);
+      return null;
+    }
   }
 
   /**

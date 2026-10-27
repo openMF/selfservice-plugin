@@ -116,4 +116,13 @@ public class SelfAccountTemplateData implements Comparable<SelfAccountTemplateDa
   public Integer getAccountType() {
     return this.accountType.getId().intValue();
   }
+
+  /**
+   * Returns the id of the client that owns this account.
+   *
+   * @return the client id
+   */
+  public Long getClientId() {
+    return this.clientId;
+  }
 }

@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
@@ -47,6 +48,7 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
+import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
@@ -965,6 +967,56 @@ class SelfAccountTransferWritePlatformServiceImplTest {
 
     verify(stepUpGuard).requireIfProtected(eq(StepUpAction.OWN_TRANSFER), any(), any());
     verifyNoInteractions(accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void createTransfer_notificationCarriesAccountNumbersClientNamesAndDescription() {
+    when(dataValidator.validateCreate(eq(""), anyString()))
+        .thenReturn(transferParams(1L, 2L, "100.00"));
+    when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any()))
+        .thenReturn("Rent");
+    CommandProcessingResult result = mock(CommandProcessingResult.class);
+    when(result.getResourceId()).thenReturn(77L);
+    when(accountTransfersWritePlatformService.create(any())).thenReturn(result);
+    when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(1L)))
+        .thenReturn(List.of("000000001"));
+    when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(2L)))
+        .thenReturn(List.of("000000002"));
+    when(clientReadPlatformService.retrieveOne(5L))
+        .thenReturn(ClientData.lookup(5L, "Ana Mora", null, null));
+    when(clientReadPlatformService.retrieveOne(6L))
+        .thenReturn(ClientData.lookup(6L, "Luis Vega", null, null));
+
+    service.createTransfer("", "{\"transferDescription\":\"Rent\"}", httpRequest);
+
+    ArgumentCaptor<SelfServiceNotificationEvent> eventCaptor =
+        ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
+    verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+    Map<String, Object> contextData = eventCaptor.getValue().getContextData();
+    assertEquals("000000001", contextData.get("fromAccountNumber"));
+    assertEquals("000000002", contextData.get("toAccountNumber"));
+    assertEquals("Ana Mora", contextData.get("fromClientName"));
+    assertEquals("Luis Vega", contextData.get("toClientName"));
+    assertEquals("Rent", contextData.get("transferDescription"));
+    assertEquals("77", contextData.get("transferId"));
+  }
+
+  @Test
+  void createTransfer_unresolvedAccountNumber_showsNaNotInternalId() {
+    when(dataValidator.validateCreate(eq(""), anyString()))
+        .thenReturn(transferParams(1L, 2L, "100.00"));
+    when(accountTransfersWritePlatformService.create(any()))
+        .thenReturn(mock(CommandProcessingResult.class));
+    when(jdbcTemplate.queryForList(anyString(), eq(String.class), any())).thenReturn(List.of());
+
+    service.createTransfer("", "{}", httpRequest);
+
+    ArgumentCaptor<SelfServiceNotificationEvent> eventCaptor =
+        ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
+    verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+    Map<String, Object> contextData = eventCaptor.getValue().getContextData();
+    assertEquals("N/A", contextData.get("fromAccountNumber"));
+    assertEquals("N/A", contextData.get("toAccountNumber"));
   }
 
   private AccountTransferPrepareRequest prepareRequest(String fromAccount) {
