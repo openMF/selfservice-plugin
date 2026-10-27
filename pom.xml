@@ -23,7 +23,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <fineract.version>0.0.1556-391c415</fineract.version>
+    <fineract.version>0.0.1628-bc1c598</fineract.version>
     <mifos.version>1.16.0-SNAPSHOT</mifos.version>
     <eclipselink.version>5.0.1</eclipselink.version>
     <truth.version>1.4.5</truth.version>    
