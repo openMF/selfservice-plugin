@@ -130,6 +130,47 @@ public class StepUpException extends RuntimeException {
         details());
   }
 
+  /** The authenticator is switched off for this tenant (or step-up as a whole is). */
+  public static StepUpException totpDisabled() {
+    return new StepUpException(
+        "totp.disabled", 400, "The authenticator app is not enabled.", details());
+  }
+
+  /** The user has no active authenticator to verify against or to change. */
+  public static StepUpException totpNotEnrolled() {
+    return new StepUpException(
+        "totp.not.enrolled", 400, "No authenticator app is set up for this user.", details());
+  }
+
+  /** Confirming without having asked for a secret first (or the request was replaced). */
+  public static StepUpException totpNoPendingEnrollment() {
+    return new StepUpException(
+        "totp.enrollment.missing",
+        400,
+        "Start the authenticator setup first.",
+        details());
+  }
+
+  /** A TOTP challenge has no code that could be sent again. */
+  public static StepUpException resendUnsupported() {
+    return new StepUpException(
+        "resend.unsupported",
+        400,
+        "A code from the authenticator app cannot be resent.",
+        details());
+  }
+
+  // 409 -----------------------------------------------------------------------------------------
+
+  /** Pairing a second authenticator would silently replace the first: remove it first. */
+  public static StepUpException totpAlreadyEnrolled() {
+    return new StepUpException(
+        "totp.already.enrolled",
+        409,
+        "An authenticator app is already set up. Remove it before pairing another one.",
+        details());
+  }
+
   // 429 -----------------------------------------------------------------------------------------
 
   public static StepUpException locked(final long retryAfterSeconds) {

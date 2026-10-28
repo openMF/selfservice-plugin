@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MULTI-TENANT NOTE: included from the TENANT changelog master, executed against every
+        tenant schema.
+
+        MX-488 follow-up (US-E12-02): authenticator app (TOTP) as a step-up channel.
+        The TOTP secret must be read back on every check, so it is stored ENCRYPTED (AES-256-GCM,
+        key from the tenant property totpEncryptionKey), never in clear text. Recovery codes are
+        stored only as keyed hashes.
+    -->
+
+    <changeSet id="ss-0088-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_totp_enrollment"/>
+            </not>
+        </preConditions>
+        <comment>One authenticator app per self-service user (encrypted secret, replay and lock-out state).</comment>
+        <createTable tableName="m_selfservice_totp_enrollment">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_ss_totp_enrollment_user"/>
+            </column>
+            <column name="secret_enc" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="key_version" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failed_attempts" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locked_until" type="DATETIME"/>
+            <column name="last_used_step" type="BIGINT"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="confirmed_at" type="DATETIME"/>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="ss-0088-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_totp_recovery_code"/>
+            </not>
+        </preConditions>
+        <comment>Single-use recovery codes, kept only as keyed hashes.</comment>
+        <createTable tableName="m_selfservice_totp_recovery_code">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_at" type="DATETIME"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="ss-0088-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_totp_recovery_code"/>
+            <not>
+                <indexExists tableName="m_selfservice_totp_recovery_code"
+                             indexName="idx_ss_totp_recovery_user_hash"/>
+            </not>
+        </preConditions>
+        <comment>Looks a code up by user and hash.</comment>
+        <createIndex tableName="m_selfservice_totp_recovery_code"
+                     indexName="idx_ss_totp_recovery_user_hash">
+            <column name="appuser_id"/>
+            <column name="code_hash"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="ss-0088-4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="m_selfservice_stepup_challenge"/>
+            <columnExists tableName="m_selfservice_stepup_challenge" columnName="otp_hash"/>
+        </preConditions>
+        <comment>
+            A TOTP challenge has no stored code: the app produces it. SMS and e-mail challenges keep
+            filling both columns; rows that exist already are not touched.
+        </comment>
+        <dropNotNullConstraint tableName="m_selfservice_stepup_challenge"
+                               columnName="otp_hash"
+                               columnDataType="VARCHAR(64)"/>
+        <dropNotNullConstraint tableName="m_selfservice_stepup_challenge"
+                               columnName="otp_salt"
+                               columnDataType="VARCHAR(32)"/>
+    </changeSet>
+
+    <!-- No foreign key to the user table on purpose: self-service users live in
+         m_appselfservice_user (see 082, 067 and 076 for the same reason). -->
+</databaseChangeLog>

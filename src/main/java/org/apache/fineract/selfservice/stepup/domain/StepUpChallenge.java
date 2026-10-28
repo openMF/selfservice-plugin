@@ -47,10 +47,11 @@ public class StepUpChallenge extends AbstractPersistableCustom<Long> {
   @Column(name = "channel", length = 10, nullable = false)
   private StepUpChannel channel;
 
-  @Column(name = "otp_hash", length = 64, nullable = false)
+  /** {@code null} for a TOTP challenge: the code comes from the app, nothing is stored. */
+  @Column(name = "otp_hash", length = 64)
   private String otpHash;
 
-  @Column(name = "otp_salt", length = 32, nullable = false)
+  @Column(name = "otp_salt", length = 32)
   private String otpSalt;
 
   @Enumerated(EnumType.STRING)

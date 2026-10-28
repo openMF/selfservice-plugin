@@ -36,29 +36,70 @@ public record StepUpSettings(
     int challengeRateWindowSeconds,
     int retentionDays,
     boolean invalidateSessionsOnPasswordChange,
-    String hmacSecret) {
+    String hmacSecret,
+    boolean totpEnabled,
+    String totpEncryptionKey,
+    String totpIssuer,
+    int totpWindowSteps,
+    int totpMaxFailures,
+    int totpLockoutSeconds,
+    int recoveryCodeCount,
+    boolean totpExclusive) {
 
   public static final String SERVICE_NAME = "SELF_SERVICE_STEP_UP";
 
   /** Tenant property that holds the key used to hash the OTPs of this tenant. */
   public static final String HMAC_SECRET_PROPERTY = "hmacSecret";
 
+  /** Tenant property that holds the key protecting the authenticator secrets of this tenant. */
+  public static final String TOTP_KEY_PROPERTY = "totpEncryptionKey";
+
+  static final String DEFAULT_TOTP_ISSUER = "Mifos";
+  static final int MAX_TOTP_ISSUER_LENGTH = 40;
+
   static final Set<StepUpAction> DEFAULT_PROTECTED_ACTIONS =
       EnumSet.of(
-          StepUpAction.TPT_TRANSFER, StepUpAction.CONFIRM_TRANSFER, StepUpAction.CHANGE_PASSWORD);
+          StepUpAction.TPT_TRANSFER,
+          StepUpAction.CONFIRM_TRANSFER,
+          StepUpAction.CHANGE_PASSWORD,
+          StepUpAction.MANAGE_AUTHENTICATOR);
 
   /** Defaults used when nothing is configured: step-up is OFF. */
   public static StepUpSettings defaults() {
     return fromProperties(Map.of());
   }
 
-  /** {@code true} if step-up is on AND this action is in the protected list. */
+  /**
+   * {@code true} if step-up is on AND this action is in the protected list. Changing the
+   * authenticator is protected whenever the authenticator is on, whatever the list says: a tenant
+   * that saved its own list before the feature existed must not get an unprotected way to pair a
+   * stranger's phone.
+   */
   public boolean isProtected(final StepUpAction action) {
-    return enabled && protectedActions.contains(action);
+    if (!enabled) {
+      return false;
+    }
+    return protectedActions.contains(action)
+        || (action == StepUpAction.MANAGE_AUTHENTICATOR && totpEnabled);
   }
 
+  /**
+   * {@code true} when the tenant allows the channel. SMS and e-mail follow the {@code channels}
+   * list. The authenticator follows its own switch ({@link #totpEnabled}) and not that list: the
+   * list was seeded as {@code SMS,EMAIL} for every tenant long before the authenticator existed, so
+   * requiring it there would make the switch do nothing, and an unset list means "all channels",
+   * which would switch the authenticator on for tenants that never asked for it.
+   */
   public boolean isChannelAllowed(final StepUpChannel channel) {
+    if (channel == StepUpChannel.TOTP) {
+      return totpEnabled;
+    }
     return channels.contains(channel);
+  }
+
+  /** {@code true} when step-up is on AND the tenant switched the authenticator on. */
+  public boolean totpAvailable() {
+    return enabled && totpEnabled;
   }
 
   /** Builds settings from the raw key/value properties of the external service. */
@@ -79,7 +120,29 @@ public record StepUpSettings(
         parseInt(properties.get("challengeRateWindowSeconds"), 900, 60, 86_400),
         parseInt(properties.get("retentionDays"), 30, 1, 365),
         parseBoolean(properties.get("invalidateSessionsOnPasswordChange"), enabled),
-        blankToNull(properties.get(HMAC_SECRET_PROPERTY)));
+        blankToNull(properties.get(HMAC_SECRET_PROPERTY)),
+        parseBoolean(properties.get("totpEnabled"), false),
+        blankToNull(properties.get(TOTP_KEY_PROPERTY)),
+        parseIssuer(properties.get("totpIssuer")),
+        parseInt(properties.get("totpWindowSteps"), 1, 0, 2),
+        parseInt(properties.get("totpMaxFailures"), 5, 1, 10),
+        parseInt(properties.get("totpLockoutSeconds"), 900, 60, 86_400),
+        parseInt(properties.get("recoveryCodeCount"), 10, 5, 20),
+        parseBoolean(properties.get("totpExclusive"), true));
+  }
+
+  /** The name the authenticator app shows: no control characters and no colon, at most 40. */
+  private static String parseIssuer(final String raw) {
+    if (raw == null) {
+      return DEFAULT_TOTP_ISSUER;
+    }
+    final String clean = raw.replaceAll("[\\p{Cntrl}:]", "").trim();
+    if (clean.isEmpty()) {
+      return DEFAULT_TOTP_ISSUER;
+    }
+    return clean.length() > MAX_TOTP_ISSUER_LENGTH
+        ? clean.substring(0, MAX_TOTP_ISSUER_LENGTH).trim()
+        : clean;
   }
 
   private static String blankToNull(final String raw) {
@@ -99,6 +162,10 @@ public record StepUpSettings(
         + channels
         + ", hmacSecret="
         + (hmacSecret == null ? "not set" : "set")
+        + ", totpEnabled="
+        + totpEnabled
+        + ", totpEncryptionKey="
+        + (totpEncryptionKey == null ? "not set" : "set")
         + "]";
   }
 

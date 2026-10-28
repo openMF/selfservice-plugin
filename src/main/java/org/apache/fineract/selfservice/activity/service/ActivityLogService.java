@@ -89,6 +89,30 @@ public class ActivityLogService {
       final Long userId,
       final Long clientId,
       final Map<String, Object> source) {
+    write(type, outcome, userId, clientId, source, clientIp);
+  }
+
+  /**
+   * Records an activity the user did not do themselves, such as a staff member removing the
+   * authenticator: the request comes from the staff member, so its address must not appear in the
+   * history of the user (it would be both wrong and a leak).
+   */
+  public void recordWithoutAddress(
+      final ActivityType type,
+      final ActivityOutcome outcome,
+      final Long userId,
+      final Long clientId,
+      final Map<String, Object> source) {
+    write(type, outcome, userId, clientId, source, () -> null);
+  }
+
+  private void write(
+      final ActivityType type,
+      final ActivityOutcome outcome,
+      final Long userId,
+      final Long clientId,
+      final Map<String, Object> source,
+      final Supplier<String> addressSource) {
     if (type == null || outcome == null || userId == null) {
       return;
     }
@@ -109,7 +133,7 @@ public class ActivityLogService {
                     clientId,
                     type,
                     outcome,
-                    IpAddressMasker.mask(clientIp.get()),
+                    IpAddressMasker.mask(addressSource.get()),
                     ActivityDetails.toJson(type, source),
                     now));
           });
