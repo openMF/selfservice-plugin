@@ -17,6 +17,7 @@ import org.apache.fineract.selfservice.activity.domain.ActivityOutcome;
 import org.apache.fineract.selfservice.activity.domain.ActivityType;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.stepup.event.StepUpEvent;
+import org.apache.fineract.selfservice.stepup.event.TotpEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -93,6 +94,45 @@ public class ActivityEventListener {
       log.warn(
           "Could not turn step-up event {} into an activity: {}", event.type(), e.getMessage());
     }
+  }
+
+  /**
+   * The authenticator app: pairing, removal (by the user or by staff), recovery codes and lock-out.
+   * Unlike the step-up events, the history needs all of them: they are what a user looks for after
+   * an account takeover.
+   */
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+  public void onTotpEvent(final TotpEvent event) {
+    try {
+      final Optional<Mapped> mapped = mapTotp(event.type());
+      if (mapped.isEmpty() || event.userId() == null) {
+        return;
+      }
+      if (event.type() == TotpEvent.Type.RESET_BY_STAFF) {
+        activityLogService.recordWithoutAddress(
+            mapped.get().type(), mapped.get().outcome(), event.userId(), null, Map.of());
+      } else {
+        activityLogService.record(
+            mapped.get().type(), mapped.get().outcome(), event.userId(), null, Map.of());
+      }
+    } catch (Exception e) {
+      log.warn("Could not turn authenticator event {} into an activity: {}", event.type(), e);
+    }
+  }
+
+  static Optional<Mapped> mapTotp(final TotpEvent.Type type) {
+    if (type == null) {
+      return Optional.empty();
+    }
+    return switch (type) {
+      case ENROLLED -> of(ActivityType.AUTHENTICATOR_ENROLLED, ActivityOutcome.SUCCESS);
+      case REMOVED -> of(ActivityType.AUTHENTICATOR_REMOVED, ActivityOutcome.SUCCESS);
+      case RESET_BY_STAFF -> of(ActivityType.AUTHENTICATOR_RESET, ActivityOutcome.SUCCESS);
+      case LOCKED -> of(ActivityType.AUTHENTICATOR_LOCKED, ActivityOutcome.FAILURE);
+      case RECOVERY_CODES_REGENERATED ->
+          of(ActivityType.RECOVERY_CODES_REGENERATED, ActivityOutcome.SUCCESS);
+      case RECOVERY_CODE_USED -> of(ActivityType.RECOVERY_CODE_USED, ActivityOutcome.SUCCESS);
+    };
   }
 
   static Optional<Mapped> mapStepUp(final StepUpEvent.Type type) {

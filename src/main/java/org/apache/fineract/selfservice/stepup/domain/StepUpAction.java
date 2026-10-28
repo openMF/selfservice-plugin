@@ -46,7 +46,13 @@ public enum StepUpAction {
           PayloadField.optional("currencyCode", FieldKind.UPPER_TEXT),
           PayloadField.required("transferAmount", FieldKind.AMOUNT))),
   /** Password change: {@code PUT /v1/self/user}. Bound to the action only (never the password). */
-  CHANGE_PASSWORD(List.of());
+  CHANGE_PASSWORD(List.of()),
+  /**
+   * Pairing, re-issuing the recovery codes of, or removing the authenticator app: {@code POST
+   * /v1/self/stepup/totp/enrollment/confirm}, {@code POST .../recovery-codes}, {@code DELETE
+   * /v1/self/stepup/totp}. Bound to the action only.
+   */
+  MANAGE_AUTHENTICATOR(List.of());
 
   /** How a payload field is normalised before hashing. */
   public enum FieldKind {

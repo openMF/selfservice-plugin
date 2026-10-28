@@ -1,0 +1,20 @@
+info:
+  name: 15. STAFF - RESET THE AUTHENTICATOR OF A USER
+  type: http
+  seq: 16
+
+http:
+  method: DELETE
+  url: http://localhost:8080/fineract-provider/api/v1/selfservice/users/{{userId}}/totp
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic {{adminBasicAuth}}
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

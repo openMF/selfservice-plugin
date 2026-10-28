@@ -22,6 +22,8 @@ final class StepUpMessages {
           english ? "transfer between your accounts" : "transferencia entre tus cuentas";
       case CONFIRM_TRANSFER -> english ? "transfer confirmation" : "confirmación de transferencia";
       case CHANGE_PASSWORD -> english ? "password change" : "cambio de contraseña";
+      case MANAGE_AUTHENTICATOR ->
+          english ? "authenticator app change" : "cambio de la app de autenticación";
     };
   }
 }

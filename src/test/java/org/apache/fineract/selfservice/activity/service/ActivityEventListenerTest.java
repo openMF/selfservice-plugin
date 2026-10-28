@@ -26,6 +26,7 @@ import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.domain.StepUpChannel;
 import org.apache.fineract.selfservice.stepup.event.StepUpEvent;
+import org.apache.fineract.selfservice.stepup.event.TotpEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -252,6 +253,100 @@ class ActivityEventListenerTest {
         .record(any(), any(), any(), any(), any());
 
     assertDoesNotThrow(() -> listener.onStepUpEvent(stepUp(StepUpEvent.Type.ISSUED)));
+  }
+
+  // ---- authenticator app ----------------------------------------------------------------------
+
+  private static TotpEvent totp(final TotpEvent.Type type, final Long userId) {
+    return new TotpEvent(type, userId, "reason", LocalDateTime.of(2026, 10, 28, 12, 0), "10.0.0.1");
+  }
+
+  @Test
+  void totp_everyEventOfTheAuthenticatorIsMappedToTheRightActivity() {
+    final Map<TotpEvent.Type, ActivityType> expected = new EnumMap<>(TotpEvent.Type.class);
+    expected.put(TotpEvent.Type.ENROLLED, ActivityType.AUTHENTICATOR_ENROLLED);
+    expected.put(TotpEvent.Type.REMOVED, ActivityType.AUTHENTICATOR_REMOVED);
+    expected.put(TotpEvent.Type.RESET_BY_STAFF, ActivityType.AUTHENTICATOR_RESET);
+    expected.put(TotpEvent.Type.LOCKED, ActivityType.AUTHENTICATOR_LOCKED);
+    expected.put(
+        TotpEvent.Type.RECOVERY_CODES_REGENERATED, ActivityType.RECOVERY_CODES_REGENERATED);
+    expected.put(TotpEvent.Type.RECOVERY_CODE_USED, ActivityType.RECOVERY_CODE_USED);
+
+    // a new event type must be mapped on purpose, not forgotten
+    assertEquals(expected.keySet(), java.util.EnumSet.allOf(TotpEvent.Type.class));
+    for (final Map.Entry<TotpEvent.Type, ActivityType> entry : expected.entrySet()) {
+      assertEquals(
+          entry.getValue(),
+          ActivityEventListener.mapTotp(entry.getKey()).orElseThrow().type(),
+          entry.getKey().name());
+    }
+  }
+
+  @Test
+  void totp_aLockOutIsAFailure_everythingElseASuccess() {
+    for (final TotpEvent.Type type : TotpEvent.Type.values()) {
+      assertEquals(
+          type == TotpEvent.Type.LOCKED ? ActivityOutcome.FAILURE : ActivityOutcome.SUCCESS,
+          ActivityEventListener.mapTotp(type).orElseThrow().outcome(),
+          type.name());
+    }
+  }
+
+  @Test
+  void totp_aUserChangeIsRecordedWithTheAddressOfTheConnection_andNoDetails() {
+    listener.onTotpEvent(totp(TotpEvent.Type.ENROLLED, 7L));
+
+    verify(activityLogService)
+        .record(
+            eq(ActivityType.AUTHENTICATOR_ENROLLED),
+            eq(ActivityOutcome.SUCCESS),
+            eq(7L),
+            isNull(),
+            eq(Map.of()));
+    verify(activityLogService, never()).recordWithoutAddress(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void totp_aStaffReset_isRecordedWithoutAnAddress_becauseTheRequestIsTheStaffMembers() {
+    listener.onTotpEvent(totp(TotpEvent.Type.RESET_BY_STAFF, 7L));
+
+    verify(activityLogService)
+        .recordWithoutAddress(
+            eq(ActivityType.AUTHENTICATOR_RESET),
+            eq(ActivityOutcome.SUCCESS),
+            eq(7L),
+            isNull(),
+            eq(Map.of()));
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void totp_theReasonAndTheAddressOfTheEventAreNeverPassedOn() {
+    listener.onTotpEvent(totp(TotpEvent.Type.LOCKED, 7L));
+
+    final ArgumentCaptor<Map<String, Object>> source = ArgumentCaptor.forClass(Map.class);
+    verify(activityLogService)
+        .record(any(), any(), eq(7L), isNull(), source.capture());
+    assertTrue(source.getValue().isEmpty());
+  }
+
+  @Test
+  void totp_anEventWithoutAUser_isIgnored() {
+    listener.onTotpEvent(totp(TotpEvent.Type.ENROLLED, null));
+    verify(activityLogService, never()).record(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void totp_aFailureInsideTheLog_neverReachesThePublisher() {
+    doThrow(new IllegalStateException("boom"))
+        .when(activityLogService)
+        .record(any(), any(), any(), any(), any());
+    doThrow(new IllegalStateException("boom"))
+        .when(activityLogService)
+        .recordWithoutAddress(any(), any(), any(), any(), any());
+
+    assertDoesNotThrow(() -> listener.onTotpEvent(totp(TotpEvent.Type.REMOVED, 7L)));
+    assertDoesNotThrow(() -> listener.onTotpEvent(totp(TotpEvent.Type.RESET_BY_STAFF, 7L)));
   }
 
   @Test

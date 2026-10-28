@@ -40,6 +40,7 @@ import org.apache.fineract.selfservice.stepup.domain.StepUpChannel;
 import org.apache.fineract.selfservice.stepup.domain.StepUpStatus;
 import org.apache.fineract.selfservice.stepup.event.StepUpEvent;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,6 +62,7 @@ class StepUpChallengeServiceTest {
 
   @Mock private StepUpChallengeRepository repository;
   @Mock private StepUpSettingsProvider settingsProvider;
+  @Mock private TotpService totpService;
   @Mock private StepUpDeliveryChannel smsChannel;
   @Mock private StepUpDeliveryChannel emailChannel;
   @Mock private TransactionDateUtil transactionDateUtil;
@@ -109,6 +111,7 @@ class StepUpChallengeServiceTest {
         repository,
         settingsProvider,
         cryptoToUse,
+        totpService,
         List.of(smsChannel, emailChannel),
         transactionDateUtil,
         eventPublisher);

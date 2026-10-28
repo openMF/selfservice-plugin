@@ -3151,7 +3151,7 @@
         },
         {
           "name": "STEP-UP (OTP)",
-          "description": "MX-488 / US-E12-02. Run in order: 00 login (stores {{sessionKey}}), 01 config, 02 or 03 challenge (stores {{challengeId}}), 04 verify with the code received by e-mail/SMS (stores {{stepUpToken}}), then send the protected request with the X-Step-Up-Token header (05, 06). Step-up must be enabled for the tenant: see README.",
+          "description": "MX-488 / US-E12-02. Run in order: 00 login (stores {{sessionKey}}), 01 config, 02 or 03 challenge (stores {{challengeId}}), 04 verify with the code received by e-mail/SMS (stores {{stepUpToken}}), then send the protected request with the X-Step-Up-Token header (05, 06). Step-up must be enabled for the tenant: see README. Authenticator app (TOTP): 07 status, 08 start pairing, 09 + 04 step-up, 10 confirm; afterwards 11 + 04 (or 12 with a recovery code) give a token for any protected action; 13 and 14 manage it; 15 is for staff.",
           "item": [
             {
               "name": "00. LOGIN (stores the session key)",
@@ -3575,6 +3575,454 @@
                   }
                 },
                 "description": "Succeeds once; all sessions of the user are then revoked (log in again)."
+              },
+              "response": []
+            },
+            {
+              "name": "07. AUTHENTICATOR STATUS",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/totp",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "totp"
+                  ]
+                },
+                "description": "NONE, PENDING or ACTIVE; 'available' is false when the tenant has not switched it on."
+              },
+              "response": []
+            },
+            {
+              "name": "08. AUTHENTICATOR - START PAIRING",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/totp/enrollment",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "totp",
+                    "enrollment"
+                  ]
+                },
+                "description": "Returns the secret ONCE (otpauthUri for a QR code, secret as text). Needs totpEnabled and totpEncryptionKey for the tenant: see README."
+              },
+              "response": []
+            },
+            {
+              "name": "09. REQUEST CHALLENGE - MANAGE AUTHENTICATOR",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"action\": \"MANAGE_AUTHENTICATOR\",\n    \"channel\": \"EMAIL\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Pairing, new recovery codes and removal need a step-up for this action. Then run 04 to get the token."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('challengeId', pm.response.json().challengeId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10. AUTHENTICATOR - CONFIRM PAIRING (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/totp/enrollment/confirm",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "totp",
+                    "enrollment",
+                    "confirm"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"code\": \"123456\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "The code shown by the app. Returns the recovery codes ONCE."
+              },
+              "response": []
+            },
+            {
+              "name": "11. REQUEST CHALLENGE - AUTHENTICATOR APP",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"action\": \"CHANGE_PASSWORD\",\n    \"channel\": \"TOTP\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Nothing is sent. Run 04 with the code of the app (otp) to get the token."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  pm.collectionVariables.set('challengeId', pm.response.json().challengeId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12. VERIFY RECOVERY CODE",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges/{{challengeId}}/verify",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges",
+                    "{{challengeId}}",
+                    "verify"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"recoveryCode\": \"ABCDE-FGHJK\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "When the phone is lost. Works once, only on a TOTP challenge."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  pm.collectionVariables.set('stepUpToken', pm.response.json().stepUpToken);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "13. AUTHENTICATOR - NEW RECOVERY CODES (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/totp/recovery-codes",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "totp",
+                    "recovery-codes"
+                  ]
+                },
+                "description": "The old codes stop working."
+              },
+              "response": []
+            },
+            {
+              "name": "14. AUTHENTICATOR - REMOVE (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/totp",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "totp"
+                  ]
+                },
+                "description": "Cancelling a pairing that was never confirmed needs no token."
+              },
+              "response": []
+            },
+            {
+              "name": "15. STAFF - RESET THE AUTHENTICATOR OF A USER",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{adminBasicAuth}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/selfservice/users/{{userId}}/totp",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "selfservice",
+                    "users",
+                    "{{userId}}",
+                    "totp"
+                  ]
+                },
+                "description": "For a user who lost the phone and the recovery codes. Needs UPDATE_SELFSERVICEUSER. {{adminBasicAuth}} is the Basic value of a staff account; do not commit it."
               },
               "response": []
             }
@@ -4210,6 +4658,14 @@
     },
     {
       "key": "stepUpToken",
+      "value": ""
+    },
+    {
+      "key": "adminBasicAuth",
+      "value": ""
+    },
+    {
+      "key": "userId",
       "value": ""
     }
   ]

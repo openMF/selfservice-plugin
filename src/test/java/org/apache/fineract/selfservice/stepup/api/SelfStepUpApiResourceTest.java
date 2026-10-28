@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ import org.apache.fineract.selfservice.stepup.service.StepUpContact;
 import org.apache.fineract.selfservice.stepup.service.StepUpCrypto;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettings;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,7 @@ class SelfStepUpApiResourceTest {
   @Mock private PlatformSelfServiceSecurityContext context;
   @Mock private StepUpChallengeService challengeService;
   @Mock private StepUpSettingsProvider settingsProvider;
+  @Mock private TotpService totpService;
   @Mock private HttpServletRequest request;
   @Mock private AppSelfServiceUser user;
 
@@ -75,7 +78,8 @@ class SelfStepUpApiResourceTest {
             challengeService,
             settingsProvider,
             new StepUpDataValidator(new FromJsonHelper()),
-            new AuthorizationHeaderStepUpSessionResolver());
+            new AuthorizationHeaderStepUpSessionResolver(),
+            totpService);
     when(context.authenticatedSelfServiceUser()).thenReturn(user);
     when(user.getId()).thenReturn(7L);
     when(user.getUsername()).thenReturn("ana");
@@ -157,12 +161,12 @@ class SelfStepUpApiResourceTest {
     assertEquals(
         "error.msg.selfservice.stepup.session.required",
         assertThrows(StepUpException.class, () -> resource.resend(5L, request)).getErrorCode());
-    verify(challengeService, never()).verify(any(), any(), any(), any(), any());
+    verify(challengeService, never()).verify(any(), any(), any(), any(), any(), any());
   }
 
   @Test
   void verify_returnsTheGrantAndScopesTheLookupToUserAndSession() {
-    when(challengeService.verify(any(), any(), any(), any(), any()))
+    when(challengeService.verify(any(), any(), any(), any(), any(), any()))
         .thenReturn(
             new StepUpGrantData("grant-token-value", "TPT_TRANSFER", "2026-10-21T12:02:00"));
 
@@ -171,7 +175,8 @@ class SelfStepUpApiResourceTest {
     final JsonObject body = JsonParser.parseString(json).getAsJsonObject();
     assertEquals("grant-token-value", body.get("stepUpToken").getAsString());
     assertEquals("TPT_TRANSFER", body.get("action").getAsString());
-    verify(challengeService).verify(eq(5L), eq("123456"), eq(7L), eq(SESSION_HASH), eq("10.0.0.9"));
+    verify(challengeService)
+        .verify(eq(5L), eq("123456"), isNull(), eq(7L), eq(SESSION_HASH), eq("10.0.0.9"));
   }
 
   @Test
@@ -209,5 +214,106 @@ class SelfStepUpApiResourceTest {
 
     assertFalse(body.get("enabled").getAsBoolean());
     assertFalse(body.get("sessionBound").getAsBoolean());
+  }
+
+  // ---- authenticator app (TOTP) ---------------------------------------------------------------
+
+  private static StepUpSettings totpSettings(final String... keyValues) {
+    final Map<String, String> props = new java.util.HashMap<>();
+    props.put("enabled", "true");
+    props.put("totpEnabled", "true");
+    for (int i = 0; i + 1 < keyValues.length; i += 2) {
+      props.put(keyValues[i], keyValues[i + 1]);
+    }
+    return StepUpSettings.fromProperties(props);
+  }
+
+  private java.util.List<String> channelsOf(final String json) {
+    final java.util.List<String> channels = new java.util.ArrayList<>();
+    JsonParser.parseString(json)
+        .getAsJsonObject()
+        .getAsJsonArray("availableChannels")
+        .forEach(c -> channels.add(c.getAsString()));
+    return channels;
+  }
+
+  @Test
+  void config_offersTheAuthenticatorOnlyToAUserWhoPairedOne() {
+    when(settingsProvider.current()).thenReturn(totpSettings("totpExclusive", "false"));
+    when(totpService.hasActive(7L)).thenReturn(false);
+    assertEquals(java.util.List.of("EMAIL"), channelsOf(resource.config(request)));
+
+    when(totpService.hasActive(7L)).thenReturn(true);
+    assertEquals(java.util.List.of("EMAIL", "TOTP"), channelsOf(resource.config(request)));
+  }
+
+  @Test
+  void config_whileTheAuthenticatorIsActiveAndExclusive_onlyItIsOffered() {
+    when(settingsProvider.current()).thenReturn(totpSettings());
+    when(totpService.hasActive(7L)).thenReturn(true);
+    assertEquals(java.util.List.of("TOTP"), channelsOf(resource.config(request)));
+  }
+
+  @Test
+  void config_neverOffersTheAuthenticatorWhenTheTenantDidNotSwitchItOn() {
+    when(settingsProvider.current()).thenReturn(totpSettings("totpEnabled", "false"));
+    when(totpService.hasActive(7L)).thenReturn(true);
+    assertEquals(java.util.List.of("EMAIL"), channelsOf(resource.config(request)));
+  }
+
+  @Test
+  void config_theAuthenticatorWorksWithTheChannelListEveryTenantAlreadyHas() {
+    // the step-up migration seeded "channels = SMS,EMAIL": the TOTP switch must not need a change
+    when(settingsProvider.current())
+        .thenReturn(totpSettings("channels", "SMS,EMAIL", "totpExclusive", "false"));
+    when(totpService.hasActive(7L)).thenReturn(true);
+    assertEquals(java.util.List.of("EMAIL", "TOTP"), channelsOf(resource.config(request)));
+  }
+
+  @Test
+  void config_listsChangingTheAuthenticatorAsProtected_evenWithACustomList() {
+    when(settingsProvider.current()).thenReturn(totpSettings("protectedActions", "TPT_TRANSFER"));
+    final String json = resource.config(request);
+    final String actions =
+        JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("protectedActions").toString();
+    assertTrue(actions.contains("MANAGE_AUTHENTICATOR"));
+    assertTrue(actions.contains("TPT_TRANSFER"));
+    assertFalse(actions.contains("CHANGE_PASSWORD"));
+  }
+
+  @Test
+  void config_doesNotMentionChangingTheAuthenticatorWhileItIsSwitchedOff() {
+    when(settingsProvider.current())
+        .thenReturn(
+            StepUpSettings.fromProperties(
+                Map.of("enabled", "true", "protectedActions", "TPT_TRANSFER")));
+    final String actions =
+        JsonParser.parseString(resource.config(request))
+            .getAsJsonObject()
+            .getAsJsonArray("protectedActions")
+            .toString();
+    assertFalse(actions.contains("MANAGE_AUTHENTICATOR"));
+  }
+
+  @Test
+  void verify_passesARecoveryCodeToTheService() {
+    when(challengeService.verify(any(), any(), any(), any(), any(), any()))
+        .thenReturn(
+            new StepUpGrantData("grant-token-value", "TPT_TRANSFER", "2026-10-21T12:02:00"));
+
+    resource.verify(5L, "{\"recoveryCode\":\"ABCDE-FGHJK\"}", request);
+
+    verify(challengeService)
+        .verify(eq(5L), isNull(), eq("ABCDE-FGHJK"), eq(7L), eq(SESSION_HASH), eq("10.0.0.9"));
+  }
+
+  @Test
+  void verify_refusesACallWithBothCodes() {
+    assertThrows(
+        org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException.class,
+        () ->
+            resource.verify(
+                5L, "{\"otp\":\"123456\",\"recoveryCode\":\"ABCDE-FGHJK\"}", request));
+    verify(challengeService, never()).verify(any(), any(), any(), any(), any(), any());
   }
 }

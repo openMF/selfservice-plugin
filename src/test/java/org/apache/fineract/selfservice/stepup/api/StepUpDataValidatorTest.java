@@ -150,8 +150,58 @@ class StepUpDataValidatorTest {
 
   @Test
   void verify_returnsTheTrimmedOtp() {
-    assertEquals("123456", validator.validateVerify("{\"otp\":\" 123456 \"}"));
-    assertEquals("042917", validator.validateVerify("{\"otp\":\"042917\"}"));
+    assertEquals("123456", validator.validateVerify("{\"otp\":\" 123456 \"}").otp());
+    assertEquals("042917", validator.validateVerify("{\"otp\":\"042917\"}").otp());
+    assertEquals(null, validator.validateVerify("{\"otp\":\"042917\"}").recoveryCode());
+  }
+
+  @Test
+  void verify_acceptsARecoveryCodeInsteadOfAnOtp() {
+    final StepUpDataValidator.VerifyRequest request =
+        validator.validateVerify("{\"recoveryCode\":\" ABCDE-FGHJK \"}");
+    assertEquals("ABCDE-FGHJK", request.recoveryCode());
+    assertEquals(null, request.otp());
+  }
+
+  @Test
+  void verify_rejectsBothAnOtpAndARecoveryCode() {
+    assertTrue(
+        errorParameters(
+                assertThrows(
+                    PlatformApiDataValidationException.class,
+                    () ->
+                        validator.validateVerify(
+                            "{\"otp\":\"123456\",\"recoveryCode\":\"ABCDE-FGHJK\"}")))
+            .contains("recoveryCode"));
+  }
+
+  @Test
+  void verify_rejectsATooLongRecoveryCode() {
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> validator.validateVerify("{\"recoveryCode\":\"" + "A".repeat(33) + "\"}"));
+  }
+
+  @Test
+  void confirmTotp_returnsTheTrimmedCode() {
+    assertEquals("042917", validator.validateConfirmTotp("{\"code\":\" 042917 \"}"));
+  }
+
+  @Test
+  void confirmTotp_rejectsBlankMissingTooLongAndUnknownFields() {
+    assertTrue(
+        errorParameters(
+                assertThrows(
+                    PlatformApiDataValidationException.class,
+                    () -> validator.validateConfirmTotp("{\"code\":\" \"}")))
+            .contains("code"));
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> validator.validateConfirmTotp("{\"code\":\"12345678901234567\"}"));
+    assertThrows(
+        UnsupportedParameterException.class,
+        () -> validator.validateConfirmTotp("{\"code\":\"123456\",\"otp\":\"1\"}"));
+    assertThrows(InvalidJsonException.class, () -> validator.validateConfirmTotp(""));
   }
 
   @Test
