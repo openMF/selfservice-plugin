@@ -186,6 +186,33 @@ class ActivityLogServiceTest {
   }
 
   @Test
+  void recordWithoutAddress_neverKeepsTheAddressOfTheRequest() {
+    // the request is a staff member's: its address must not end up in the history of the user
+    service.recordWithoutAddress(
+        ActivityType.AUTHENTICATOR_RESET, ActivityOutcome.SUCCESS, 7L, null, Map.of());
+
+    final SelfServiceActivity row = saved();
+    assertNull(row.getIpMasked());
+    assertEquals(ActivityType.AUTHENTICATOR_RESET, row.getType());
+    assertEquals(7L, row.getAppUserId());
+  }
+
+  @Test
+  void recordWithoutAddress_stillHonoursTheTenantSwitchAndNeverThrows() {
+    when(settingsProvider.current())
+        .thenReturn(ActivitySettings.fromProperties(Map.of("enabled", "false")));
+    service.recordWithoutAddress(
+        ActivityType.AUTHENTICATOR_RESET, ActivityOutcome.SUCCESS, 7L, null, Map.of());
+    verify(repository, never()).save(any());
+
+    when(settingsProvider.current()).thenThrow(new IllegalStateException("boom"));
+    assertDoesNotThrow(
+        () ->
+            service.recordWithoutAddress(
+                ActivityType.AUTHENTICATOR_RESET, ActivityOutcome.SUCCESS, 7L, null, Map.of()));
+  }
+
+  @Test
   void noAddressMeansNoIp() {
     address = null;
 

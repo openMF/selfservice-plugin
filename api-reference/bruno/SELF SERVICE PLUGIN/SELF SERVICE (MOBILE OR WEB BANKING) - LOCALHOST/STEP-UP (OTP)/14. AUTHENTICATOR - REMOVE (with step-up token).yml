@@ -1,0 +1,22 @@
+info:
+  name: 14. AUTHENTICATOR - REMOVE (with step-up token)
+  type: http
+  seq: 15
+
+http:
+  method: DELETE
+  url: http://localhost:8080/fineract-provider/api/v1/self/stepup/totp
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic {{sessionKey}}
+    - name: X-Step-Up-Token
+      value: "{{stepUpToken}}"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -98,5 +98,7 @@
   <include file="parts/084-add-notification-messages-stepup.xml" relativeToChangelogFile="true"/>
   <include file="parts/085-create-activity-table.xml" relativeToChangelogFile="true"/>
   <include file="parts/086-add-activity-config.xml" relativeToChangelogFile="true"/>
+  <include file="parts/088-create-totp-tables.xml" relativeToChangelogFile="true"/>
+  <include file="parts/089-add-totp-config.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

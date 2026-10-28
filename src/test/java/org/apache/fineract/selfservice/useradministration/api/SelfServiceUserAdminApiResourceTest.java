@@ -15,6 +15,7 @@ import java.util.List;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.service.AppSelfServiceUserReadPlatformService;
 import org.apache.fineract.selfservice.useradministration.service.SelfServiceUserAdminWritePlatformService;
@@ -28,6 +29,7 @@ class SelfServiceUserAdminApiResourceTest {
   private AppUser staffUser;
   private AppSelfServiceUserReadPlatformService readPlatformService;
   private ToApiJsonSerializer<CommandProcessingResult> serializer;
+  private TotpService totpService;
   private SelfServiceUserAdminApiResource resource;
 
   @BeforeEach
@@ -38,10 +40,11 @@ class SelfServiceUserAdminApiResourceTest {
     SelfServiceUserAdminWritePlatformService writePlatformService =
         mock(SelfServiceUserAdminWritePlatformService.class);
     serializer = mock(ToApiJsonSerializer.class);
+    totpService = mock(TotpService.class);
     when(context.authenticatedUser()).thenReturn(staffUser);
     resource =
         new SelfServiceUserAdminApiResource(
-            context, readPlatformService, writePlatformService, serializer);
+            context, readPlatformService, writePlatformService, serializer, totpService);
   }
 
   @Test
@@ -75,5 +78,49 @@ class SelfServiceUserAdminApiResourceTest {
     assertEquals("user-json", result);
     verify(staffUser).validateHasReadPermission("SELFSERVICEUSER");
     verify(readPlatformService).retrieveSelfServiceUserForAdmin(10L);
+  }
+
+  @Test
+  void resetAuthenticator_shouldRequireUpdatePermissionAndCheckTheUserIsVisible() {
+    when(totpService.adminReset(10L)).thenReturn(true);
+
+    String result = resource.resetAuthenticator(10L);
+
+    assertEquals("{\"removed\":true}", result);
+    verify(staffUser).validateHasUpdatePermission("SELFSERVICEUSER");
+    // same visibility rule (office hierarchy, not deleted) as the other administration calls
+    verify(readPlatformService).retrieveSelfServiceUserDomainForAdmin(10L);
+    verify(totpService).adminReset(10L);
+  }
+
+  @Test
+  void resetAuthenticator_reportsWhenThereWasNothingToRemove() {
+    when(totpService.adminReset(10L)).thenReturn(false);
+    assertEquals("{\"removed\":false}", resource.resetAuthenticator(10L));
+  }
+
+  @Test
+  void resetAuthenticator_withoutPermission_changesNothing() {
+    org.mockito.Mockito.doThrow(new SecurityException("no permission"))
+        .when(staffUser)
+        .validateHasUpdatePermission("SELFSERVICEUSER");
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        SecurityException.class, () -> resource.resetAuthenticator(10L));
+
+    org.mockito.Mockito.verifyNoInteractions(totpService);
+    org.mockito.Mockito.verify(readPlatformService, org.mockito.Mockito.never())
+        .retrieveSelfServiceUserDomainForAdmin(10L);
+  }
+
+  @Test
+  void resetAuthenticator_forAUserTheStaffMemberCannotSee_changesNothing() {
+    when(readPlatformService.retrieveSelfServiceUserDomainForAdmin(10L))
+        .thenThrow(new IllegalArgumentException("not visible"));
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException.class, () -> resource.resetAuthenticator(10L));
+
+    org.mockito.Mockito.verifyNoInteractions(totpService);
   }
 }

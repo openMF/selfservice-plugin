@@ -48,6 +48,14 @@ class StepUpContactTest {
   }
 
   @Test
+  void theAuthenticatorApp_hasNoDestination_soNothingIsEverSentToIt() {
+    final StepUpContact both = contact("ana@example.com", "5519500324");
+    assertNull(both.destination(StepUpChannel.TOTP));
+    assertNull(both.maskedDestination(StepUpChannel.TOTP));
+    assertFalse(both.supports(StepUpChannel.TOTP));
+  }
+
+  @Test
   void maskedDestination_isNullWhenMissing() {
     assertNull(contact(null, null).maskedDestination(StepUpChannel.EMAIL));
     assertNull(contact(null, null).maskedDestination(StepUpChannel.SMS));

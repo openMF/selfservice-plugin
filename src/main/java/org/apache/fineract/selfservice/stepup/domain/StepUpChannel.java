@@ -6,8 +6,12 @@
  */
 package org.apache.fineract.selfservice.stepup.domain;
 
-/** Delivery channel for a step-up OTP. TOTP/authenticator is a planned follow-up channel. */
+/**
+ * How a step-up code reaches, or is produced for, the user: SMS and EMAIL send a code; TOTP is the
+ * code of the user's authenticator app, nothing is sent.
+ */
 public enum StepUpChannel {
   SMS,
-  EMAIL
+  EMAIL,
+  TOTP
 }

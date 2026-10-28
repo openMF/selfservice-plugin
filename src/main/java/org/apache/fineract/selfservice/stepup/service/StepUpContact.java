@@ -46,9 +46,16 @@ public record StepUpContact(
     return destination(channel) != null;
   }
 
-  /** Raw destination for the channel, {@code null} if the user has none on file. */
+  /**
+   * Raw destination for the channel, {@code null} if the user has none on file. The authenticator
+   * app has no destination: nothing is sent to it.
+   */
   public String destination(final StepUpChannel channel) {
-    return channel == StepUpChannel.EMAIL ? email : mobile;
+    return switch (channel) {
+      case EMAIL -> email;
+      case SMS -> mobile;
+      case TOTP -> null;
+    };
   }
 
   /** Destination safe to show to the user, e.g. {@code j***@mail.com} or {@code ******1234}. */

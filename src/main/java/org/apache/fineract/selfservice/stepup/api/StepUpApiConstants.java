@@ -20,8 +20,13 @@ public final class StepUpApiConstants {
   public static final String channelParamName = "channel";
   public static final String payloadParamName = "payload";
   public static final String otpParamName = "otp";
+  public static final String recoveryCodeParamName = "recoveryCode";
+  public static final String codeParamName = "code";
+
+  public static final String RESOURCE_NAME_TOTP = "stepup.totp";
 
   public static final Set<String> CREATE_CHALLENGE_PARAMETERS =
       Set.of(actionParamName, channelParamName, payloadParamName);
-  public static final Set<String> VERIFY_PARAMETERS = Set.of(otpParamName);
+  public static final Set<String> VERIFY_PARAMETERS = Set.of(otpParamName, recoveryCodeParamName);
+  public static final Set<String> CONFIRM_TOTP_PARAMETERS = Set.of(codeParamName);
 }

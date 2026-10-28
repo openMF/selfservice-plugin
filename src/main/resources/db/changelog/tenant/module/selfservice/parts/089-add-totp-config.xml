@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MX-488 follow-up (US-E12-02): per-tenant settings of the authenticator app (TOTP), added to
+        the SELF_SERVICE_STEP_UP external service created in 083 and read by StepUpSettingsProvider.
+        Nothing is read from environment variables, so one tenant can never change another one.
+        Each key is added only when it is missing, so a tenant that already changed one keeps it.
+
+        Keys (values outside the allowed range fall back to the defaults below):
+          totpEnabled          true|false   the authenticator app is offered     (default false)
+                                            needs enabled=true as well. It has its own switch and
+                                            does not depend on "channels" (which every tenant got
+                                            as SMS,EMAIL from 083, and which means "all channels"
+                                            when unset), so one flag turns it on or off.
+          totpEncryptionKey    at least 32 characters; protects the secrets of THIS tenant (AES-GCM
+                               key is derived from it). Seeded with a placeholder too short to be
+                               used, so the feature cannot start without a real key. Treat it like
+                               the other external-service secrets (SMTP, SMS): restrict who may
+                               read the external service configuration.
+          totpIssuer           name the app shows next to the account            (Mifos)
+          totpWindowSteps      0..2   30-second steps accepted either side (clock drift)   (1)
+          totpMaxFailures      1..10  wrong codes before the authenticator locks           (5)
+          totpLockoutSeconds   60..86400                                                   (900)
+          recoveryCodeCount    5..20  recovery codes handed out                            (10)
+          totpExclusive        true|false  while a user has an active authenticator, SMS and
+                               e-mail codes are not offered (SIM-swap protection)          (true)
+    -->
+
+    <changeSet id="ss-0089-1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpEnabled'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpEnabled"/>
+            <column name="value" value="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpEncryptionKey'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpEncryptionKey"/>
+            <column name="value" value="change-me-before-enabling"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpIssuer'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpIssuer"/>
+            <column name="value" value="Mifos"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpWindowSteps'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpWindowSteps"/>
+            <column name="value" value="1"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-5" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpMaxFailures'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpMaxFailures"/>
+            <column name="value" value="5"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-6" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpLockoutSeconds'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpLockoutSeconds"/>
+            <column name="value" value="900"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-7" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'recoveryCodeCount'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="recoveryCodeCount"/>
+            <column name="value" value="10"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="ss-0089-8" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.name = 'totpExclusive'
+                  AND esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_STEP_UP')"/>
+            <column name="name" value="totpExclusive"/>
+            <column name="value" value="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

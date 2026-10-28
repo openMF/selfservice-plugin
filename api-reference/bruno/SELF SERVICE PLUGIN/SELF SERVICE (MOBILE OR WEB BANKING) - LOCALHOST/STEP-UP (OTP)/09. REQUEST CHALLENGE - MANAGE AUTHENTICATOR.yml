@@ -1,0 +1,27 @@
+info:
+  name: 09. REQUEST CHALLENGE - MANAGE AUTHENTICATOR
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges
+  headers:
+    - name: Fineract-Platform-TenantId
+      value: default
+    - name: Authorization
+      value: Basic {{sessionKey}}
+  body:
+    type: json
+    data: |-
+      {
+          "action": "MANAGE_AUTHENTICATOR",
+          "channel": "EMAIL"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

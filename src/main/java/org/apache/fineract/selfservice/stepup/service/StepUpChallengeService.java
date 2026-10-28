@@ -24,6 +24,7 @@ import org.apache.fineract.selfservice.stepup.domain.StepUpChannel;
 import org.apache.fineract.selfservice.stepup.domain.StepUpStatus;
 import org.apache.fineract.selfservice.stepup.event.StepUpEvent;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +55,7 @@ public class StepUpChallengeService {
   private final StepUpChallengeRepository repository;
   private final StepUpSettingsProvider settingsProvider;
   private final StepUpCrypto crypto;
+  private final TotpService totpService;
   private final Map<StepUpChannel, StepUpDeliveryChannel> deliveryChannels;
   private final TransactionDateUtil transactionDateUtil;
   private final ApplicationEventPublisher eventPublisher;
@@ -62,12 +64,14 @@ public class StepUpChallengeService {
       final StepUpChallengeRepository repository,
       final StepUpSettingsProvider settingsProvider,
       final StepUpCrypto crypto,
+      final TotpService totpService,
       final List<StepUpDeliveryChannel> deliveryChannelList,
       final TransactionDateUtil transactionDateUtil,
       final ApplicationEventPublisher eventPublisher) {
     this.repository = repository;
     this.settingsProvider = settingsProvider;
     this.crypto = crypto;
+    this.totpService = totpService;
     this.transactionDateUtil = transactionDateUtil;
     this.eventPublisher = eventPublisher;
     this.deliveryChannels = new EnumMap<>(StepUpChannel.class);
@@ -102,10 +106,18 @@ public class StepUpChallengeService {
     if (!settings.isProtected(action)) {
       throw StepUpException.actionNotProtected(action);
     }
-    if (!settings.isChannelAllowed(channel) || !contact.supports(channel)) {
+    final Long userId = contact.userId();
+    final boolean totp = channel == StepUpChannel.TOTP;
+    if (totp) {
+      if (!settings.isChannelAllowed(channel) || !totpService.hasActive(userId)) {
+        throw StepUpException.channelUnavailable();
+      }
+    } else if (!settings.isChannelAllowed(channel)
+        || !contact.supports(channel)
+        || onlyAuthenticatorAllowed(settings, userId)) {
       throw StepUpException.channelUnavailable();
     }
-    if (!crypto.hasUsableSecret()) {
+    if (!totp && !crypto.hasUsableSecret()) {
       log.error(
           "Step-up is enabled but the tenant property '{}' of '{}' is missing or shorter than {}"
               + " characters; refusing to issue challenges.",
@@ -115,13 +127,18 @@ public class StepUpChallengeService {
       throw StepUpException.misconfigured();
     }
 
-    final Long userId = contact.userId();
     final LocalDateTime now = now();
 
     final List<StepUpChallenge> lockouts =
         repository.findActiveLockouts(userId, action, StepUpStatus.LOCKED, now);
     if (!lockouts.isEmpty()) {
       throw StepUpException.locked(secondsUntil(now, lockouts.get(0).getLockedUntil()));
+    }
+    if (totp) {
+      final Optional<Long> authenticatorLock = totpService.lockedSeconds(userId);
+      if (authenticatorLock.isPresent()) {
+        throw StepUpException.locked(authenticatorLock.get());
+      }
     }
     if (repository.countCreatedSince(
             userId, now.minusSeconds(settings.challengeRateWindowSeconds()))
@@ -139,8 +156,9 @@ public class StepUpChallengeService {
       repository.saveAll(open);
     }
 
-    final String otp = crypto.generateOtp(settings.otpLength());
-    final String salt = crypto.newSalt();
+    // The code of an authenticator app is produced by the app: nothing is generated, stored or sent.
+    final String otp = totp ? null : crypto.generateOtp(settings.otpLength());
+    final String salt = totp ? null : crypto.newSalt();
     final StepUpChallenge challenge =
         StepUpChallenge.issue(
             userId,
@@ -148,7 +166,7 @@ public class StepUpChallengeService {
             action,
             StepUpPayloadHasher.hash(action, payloadValues),
             channel,
-            crypto.hashOtp(otp, salt),
+            totp ? null : crypto.hashOtp(otp, salt),
             salt,
             settings.maxAttempts(),
             now,
@@ -156,7 +174,10 @@ public class StepUpChallengeService {
             ipAddress);
     repository.saveAndFlush(challenge);
 
-    deliverAfterCommit(contact, channel, otp, action, settings.otpTtlSeconds(), locale, ipAddress);
+    if (!totp) {
+      deliverAfterCommit(
+          contact, channel, otp, action, settings.otpTtlSeconds(), locale, ipAddress);
+    }
     publish(StepUpEvent.Type.ISSUED, challenge, null, now, ipAddress);
     return toData(challenge, contact, settings);
   }
@@ -173,6 +194,21 @@ public class StepUpChallengeService {
   public StepUpGrantData verify(
       final Long challengeId,
       final String otp,
+      final Long userId,
+      final String sessionHash,
+      final String ipAddress) {
+    return verify(challengeId, otp, null, userId, sessionHash, ipAddress);
+  }
+
+  /**
+   * Checks the code. On a TOTP challenge either {@code otp} (the 6 digits of the app) or {@code
+   * recoveryCode} is given; a recovery code is not accepted on an SMS or e-mail challenge.
+   */
+  @Transactional(noRollbackFor = StepUpException.class)
+  public StepUpGrantData verify(
+      final Long challengeId,
+      final String otp,
+      final String recoveryCode,
       final Long userId,
       final String sessionHash,
       final String ipAddress) {
@@ -204,9 +240,30 @@ public class StepUpChallengeService {
 
     // A malformed code is counted as a wrong attempt too, so format errors are not an oracle and
     // cannot be used to probe for free.
-    final boolean wellFormed = otp != null && otp.matches("\\d{4,8}");
-    final boolean correct =
-        wellFormed && crypto.otpMatches(otp, challenge.getOtpSalt(), challenge.getOtpHash());
+    final boolean correct;
+    final String failureReason;
+    // What the client is told is left: for the app the smaller of the two counts, because the
+    // authenticator (per user) can lock before this challenge runs out of attempts.
+    int attemptsLeftForClient = Integer.MAX_VALUE;
+    if (challenge.getChannel() == StepUpChannel.TOTP) {
+      // The authenticator keeps its own count of wrong codes (per user, so new challenges do not
+      // reset it); when that count locks it, the request is refused without counting twice.
+      final TotpService.Verification result =
+          totpService.verify(userId, otp, recoveryCode, ipAddress);
+      if (result.outcome() == TotpService.Outcome.LOCKED) {
+        throw StepUpException.locked(result.retryAfterSeconds());
+      }
+      correct = result.accepted();
+      failureReason = recoveryCode != null ? "recovery.mismatch" : "totp.mismatch";
+      if (!correct) {
+        attemptsLeftForClient = result.failuresRemaining();
+      }
+    } else {
+      final boolean wellFormed = otp != null && recoveryCode == null && otp.matches("\\d{4,8}");
+      correct =
+          wellFormed && crypto.otpMatches(otp, challenge.getOtpSalt(), challenge.getOtpHash());
+      failureReason = wellFormed ? "otp.mismatch" : "otp.malformed";
+    }
 
     if (!correct) {
       final boolean nowLocked = challenge.registerFailedAttempt(now, settings.lockoutSeconds());
@@ -214,13 +271,14 @@ public class StepUpChallengeService {
       publish(
           nowLocked ? StepUpEvent.Type.LOCKED : StepUpEvent.Type.FAILED,
           challenge,
-          wellFormed ? "otp.mismatch" : "otp.malformed",
+          failureReason,
           now,
           ipAddress);
       if (nowLocked) {
         throw StepUpException.locked(settings.lockoutSeconds());
       }
-      throw StepUpException.otpInvalid(challenge.attemptsRemaining());
+      throw StepUpException.otpInvalid(
+          Math.min(challenge.attemptsRemaining(), attemptsLeftForClient));
     }
 
     final String grantToken = crypto.newGrantToken();
@@ -259,6 +317,9 @@ public class StepUpChallengeService {
     if (!challenge.isPending()) {
       throw StepUpException.invalid();
     }
+    if (challenge.getChannel() == StepUpChannel.TOTP) {
+      throw StepUpException.resendUnsupported();
+    }
     if (challenge.isExpired(now)) {
       challenge.markExpired();
       repository.saveAndFlush(challenge);
@@ -266,7 +327,8 @@ public class StepUpChallengeService {
       throw StepUpException.otpExpired();
     }
     if (!settings.isChannelAllowed(challenge.getChannel())
-        || !contact.supports(challenge.getChannel())) {
+        || !contact.supports(challenge.getChannel())
+        || onlyAuthenticatorAllowed(settings, contact.userId())) {
       throw StepUpException.channelUnavailable();
     }
     if (challenge.isResendCoolingDown(now, settings.resendCooldownSeconds())) {
@@ -303,8 +365,13 @@ public class StepUpChallengeService {
    * Atomically consumes a grant for the given binding. Succeeds exactly once; every mismatch is the
    * same generic {@link StepUpException#invalid()} for the caller (the precise reason goes only to
    * the internal audit event).
+   *
+   * <p>A refusal changes nothing (the conditional UPDATE matched no row), so it must not mark the
+   * surrounding transaction rollback-only: a caller that runs the guard inside a transaction of its
+   * own and lets the refusal pass up ({@code noRollbackFor}) would otherwise end with an {@code
+   * UnexpectedRollbackException} instead of the 403.
    */
-  @Transactional
+  @Transactional(noRollbackFor = StepUpException.class)
   public void consumeGrant(
       final String grantToken,
       final Long userId,
@@ -378,6 +445,17 @@ public class StepUpChallengeService {
   // Helpers
   // ---------------------------------------------------------------------------------------------
 
+  /**
+   * {@code true} when SMS and e-mail codes must not be offered to this user: the tenant keeps the
+   * authenticator exclusive and the user has one. Otherwise a stolen session plus a SIM swap would
+   * bypass the app.
+   */
+  private boolean onlyAuthenticatorAllowed(final StepUpSettings settings, final Long userId) {
+    return settings.totpExclusive()
+        && settings.isChannelAllowed(StepUpChannel.TOTP)
+        && totpService.hasActive(userId);
+  }
+
   private LocalDateTime now() {
     return transactionDateUtil.getCurrentTenantLocalDateTime();
   }
@@ -399,7 +477,9 @@ public class StepUpChallengeService {
         challenge.getExpiresAt().toString(),
         challenge.attemptsRemaining(),
         challenge.resendAvailableAt(settings.resendCooldownSeconds()).toString(),
-        Math.max(0, settings.maxResends() - challenge.getResendCount()));
+        challenge.getChannel() == StepUpChannel.TOTP
+            ? 0
+            : Math.max(0, settings.maxResends() - challenge.getResendCount()));
   }
 
   private void publish(

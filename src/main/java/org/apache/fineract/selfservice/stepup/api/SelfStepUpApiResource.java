@@ -30,6 +30,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.stepup.data.StepUpChallengeData;
 import org.apache.fineract.selfservice.stepup.data.StepUpConfigData;
 import org.apache.fineract.selfservice.stepup.data.StepUpGrantData;
+import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.domain.StepUpChannel;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
 import org.apache.fineract.selfservice.stepup.service.StepUpChallengeService;
@@ -38,6 +39,7 @@ import org.apache.fineract.selfservice.stepup.service.StepUpRequestSupport;
 import org.apache.fineract.selfservice.stepup.service.StepUpSessionResolver;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettings;
 import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Component;
 
@@ -68,6 +70,7 @@ public class SelfStepUpApiResource {
   private final StepUpSettingsProvider settingsProvider;
   private final StepUpDataValidator dataValidator;
   private final StepUpSessionResolver sessionResolver;
+  private final TotpService totpService;
 
   @GET
   @Path("/config")
@@ -89,15 +92,31 @@ public class SelfStepUpApiResource {
     final AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     final StepUpContact contact = StepUpContact.from(user);
     final StepUpSettings settings = settingsProvider.current();
+    // The authenticator has no contact: it is offered when the tenant allows it and the user paired
+    // one. While it is active and exclusive, SMS and e-mail are not offered (SIM-swap protection).
+    final boolean totpActive =
+        settings.isChannelAllowed(StepUpChannel.TOTP) && totpService.hasActive(user.getId());
+    final boolean onlyAuthenticator = totpActive && settings.totpExclusive();
     final List<String> channels =
         List.of(StepUpChannel.values()).stream()
-            .filter(c -> settings.isChannelAllowed(c) && contact.supports(c))
+            .filter(
+                c ->
+                    c == StepUpChannel.TOTP
+                        ? totpActive
+                        : !onlyAuthenticator && settings.isChannelAllowed(c) && contact.supports(c))
             .map(Enum::name)
             .toList();
     final StepUpConfigData data =
         new StepUpConfigData(
             settings.enabled(),
-            settings.protectedActions().stream().map(Enum::name).sorted().toList(),
+            java.util.stream.Stream.concat(
+                    settings.protectedActions().stream(),
+                    java.util.stream.Stream.of(StepUpAction.MANAGE_AUTHENTICATOR)
+                        .filter(settings::isProtected))
+                .map(Enum::name)
+                .distinct()
+                .sorted()
+                .toList(),
             channels,
             settings.otpLength(),
             settings.otpTtlSeconds(),
@@ -116,8 +135,10 @@ public class SelfStepUpApiResource {
   @Operation(
       summary = "Request a step-up challenge",
       description =
-          "Sends a one-time code over the chosen channel (SMS or EMAIL). Any previous open"
-              + " challenge of the user for the same action is replaced. Rate limited per user.")
+          "Sends a one-time code over the chosen channel (SMS or EMAIL), or, for TOTP, opens a"
+              + " challenge to be answered with the code of the user's authenticator app (nothing"
+              + " is sent). Any previous open challenge of the user for the same action is"
+              + " replaced. Rate limited per user.")
   @RequestBody(
       required = true,
       content =
@@ -171,8 +192,9 @@ public class SelfStepUpApiResource {
       summary = "Verify the one-time code",
       description =
           "On success returns a one-time stepUpToken bound to the user, the session, the action and"
-              + " the payload of the challenge. A wrong code consumes an attempt; after the"
-              + " configured number of attempts the challenge is locked.")
+              + " the payload of the challenge. Send 'otp', or on a TOTP challenge a single-use"
+              + " 'recoveryCode'. A wrong code consumes an attempt; after the configured number of"
+              + " attempts the challenge is locked.")
   @RequestBody(
       required = true,
       content =
@@ -200,12 +222,14 @@ public class SelfStepUpApiResource {
     final AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     final String sessionHash =
         sessionResolver.sessionHash(httpRequest).orElseThrow(StepUpException::sessionRequired);
-    final String otp = dataValidator.validateVerify(apiRequestBodyAsJson);
+    final StepUpDataValidator.VerifyRequest request =
+        dataValidator.validateVerify(apiRequestBodyAsJson);
 
     final StepUpGrantData grant =
         challengeService.verify(
             challengeId,
-            otp,
+            request.otp(),
+            request.recoveryCode(),
             user.getId(),
             sessionHash,
             StepUpRequestSupport.clientIp(httpRequest));

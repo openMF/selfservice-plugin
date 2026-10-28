@@ -30,4 +30,9 @@ public class StepUpEventLogger {
         event.channel(),
         event.reason());
   }
+
+  @EventListener
+  public void onTotpEvent(final TotpEvent event) {
+    log.info("TOTP {} userId={} reason={}", event.type(), event.userId(), event.reason());
+  }
 }

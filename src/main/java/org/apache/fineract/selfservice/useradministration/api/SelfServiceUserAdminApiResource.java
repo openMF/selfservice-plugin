@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.selfservice.stepup.totp.TotpService;
 import org.apache.fineract.selfservice.useradministration.data.AppSelfServiceUserData;
 import org.apache.fineract.selfservice.useradministration.service.AppSelfServiceUserReadPlatformService;
 import org.apache.fineract.selfservice.useradministration.service.SelfServiceUserAdminWritePlatformService;
@@ -39,6 +40,7 @@ public class SelfServiceUserAdminApiResource {
   private final AppSelfServiceUserReadPlatformService readPlatformService;
   private final SelfServiceUserAdminWritePlatformService writePlatformService;
   private final ToApiJsonSerializer<CommandProcessingResult> toApiJsonSerializer;
+  private final TotpService totpService;
 
   /**
    * Lists self-service users visible to the authenticated administrator.
@@ -124,6 +126,25 @@ public class SelfServiceUserAdminApiResource {
       @PathParam("userId") Long userId, @PathParam("clientId") Long clientId) {
     context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
     return toApiJsonSerializer.serialize(writePlatformService.delinkClient(userId, clientId));
+  }
+
+  /**
+   * Removes the authenticator app and the recovery codes of a visible self-service user who lost
+   * the phone and the recovery codes. The user falls back to SMS or e-mail codes and can pair a new
+   * app. The change shows in the user's activity history (without the address of the staff
+   * member).
+   *
+   * @param userId self-service user identifier
+   * @return {@code {"removed": true|false}}; requires {@code UPDATE_SELFSERVICEUSER}
+   */
+  @DELETE
+  @Path("{userId}/totp")
+  @Produces({MediaType.APPLICATION_JSON})
+  public String resetAuthenticator(@PathParam("userId") Long userId) {
+    context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    // Same visibility rule as the other administration calls (office hierarchy, not deleted).
+    readPlatformService.retrieveSelfServiceUserDomainForAdmin(userId);
+    return "{\"removed\":" + totpService.adminReset(userId) + "}";
   }
 
   /**

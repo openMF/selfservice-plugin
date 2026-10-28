@@ -34,6 +34,7 @@ public class StepUpDataValidator {
 
   private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>() {}.getType();
   private static final int MAX_OTP_INPUT_LENGTH = 16;
+  private static final int MAX_RECOVERY_CODE_INPUT_LENGTH = 32;
 
   private final FromJsonHelper fromApiJsonHelper;
 
@@ -101,8 +102,13 @@ public class StepUpDataValidator {
     return new CreateChallengeRequest(action, channel, values);
   }
 
-  /** Returns the raw OTP text exactly as sent; the service decides if it is well formed. */
-  public String validateVerify(final String json) {
+  /**
+   * A validated "verify" request: the code of an SMS, e-mail or authenticator app ({@code otp}), or
+   * a recovery code. Exactly one of the two is set. The service decides if it is well formed.
+   */
+  public record VerifyRequest(String otp, String recoveryCode) {}
+
+  public VerifyRequest validateVerify(final String json) {
     if (StringUtils.isBlank(json)) {
       throw new InvalidJsonException();
     }
@@ -115,14 +121,55 @@ public class StepUpDataValidator {
         new DataValidatorBuilder(errors).resource(StepUpApiConstants.RESOURCE_NAME_VERIFY);
     final String otp =
         fromApiJsonHelper.extractStringNamed(StepUpApiConstants.otpParamName, element);
+    final String recoveryCode =
+        fromApiJsonHelper.extractStringNamed(StepUpApiConstants.recoveryCodeParamName, element);
+    if (StringUtils.isNotBlank(otp) && StringUtils.isNotBlank(recoveryCode)) {
+      validator
+          .reset()
+          .parameter(StepUpApiConstants.recoveryCodeParamName)
+          .failWithCode("only.one.code", "Send either 'otp' or 'recoveryCode', not both.");
+    } else if (StringUtils.isNotBlank(recoveryCode)) {
+      validator
+          .reset()
+          .parameter(StepUpApiConstants.recoveryCodeParamName)
+          .value(recoveryCode)
+          .notExceedingLengthOf(MAX_RECOVERY_CODE_INPUT_LENGTH);
+    } else {
+      validator
+          .reset()
+          .parameter(StepUpApiConstants.otpParamName)
+          .value(otp)
+          .notBlank()
+          .notExceedingLengthOf(MAX_OTP_INPUT_LENGTH);
+    }
+    throwIfErrors(errors);
+    return StringUtils.isNotBlank(recoveryCode)
+        ? new VerifyRequest(null, recoveryCode.trim())
+        : new VerifyRequest(otp.trim(), null);
+  }
+
+  /** Returns the code of the app exactly as sent; the service decides if it is well formed. */
+  public String validateConfirmTotp(final String json) {
+    if (StringUtils.isBlank(json)) {
+      throw new InvalidJsonException();
+    }
+    fromApiJsonHelper.checkForUnsupportedParameters(
+        MAP_TYPE, json, StepUpApiConstants.CONFIRM_TOTP_PARAMETERS);
+    final JsonElement element = fromApiJsonHelper.parse(json);
+
+    final List<ApiParameterError> errors = new ArrayList<>();
+    final DataValidatorBuilder validator =
+        new DataValidatorBuilder(errors).resource(StepUpApiConstants.RESOURCE_NAME_TOTP);
+    final String code =
+        fromApiJsonHelper.extractStringNamed(StepUpApiConstants.codeParamName, element);
     validator
         .reset()
-        .parameter(StepUpApiConstants.otpParamName)
-        .value(otp)
+        .parameter(StepUpApiConstants.codeParamName)
+        .value(code)
         .notBlank()
         .notExceedingLengthOf(MAX_OTP_INPUT_LENGTH);
     throwIfErrors(errors);
-    return otp.trim();
+    return code.trim();
   }
 
   private static String upperTrim(final String value) {
