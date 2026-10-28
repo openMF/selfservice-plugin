@@ -204,7 +204,7 @@ Everything is configured **per tenant** in the external service `SELF_SERVICE_ST
    | `enabled` | `false` | master switch |
    | `hmacSecret` | placeholder | key used to hash this tenant's OTPs (at least 32 characters) |
    | `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | also available: `OWN_TRANSFER` (transfers between own accounts) |
-   | `channels` | `SMS,EMAIL` | channels offered to the user |
+   | `channels` | `SMS,EMAIL` | channels offered to the user (the authenticator app has its own switch, see below) |
    | `otpLength` | `6` (4-8) | digits of the code |
    | `otpTtlSeconds` | `300` (60-900) | validity of a code |
    | `maxAttempts` | `5` (1-10) | wrong codes before the challenge is locked |
@@ -250,13 +250,104 @@ Errors use the usual Fineract body (`userMessageGlobalisationCode`, `defaultUser
 | `invalid` (unknown, expired, used, other user/session/action/payload) | 403 | |
 | `session.required` | 403 | |
 | `otp.invalid` | 400 | `attemptsRemaining` |
-| `otp.expired`, `disabled`, `action.not.protected`, `channel.unavailable`, `legacy.otp.disabled` | 400 | |
+| `otp.expired`, `disabled`, `action.not.protected`, `channel.unavailable`, `legacy.otp.disabled`, `resend.unsupported`, `totp.disabled`, `totp.not.enrolled`, `totp.enrollment.missing` | 400 | |
+| `totp.already.enrolled` | 409 | |
 | `locked`, `resend.cooldown`, `resend.limit`, `rate.limited` | 429 | `retryAfterSeconds` (+ `Retry-After` header) |
 | `misconfigured` | 500 | |
 
 Browser clients served from another origin must allow the `X-Step-Up-Token` request header in the Fineract CORS configuration (`fineract.security.cors.allowed-headers`).
 
 Step-up events (`ISSUED, RESENT, VERIFIED, FAILED, LOCKED, CONSUMED, REJECTED`) are published as Spring `StepUpEvent`s and the challenge rows are kept for `retentionDays`, so an activity feed can consume them.
+
+### Authenticator app (TOTP)
+
+A client can pair an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password...) and use the 6-digit code of the app instead of an SMS or e-mail code for the same protected actions. SMS can be intercepted (SIM swap) and costs money; the app does neither. It is **disabled by default** and **per tenant**.
+
+#### Enable it for a tenant
+
+All keys belong to the same external service `SELF_SERVICE_STEP_UP` (Liquibase `089` adds them with safe defaults). Nothing is read from environment variables.
+
+1. Give the tenant its own key (at least 32 characters, random). It protects the secrets of **this** tenant: the key of the AES-256-GCM encryption of the TOTP secrets and of the hash of the recovery codes is derived from it. Treat it like the other external-service secrets (SMTP, SMS, `hmacSecret`): only administrators should be able to read the external service configuration. Without a usable key (the seeded placeholder is too short on purpose) nobody can pair an app and the API answers `error.msg.selfservice.stepup.misconfigured`.
+
+   ```sql
+   UPDATE c_external_service_properties SET value = '<long random value>'
+   WHERE name = 'totpEncryptionKey'
+     AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP');
+   ```
+
+   If this key is changed, the secrets already stored cannot be decrypted any more: those users have to be reset (see below) and pair again.
+
+2. Turn it on. Step-up as a whole (`enabled`) must be on too:
+
+   ```sql
+   UPDATE c_external_service_properties SET value = 'true'
+   WHERE name = 'totpEnabled'
+     AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP');
+   ```
+
+   | Key | Default | Meaning |
+   |---|---|---|
+   | `totpEnabled` | `false` | switch of the authenticator. It does not depend on `channels` |
+   | `totpEncryptionKey` | placeholder | at least 32 characters, see above |
+   | `totpIssuer` | `Mifos` | name the app shows next to the account (at most 40 characters) |
+   | `totpWindowSteps` | `1` (0-2) | 30-second steps accepted either side of the current one (clock drift) |
+   | `totpMaxFailures` | `5` (1-10) | wrong codes before the authenticator locks |
+   | `totpLockoutSeconds` | `900` (60-86400) | how long it stays locked |
+   | `recoveryCodeCount` | `10` (5-20) | recovery codes handed out |
+   | `totpExclusive` | `true` | while a user has an active authenticator, SMS and e-mail codes are **not** offered (SIM-swap protection) |
+
+   Digits (6), period (30 s) and SHA-1 are fixed: Google Authenticator ignores any other value, so a different setting would give codes the app can never match.
+
+#### Pairing
+
+All calls need the session token, like the rest of step-up, and act on the logged-in user only (there is no user id).
+
+| Step | Request |
+|---|---|
+| 1 | `POST /v1/self/stepup/totp/enrollment` -> `201 { "secret", "otpauthUri", "issuer", "digits", "periodSeconds" }`. The secret is shown **once**; draw `otpauthUri` as a QR code in the client (never send it to a third party) and offer `secret` as text. Refused with `409 totp.already.enrolled` while an authenticator is active. |
+| 2 | a step-up challenge for `MANAGE_AUTHENTICATOR` over SMS or e-mail (see Flow) -> `stepUpToken` |
+| 3 | `POST /v1/self/stepup/totp/enrollment/confirm` `{ "code": "123456" }` with `X-Step-Up-Token` -> `200 { "recoveryCodes": [ "ABCDE-FGHJK", ... ] }`. The code of the app proves it holds the secret. The recovery codes are shown **once**. |
+| | `GET /v1/self/stepup/totp` -> `{ "available", "status": "NONE|PENDING|ACTIVE", "recoveryCodesRemaining", "exclusive", "confirmedAt" }` |
+| | `POST /v1/self/stepup/totp/recovery-codes` (with a step-up token) -> a new set; the old codes stop working |
+| | `DELETE /v1/self/stepup/totp` (with a step-up token, because it is active) removes the authenticator and its recovery codes. Cancelling a pairing that was never confirmed needs no token. |
+
+`MANAGE_AUTHENTICATOR` is protected whenever the authenticator is on, **whatever `protectedActions` says**: a tenant that saved its own list before this feature existed must not get an unprotected way to pair a stranger's phone. When step-up is off for the tenant nothing is checked, as for every other action.
+
+#### Using it
+
+The app is the channel `TOTP` of the normal challenges:
+
+| Step | Request |
+|---|---|
+| 1 | `POST /v1/self/stepup/challenges` `{ "action": "...", "channel": "TOTP", "payload": {...} }` -> `201`. Nothing is sent or stored; there is no `maskedDestination`, and a resend is refused (`resend.unsupported`). |
+| 2 | `POST /v1/self/stepup/challenges/{id}/verify` `{ "otp": "123456" }`, or `{ "recoveryCode": "ABCDE-FGHJK" }` when the phone is lost -> `200 { "stepUpToken" }` |
+| 3 | the protected request with `X-Step-Up-Token`, exactly as with an SMS code |
+
+`GET /v1/self/stepup/config` lists `TOTP` among `availableChannels` for a user who paired an app, and, with `totpExclusive`, lists **only** `TOTP` for that user.
+
+Rules enforced by the server:
+
+- **Replay:** each 30-second step is accepted once. A code that was used (or an older step) is refused.
+- **Lock-out per user:** wrong codes count against the authenticator, not against a challenge, so opening new challenges never resets the count. After `totpMaxFailures` it is locked (`429 locked`, `Retry-After`) for `totpLockoutSeconds`, and neither the right code nor a recovery code is tried meanwhile.
+- **Recovery codes** work once, only on a TOTP challenge, and are stored only as keyed hashes. They count as wrong attempts when they are wrong, so they cannot be guessed either.
+- **Secrets:** the TOTP secret is stored AES-256-GCM encrypted (random nonce, the user id is bound in, so a row copied to another user does not decrypt). It is never logged, never put in an event, never returned again. Anybody who can read the database **and** the external service properties can decrypt it: that is the same trust level as the SMTP password in the same service.
+- **Time:** codes use Unix time, never the tenant's local date.
+
+#### Lost phone and lost recovery codes
+
+A member of staff removes the pairing; the user falls back to SMS or e-mail codes and can pair a new app:
+
+```
+DELETE /v1/selfservice/users/{userId}/totp      (permission UPDATE_SELFSERVICEUSER, same office-hierarchy rule as the other user administration calls)
+```
+
+It answers `{ "removed": true|false }` and works even when the tenant has switched the authenticator off. The user sees `AUTHENTICATOR_RESET` in the activity history; the address of the staff member is **not** stored there.
+
+#### Activity history
+
+The history gets `AUTHENTICATOR_ENROLLED`, `AUTHENTICATOR_REMOVED`, `AUTHENTICATOR_RESET`, `AUTHENTICATOR_LOCKED`, `RECOVERY_CODES_REGENERATED` and `RECOVERY_CODE_USED`, so a user can spot an account takeover. Spring `TotpEvent`s carry the same facts, never a code, a secret or a hash.
+
+Not in this version: security e-mails to the user when the authenticator is paired or removed, and a "required" mode that forces every client to pair one.
 
 ## Activity history
 
@@ -268,7 +359,7 @@ GET /v1/self/activity?limit=20&offset=0&type=LOGIN,TRANSFER_CONFIRMED
 
 - Newest first, only the **logged-in user's own** events. There is no user id parameter.
 - `limit` defaults to 20 and is capped by the tenant setting `maxPageSize`. `type` is an optional list. The answer is `{ "totalFilteredRecords": n, "pageItems": [ { "id", "type", "outcome", "occurredAt", "ipAddress", "details" } ] }`.
-- `type`: `LOGIN`, `LOGIN_FAILED`, `LOGIN_NEW_DEVICE`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET`, `TRANSFER_CONFIRMED`, `BENEFICIARY_ADDED`, `BENEFICIARY_UPDATED`, `BENEFICIARY_DELETED`, `PROFILE_IMAGE_CHANGED`, `PROFILE_IMAGE_REMOVED`, `SINPE_SUBSCRIPTION_CHANGED`, `STEP_UP_REQUESTED`, `STEP_UP_VERIFIED`, `STEP_UP_LOCKED`. The client translates the code; no text is stored.
+- `type`: `LOGIN`, `LOGIN_FAILED`, `LOGIN_NEW_DEVICE`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET`, `TRANSFER_CONFIRMED`, `BENEFICIARY_ADDED`, `BENEFICIARY_UPDATED`, `BENEFICIARY_DELETED`, `PROFILE_IMAGE_CHANGED`, `PROFILE_IMAGE_REMOVED`, `SINPE_SUBSCRIPTION_CHANGED`, `STEP_UP_REQUESTED`, `STEP_UP_VERIFIED`, `STEP_UP_LOCKED`, `AUTHENTICATOR_ENROLLED`, `AUTHENTICATOR_REMOVED`, `AUTHENTICATOR_RESET`, `AUTHENTICATOR_LOCKED`, `RECOVERY_CODES_REGENERATED`, `RECOVERY_CODE_USED`. The client translates the code; no text is stored.
 - **Where the address comes from:** the address of the connection (`getRemoteAddr()`). The plugin never reads `X-Forwarded-For` itself, because any client can write anything in that header and the history exists to show where an action really came from. Behind a reverse proxy, configure the trusted proxies of the server (for example `server.forward-headers-strategy=native` and `server.tomcat.remoteip.internal-proxies=<your proxies>`); then `getRemoteAddr()` is the real client. Without a trusted proxy the address of the proxy is shown. The same rule applies to the address kept with step-up challenges.
 - **Privacy:** the IP address is stored and returned **masked** (`203.0.x.x`, IPv6 `2001:db8:x:x:x:x:x:x`); the full address is never kept. `details` is built from a whitelist per type (for a transfer: amount, currency when known, destination name, last 4 digits of the destination account). A password, OTP, token, e-mail, phone number or full account number never reaches the history.
 - A wrong-password login is recorded at most **once per minute per user**, so a guessing attack cannot flood the feed. Wrong step-up codes are not listed one by one; the request, the successful verification and a lock-out are.
