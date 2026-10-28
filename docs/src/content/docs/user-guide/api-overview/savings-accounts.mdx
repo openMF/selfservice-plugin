@@ -1,0 +1,30 @@
+---
+title: Savings Accounts
+description: Savings account management API endpoints
+---
+
+# Savings Accounts
+
+Endpoints under `/v1/self/savingsaccounts` for managing savings accounts and transactions.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/savingsaccounts` | `GET` | List savings accounts |
+| `/v1/self/savingsaccounts` | `POST` | Apply for a new savings account |
+| `/v1/self/savingsaccounts/{accountId}` | `GET` | Get savings account details |
+| `/v1/self/savingsaccounts/{accountId}/transactions` | `GET` | List savings account transactions |
+| `/v1/self/savingsaccounts/{accountId}/charges` | `GET` | List savings account charges |
+| `/v1/self/savingsaccounts/template` | `GET` | Get savings account template |
+
+## What You Can Do
+
+- List your savings accounts and view balances
+- View transaction history and charges
+- Apply for new savings products
+
+## Related
+
+- [Products Catalog](/user-guide/api-overview/products-catalog)
+- [Loan Accounts](/user-guide/api-overview/loan-accounts)

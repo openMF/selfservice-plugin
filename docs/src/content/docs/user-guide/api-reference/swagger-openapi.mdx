@@ -1,0 +1,45 @@
+---
+title: Swagger / OpenAPI
+description: Access the runtime Swagger/OpenAPI documentation when the plugin is loaded
+---
+
+# Swagger / OpenAPI
+
+Full OpenAPI/Swagger documentation is available **at runtime** via the Fineract Swagger UI when the plugin is loaded.
+
+## Accessing Swagger UI
+
+Once the plugin is deployed into Fineract, the Swagger UI is available at:
+
+```
+https://<fineract-host>/fineract-provider/swagger-ui.html
+```
+
+or
+
+```
+https://<fineract-host>/fineract-provider/swagger-ui/index.html
+```
+
+The plugin's endpoints are documented with Swagger annotations (`io.swagger.core.v3:swagger-annotations`) and appear alongside Fineract's core API documentation.
+
+## Swagger-Annotated Resources
+
+The following plugin resources include Swagger annotations:
+
+- `SelfAuthenticationApiResourceSwagger`
+- `SelfUserApiResourceSwagger`
+- `SelfUserDetailsApiResourceSwagger`
+- `SelfSavingsAccountApiResourceSwagger`
+- `SelfShareAccountsApiResourceSwagger`
+- `SelfAccountTransferApiResourceSwagger`
+- `SelfBeneficiariesTPTApiResourceSwagger`
+- `SelfRunReportApiResourceSwagger`
+- `StepUpApiResourceSwagger`
+- `SelfOfficesApiResourceSwagger`
+- `PocketApiResourceSwagger`
+
+## Related
+
+- [Endpoints Summary](/user-guide/api-reference/endpoints-summary)
+- [Postman & Bruno Collections](/user-guide/api-reference/postman-bruno)

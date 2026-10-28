@@ -1,0 +1,55 @@
+# =============================================================================
+# Docker Compose for Mifos Self Service Plugin documentation
+# Serves the Astro + Starlight static site
+# Target domain: https://docs.mifos.community
+# =============================================================================
+
+services:
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: mifos-docs
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    expose:
+      - "8080"
+    # Non-root user is set in the Dockerfile; no need to override here.
+    # Uncomment to run as a specific UID in OpenShift-style environments:
+    # user: "1001:1001"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+    # Resource limits — adjust for your environment
+    # mem_limit: 256m
+    # cpus: '0.5'
+
+    # Environment variables for reverse-proxy integration (optional)
+    environment:
+      - NGINX_HOST=docs.mifos.community
+      - VIRTUAL_HOST=docs.mifos.community
+      - VIRTUAL_PORT=80
+
+    # Traefik labels — uncomment and adapt if deploying behind Traefik
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.docs.rule=Host(`docs.mifos.community`)"
+    #   - "traefik.http.routers.docs.entrypoints=web"
+    #   # TLS / Let's Encrypt (uncomment when using traefik with certResolver):
+    #   - "traefik.http.routers.docs.tls=true"
+    #   - "traefik.http.routers.docs.tls.certresolver=le"
+    #   - "traefik.http.services.docs.loadbalancer.server.port=80"
+
+    networks:
+      - mifos-docs
+
+networks:
+  mifos-docs:
+    driver: bridge

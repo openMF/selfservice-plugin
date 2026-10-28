@@ -1,0 +1,63 @@
+---
+title: Configuration Properties
+description: Configuration properties and external service settings for the Mifos Self Service Plugin
+---
+
+# Configuration Properties
+
+The Self Service Plugin is designed to work out of the box with no additional configuration. Per-tenant settings are stored in Fineract's `c_external_service` / `c_external_service_properties` tables, seeded by Liquibase. Nothing is read from environment variables.
+
+## External Services
+
+### SELF_SERVICE_STEP_UP
+
+Step-up OTP and authenticator configuration.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Master switch |
+| `hmacSecret` | placeholder | Key used to hash OTPs (min 32 chars) |
+| `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | Also: `OWN_TRANSFER` |
+| `channels` | `SMS,EMAIL` | Delivery channels |
+| `otpLength` | `6` (4–8) | Digits per code |
+| `otpTtlSeconds` | `300` (60–900) | Code validity |
+| `maxAttempts` | `5` (1–10) | Wrong codes before lockout |
+| `lockoutSeconds` | `900` | Lockout duration |
+| `resendCooldownSeconds` | `60` | Resend cooldown |
+| `maxResends` | `3` | Max resends |
+| `grantTtlSeconds` | `120` (30–600) | Step-up token validity |
+| `challengeRateLimit` | `5` | Challenges per user per window |
+| `challengeRateWindowSeconds` | `900` | Rate window (seconds) |
+| `retentionDays` | `30` | Challenge retention |
+| `invalidateSessionsOnPasswordChange` | follows `enabled` | Revoke sessions on password change |
+| `totpEnabled` | `false` | Authenticator app switch |
+| `totpEncryptionKey` | placeholder | TOTP secret encryption key (min 32 chars) |
+| `totpIssuer` | `Mifos` | App issuer name (max 40 chars) |
+| `totpWindowSteps` | `1` (0–2) | TOTP clock drift tolerance |
+| `totpMaxFailures` | `5` (1–10) | TOTP failures before lockout |
+| `totpLockoutSeconds` | `900` (60–86400) | TOTP lockout duration |
+| `recoveryCodeCount` | `10` (5–20) | Recovery codes per user |
+| `totpExclusive` | `true` | Disable SMS/email while TOTP active |
+
+### SELF_SERVICE_ACTIVITY
+
+Activity history configuration.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | `false` stops recording |
+| `retentionDays` | `90` | History retention (`1`–`3650`) |
+| `maxPageSize` | `100` | Max page size (`10`–`500`) |
+
+## Maven Repositories
+
+The `pom.xml` resolves Apache Fineract libraries from:
+
+| Repository | URL |
+|---|---|
+| Mifos libs-release | `https://mifos.jfrog.io/artifactory/libs-release` |
+| Mifos libs-snapshot | `https://mifos.jfrog.io/artifactory/libs-snapshot` |
+| Mifos libs-release-local | `https://mifos.jfrog.io/artifactory/libs-release-local` |
+| OSS Sonatype snapshots | `https://oss.sonatype.org/content/repositories/snapshots/` |
+| Spring snapshots | `https://repo.spring.io/snapshot` |
+| Spring milestones | `https://repo.spring.io/milestone` |

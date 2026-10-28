@@ -1,0 +1,38 @@
+---
+title: Changelog / Version Compatibility
+description: Version compatibility and changelog for the Mifos Self Service Plugin
+---
+
+# Changelog / Version Compatibility
+
+## Current Versions
+
+| Component | Version |
+|---|---|
+| **Plugin** | 1.16.0-SNAPSHOT |
+| **Java (JDK)** | 25 |
+| **Spring Boot** | 4 |
+| **Apache Fineract** | 1.16.0-SNAPSHOT (`develop` branch) |
+| **Database** | PostgreSQL / MySQL |
+
+## Compatibility Matrix
+
+| Plugin Version | Fineract Version | Java | Spring Boot |
+|---|---|---|---|
+| 1.16.0-SNAPSHOT | 1.16.0-SNAPSHOT | 25 | 4 |
+
+## History
+
+This plugin was extracted from the Apache Fineract codebase. The self-service functionality was originally part of Fineract core and was removed to keep Fineract modular. This repository continues that work as a standalone, community-maintained plugin under the Mifos Initiative.
+
+## Upgrading
+
+1. Build the new plugin JAR from source.
+2. Deploy it into your Fineract instance (Docker or Tomcat).
+3. Restart Fineract — Liquibase migrations run automatically against every tenant.
+4. Verify endpoints are available at `/v1/self/...`.
+
+## Changelog Location
+
+Detailed changelogs are tracked in GitHub releases and the repository commit history:
+https://github.com/openMF/selfservice-plugin/commits/develop

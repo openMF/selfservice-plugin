@@ -1,0 +1,38 @@
+---
+title: Permissions
+description: Permissions used by the Mifos Self Service Plugin
+---
+
+# Permissions
+
+The plugin uses Spring Security with method-level `@PreAuthorize` annotations. Below are the key permissions.
+
+## Self-Service User Permissions
+
+| Permission | Description |
+|---|---|
+| `READ_SELFSERVICEUSER` | Read self-service user data |
+| `UPDATE_SELFSERVICEUSER` | Update self-service user data (staff) |
+| `DATA_TABLE_VIEW` | View data tables |
+
+## Step-up / TOTP Permissions
+
+Staff can remove a user's authenticator pairing:
+
+```
+DELETE /v1/selfservice/users/{userId}/totp
+```
+Requires `UPDATE_SELFSERVICEUSER` with the same office-hierarchy rule as other user administration calls.
+
+## Endpoint-Level Security
+
+Each `/v1/self/*` resource enforces appropriate permissions. Sensitive operations (TPT transfer, confirm transfer, change password) require step-up OTP verification when enabled for the tenant.
+
+## Ownership Guards
+
+`SelfServiceOwnershipGuard` ensures users can only access their own data — there is no user id parameter in self-service endpoints; all operations act on the logged-in user.
+
+## Related
+
+- [Security & Best Practices](/user-guide/security-best-practices)
+- [Step-up OTP Authentication](/user-guide/configuration/stepup-otp)

@@ -1,0 +1,61 @@
+---
+title: Development Setup
+description: Set up your development environment to build and test the Mifos Self Service Plugin
+---
+
+# Development Setup
+
+## Prerequisites
+
+| Requirement | Version |
+|---|---|
+| **Java (JDK)** | **25** |
+| **Maven** | 3.6+ (or `./mvnw` wrapper) |
+| **Apache Fineract** | 1.16.0-SNAPSHOT (`develop` branch) |
+| **Database** | PostgreSQL or MySQL |
+
+## Clone and Build
+
+```bash
+git clone https://github.com/openMF/selfservice-plugin.git
+cd selfservice-plugin
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+This produces `target/selfservice-plugin-1.16.0-SNAPSHOT.jar`.
+
+## Run Tests
+
+```bash
+# Unit tests only
+./mvnw test
+
+# Full build with integration tests
+./mvnw verify
+```
+
+## Deploy for Local Testing
+
+Copy the built JAR into a running Fineract instance:
+
+```bash
+# Docker
+cp target/selfservice-plugin-*.jar /opt/fineract/plugins/
+java -Dloader.path=/opt/fineract/plugins/ -jar fineract-provider.jar
+
+# Tomcat
+cp target/selfservice-plugin-*.jar $TOMCAT_HOME/webapps/fineract-provider/WEB-INF/lib/
+```
+
+## Repositories
+
+The `pom.xml` resolves Apache Fineract libraries from:
+
+- Mifos JFrog Artifactory: `libs-release`, `libs-snapshot`, `libs-release-local`
+- OSS Sonatype snapshots
+- Spring snapshot and milestone repositories
+
+## Next Steps
+
+- [Project Structure](/developer-guide/project-structure)
+- [Coding Standards & Patterns](/developer-guide/coding-standards)

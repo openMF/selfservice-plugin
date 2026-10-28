@@ -1,0 +1,53 @@
+---
+title: What is the Self Service Plugin?
+description: Overview of the Mifos Self Service Plugin capabilities and architecture
+---
+
+# What is the Self Service Plugin?
+
+The Mifos Self Service Plugin is a community-maintained, open-source extension for Apache Fineract that exposes customer-facing banking capabilities through a dedicated REST API surface.
+
+## Plugin vs. Standalone Application
+
+This project is **not** a standalone service. It is a Spring Boot plugin packaged as a JAR that you deploy into an existing Fineract instance:
+
+```bash
+# The plugin JAR is dropped onto the Fineract classpath
+java -Dloader.path=/opt/fineract/plugins/ -jar fineract-provider.jar
+```
+
+Once loaded, the plugin:
+
+- Auto-registers its JAX-RS endpoints under `/v1/self/...`
+- Runs its own Liquibase migrations against every configured Fineract tenant
+- Integrates with Fineract's multi-tenant architecture and security model
+- Requires no forking or patching of Fineract source code
+
+## What It Does
+
+| Capability | Description |
+|---|---|
+| **Self-Registration & Enrollment** | Customers sign up, receive a verification token (via email/SMS), and activate their account. |
+| **Authentication** | Dedicated login endpoint with HTTP Basic Auth support, 2FA compatibility, and login attempt notifications. |
+| **Password Recovery** | Request a password reset token and renew the password — all self-service. |
+| **Client Profile** | View personal details, profile images, charges, and transaction history. |
+| **Savings Accounts** | List savings accounts, view balances, transactions, charges, and apply for new savings products. |
+| **Loan Accounts** | Browse loan details, repayment schedules, charges, guarantors, and apply for new loans. |
+| **Share Accounts** | View share account holdings and apply for share products. |
+| **Fund Transfers** | Transfer between own accounts or to third-party beneficiaries (with configurable daily/per-beneficiary limits). |
+| **Beneficiary Management** | Add, update, and delete third-party transfer beneficiaries. |
+| **Product Discovery** | Browse available savings, loan, and share products. |
+| **Reports** | Run pre-configured financial reports scoped to the authenticated user. |
+| **Surveys & Scorecards** | Participate in surveys and view scorecards. |
+| **Notifications** | Event-driven email/SMS notifications for login activity and account activation (with cooldown and SMTP fallback). |
+| **Step-up OTP Authentication** | Challenge-based one-time codes (SMS, email, or authenticator app) for sensitive operations. |
+| **Activity History** | View logins and sensitive actions on your own account to spot unauthorised use. |
+
+## Tech Stack
+
+- **Java 25** · **Spring Boot 4**
+- **Spring Security** (Basic Auth + OAuth2)
+- **JAX-RS** (REST endpoints)
+- **JPA / EclipseLink** · **Liquibase** (multi-tenant schema migrations)
+- **Lombok** · **Swagger / OpenAPI**
+- **Apache Fineract 1.16.0-SNAPSHOT** (`develop` branch)

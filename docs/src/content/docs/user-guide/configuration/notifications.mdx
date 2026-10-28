@@ -1,0 +1,26 @@
+---
+title: Notifications (Email / SMS)
+description: Configure email and SMS notifications for the Mifos Self Service Plugin
+---
+
+# Notifications (Email / SMS)
+
+The plugin sends event-driven email and SMS notifications for login activity and account activation, with cooldown and SMTP fallback.
+
+## Configuration
+
+Notifications are configured **per tenant** in the `SELF_SERVICE_STEP_UP` external service (tables `c_external_service` / `c_external_service_properties`), seeded and disabled by Liquibase. Nothing is read from environment variables.
+
+Make sure email (SMTP) and/or SMS delivery works for the tenant: step-up OTP codes are sent through the self-service notification module (template `STEP_UP_OTP`, es-MX by default, English with an English `Accept-Language`).
+
+## Notification Channels
+
+| Channel | Use Case |
+|---|---|
+| **Email** | Login notifications, OTP codes, account activation |
+| **SMS** | OTP codes (step-up), login notifications |
+| **WhatsApp** | Supported via plugin notification senders |
+
+## Next Step
+
+For step-up OTP configuration (which uses the same notification delivery), see [Step-up OTP Authentication](/user-guide/configuration/stepup-otp).

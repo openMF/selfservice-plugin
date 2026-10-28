@@ -1,0 +1,48 @@
+---
+title: Introduction
+description: Introduction to the Mifos Self Service Plugin for Apache Fineract
+---
+
+# Introduction
+
+Apache Fineract is an open-source core banking platform. Out of the box, its APIs are designed for **back-office staff** — loan officers, tellers, and administrators. There is no built-in mechanism for a bank's actual *customers* to log in, check their balances, or initiate transfers themselves.
+
+**The Mifos Self Service Plugin bridges that gap.** It adds a complete set of customer-facing REST APIs (under `/v1/self/...`) that sit on top of Fineract's core. Think of it as the backend for a mobile banking app or a customer web portal.
+
+> **Key point:** This is a *plugin*, not a standalone application. It ships as a JAR that you drop into your existing Fineract deployment. It extends Fineract at runtime — no forking, no patching of Fineract source code required.
+
+## What Problems It Solves
+
+| Without the Plugin | With the Plugin |
+|---|---|
+| Customers must visit a branch or call staff to check balances. | Customers check balances and transactions via a mobile app or web portal. |
+| Fund transfers require staff intervention. | Customers initiate own-account and third-party transfers self-service. |
+| No customer self-registration or password recovery. | Customers enroll, verify, and reset passwords themselves. |
+| No customer-facing API surface. | A complete `/v1/self/*` REST API for customer operations. |
+
+## Where It Fits
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Client Applications                   │
+│          (Mobile App / Web Portal / Chatbot)            │
+└────────────────────────┬────────────────────────────────┘
+                         │  HTTPS  /v1/self/*
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│              Self Service Plugin (this repo)            │
+│  Registration & Enrollment   Security & Auth   Notifications
+│  Clients / Savings / Loans   Shares / Transfers   Products / Reports
+└────────────────────────┬────────────────────────────────┘
+                         │  delegates to
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│               Apache Fineract Core                      │
+│        (fineract-provider, fineract-core, etc.)         │
+│                   Multi-Tenant DB                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Notices
+
+Mifos® is not affiliated with, endorsed by, or otherwise associated with the Apache Software Foundation® (ASF) or any of its projects. Apache Fineract® is a trademark of the Apache Software Foundation®.

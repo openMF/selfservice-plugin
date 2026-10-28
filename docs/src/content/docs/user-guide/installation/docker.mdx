@@ -1,0 +1,72 @@
+---
+title: Deploy with Docker
+description: Deploy the Mifos Self Service Plugin into Fineract running in Docker
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Deploy with Docker
+
+The plugin is a JAR that you drop onto the Fineract classpath. When Fineract runs in Docker, mount the plugin JAR into the container and pass it via `loader.path`.
+
+<Aside type="tip">
+  <strong>One JAR, multiple tenants.</strong> Once the plugin is on the classpath, it auto-registers its endpoints and runs its own Liquibase migrations against every configured Fineract tenant — no per-tenant redeployment needed.
+</Aside>
+
+## 1. Build the Plugin JAR
+
+```bash
+cd selfservice-plugin
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+## 2. Create a Plugins Directory on the Host
+
+```bash
+mkdir -p /opt/fineract/plugins
+cp target/selfservice-plugin-*.jar /opt/fineract/plugins/
+```
+
+## 3. Start Fineract with the Plugin
+
+```bash
+java -Dloader.path=/opt/fineract/plugins/ -jar fineract-provider.jar
+```
+
+If you're running Fineract via Docker Compose, mount the plugins directory:
+
+```yaml
+services:
+  fineract:
+    image: apache/fineract-provider:1.16.0-SNAPSHOT
+    volumes:
+      - /opt/fineract/plugins:/opt/fineract/plugins
+    environment:
+      - loader.path=/opt/fineract/plugins
+    ports:
+      - "8080:8080"
+```
+
+<Aside type="caution">
+  <strong>Image tag varies by distribution.</strong> The exact Docker image tag and environment variables depend on your Fineract distribution. Consult your Fineract deployment documentation for the correct way to pass `loader.path` into the container.
+</Aside>
+
+## 4. Verify
+
+Once Fineract is running, the plugin's endpoints are available at:
+
+```bash
+curl https://<fineract-host>/fineract-provider/v1/self/registration
+curl https://<fineract-host>/fineract-provider/v1/self/authentication
+curl https://<fineract-host>/fineract-provider/v1/self/savingsaccounts
+```
+
+<CardGrid>
+<Card title="Next: Configure the plugin">
+  Set up notifications, step-up OTP, and activity retention per tenant.
+
+  <div slot="footer" style="display: flex; gap: 0.5rem;">
+    <a href="/user-guide/configuration/basic-settings/" style="text-decoration: none; color: inherit; font-weight: 500;">Configuration →</a>
+  </div>
+</Card>
+</CardGrid>

@@ -1,0 +1,40 @@
+---
+title: Authentication & Registration
+description: Self-service authentication, registration, login, and password recovery API endpoints
+---
+
+# Authentication & Registration
+
+Endpoints under `/v1/self/` for customer self-registration, login, and password recovery.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/registration` | `POST` | Self-registration & enrollment — customers sign up and receive a verification token |
+| `/v1/self/authentication` | `POST` | Login (HTTP Basic Auth) — returns a session token |
+| `/v1/self/password` | `POST` | Forgot password / reset — request a reset token and renew the password |
+| `/v1/self/user` | `PUT` | Change password (step-up protected when enabled) |
+| `/v1/self/userdetails` | `GET` | Current user details |
+
+## Registration Flow
+
+1. Customer submits registration details to `POST /v1/self/registration`.
+2. A verification token is sent via email or SMS.
+3. Customer confirms registration with the token.
+4. Account is activated and the customer can log in.
+
+## Login
+
+Login uses HTTP Basic Auth and returns a session token (`base64EncodedAuthenticationKey`). This token is used as a bearer-like credential for subsequent requests, carried in the `Authorization` header wrapped as `Basic base64(<token>)`.
+
+## Password Recovery
+
+1. Customer requests a password reset via `POST /v1/self/password`.
+2. A reset token is sent via email or SMS.
+3. Customer resets the password using the token.
+
+## Related
+
+- [Step-up OTP Authentication](/user-guide/configuration/stepup-otp) — protects sensitive operations like password changes.
+- [Security & Best Practices](/user-guide/security-best-practices)

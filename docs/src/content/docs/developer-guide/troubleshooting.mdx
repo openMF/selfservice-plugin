@@ -1,0 +1,59 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for the Mifos Self Service Plugin
+---
+
+# Troubleshooting
+
+## Build Issues
+
+### Dependency resolution fails
+
+Ensure your build machine can reach the Mifos JFrog Artifactory repositories:
+
+- `https://mifos.jfrog.io/artifactory/libs-release`
+- `https://mifos.jfrog.io/artifactory/libs-snapshot`
+- `https://mifos.jfrog.io/artifactory/libs-release-local`
+
+If behind a proxy, configure Maven's `settings.xml` with a mirror.
+
+### Spotless formatting check fails
+
+Run `./mvnw compile` — Spotless enforces Google Java Format at compile phase. Fix formatting issues or run a formatter on your code.
+
+## Deployment Issues
+
+### Endpoints return 404
+
+- Verify the plugin JAR is in the correct location (`/opt/fineract/plugins/` for Docker, `WEB-INF/lib/` for Tomcat).
+- Verify Fineract was restarted after copying the JAR.
+- Check that `loader.path` includes the plugins directory.
+
+### Step-up OTP not working
+
+- Check that `enabled = 'true'` in `c_external_service_properties` for `SELF_SERVICE_STEP_UP`.
+- Check that `hmacSecret` is set to a value at least 32 characters long.
+- Verify SMTP/SMS delivery is configured for the tenant.
+- Ensure the `X-Step-Up-Token` header is allowed in CORS configuration.
+
+### Activity history empty
+
+- Check that `enabled = 'true'` in `c_external_service_properties` for `SELF_SERVICE_ACTIVITY`.
+- Verify the nightly purge job hasn't removed recent entries (check `retentionDays`).
+
+## Runtime Issues
+
+### Session token rejected for step-up
+
+Step-up requires a session token from login, not `user:password` Basic auth. Use the `base64EncodedAuthenticationKey` from the login response.
+
+### TOTP pairing fails
+
+- Verify `totpEnabled = 'true'` and `enabled = 'true'` for `SELF_SERVICE_STEP_UP`.
+- Verify `totpEncryptionKey` is set to at least 32 characters.
+- Check that the user doesn't already have an active authenticator (`totp.already.enrolled`).
+
+## Getting Help
+
+- Create an issue on [GitHub](https://github.com/openMF/selfservice-plugin/issues).
+- Join the [Mifos community forums](https://community.mifos.org/).

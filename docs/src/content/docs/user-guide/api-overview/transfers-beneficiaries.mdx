@@ -1,0 +1,35 @@
+---
+title: Transfers & Beneficiaries
+description: Fund transfers and third-party transfer beneficiary management API endpoints
+---
+
+# Transfers & Beneficiaries
+
+Endpoints for transferring funds between accounts and managing third-party transfer beneficiaries.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/accounttransfers` | `GET` | List transfers |
+| `/v1/self/accounttransfers` | `POST` | Initiate a transfer (own or third-party) |
+| `/v1/self/accounttransfers/confirm` | `POST` | Confirm a transfer (step-up protected) |
+| `/v1/self/beneficiaries/tpt` | `GET` | List third-party transfer beneficiaries |
+| `/v1/self/beneficiaries/tpt` | `POST` | Add a beneficiary |
+| `/v1/self/beneficiaries/tpt` | `PUT` | Update a beneficiary |
+| `/v1/self/beneficiaries/tpt` | `DELETE` | Delete a beneficiary |
+
+## Transfer Types
+
+| Type | Description |
+|---|---|
+| **Own Transfer** | Transfer between your own accounts |
+| **Third-Party Transfer (TPT)** | Transfer to a registered beneficiary |
+
+## Step-up Protection
+
+Sensitive transfer operations (TPT, confirm transfer, change password) can require step-up OTP verification when enabled for the tenant. See [Step-up OTP Authentication](/user-guide/configuration/stepup-otp).
+
+## Beneficiary Limits
+
+Transfers are subject to configurable daily and per-beneficiary limits. Beneficiaries can be added, updated, and deleted by the authenticated user.

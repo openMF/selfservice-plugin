@@ -1,0 +1,58 @@
+---
+title: Activity History
+description: Activity history API endpoint for viewing logins and sensitive actions
+---
+
+# Activity History
+
+Customers can view the logins and sensitive actions of their own account to spot unauthorised use.
+
+## Endpoint
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/activity` | `GET` | Activity history of the logged-in user |
+
+## Example Request
+
+```http
+GET /v1/self/activity?limit=20&offset=0&type=LOGIN,TRANSFER_CONFIRMED
+```
+
+## Response Format
+
+```json
+{
+  "totalFilteredRecords": 42,
+  "pageItems": [
+    {
+      "id": 123,
+      "type": "LOGIN",
+      "outcome": "SUCCESS",
+      "occurredAt": "2026-01-15T10:30:00Z",
+      "ipAddress": "203.0.x.x",
+      "details": "{...}"
+    }
+  ]
+}
+```
+
+## Activity Types
+
+`LOGIN`, `LOGIN_FAILED`, `LOGIN_NEW_DEVICE`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET`, `TRANSFER_CONFIRMED`, `BENEFICIARY_ADDED`, `BENEFICIARY_UPDATED`, `BENEFICIARY_DELETED`, `PROFILE_IMAGE_CHANGED`, `PROFILE_IMAGE_REMOVED`, `SINPE_SUBSCRIPTION_CHANGED`, `STEP_UP_REQUESTED`, `STEP_UP_VERIFIED`, `STEP_UP_LOCKED`, `AUTHENTICATOR_ENROLLED`, `AUTHENTICATOR_REMOVED`, `AUTHENTICATOR_RESET`, `AUTHENTICATOR_LOCKED`, `RECOVERY_CODES_REGENERATED`, `RECOVERY_CODE_USED`.
+
+## Privacy
+
+- IP addresses are stored and returned **masked** (e.g., `203.0.x.x`).
+- Passwords, OTPs, tokens, email addresses, phone numbers, and full account numbers never reach the history.
+- `details` is built from a whitelist per type (for a transfer: amount, currency, destination name, last 4 digits of the destination account).
+
+## Per-Tenant Configuration
+
+Configured via the `SELF_SERVICE_ACTIVITY` external service:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | `false` stops recording |
+| `retentionDays` | `90` | How long history is kept (`1`–`3650`) |
+| `maxPageSize` | `100` | Largest page a client may request (`10`–`500`) |
