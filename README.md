@@ -307,7 +307,7 @@ All calls need the session token, like the rest of step-up, and act on the logge
 | 1 | `POST /v1/self/stepup/totp/enrollment` -> `201 { "secret", "otpauthUri", "issuer", "digits", "periodSeconds" }`. The secret is shown **once**; draw `otpauthUri` as a QR code in the client (never send it to a third party) and offer `secret` as text. Refused with `409 totp.already.enrolled` while an authenticator is active. |
 | 2 | a step-up challenge for `MANAGE_AUTHENTICATOR` over SMS or e-mail (see Flow) -> `stepUpToken` |
 | 3 | `POST /v1/self/stepup/totp/enrollment/confirm` `{ "code": "123456" }` with `X-Step-Up-Token` -> `200 { "recoveryCodes": [ "ABCDE-FGHJK", ... ] }`. The code of the app proves it holds the secret. The recovery codes are shown **once**. |
-| | `GET /v1/self/stepup/totp` -> `{ "available", "status": "NONE|PENDING|ACTIVE", "recoveryCodesRemaining", "exclusive", "confirmedAt" }` |
+| | `GET /v1/self/stepup/totp` -> `{ "available", "status": "NONE\|PENDING\|ACTIVE", "recoveryCodesRemaining", "exclusive", "confirmedAt" }` |
 | | `POST /v1/self/stepup/totp/recovery-codes` (with a step-up token) -> a new set; the old codes stop working |
 | | `DELETE /v1/self/stepup/totp` (with a step-up token, because it is active) removes the authenticator and its recovery codes. Cancelling a pairing that was never confirmed needs no token. |
 
