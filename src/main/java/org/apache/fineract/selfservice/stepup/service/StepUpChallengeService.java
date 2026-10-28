@@ -242,6 +242,9 @@ public class StepUpChallengeService {
     // cannot be used to probe for free.
     final boolean correct;
     final String failureReason;
+    // What the client is told is left: for the app the smaller of the two counts, because the
+    // authenticator (per user) can lock before this challenge runs out of attempts.
+    int attemptsLeftForClient = Integer.MAX_VALUE;
     if (challenge.getChannel() == StepUpChannel.TOTP) {
       // The authenticator keeps its own count of wrong codes (per user, so new challenges do not
       // reset it); when that count locks it, the request is refused without counting twice.
@@ -252,6 +255,9 @@ public class StepUpChallengeService {
       }
       correct = result.accepted();
       failureReason = recoveryCode != null ? "recovery.mismatch" : "totp.mismatch";
+      if (!correct) {
+        attemptsLeftForClient = result.failuresRemaining();
+      }
     } else {
       final boolean wellFormed = otp != null && recoveryCode == null && otp.matches("\\d{4,8}");
       correct =
@@ -271,7 +277,8 @@ public class StepUpChallengeService {
       if (nowLocked) {
         throw StepUpException.locked(settings.lockoutSeconds());
       }
-      throw StepUpException.otpInvalid(challenge.attemptsRemaining());
+      throw StepUpException.otpInvalid(
+          Math.min(challenge.attemptsRemaining(), attemptsLeftForClient));
     }
 
     final String grantToken = crypto.newGrantToken();

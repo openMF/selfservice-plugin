@@ -339,6 +339,34 @@ class StepUpChallengeServiceTotpTest {
   }
 
   @Test
+  void verify_totp_aWrongCode_reportsTheSmallerOfTheTwoCounts() {
+    // earlier wrong codes on other challenges: the authenticator will lock before this challenge
+    final StepUpChallenge challenge = pendingTotpChallenge();
+    when(totpService.verify(USER, "000000", null, "10.0.0.1"))
+        .thenReturn(new TotpService.Verification(TotpService.Outcome.WRONG, 1, 0));
+
+    final StepUpException ex =
+        assertThrows(
+            StepUpException.class,
+            () -> service.verify(99L, "000000", null, USER, SESSION, "10.0.0.1"));
+
+    assertEquals(1, ex.getDetails().get("attemptsRemaining"));
+    assertEquals(1, challenge.getAttempts());
+  }
+
+  @Test
+  void verify_totp_whenTheChallengeIsTheNarrowerLimit_itsCountIsReported() {
+    pendingTotpChallenge();
+    when(totpService.verify(USER, "000000", null, "10.0.0.1"))
+        .thenReturn(new TotpService.Verification(TotpService.Outcome.WRONG, 5, 0));
+    final StepUpException ex =
+        assertThrows(
+            StepUpException.class,
+            () -> service.verify(99L, "000000", null, USER, SESSION, "10.0.0.1"));
+    assertEquals(4, ex.getDetails().get("attemptsRemaining"));
+  }
+
+  @Test
   void verify_totp_aWrongRecoveryCode_isReportedAsSuch() {
     pendingTotpChallenge();
     when(totpService.verify(USER, null, "ABCDE-FGHJK", "10.0.0.1"))
