@@ -33,10 +33,162 @@ class StepUpSettingsTest {
     assertEquals(120, s.grantTtlSeconds());
     assertEquals(
         EnumSet.of(
-            StepUpAction.TPT_TRANSFER, StepUpAction.CONFIRM_TRANSFER, StepUpAction.CHANGE_PASSWORD),
+            StepUpAction.TPT_TRANSFER,
+            StepUpAction.CONFIRM_TRANSFER,
+            StepUpAction.CHANGE_PASSWORD,
+            StepUpAction.MANAGE_AUTHENTICATOR),
         s.protectedActions());
     assertEquals(EnumSet.allOf(StepUpChannel.class), s.channels());
     assertFalse(s.invalidateSessionsOnPasswordChange());
+  }
+
+  // ---- authenticator app (TOTP) ---------------------------------------------------------------
+
+  @Test
+  void totp_isOffByDefault_withSafeLimits() {
+    final StepUpSettings s = StepUpSettings.defaults();
+    assertFalse(s.totpEnabled());
+    assertFalse(s.totpAvailable());
+    assertNull(s.totpEncryptionKey());
+    assertEquals("Mifos", s.totpIssuer());
+    assertEquals(1, s.totpWindowSteps());
+    assertEquals(5, s.totpMaxFailures());
+    assertEquals(900, s.totpLockoutSeconds());
+    assertEquals(10, s.recoveryCodeCount());
+    assertTrue(s.totpExclusive());
+  }
+
+  @Test
+  void totpChannel_needsItsOwnSwitch_evenWhenTheChannelListIsUnset() {
+    // an unset channel list means "all channels": the authenticator must still stay off
+    final StepUpSettings off = StepUpSettings.fromProperties(Map.of("enabled", "true"));
+    assertTrue(off.channels().contains(StepUpChannel.TOTP));
+    assertFalse(off.isChannelAllowed(StepUpChannel.TOTP));
+    assertTrue(off.isChannelAllowed(StepUpChannel.SMS));
+
+    final StepUpSettings on =
+        StepUpSettings.fromProperties(Map.of("enabled", "true", "totpEnabled", "true"));
+    assertTrue(on.isChannelAllowed(StepUpChannel.TOTP));
+  }
+
+  @Test
+  void totpChannel_followsItsOwnSwitch_notTheChannelList() {
+    // every tenant got "channels = SMS,EMAIL" from the step-up migration: the authenticator must
+    // work with that list as it is, or the switch would do nothing
+    final StepUpSettings on =
+        StepUpSettings.fromProperties(
+            Map.of("enabled", "true", "totpEnabled", "true", "channels", "SMS,EMAIL"));
+    assertTrue(on.isChannelAllowed(StepUpChannel.TOTP));
+
+    final StepUpSettings off =
+        StepUpSettings.fromProperties(
+            Map.of("enabled", "true", "totpEnabled", "false", "channels", "SMS,EMAIL,TOTP"));
+    assertFalse(off.isChannelAllowed(StepUpChannel.TOTP));
+  }
+
+  @Test
+  void theChannelListStillGovernsSmsAndEmail() {
+    final StepUpSettings s =
+        StepUpSettings.fromProperties(
+            Map.of("enabled", "true", "totpEnabled", "true", "channels", "EMAIL"));
+    assertFalse(s.isChannelAllowed(StepUpChannel.SMS));
+    assertTrue(s.isChannelAllowed(StepUpChannel.EMAIL));
+    assertTrue(s.isChannelAllowed(StepUpChannel.TOTP));
+  }
+
+  @Test
+  void totpAvailable_needsStepUpAndTheTotpSwitch() {
+    assertFalse(
+        StepUpSettings.fromProperties(Map.of("totpEnabled", "true")).totpAvailable(),
+        "step-up itself is off");
+    assertFalse(StepUpSettings.fromProperties(Map.of("enabled", "true")).totpAvailable());
+    assertTrue(
+        StepUpSettings.fromProperties(Map.of("enabled", "true", "totpEnabled", "true"))
+            .totpAvailable());
+  }
+
+  @Test
+  void totpSettings_areParsedAndOutOfRangeValuesFallBack() {
+    final StepUpSettings ok =
+        StepUpSettings.fromProperties(
+            Map.of(
+                "totpEnabled", "true",
+                "totpEncryptionKey", "k".repeat(40),
+                "totpIssuer", "Banco Uno",
+                "totpWindowSteps", "2",
+                "totpMaxFailures", "3",
+                "totpLockoutSeconds", "120",
+                "recoveryCodeCount", "8",
+                "totpExclusive", "false"));
+    assertEquals("k".repeat(40), ok.totpEncryptionKey());
+    assertEquals("Banco Uno", ok.totpIssuer());
+    assertEquals(2, ok.totpWindowSteps());
+    assertEquals(3, ok.totpMaxFailures());
+    assertEquals(120, ok.totpLockoutSeconds());
+    assertEquals(8, ok.recoveryCodeCount());
+    assertFalse(ok.totpExclusive());
+
+    final StepUpSettings bad =
+        StepUpSettings.fromProperties(
+            Map.of(
+                "totpWindowSteps", "5",
+                "totpMaxFailures", "0",
+                "totpLockoutSeconds", "1",
+                "recoveryCodeCount", "100"));
+    assertEquals(1, bad.totpWindowSteps());
+    assertEquals(5, bad.totpMaxFailures());
+    assertEquals(900, bad.totpLockoutSeconds());
+    assertEquals(10, bad.recoveryCodeCount());
+  }
+
+  @Test
+  void totpIssuer_isCleanedForTheAuthenticatorLabel() {
+    assertEquals(
+        "Mifos", StepUpSettings.fromProperties(Map.of("totpIssuer", "  ")).totpIssuer());
+    assertEquals(
+        "BadIssuer", StepUpSettings.fromProperties(Map.of("totpIssuer", "Bad:Issuer")).totpIssuer());
+    assertEquals(
+        "Bank", StepUpSettings.fromProperties(Map.of("totpIssuer", "Ba\nnk")).totpIssuer());
+    assertEquals(
+        40, StepUpSettings.fromProperties(Map.of("totpIssuer", "x".repeat(80))).totpIssuer().length());
+  }
+
+  @Test
+  void managingTheAuthenticator_isProtectedWheneverItIsOn_evenWithACustomList() {
+    final StepUpSettings custom =
+        StepUpSettings.fromProperties(
+            Map.of(
+                "enabled", "true", "totpEnabled", "true", "protectedActions", "TPT_TRANSFER"));
+    assertTrue(custom.isProtected(StepUpAction.MANAGE_AUTHENTICATOR));
+    assertFalse(custom.isProtected(StepUpAction.CHANGE_PASSWORD));
+  }
+
+  @Test
+  void managingTheAuthenticator_followsTheListWhileTheFeatureIsOff() {
+    final StepUpSettings custom =
+        StepUpSettings.fromProperties(
+            Map.of("enabled", "true", "protectedActions", "TPT_TRANSFER"));
+    assertFalse(custom.isProtected(StepUpAction.MANAGE_AUTHENTICATOR));
+  }
+
+  @Test
+  void managingTheAuthenticator_isNeverProtectedWhenStepUpIsOff() {
+    assertFalse(
+        StepUpSettings.fromProperties(Map.of("totpEnabled", "true"))
+            .isProtected(StepUpAction.MANAGE_AUTHENTICATOR));
+  }
+
+  @Test
+  void toString_neverPrintsTheKeys() {
+    final String text =
+        StepUpSettings.fromProperties(
+                Map.of(
+                    "hmacSecret", "h".repeat(40),
+                    "totpEncryptionKey", "UNIQUE-TOTP-KEY-" + "k".repeat(30)))
+            .toString();
+    assertFalse(text.contains("UNIQUE-TOTP-KEY"));
+    assertFalse(text.contains("hhhhhhhh"));
+    assertTrue(text.contains("totpEncryptionKey=set"));
   }
 
   @Test
