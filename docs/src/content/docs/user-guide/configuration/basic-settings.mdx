@@ -1,0 +1,51 @@
+---
+title: Basic Settings
+description: Basic configuration for the Mifos Self Service Plugin
+---
+
+# Basic Settings
+
+The Self Service Plugin is designed to work **out of the box** with no additional configuration. Once deployed into Fineract:
+
+- Its JAX-RS endpoints auto-register under `/v1/self/...`
+- Its Liquibase migrations run against every configured Fineract tenant at startup
+- Per-tenant settings (notifications, step-up OTP, activity retention) are stored in Fineract's `c_external_service` / `c_external_service_properties` tables, seeded by Liquibase
+
+## Per-Tenant External Services
+
+Configuration is per-tenant and stored in the database, not in environment variables. This means enabling a feature for one tenant never affects another.
+
+The relevant external services are:
+
+| Service | Purpose | Seeded By |
+|---|---|---|
+| `SELF_SERVICE_STEP_UP` | Step-up OTP / authenticator configuration | Liquibase |
+| `SELF_SERVICE_ACTIVITY` | Activity history retention and pagination | Liquibase |
+
+## Example: Configure Activity Retention
+
+```sql
+UPDATE c_external_service_properties
+SET value = '365'
+WHERE name = 'retentionDays'
+  AND external_service_id = (
+    SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_ACTIVITY'
+  );
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | `false` stops recording (existing rows stay until purged) |
+| `retentionDays` | `90` | How long history is kept (`1`..`3650`) |
+| `maxPageSize` | `100` | Largest page a client may request (`10`..`500`) |
+
+A nightly purge job deletes rows older than each tenant's `retentionDays` (controlled by `mifos.self.service.activity.purge.enabled` / `.cron` for batch instances).
+
+## Nothing Is Read from Environment Variables
+
+Per the plugin's design, tenant-specific behavior (step-up OTP, activity history, notifications) is configured entirely through the `c_external_service_properties` table. No `.env`, system property, or environment variable controls these features.
+
+## Next Steps
+
+- [Notifications (Email / SMS)](/user-guide/configuration/notifications)
+- [Step-up OTP Authentication](/user-guide/configuration/stepup-otp)

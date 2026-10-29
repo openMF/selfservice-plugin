@@ -1,0 +1,20 @@
+# Robots.txt for Mifos Self Service Plugin Documentation
+
+User-agent: *
+Allow: /
+
+# Allow AI agents and LLM crawlers
+User-agent: GPTBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# Sitemap
+Sitemap: https://github.com/openMF/selfservice-plugin-docs/sitemap.xml

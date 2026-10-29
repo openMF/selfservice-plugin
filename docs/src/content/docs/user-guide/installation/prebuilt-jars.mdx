@@ -1,0 +1,24 @@
+---
+title: Pre-built JARs (Artifactory)
+description: Download pre-built plugin snapshots from Mifos JFrog Artifactory
+---
+
+# Pre-built JARs (Artifactory)
+
+Pre-built snapshot JARs are published to Mifos JFrog Artifactory:
+
+👉 [Download latest JAR](https://mifos.jfrog.io/ui/native/libs-snapshot-local/community/mifos/selfservice-plugin/1.16.0-SNAPSHOT/)
+
+## Resolution Repositories
+
+The plugin's `pom.xml` resolves Apache Fineract libraries from the following repositories:
+
+- `https://mifos.jfrog.io/artifactory/libs-release`
+- `https://mifos.jfrog.io/artifactory/libs-snapshot`
+- `https://mifos.jfrog.io/artifactory/libs-release-local`
+
+## Deploy the Downloaded JAR
+
+Once downloaded, follow the [Deploy with Docker](/user-guide/installation/docker) or [Deploy with Tomcat](/user-guide/installation/tomcat) instructions to install the JAR into your Fineract deployment.
+
+> **Note:** Snapshots are published from CI builds on the `develop` branch. For production use, consider building from a tagged release instead.

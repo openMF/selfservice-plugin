@@ -114,21 +114,51 @@ public interface SelfServiceRegistrationRepository
   Optional<SelfServiceRegistration> findTopByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
       @Param("clientId") Long clientId, @Param("requestType") SelfServiceRequestType requestType);
 
+  /**
+   * Like {@link #findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc} but
+   * also scoped to the user the OTP was issued to, so users who share a client never see each
+   * other's OTPs. Transfer OTP rows store the issuing self-service user's (unique) username.
+   */
+  @Query(
+      "SELECT r FROM SelfServiceRegistration r WHERE r.client.id = :clientId AND r.username ="
+          + " :username AND r.requestType = :requestType AND r.authenticationToken ="
+          + " :authenticationToken ORDER BY r.id DESC")
+  List<SelfServiceRegistration> findUserOtps(
+      @Param("clientId") Long clientId,
+      @Param("username") String username,
+      @Param("requestType") SelfServiceRequestType requestType,
+      @Param("authenticationToken") String authenticationToken);
+
+  /**
+   * Marks as consumed the unconsumed requests of {@code requestType} issued to {@code username} on
+   * {@code clientId} and created before {@code cutoff}. Scoped to the user so one signatory's new
+   * OTP never invalidates another signatory's OTP on the same client.
+   *
+   * @return the number of rows marked consumed
+   */
   // Bulk consumption: forzamos clearAutomatically + flushAutomatically para
   // que el 1er y 2do nivel de caché queden consistentes tras el UPDATE directo.
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
       "UPDATE SelfServiceRegistration r SET r.consumed = true "
           + "WHERE r.client.id = :clientId "
+          + "AND r.username = :username "
           + "AND r.requestType = :requestType "
           + "AND r.consumed = false "
           + "AND r.createdDate < :cutoff")
   int markOldOtpsAsConsumed(
       @Param("clientId") Long clientId,
+      @Param("username") String username,
       @Param("requestType") SelfServiceRequestType requestType,
       @Param("cutoff") LocalDateTime cutoff);
 
-  // Returns List, never throws NonUniqueResultException
-  List<SelfServiceRegistration> findByClient_IdAndRequestTypeAndConsumedFalseOrderByIdDesc(
-      Long clientId, SelfServiceRequestType requestType);
+  /**
+   * Unconsumed requests of {@code requestType} issued to {@code username} on {@code clientId},
+   * newest (highest id) first. Scoped to the user so signatories who share a client never see each
+   * other's OTPs. Returns a list, so several unconsumed rows never throw {@code
+   * NonUniqueResultException}.
+   */
+  List<SelfServiceRegistration>
+      findByClient_IdAndUsernameAndRequestTypeAndConsumedFalseOrderByIdDesc(
+          Long clientId, String username, SelfServiceRequestType requestType);
 }

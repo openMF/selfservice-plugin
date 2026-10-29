@@ -4123,6 +4123,192 @@
           ]
         },
         {
+          "name": "DUAL APPROVAL",
+          "description": "MX-489 / US-E12-03. A transfer of an ENTITY client at or above its threshold is held by /confirm and answers PENDING_APPROVAL with an approvalId. Log in as another active signatory (STEP-UP (OTP) 00 stores {{sessionKey}}), request a challenge, verify it with STEP-UP (OTP) 04 and approve with the step-up token. Reject needs no OTP.",
+          "item": [
+            {
+              "name": "01. LIST PENDING APPROVALS",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/accounttransfers/approvals",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "accounttransfers",
+                    "approvals"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "02. REQUEST CHALLENGE - APPROVE SECOND SIGNATURE",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/stepup/challenges",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "stepup",
+                    "challenges"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"action\": \"APPROVE_SECOND_SIGNATURE\",\n    \"channel\": \"EMAIL\",\n    \"payload\": {\n        \"approvalId\": {{approvalId}}\n    }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "03. APPROVE TRANSFER (with step-up token)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Step-Up-Token",
+                    "value": "{{stepUpToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/accounttransfers/approvals/{{approvalId}}?command=approve",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "accounttransfers",
+                    "approvals",
+                    "{{approvalId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "command",
+                      "value": "approve"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "04. REJECT TRANSFER",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Fineract-Platform-TenantId",
+                    "value": "default",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Basic {{sessionKey}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "http://localhost:8080/fineract-provider/api/v1/self/accounttransfers/approvals/{{approvalId}}?command=reject",
+                  "protocol": "http",
+                  "host": [
+                    "localhost"
+                  ],
+                  "port": "8080",
+                  "path": [
+                    "fineract-provider",
+                    "api",
+                    "v1",
+                    "self",
+                    "accounttransfers",
+                    "approvals",
+                    "{{approvalId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "command",
+                      "value": "reject"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "SHARES",
           "item": [
             {

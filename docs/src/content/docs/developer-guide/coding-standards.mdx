@@ -1,0 +1,82 @@
+---
+title: Coding Standards & Patterns
+description: Coding standards, patterns, and conventions used in the Mifos Self Service Plugin
+---
+
+# Coding Standards & Patterns
+
+## Code Style
+
+- **Google Java Format** (enforced by Spotless Maven plugin at compile phase)
+- **Lombok** for boilerplate reduction (`@RequiredArgsConstructor` for DI)
+- **Javadoc** for public APIs
+- 4-space indentation, import ordering, unused import removal
+
+## Dependency Injection
+
+```java
+@Service
+@RequiredArgsConstructor
+public class ExampleServiceImpl implements ExampleService {
+    private final ExampleRepository repository;
+
+    @Override
+    @Transactional
+    public Result performOperation(Command command) {
+        // Implementation
+    }
+}
+```
+
+## API Resource Pattern
+
+```java
+@Path("/v1/self/example")
+@Component
+@Tag(name = "Self Example", description = "Example operations")
+@RequiredArgsConstructor
+public class SelfExampleApiResource {
+    private final ExampleService service;
+
+    @GET
+    @Path("/{id}")
+    public Response getExample(@PathParam("id") Long id) {
+        // Implementation
+    }
+}
+```
+
+## Data Validation
+
+```java
+@Component
+public class ExampleDataValidator {
+    private final FromJsonHelper fromJsonHelper;
+
+    public void validate(String json) {
+        // Validation logic
+    }
+}
+```
+
+## Security Guidelines
+
+- All endpoints must be secured with appropriate permissions.
+- Use `@PreAuthorize` annotations for method-level security.
+- Validate all input data using `DataValidator` implementations.
+- Never expose sensitive information in API responses.
+
+## Service Layer
+
+Use `ReadPlatformService` / `WritePlatformService` abstractions to call Fineract platform services. Each feature area has its own service interface and implementation.
+
+## Testing
+
+- Unit tests for all service classes (`*Test.java`).
+- Integration tests for API endpoints (`*IntegrationTest.java`).
+- TestContainers for database tests.
+- Mock external dependencies.
+
+## Spotless Configuration
+
+Spotless runs at the `compile` phase with `goal: check`. It enforces Google Java Format, import ordering, unused import removal, and annotation formatting. If formatting is incorrect, the build fails.

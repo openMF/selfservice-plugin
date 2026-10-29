@@ -1,0 +1,46 @@
+---
+title: Contributing
+description: How to contribute to the Mifos Self Service Plugin
+---
+
+# Contributing
+
+Interested in contributing? We'd love your help.
+
+## Getting Started
+
+1. Fork the repository on GitHub.
+2. Create a feature branch from `develop`.
+3. Make your changes following the [coding standards](/developer-guide/coding-standards).
+4. Add or update tests.
+5. Run the test suite: `./mvnw verify`.
+6. Submit a pull request.
+
+## Development Workflow
+
+```bash
+git checkout -b feature/your-feature-name
+# ... make changes ...
+./mvnw test
+git commit -m "Describe your change"
+git push origin feature/your-feature-name
+```
+
+## Code Review
+
+All pull requests go through code review. Ensure:
+- Spotless formatting passes (`./mvnw compile`)
+- Unit tests pass (`./mvnw test`)
+- Integration tests pass (`./mvnw verify`)
+- New endpoints have appropriate tests
+- Documentation is updated if user-facing behavior changes
+
+## Community
+
+- Watch and star the project on GitHub to stay up to date.
+- Join the [Mifos community forums](https://community.mifos.org/) for discussions.
+- Create issues for bugs or feature requests.
+
+## License
+
+This project is licensed under the [Mozilla Public License 2.0](/reference/license).

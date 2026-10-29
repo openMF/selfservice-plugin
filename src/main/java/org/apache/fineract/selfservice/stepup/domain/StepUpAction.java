@@ -14,8 +14,6 @@ import java.util.List;
  * <p>Each action declares the ordered request fields that are bound into the payload hash. The same
  * field set is used when a client asks for a challenge and when the protected endpoint validates
  * the grant, so an OTP approved for one payload can never authorise another one.
- *
- * <p>A future {@code APPROVE_SECOND_SIGNATURE} action (US-E12-03) only needs a new constant here.
  */
 public enum StepUpAction {
   /** Third-party transfer: {@code POST /v1/self/accounttransfers?type=tpt}. */
@@ -52,7 +50,13 @@ public enum StepUpAction {
    * /v1/self/stepup/totp/enrollment/confirm}, {@code POST .../recovery-codes}, {@code DELETE
    * /v1/self/stepup/totp}. Bound to the action only.
    */
-  MANAGE_AUTHENTICATOR(List.of());
+  MANAGE_AUTHENTICATOR(List.of()),
+  /**
+   * Second signature on a held ENTITY transfer: {@code POST
+   * /v1/self/accounttransfers/approvals/{approvalId}?command=approve}. Bound to the approval, so an
+   * OTP verified for one held transfer can never approve another.
+   */
+  APPROVE_SECOND_SIGNATURE(List.of(PayloadField.required("approvalId", FieldKind.ID)));
 
   /** How a payload field is normalised before hashing. */
   public enum FieldKind {

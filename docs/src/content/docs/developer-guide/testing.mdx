@@ -1,0 +1,69 @@
+---
+title: Testing (Unit + Integration + Testcontainers)
+description: Testing strategy — unit tests, integration tests, and Testcontainers for the Mifos Self Service Plugin
+---
+
+# Testing
+
+## Test Types
+
+| Type | Pattern | Plugin | Phase |
+|---|---|---|---|
+| Unit tests | `*Test.java` | Surefire | `test` |
+| Integration tests | `*IntegrationTest.java` | Failsafe | `verify` |
+
+## Run Tests
+
+```bash
+# Unit tests only
+./mvnw test
+
+# Full build with integration tests
+./mvnw verify
+```
+
+## Surefire Configuration
+
+Unit tests use mockito-core as a Java agent:
+
+```xml
+<argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off</argLine>
+```
+
+Includes `**/*Test.java`, excludes `**/*SmokeTest.java` and `**/*IntegrationTest.java`.
+
+## Failsafe Configuration
+
+Integration tests run during the `verify` phase:
+
+```xml
+<argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off</argLine>
+```
+
+Includes `**/*IntegrationTest.java`.
+
+## JaCoCo Coverage
+
+Coverage reports are generated for both unit tests (`target/jacoco.exec`) and integration tests (`target/jacoco-it.exec`), then merged into `target/jacoco-merged.exec`.
+
+Coverage is enforced with minimum thresholds:
+- Line: 13%
+- Method: 20%
+- Branch: 6%
+
+## Testcontainers
+
+TestContainers 2.x is used for database-backed tests:
+- `testcontainers-junit-jupiter`
+- `testcontainers-postgresql`
+- `testcontainers`
+
+The `testcontainers-bom` is imported via dependency management.
+
+## REST Assured
+
+REST Assured (6.0.1) is used for HTTP-level integration testing. It is no longer managed by Spring Boot 4, so its version is pinned explicitly.
+
+## Mockito
+
+Mockito 5.17.0 is used for mocking external dependencies. JUnit vintage and JUnit 4 are excluded from `spring-boot-starter-test`.

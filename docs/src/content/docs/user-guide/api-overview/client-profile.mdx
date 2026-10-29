@@ -1,0 +1,36 @@
+---
+title: Client Profile
+description: Client profile, images, charges, and transactions API endpoints
+---
+
+# Client Profile
+
+Endpoints under `/v1/self/clients` for viewing and managing the authenticated customer's profile.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/clients` | `GET` | List clients linked to the user |
+| `/v1/self/clients/{clientId}` | `GET` | Get client details |
+| `/v1/self/clients/{clientId}/accounts` | `GET` | List client accounts |
+| `/v1/self/clients/{clientId}/images` | `GET` | List client profile images |
+| `/v1/self/clients/{clientId}/images` | `POST` | Upload client profile image |
+| `/v1/self/clients/{clientId}/images` | `DELETE` | Delete client profile image |
+| `/v1/self/clients/{clientId}/charges` | `GET` | List client charges |
+| `/v1/self/clients/{clientId}/charges/{chargeId}` | `GET` | Get charge details |
+| `/v1/self/clients/{clientId}/transactions` | `GET` | List client transactions |
+| `/v1/self/clients/{clientId}/transactions/{transactionId}` | `GET` | Get transaction details |
+| `/v1/self/clients/{clientId}/obligeedetails` | `GET` | Get obligee details |
+
+## What You Can Do
+
+- View personal details and linked clients
+- Upload and manage profile images
+- Review charges and transaction history
+
+## Related
+
+- [Savings Accounts](/user-guide/api-overview/savings-accounts)
+- [Loan Accounts](/user-guide/api-overview/loan-accounts)
+- [Share Accounts](/user-guide/api-overview/share-accounts)

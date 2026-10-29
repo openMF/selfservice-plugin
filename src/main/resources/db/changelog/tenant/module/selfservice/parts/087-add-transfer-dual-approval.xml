@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright since 2026 Mifos Initiative
+    This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one at
+    http://mozilla.org/MPL/2.0/.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <!--
+        MX-489: dual approval for ENTITY client transfers.
+        New tables, plus a per-tenant switch added to c_external_service (off by default); no
+        existing row is changed. Approver OTPs use the step-up challenge table (082) with action
+        APPROVE_SECOND_SIGNATURE.
+    -->
+
+    <!-- Self-service users allowed to approve transfers for an ENTITY client.
+         Kept separate from m_selfservice_user_client_mapping, whose unique_self_client
+         constraint allows only one owner per client. -->
+    <changeSet author="fineract" id="ss-0087-1">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_entity_signatory"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_entity_signatory">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ss_signatory_client"
+                             referencedTableName="m_client" referencedColumnNames="id"/>
+            </column>
+            <column name="appuser_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ss_signatory_appuser"
+                             referencedTableName="m_appselfservice_user" referencedColumnNames="id"/>
+            </column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="m_selfservice_entity_signatory"
+                             columnNames="client_id, appuser_id"
+                             constraintName="uq_ss_signatory_client_appuser"/>
+        <createIndex tableName="m_selfservice_entity_signatory" indexName="idx_ss_signatory_appuser">
+            <column name="appuser_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Per-client, per-currency threshold. No row = no dual approval (existing behaviour). -->
+    <changeSet author="fineract" id="ss-0087-2">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_client_approval_threshold"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_client_approval_threshold">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ss_threshold_client"
+                             referencedTableName="m_client" referencedColumnNames="id"/>
+            </column>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="threshold_amount" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="m_selfservice_client_approval_threshold"
+                             columnNames="client_id, currency_code"
+                             constraintName="uq_ss_threshold_client_currency"/>
+    </changeSet>
+
+    <!-- Transfers held for a second signatory. -->
+    <changeSet author="fineract" id="ss-0087-3">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="m_selfservice_transfer_approval"/>
+            </not>
+        </preConditions>
+        <createTable tableName="m_selfservice_transfer_approval">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ss_transfer_approval_client"
+                             referencedTableName="m_client" referencedColumnNames="id"/>
+            </column>
+            <column name="requested_by" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ss_transfer_approval_requester"
+                             referencedTableName="m_appselfservice_user" referencedColumnNames="id"/>
+            </column>
+            <column name="decided_by" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_ss_transfer_approval_decider"
+                             referencedTableName="m_appselfservice_user" referencedColumnNames="id"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transfer_amount" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_at" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+        <createIndex tableName="m_selfservice_transfer_approval" indexName="idx_ss_transfer_approval_client_status">
+            <column name="client_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Per-tenant switch, service SELF_SERVICE_DUAL_APPROVAL (same convention as 083 and 086).
+         enabled  true|false  (default false: no transfer is held, even with a threshold row) -->
+    <changeSet author="fineract" id="ss-0087-4">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_DUAL_APPROVAL'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <insert tableName="c_external_service">
+            <column name="name" value="SELF_SERVICE_DUAL_APPROVAL"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0087-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_DUAL_APPROVAL')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_DUAL_APPROVAL')"/>
+            <column name="name" value="enabled"/>
+            <column name="value" value="false"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

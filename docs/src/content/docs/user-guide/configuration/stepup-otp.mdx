@@ -1,0 +1,172 @@
+---
+title: Step-up OTP Authentication
+description: Configure step-up OTP and authenticator app (TOTP) for sensitive operations
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Step-up OTP Authentication
+
+<Aside type="caution">
+  <strong>Security-critical feature.</strong> Step-up OTP protects sensitive operations (transfers, password changes). Treat the HMAC key and TOTP encryption key like other tenant secrets — only administrators should read `c_external_service_properties`.
+</Aside>
+
+Sensitive operations can require a fresh one-time code (SMS or email) before they are executed, so a stolen session cannot move money or change the password. It is **disabled by default**: with the defaults the API behaves exactly as before.
+
+## Enable Step-up for a Tenant
+
+Everything is configured **per tenant** in the external service `SELF_SERVICE_STEP_UP` (tables `c_external_service` / `c_external_service_properties`, seeded and disabled by Liquibase). Nothing is read from environment variables.
+
+### 1. Set the HMAC key
+
+Give the tenant its own HMAC key (at least 32 characters, random). It is used to hash the OTPs. Treat it like the other external-service secrets (SMTP, SMS): only administrators should be able to read the external service configuration.
+
+```sql
+UPDATE c_external_service_properties
+SET value = '<long random value>'
+WHERE name = 'hmacSecret'
+  AND external_service_id = (
+    SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+  );
+```
+
+Until a usable key is set (the seeded placeholder is too short on purpose), challenges are refused with `error.msg.selfservice.stepup.misconfigured`.
+
+### 2. Turn it on
+
+```sql
+UPDATE c_external_service_properties
+SET value = 'true'
+WHERE name = 'enabled'
+  AND external_service_id = (
+    SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+  );
+```
+
+### Step-up Configuration Keys
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Master switch |
+| `hmacSecret` | placeholder | Key used to hash this tenant's OTPs (at least 32 characters) |
+| `protectedActions` | `TPT_TRANSFER,CONFIRM_TRANSFER,CHANGE_PASSWORD` | Also available: `OWN_TRANSFER` |
+| `channels` | `SMS,EMAIL` | Channels offered to the user |
+| `otpLength` | `6` (4–8) | Digits of the code |
+| `otpTtlSeconds` | `300` (60–900) | Validity of a code |
+| `maxAttempts` | `5` (1–10) | Wrong codes before the challenge is locked |
+| `lockoutSeconds` | `900` | How long a locked user/action must wait |
+| `resendCooldownSeconds` | `60` | Resend cooldown (seconds) |
+| `maxResends` | `3` | Maximum resends |
+| `grantTtlSeconds` | `120` (30–600) | Validity of the token returned after verification |
+| `challengeRateLimit` | `5` | Challenges per user per window |
+| `challengeRateWindowSeconds` | `900` | Rate limit window (seconds) |
+| `retentionDays` | `30` | Challenges are kept this long (audit trail) |
+| `invalidateSessionsOnPasswordChange` | follows `enabled` | Revoke all sessions after a password change |
+
+### 3. Ensure Delivery Works
+
+Make sure email (SMTP) and/or SMS delivery works for the tenant: codes are sent through the self-service notification module (template `STEP_UP_OTP`, es-MX by default, English with an English `Accept-Language`).
+
+## Step-up Flow
+
+The client authenticates with the **session token** returned by login (carried as `Basic base64(<token>)` in the `Authorization` header). Step-up only needs a stable session identifier, resolved through `StepUpSessionResolver` — it also recognises `Authorization: Bearer ***`.
+
+| Step | Request |
+|---|---|
+| 0 | `GET /v1/self/stepup/config` — enabled? protected actions, channels this user can use |
+| 1 | `POST /v1/self/stepup/challenges` `{ "action": "TPT_TRANSFER", "channel": "SMS", "payload": { ... } }` → `201` with `challengeId`, `maskedDestination`, `expiresAt`, `attemptsRemaining`, `resendAvailableAt` |
+| 2 | `POST /v1/self/stepup/challenges/{id}/verify` `{ "otp": "123456" }` → `200 { "stepUpToken": "...", "expiresAt": "..." }` |
+| 2b | `POST /v1/self/stepup/challenges/{id}/resend` (cooldown and maximum apply; attempts are not reset) |
+| 3 | The protected request with header `X-Step-Up-Token: <stepUpToken>` |
+
+The token works **once**, only for the same user, same session, same action, and **same payload**: the server recomputes the digest from the real request, so an approved code cannot execute a different transfer.
+
+### Protected Actions
+
+| Action | Protected Request | Payload Bound into the Token |
+|---|---|---|
+| `TPT_TRANSFER` | `POST /v1/self/accounttransfers?type=tpt` | `fromAccountId, fromAccountType, toAccountId, toAccountType, transferAmount` |
+| `OWN_TRANSFER` | `POST /v1/self/accounttransfers` | Same as above |
+| `CONFIRM_TRANSFER` | `POST /v1/self/accounttransfers/confirm` | `fromAccount, fromAccountType, toAccount, toAccountType, toPhoneNumber, transferType, currencyCode, transferAmount` |
+| `CHANGE_PASSWORD` | `PUT /v1/self/user` | The action only; all sessions are revoked afterwards |
+
+When step-up protects `CONFIRM_TRANSFER`, the older in-line transfer OTP is replaced: `/quote` no longer sends a code, `/confirm` expects the step-up token instead of `otp`, and `/otp/resend` answers `stepup.legacy.otp.disabled`.
+
+## Step-up Errors
+
+| Code (`error.msg.selfservice.stepup.*`) | HTTP | Extra Fields |
+|---|---|---|
+| `required` | 403 | `action` |
+| `invalid` | 403 | — |
+| `session.required` | 403 | — |
+| `otp.invalid` | 400 | `attemptsRemaining` |
+| `otp.expired`, `disabled`, `action.not.protected`, `channel.unavailable`, `legacy.otp.disabled`, `resend.unsupported`, `totp.disabled`, `totp.not.enrolled` | 400 | — |
+| `totp.already.enrolled` | 409 | — |
+| `locked`, `resend.cooldown`, `resend.limit`, `rate.limited` | 429 | `retryAfterSeconds` (+ `Retry-After` header) |
+| `misconfigured` | 500 | — |
+
+Browser clients served from another origin must allow the `X-Step-Up-Token` request header in the Fineract CORS configuration (`fineract.security.cors.allowed-headers`).
+
+## Authenticator App (TOTP)
+
+A client can pair an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password…) and use the 6-digit code of the app instead of an SMS or email code for the same protected actions. It is **disabled by default** and **per tenant**.
+
+### Enable TOTP for a Tenant
+
+All keys belong to the same external service `SELF_SERVICE_STEP_UP` (Liquibase `089` adds them with safe defaults).
+
+#### 1. Set the TOTP encryption key
+
+```sql
+UPDATE c_external_service_properties
+SET value = '<long random value>'
+WHERE name = 'totpEncryptionKey'
+  AND external_service_id = (
+    SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+  );
+```
+
+Without a usable key (the seeded placeholder is too short on purpose), nobody can pair an app and the API answers `error.msg.selfservice.stepup.misconfigured`.
+
+#### 2. Turn it on
+
+Step-up as a whole (`enabled`) must be on too:
+
+```sql
+UPDATE c_external_service_properties
+SET value = 'true'
+WHERE name = 'totpEnabled'
+  AND external_service_id = (
+    SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_STEP_UP'
+  );
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `totpEnabled` | `false` | Switch of the authenticator |
+| `totpEncryptionKey` | placeholder | At least 32 characters; encrypts TOTP secrets and recovery code hashes |
+| `totpIssuer` | `Mifos` | Name the app shows next to the account (max 40 characters) |
+| `totpWindowSteps` | `1` (0–2) | 30-second steps accepted either side of the current one |
+| `totpMaxFailures` | `5` (1–10) | Wrong codes before the authenticator locks |
+| `totpLockoutSeconds` | `900` (60–86400) | How long it stays locked |
+| `recoveryCodeCount` | `10` (5–20) | Recovery codes handed out |
+| `totpExclusive` | `true` | While a user has an active authenticator, SMS and email codes are **not** offered |
+
+Digits (6), period (30 s) and SHA-1 are fixed: Google Authenticator ignores any other value.
+
+### Pairing Flow
+
+| Step | Request |
+|---|---|
+| 1 | `POST /v1/self/stepup/totp/enrollment` → `201 { "secret", "otpauthUri", ... }` |
+| 2 | Step-up challenge for `MANAGE_AUTHENTICATOR` over SMS or email → `stepUpToken` |
+| 3 | `POST /v1/self/stepup/totp/enrollment/confirm` `{ "code": "123456" }` with `X-Step-Up-Token` → `200 { "recoveryCodes": [...] }` |
+
+Recovery codes are shown **once**. Use `GET /v1/self/stepup/totp` to check status, `POST /v1/self/stepup/totp/recovery-codes` to regenerate, and `DELETE /v1/self/stepup/totp` to remove.
+
+## Security Notes
+
+- The TOTP secret is stored AES-256-GCM encrypted (random nonce, user id bound in).
+- Recovery codes are stored only as keyed hashes.
+- Secrets are never logged, never put in an event, never returned again.
+- Staff can remove a pairing: `DELETE /v1/selfservice/users/{userId}/totp` (permission `UPDATE_SELFSERVICEUSER`).
