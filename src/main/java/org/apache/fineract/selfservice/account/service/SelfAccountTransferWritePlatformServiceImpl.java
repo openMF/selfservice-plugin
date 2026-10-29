@@ -418,14 +418,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
   // =====================================================================
 
   /**
-   * True when the source client is an ENTITY with an approval threshold for the source account's
-   * currency and {@code amount} (fee excluded) is greater than or equal to it. The currency comes
-   * from the account, never from the request, so it cannot be changed to dodge the threshold. No
-   * threshold row means no dual approval, which keeps the existing flow for every other client.
+   * True when the tenant has dual approval enabled, the source client is an ENTITY with an
+   * approval threshold for the source account's currency, and {@code amount} (fee excluded) is
+   * greater than or equal to it. The currency comes from the account, never from the request, so
+   * it cannot be changed to dodge the threshold. Switch off or no threshold row means no dual
+   * approval, which keeps the existing flow for every other tenant and client.
    */
   private boolean requiresDualApproval(SavingsAccount sourceSavingsAccount, BigDecimal amount) {
     Client client = sourceSavingsAccount.getClient();
-    if (client == null || !LegalForm.ENTITY.getValue().equals(client.getLegalForm())) {
+    if (client == null
+        || !LegalForm.ENTITY.getValue().equals(client.getLegalForm())
+        || !isDualApprovalEnabled()) {
       return false;
     }
     List<BigDecimal> thresholds =
@@ -436,6 +439,21 @@ public class SelfAccountTransferWritePlatformServiceImpl
             client.getId(),
             sourceSavingsAccount.getCurrency().getCode());
     return !thresholds.isEmpty() && amount != null && amount.compareTo(thresholds.get(0)) >= 0;
+  }
+
+  /**
+   * Per-tenant switch {@code SELF_SERVICE_DUAL_APPROVAL.enabled}, seeded {@code false} by 087. Read
+   * per call, like the other per-tenant settings, so one tenant never sees another's value. A read
+   * error is not swallowed: falling back to "off" would let a large transfer skip the approval.
+   */
+  private boolean isDualApprovalEnabled() {
+    List<String> values =
+        jdbcTemplate.queryForList(
+            "SELECT p.value FROM c_external_service_properties p JOIN c_external_service s ON"
+                + " p.external_service_id = s.id"
+                + " WHERE s.name = 'SELF_SERVICE_DUAL_APPROVAL' AND p.name = 'enabled'",
+            String.class);
+    return !values.isEmpty() && Boolean.parseBoolean(StringUtils.trim(values.get(0)));
   }
 
   /**

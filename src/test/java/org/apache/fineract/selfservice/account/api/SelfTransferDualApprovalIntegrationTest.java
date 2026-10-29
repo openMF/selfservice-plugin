@@ -128,6 +128,7 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
     setStepUpProperty("challengeRateLimit", "5");
     setStepUpProperty("hmacSecret", "change-me-before-enabling");
     setStepUpProperty("protectedActions", originalProtectedActions);
+    setDualApprovalEnabled("false");
     originalPinService.forEach(SelfTransferDualApprovalIntegrationTest::setPinProperty);
     pinGateway.stop();
   }
@@ -138,6 +139,7 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
     setStepUpProperty("enabled", "true");
     setStepUpProperty("challengeRateLimit", "50");
     setStepUpProperty("protectedActions", "CONFIRM_TRANSFER,APPROVE_SECOND_SIGNATURE");
+    setDualApprovalEnabled("true");
     resetPinGateway("{\"operationId\":\"PIN-OP-1\",\"internalRefNumber\":\"PIN-REF-1\"}");
   }
 
@@ -204,6 +206,22 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
     assertNotEquals("PENDING_APPROVAL", response.path("status"));
     assertEquals("0", approvalCount(company.account()));
     assertMovedOnce(company, senderBefore, receiverBefore, "99.99");
+  }
+
+  @Test
+  @DisplayName("tenant switch off: at the threshold the transfer runs at once, without an approval")
+  void tenantSwitchOff_executesImmediately() {
+    Company company = newCompany();
+    BigDecimal senderBefore = balance(company.account());
+    BigDecimal receiverBefore = balance(receiver);
+    setDualApprovalEnabled("false");
+
+    Response response = confirmSameBank(company, "100.00");
+
+    assertEquals(200, response.statusCode(), response.asString());
+    assertNotEquals("PENDING_APPROVAL", response.path("status"));
+    assertEquals("0", approvalCount(company.account()));
+    assertMovedOnce(company, senderBefore, receiverBefore, "100.00");
   }
 
   @Test
@@ -367,9 +385,9 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
   @Test
   @DisplayName("PIN: a failure after the gateway accepted ends as FAILED and is never sent again")
   void pinTransfer_failureAfterTheSend_isFinal() {
-    // The gateway accepts the transfer but answers with a body that is not JSON, so the plugin
-    // fails after the money left. The approval must not go back to PENDING.
-    resetPinGateway("OK");
+    // The gateway accepts the transfer but answers with an amount that is not a number, so the
+    // plugin fails after the money left. The approval must not go back to PENDING.
+    resetPinGateway("{\"operationId\":\"PIN-OP-1\",\"debitedAmount\":\"n/a\"}");
     Company company = newCompany();
     long approvalId = holdPin(company, "100.00");
 
@@ -551,6 +569,10 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
 
   private static void setStepUpProperty(String name, String value) {
     setExternalServiceProperty("SELF_SERVICE_STEP_UP", name, value);
+  }
+
+  private static void setDualApprovalEnabled(String value) {
+    setExternalServiceProperty("SELF_SERVICE_DUAL_APPROVAL", "enabled", value);
   }
 
   // ---------------------------------------------------------------------------------------------

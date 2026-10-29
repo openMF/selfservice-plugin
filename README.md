@@ -386,7 +386,14 @@ A nightly job (batch instances only, `mifos.self.service.activity.purge.enabled`
 
 ## Dual approval (ENTITY clients)
 
-A business (ENTITY) client can require a second signatory for large transfers (MX-489). It is off unless a threshold row exists for the client, so every other client keeps the single-user flow.
+A business (ENTITY) client can require a second signatory for large transfers (MX-489). It is off unless the tenant switches it on **and** a threshold row exists for the client, so every other tenant and client keeps the single-user flow.
+
+- **Tenant switch:** service `SELF_SERVICE_DUAL_APPROVAL`, property `enabled` (default `false`, seeded by Liquibase 087). While it is `false` no transfer is held, whatever thresholds exist. Turning it off does not cancel transfers already held: they can still be approved or rejected.
+
+```sql
+UPDATE c_external_service_properties SET value = 'true' WHERE name = 'enabled'
+  AND external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_DUAL_APPROVAL');
+```
 
 - **Threshold:** set per client and currency in `m_selfservice_client_approval_threshold`. A transfer is held when its amount, **excluding the fee**, is **greater than or equal to** the threshold for the source account's currency. The currency is read from the account, not from the request. There is no tenant-wide threshold.
 - **Signatories:** self-service users who may approve for a client are listed in `m_selfservice_entity_signatory` (`is_active = false` revokes them). The one-owner-per-client mapping (`unique_self_client`) is unchanged.

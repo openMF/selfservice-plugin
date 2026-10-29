@@ -458,10 +458,9 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
     numericSourceAccount(SAVINGS_ID, ownSavings);
     SelfServiceRegistration registration = validOtpRegistration();
-    when(registrationRepository
-            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-                OWN_CLIENT_ID, SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
-        .thenReturn(Optional.of(registration));
+    when(registrationRepository.findUserOtps(
+            OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP))
+        .thenReturn(List.of(registration));
     when(quoteService.calculateFee(any(), any(Client.class)))
         .thenReturn(
             new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
@@ -991,6 +990,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void createTransfer_notificationCarriesAccountNumbersClientNamesAndDescription() {
     when(dataValidator.validateCreate(eq(""), anyString()))
         .thenReturn(transferParams(1L, 2L, "100.00"));
+    numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
     when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any()))
         .thenReturn("Rent");
     CommandProcessingResult result = mock(CommandProcessingResult.class);
@@ -1023,6 +1023,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void createTransfer_unresolvedAccountNumber_showsNaNotInternalId() {
     when(dataValidator.validateCreate(eq(""), anyString()))
         .thenReturn(transferParams(1L, 2L, "100.00"));
+    numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
     when(accountTransfersWritePlatformService.create(any()))
         .thenReturn(mock(CommandProcessingResult.class));
     when(jdbcTemplate.queryForList(anyString(), eq(String.class), any())).thenReturn(List.of());
@@ -1218,7 +1219,15 @@ class SelfAccountTransferWritePlatformServiceImplTest {
                 eq(OWN_CLIENT_ID),
                 eq("CRC")))
         .thenReturn(threshold == null ? List.of() : List.of(new BigDecimal(threshold)));
+    tenantDualApproval(List.of("true"));
     return ownSavings;
+  }
+
+  /** Values of the tenant's SELF_SERVICE_DUAL_APPROVAL.enabled property (empty = no row). */
+  private void tenantDualApproval(List<String> enabledValues) {
+    lenient()
+        .when(jdbcTemplate.queryForList(contains("SELF_SERVICE_DUAL_APPROVAL"), eq(String.class)))
+        .thenReturn(enabledValues);
   }
 
   private void approverOtpProtected(boolean isProtected) {
@@ -1260,6 +1269,37 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void confirmTransfer_entityWithoutThresholdForTheCurrency_executesImmediately() throws Exception {
     validLegacyOtp();
     entitySourceAccount(null);
+
+    assertThrows(
+        RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyExecutionReached();
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_entityAtThreshold_tenantSwitchOff_executesImmediately() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    tenantDualApproval(List.of("false"));
+
+    assertThrows(
+        RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyExecutionReached();
+    verify(jdbcTemplate, never())
+        .queryForList(contains("approval_threshold"), eq(BigDecimal.class), any(), any());
+    verifyNoInteractions(transferApprovalRepository);
+  }
+
+  @Test
+  void confirmTransfer_entityAtThreshold_tenantSwitchMissing_executesImmediately()
+      throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    tenantDualApproval(List.of());
 
     assertThrows(
         RuntimeException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));

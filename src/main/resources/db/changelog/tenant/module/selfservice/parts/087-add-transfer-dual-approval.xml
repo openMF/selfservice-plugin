@@ -12,8 +12,9 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
     <!--
         MX-489: dual approval for ENTITY client transfers.
-        Only new tables; no existing table or row is touched. Approver OTPs use the step-up
-        challenge table (082) with action APPROVE_SECOND_SIGNATURE.
+        New tables, plus a per-tenant switch added to c_external_service (off by default); no
+        existing row is changed. Approver OTPs use the step-up challenge table (082) with action
+        APPROVE_SECOND_SIGNATURE.
     -->
 
     <!-- Self-service users allowed to approve transfers for an ENTITY client.
@@ -131,6 +132,35 @@
             <column name="client_id"/>
             <column name="status"/>
         </createIndex>
+    </changeSet>
+
+    <!-- Per-tenant switch, service SELF_SERVICE_DUAL_APPROVAL (same convention as 083 and 086).
+         enabled  true|false  (default false: no transfer is held, even with a threshold row) -->
+    <changeSet author="fineract" id="ss-0087-4">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM c_external_service WHERE name = 'SELF_SERVICE_DUAL_APPROVAL'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <insert tableName="c_external_service">
+            <column name="name" value="SELF_SERVICE_DUAL_APPROVAL"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fineract" id="ss-0087-5">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM c_external_service_properties esp
+                WHERE esp.external_service_id = (SELECT id FROM c_external_service WHERE name = 'SELF_SERVICE_DUAL_APPROVAL')
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="c_external_service_properties">
+            <column name="external_service_id" valueComputed="(SELECT id FROM c_external_service WHERE name='SELF_SERVICE_DUAL_APPROVAL')"/>
+            <column name="name" value="enabled"/>
+            <column name="value" value="false"/>
+        </insert>
     </changeSet>
 
 </databaseChangeLog>
