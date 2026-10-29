@@ -23,6 +23,7 @@ import org.apache.fineract.selfservice.account.data.RemittanceRecipientRequest;
 import org.apache.fineract.selfservice.account.data.RemittanceResponse;
 import org.apache.fineract.selfservice.account.domain.SelfServiceRemittance;
 import org.apache.fineract.selfservice.account.domain.SelfServiceRemittanceRepository;
+import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class RemittanceService {
   private final RemittanceExternalService externalService;
   private final SelfServiceRemittanceRepository remittanceRepository;
   private final PlatformSelfServiceSecurityContext context;
+  private final SelfServiceOwnershipGuard ownershipGuard;
   private final Gson gson = new Gson();
 
   public String getAvailableVendors(String operationType) {
@@ -136,9 +138,12 @@ public class RemittanceService {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();  
     Client client = user.getAppUserClientMappings().iterator().next().getClient();
     
-    String clientId = request.getClientIdMifos() != null
-        ? request.getClientIdMifos()
-        : String.valueOf(client.getId());
+    Long clientId = client.getId();
+    if (request.getClientIdMifos() != null) {
+      // the payout goes to this client, so it has to be one of the caller's own
+      clientId = parseClientId(request.getClientIdMifos());
+      ownershipGuard.validateClientOwnership(clientId);
+    }
 
     Map<String, Object> body = new HashMap<>();
     Map<String, String> additional = new HashMap<>();
@@ -146,7 +151,8 @@ public class RemittanceService {
         ? request.getAdditionalInfoComment() : "Payout confirmed from Self Service");
     body.put("additionalInfo", additional);
 
-    String raw = externalService.confirmPayout(vendor, transactionId, clientId, body);
+    String raw =
+        externalService.confirmPayout(vendor, transactionId, String.valueOf(clientId), body);
     updateLocalStatus(transactionId, vendor, "PAID", raw);
 
     return RemittanceResponse.builder()
@@ -316,6 +322,15 @@ public class RemittanceService {
         .createdOn(entity.getCreatedOn())
         .message("Remittance created successfully")
         .build();
+  }
+
+  /** Returns null for a non-numeric id so the ownership guard rejects it. */
+  private Long parseClientId(String clientIdMifos) {
+    try {
+      return Long.valueOf(clientIdMifos.trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   private void updateLocalStatus(String pin, String vendor, String status, String rawResponse) {
