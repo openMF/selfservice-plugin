@@ -1,0 +1,107 @@
+# Mifos Self Service Plugin — Documentation
+
+This `llms.txt` provides a concise, machine-readable overview of the Mifos Self Service Plugin documentation site. It is intended for AI agents, coding assistants, and LLM consumers.
+
+## Site
+- **Title:** Mifos Self Service Plugin
+- **Description:** Customer-facing self-service banking APIs for Apache Fineract
+- **Source repo:** https://github.com/openMF/selfservice-plugin
+- **Docs repo:** https://github.com/openMF/selfservice-plugin-docs
+- **License:** MPL-2.0
+
+## What is the Self Service Plugin?
+A Spring Boot plugin (JAR) that extends Apache Fineract to provide customer-facing self-service banking APIs under `/v1/self/...`. It is NOT a standalone application — it is dropped into an existing Fineract deployment.
+
+## Key Capabilities
+- Self-Registration & Enrollment
+- Authentication & Session Management
+- Password Recovery
+- Client Profile
+- Savings Accounts
+- Loan Accounts
+- Share Accounts
+- Fund Transfers (Own + Third-Party)
+- Beneficiary Management
+- Products Catalog
+- Reports & Surveys
+- Activity History
+- Step-up OTP Authentication
+- Authenticator App (TOTP)
+- Notifications (Email / SMS)
+
+## Tech Stack
+- Java 25 · Spring Boot 4 · Spring Security (Basic Auth + OAuth2)
+- JAX-RS · Swagger / OpenAPI
+- JPA / EclipseLink · Liquibase (multi-tenant)
+- Apache Fineract 1.16.0-SNAPSHOT · PostgreSQL / MySQL
+
+## Documentation Sections
+
+### Getting Started
+- Introduction: /getting-started/introduction
+- What is the Self Service Plugin?: /getting-started/what-is
+- Architecture Overview: /getting-started/architecture
+- Prerequisites: /getting-started/prerequisites
+
+### User Guide — Installation
+- Build from Source: /user-guide/installation/build-from-source
+- Deploy with Docker: /user-guide/installation/docker
+- Deploy with Tomcat: /user-guide/installation/tomcat
+- Pre-built JARs (Artifactory): /user-guide/installation/prebuilt-jars
+
+### User Guide — Configuration
+- Basic Settings: /user-guide/configuration/basic-settings
+- Notifications (Email / SMS): /user-guide/configuration/notifications
+- Step-up OTP Authentication: /user-guide/configuration/stepup-otp
+
+### User Guide — API Overview
+- Authentication & Registration: /user-guide/api-overview/authentication-registration
+- Client Profile: /user-guide/api-overview/client-profile
+- Savings Accounts: /user-guide/api-overview/savings-accounts
+- Loan Accounts: /user-guide/api-overview/loan-accounts
+- Share Accounts: /user-guide/api-overview/share-accounts
+- Transfers & Beneficiaries: /user-guide/api-overview/transfers-beneficiaries
+- Products Catalog: /user-guide/api-overview/products-catalog
+- Reports & Surveys: /user-guide/api-overview/reports-surveys
+- Activity History: /user-guide/api-overview/activity-history
+
+### User Guide — API Reference
+- Endpoints Summary: /user-guide/api-reference/endpoints-summary
+- Postman & Bruno Collections: /user-guide/api-reference/postman-bruno
+- Swagger / OpenAPI: /user-guide/api-reference/swagger-openapi
+
+### User Guide — Security
+- Security & Best Practices: /user-guide/security-best-practices
+
+### Developer Guide
+- Development Setup: /developer-guide/development-setup
+- Project Structure: /developer-guide/project-structure
+- Coding Standards & Patterns: /developer-guide/coding-standards
+- Adding New Endpoints: /developer-guide/adding-new-endpoints
+- Testing (Unit + Integration + Testcontainers): /developer-guide/testing
+- Database Migrations (Liquibase): /developer-guide/database-migrations
+- Contributing: /developer-guide/contributing
+- Troubleshooting: /developer-guide/troubleshooting
+
+### Reference
+- Configuration Properties: /reference/configuration-properties
+- Permissions: /reference/permissions
+- Changelog / Version Compatibility: /reference/changelog-version-compatibility
+- License: /reference/license
+
+## Key Facts for AI Agents
+- All endpoints live under `/v1/self/`
+- The plugin auto-registers endpoints and runs Liquibase migrations against every Fineract tenant at startup
+- Per-tenant config (step-up OTP, activity, notifications) is in `c_external_service` / `c_external_service_properties` tables — nothing read from env vars
+- Step-up OTP is disabled by default; enable per tenant via `SELF_SERVICE_STEP_UP` external service
+- Activity history is enabled by default; configure via `SELF_SERVICE_ACTIVITY` external service
+- Build: `./mvnw clean package -Dmaven.test.skip=true`
+- Deploy: copy JAR to `/opt/fineract/plugins/` (Docker) or `WEB-INF/lib/` (Tomcat), restart Fineract
+- Full OpenAPI/Swagger available at runtime via Fineract Swagger UI when plugin loaded
+
+## How to Use This Documentation with an AI Agent
+- Fetch any page URL directly; pages are semantic HTML with clean headings, tables, and code blocks
+- Use the sitemap at /sitemap.xml to enumerate all pages
+- Use Pagefind search (built-in) for full-text search across the docs
+- Code blocks are fenced with language tags (bash, sql, yaml, java, json)
+- Tables use standard Markdown/HTML table format

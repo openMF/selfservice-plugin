@@ -1,0 +1,44 @@
+---
+title: Endpoints Summary
+description: Complete summary of all /v1/self/* API endpoints
+---
+
+# Endpoints Summary
+
+All endpoints live under `/v1/self/`. Full OpenAPI/Swagger documentation is available at runtime via the Fineract Swagger UI when the plugin is loaded.
+
+## Endpoints by Resource
+
+| Base Path | Resource | Methods |
+|---|---|---|
+| `/v1/self/registration` | Self-Registration & Enrollment | `POST` |
+| `/v1/self/authentication` | Login (HTTP Basic) | `POST` |
+| `/v1/self/password` | Forgot Password / Reset | `POST` |
+| `/v1/self/user` | Current User Profile (password change; step-up protected when enabled) | `PUT` |
+| `/v1/self/userdetails` | Current User Details | `GET` |
+| `/v1/self/clients` | Client Profile, Images, Charges, Transactions | `GET`, `POST`, `PUT`, `DELETE` |
+| `/v1/self/savingsaccounts` | Savings Accounts & Transactions | `GET`, `POST` |
+| `/v1/self/loans` | Loan Accounts, Charges, Guarantors | `GET`, `POST`, `PUT` |
+| `/v1/self/shareaccounts` | Share Accounts | `GET`, `POST` |
+| `/v1/self/accounttransfers` | Fund Transfers (Own + TPT) | `GET`, `POST` |
+| `/v1/self/stepup` | Step-up (OTP) authentication for sensitive operations | `GET`, `POST` |
+| `/v1/self/activity` | Activity history of the logged-in user | `GET` |
+| `/v1/self/beneficiaries/tpt` | Third-Party Transfer Beneficiaries | `GET`, `POST`, `PUT`, `DELETE` |
+| `/v1/self/loanproducts` | Loan Products Catalog | `GET` |
+| `/v1/self/savingsproducts` | Savings Products Catalog | `GET` |
+| `/v1/self/products/share` | Share Products Catalog | `GET` |
+| `/v1/self/runreports` | Self-Service Reports | `GET` |
+| `/v1/self/surveys` | Surveys (SPM) | `GET` |
+| `/v1/self/surveys/scorecards` | Survey Scorecards | `GET`, `POST` |
+
+## Additional Staff-Facing Endpoints
+
+| Base Path | Resource | Methods |
+|---|---|---|
+| `/v1/selfservice/users` | User Administration | `GET`, `PUT`, `DELETE` |
+| `/v1/selfservice/users/{userId}/totp` | TOTP Reset (staff) | `DELETE` |
+
+## Try It Out
+
+- **Postman & Bruno collections:** [Collections](/user-guide/api-reference/postman-bruno)
+- **Swagger UI:** Available at runtime via Fineract when the plugin is loaded ([details](/user-guide/api-reference/swagger-openapi))

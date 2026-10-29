@@ -1,0 +1,137 @@
+---
+title: Mifos Self Service Plugin
+description: Customer-facing self-service banking APIs for Apache Fineract — registration, authentication, accounts, transfers, step-up OTP, and activity history.
+---
+
+import { CardGrid, Card } from '@astrojs/starlight/components';
+
+<aside slot="hero">
+  <div class="ambient">
+    <div class="ambient-blob ambient-blob-1"></div>
+    <div class="ambient-blob ambient-blob-2"></div>
+  </div>
+
+  <div class="glass-card reveal reveal-delay-1" style="max-width: 820px; margin: 0 auto;">
+    <div style="margin-bottom: 1rem;">
+      <span class="badge badge-teal">Open Source · Apache Fineract Plugin · MPL-2.0</span>
+    </div>
+    <h1 class="text-gradient reveal reveal-delay-3" style="font-size: 3rem; margin: 0 0 1.25rem 0; line-height: 1.15;">
+      Self-Service Banking, Built for Fineract
+    </h1>
+    <p class="reveal reveal-delay-4" style="font-size: 1.25rem; color: var(--mifos-text-muted); margin: 0 0 1.75rem 0;">
+      A Spring Boot plugin that gives bank customers a modern self-service experience —
+      registration, authentication, accounts, transfers, step-up OTP, and activity history —
+      all through a dedicated <code>/v1/self/</code> API surface.
+    </p>
+    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+      <a href="/user-guide/installation/" class="button button-primary reveal reveal-delay-5">
+        Get Started
+      </a>
+      <a href="/user-guide/api-reference/endpoints-summary/" class="button button-outline reveal reveal-delay-5">
+        View API Endpoints
+      </a>
+    </div>
+  </div>
+</aside>
+
+# Mifos Self Service Plugin
+
+A Spring Boot plugin that extends [Apache Fineract](https://fineract.apache.org/) to provide **customer-facing self-service banking APIs** under `/v1/self/...`.
+
+It lets customers register, authenticate, view their accounts, transfer funds, and manage their financial products — all without staff intervention. This is a **plugin**, not a standalone application: it ships as a JAR you drop into your existing Fineract deployment.
+
+## What You Can Build With It
+
+<CardGrid>
+<Card title="Customer Self-Registration" icon="user">
+  Let customers sign up, verify via email/SMS, and activate their own accounts — no branch visit required.
+</Card>
+
+<Card title="Authentication & Session Management" icon="lock">
+  Dedicated login with HTTP Basic Auth, session tokens, device fingerprints, and login-attempt notifications.
+</Card>
+
+<Card title="Account Management" icon="credit-card">
+  View savings, loan, and share account details, balances, transactions, and charges.
+</Card>
+
+<Card title="Fund Transfers" icon="send">
+  Transfer between own accounts or to third-party beneficiaries with configurable daily and per-beneficiary limits.
+</Card>
+
+<Card title="Step-up OTP Authentication" icon="shield-check">
+  Challenge-based one-time codes (SMS, email, or authenticator app) for sensitive operations like transfers and password changes.
+</Card>
+
+<Card title="Activity History" icon="activity">
+  Let customers view their logins and sensitive actions to spot unauthorised use — with masked IP addresses for privacy.
+</Card>
+</CardGrid>
+
+## Quick Start
+
+Build the plugin from source and deploy it into Fineract:
+
+```bash
+git clone https://github.com/openMF/selfservice-plugin.git
+cd selfservice-plugin
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+```bash
+# Copy into a Fineract deployment
+cp target/selfservice-plugin-*.jar /opt/fineract/plugins/
+java -Dloader.path=/opt/fineract/plugins/ -jar fineract-provider.jar
+```
+
+Endpoints are then available at `https://<fineract-host>/fineract-provider/v1/self/...`.
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Java 25 |
+| Framework | Spring Boot 4 · Spring Security (Basic Auth + OAuth2) |
+| API | JAX-RS · Swagger / OpenAPI |
+| Data | JPA / EclipseLink · Liquibase (multi-tenant) |
+| Runtime | Apache Fineract 1.16.0-SNAPSHOT |
+| Database | PostgreSQL or MySQL (managed by Fineract) |
+
+## Who Is This For
+
+- **Banks & fintechs** — offer customers a modern digital banking experience without replacing your core.
+- **Mobile / web app developers** — integrate self-service banking into your customer app via REST APIs.
+- **Platform engineers** — deploy a lightweight JAR plugin into your existing Fineract instance.
+- **Contributors** — extend endpoints, add features, and ship back to the community.
+
+<CardGrid>
+<Card title="Installation" icon="rocket">
+  Build from source, deploy with Docker or Tomcat, or pull pre-built JARs from Artifactory.
+
+  <div slot="footer" style="display: flex; gap: 0.5rem;">
+    <a href="/user-guide/installation/" style="text-decoration: none; color: inherit; font-weight: 500;">Read →</a>
+  </div>
+</Card>
+
+<Card title="Configuration" icon="sliders">
+  Per-tenant settings for notifications, step-up OTP, and activity retention — nothing read from env vars.
+
+  <div slot="footer" style="display: flex; gap: 0.5rem;">
+    <a href="/user-guide/configuration/" style="text-decoration: none; color: inherit; font-weight: 500;">Read →</a>
+  </div>
+</Card>
+
+<Card title="Developer Guide" icon="code">
+  Development setup, coding standards, testing with Testcontainers, and Liquibase migrations.
+
+  <div slot="footer" style="display: flex; gap: 0.5rem;">
+    <a href="/developer-guide/development-setup/" style="text-decoration: none; color: inherit; font-weight: 500;">Read →</a>
+  </div>
+</Card>
+</CardGrid>
+
+## Trusted by the Mifos Community
+
+<p style="color: var(--mifos-text-muted); text-align: center; font-size: 0.95rem;">
+  Part of the <a href="https://mifos.org/" style="color: var(--mifos-teal); font-weight: 500;">Mifos Initiative</a> — open-source banking infrastructure for financial inclusion.
+</p>

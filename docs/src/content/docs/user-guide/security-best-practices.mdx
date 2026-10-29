@@ -1,0 +1,56 @@
+---
+title: Security & Best Practices
+description: Security guidelines for the Mifos Self Service Plugin — authentication, step-up OTP, multi-tenancy, and permissions
+---
+
+# Security & Best Practices
+
+The Self Service Plugin exposes a customer-facing API surface. Security is critical.
+
+## Authentication
+
+- The plugin uses **Spring Security** with **Basic Auth** and **OAuth2** support.
+- Login returns a session token (`base64EncodedAuthenticationKey`) carried in the `Authorization` header as `Basic base64(<token>)`.
+- Step-up OTP resolves sessions through `StepUpSessionResolver`, which also recognises `Authorization: Bearer ***` for OIDC-based security models.
+- `user:password` Basic auth has no session and is rejected for step-up (`stepup.session.required`).
+
+## Step-up OTP
+
+- Sensitive operations (TPT transfer, confirm transfer, change password) can require step-up OTP verification.
+- Step-up is **disabled by default** — enable it per tenant via the `SELF_SERVICE_STEP_UP` external service.
+- Set a strong HMAC key (at least 32 random characters) for each tenant.
+- Configure protected actions, channels, OTP length, TTL, and attempt limits per tenant.
+- TOTP (authenticator app) is available as a more secure alternative to SMS/email OTP.
+
+See [Step-up OTP Authentication](/user-guide/configuration/stepup-otp) for full details.
+
+## Multi-Tenancy
+
+- Each Fineract tenant has its own database schema.
+- Plugin Liquibase migrations run against every configured tenant.
+- Per-tenant configuration is stored in `c_external_service_properties` — nothing is read from environment variables.
+- Enabling a feature for one tenant never affects another.
+
+## Activity History Privacy
+
+- IP addresses are stored and returned **masked** (`203.0.x.x`, IPv6 `2001:db8:x:x:x:x:x:x`).
+- Passwords, OTPs, tokens, email addresses, phone numbers, and full account numbers never reach the activity history.
+- The plugin never reads `X-Forwarded-For` directly — configure trusted proxies on the application server for real client IPs.
+
+## CORS
+
+Browser clients served from another origin must allow the `X-Step-Up-Token` request header in the Fineract CORS configuration (`fineract.security.cors.allowed-headers`).
+
+## Best Practices for Integrators
+
+1. **Use HTTPS** in production — session tokens and OTP codes are sensitive.
+2. **Enable step-up OTP** for sensitive operations (transfers, password changes).
+3. **Configure strong HMAC and TOTP encryption keys** per tenant (at least 32 random characters).
+4. **Restrict access** to the `c_external_service_properties` table — only administrators should read tenant secrets.
+5. **Configure trusted proxies** if behind a reverse proxy, so `getRemoteAddr()` returns the real client IP.
+6. **Rotate keys carefully** — changing the TOTP encryption key makes existing secrets undecryptable; affected users must re-pair.
+7. **Review activity history** regularly to spot unauthorised access.
+
+## Permissions
+
+See the [Permissions reference](/reference/permissions) for a complete list of permissions used by the plugin.

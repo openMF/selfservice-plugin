@@ -1,0 +1,37 @@
+---
+title: Database Migrations (Liquibase)
+description: Liquibase database migrations for the Mifos Self Service Plugin
+---
+
+# Database Migrations (Liquibase)
+
+The plugin uses Liquibase for database migrations. Scripts are located in `src/main/resources/db/changelog/`.
+
+## Multi-Tenant Migrations
+
+The plugin runs its own Liquibase migrations against **every configured Fineract tenant** at startup. This ensures that plugin-specific tables (step-up challenges, TOTP enrollments, activity history, etc.) exist in each tenant's schema.
+
+## External Service Configuration
+
+Per-tenant configuration (step-up OTP, activity history, notifications) is seeded via Liquibase into `c_external_service` and `c_external_service_properties` tables. These are seeded with safe defaults and are **disabled by default**.
+
+## Key Migration Areas
+
+| Area | Tables |
+|---|---|
+| Step-up OTP | Step-up challenges, TOTP enrollments, recovery codes |
+| Activity history | Activity log entries |
+| Registration | Self-service registration requests, tokens |
+| User administration | App self-service users, client mappings |
+| Transfers | Transfer audits, beneficiaries, payment links |
+| Pockets | Pocket account mappings |
+
+## Working with Migrations
+
+- New changelogs go in `src/main/resources/db/changelog/`.
+- Changesets should be idempotent where possible.
+- Test migrations against a real database before deploying.
+
+## Next Step
+
+[Adding New Endpoints](/developer-guide/adding-new-endpoints) — includes guidance on adding Liquibase changelogs for new tables.

@@ -1,0 +1,118 @@
+---
+title: Adding New Endpoints
+description: How to add new API endpoints to the Mifos Self Service Plugin
+---
+
+# Adding New Endpoints
+
+## 1. Create the API Resource
+
+Create a JAX-RS resource class under the appropriate package:
+
+```java
+@Path("/v1/self/newexample")
+@Component
+@Tag(name = "Self New Example", description = "New example operations")
+@RequiredArgsConstructor
+public class SelfNewExampleApiResource {
+
+    private final NewExampleService service;
+
+    @GET
+    @Path("/{id}")
+    public Response getExample(@PathParam("id") Long id) {
+        return Response.ok(service.findById(id)).build();
+    }
+
+    @POST
+    public Response createExample(NewExampleRequest request) {
+        service.create(request);
+        return Response.status(Response.Status.CREATED).build();
+    }
+}
+```
+
+## 2. Add Swagger Annotations (Optional)
+
+Create a separate `*ApiResourceSwagger` class for OpenAPI documentation:
+
+```java
+@Tag(name = "Self New Example", description = "New example operations")
+public class SelfNewExampleApiResourceSwagger {
+    // Swagger annotations for the resource
+}
+```
+
+## 3. Create the Service Layer
+
+Define a `ReadPlatformService` / `WritePlatformService` interface and implementation:
+
+```java
+public interface NewExampleReadPlatformService {
+    NewExampleData findById(Long id);
+}
+
+@Service
+@RequiredArgsConstructor
+public class NewExampleReadPlatformServiceImpl implements NewExampleReadPlatformService {
+    private final NewExampleRepository repository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public NewExampleData findById(Long id) {
+        return repository.findById(id);
+    }
+}
+```
+
+## 4. Create the Data Validator
+
+```java
+@Component
+public class NewExampleDataValidator {
+    private final FromJsonHelper fromJsonHelper;
+
+    public void validate(String json) {
+        // Validate request JSON
+    }
+}
+```
+
+## 5. Wire Up with a Starter
+
+Create a `@Configuration` class to register Spring beans:
+
+```java
+@Configuration
+public class SelfNewExampleConfiguration {
+    @Bean
+    public NewExampleService newExampleService(NewExampleRepository repository) {
+        return new NewExampleServiceImpl(repository);
+    }
+}
+```
+
+## 6. Add Liquibase Migrations (if needed)
+
+Add XML changelogs under `src/main/resources/db/changelog/` if the new endpoint requires database tables.
+
+## 7. Add Tests
+
+- Unit test: `*Test.java` (Surefire)
+- Integration test: `*IntegrationTest.java` (Failsafe)
+
+## 8. Register in Swagger
+
+Ensure the resource is picked up by Fineract's Swagger configuration so it appears in the Swagger UI.
+
+## Checklist
+
+- [ ] JAX-RS resource under `src/main/java/org/apache/fineract/selfservice/<area>/api/`
+- [ ] Service implementation under `service/`
+- [ ] DTOs and validators under `data/`
+- [ ] Entities and repositories under `domain/` (if new tables)
+- [ ] Starter configuration under `starter/`
+- [ ] Liquibase changelog (if new tables)
+- [ ] Unit test (`*Test.java`)
+- [ ] Integration test (`*IntegrationTest.java`)
+- [ ] Spotless formatting passes (`./mvnw compile`)

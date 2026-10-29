@@ -1,0 +1,65 @@
+---
+title: Postman & Bruno Collections
+description: Download and import the Postman and Bruno API collections for hands-on exploration
+---
+
+# Postman & Bruno Collections
+
+A [Postman collection](api-reference/postman/) and a [Bruno collection](api-reference/bruno/) are included in the repository for hands-on API exploration.
+
+## Collections in the Repository
+
+Both collections live under `api-reference/` in the [selfservice-plugin repository](https://github.com/openMF/selfservice-plugin/tree/develop/api-reference):
+
+```
+api-reference/
+├── bruno/
+│   └── SELF SERVICE PLUGIN/
+│       └── SELF SERVICE (MOBILE OR WEB BANKING) - LOCALHOST/
+│           ├── ACTIVITY/
+│           ├── BENEFICIARIES/
+│           ├── CLIENTS/
+│           ├── ENVIRONMENT SETUP/
+│           ├── LOANS/
+│           ├── OFFICES/
+│           ├── SAVINGS/
+│           ├── SHARES/
+│           ├── STEP-UP (OTP)/
+│           ├── TRANSFERS/
+│           └── USER/
+├── postman/
+│   └── ...
+└── opencollection.yml
+```
+
+## Importing
+
+### Postman
+
+1. Open Postman.
+2. Click **Import**.
+3. Select the Postman collection JSON file from `api-reference/postman/`.
+4. Set up environment variables (base URL, session token, etc.).
+
+### Bruno
+
+1. Open Bruno.
+2. Click **Import** → **Collection**.
+3. Select the `opencollection.yml` or the collection directory from `api-reference/bruno/`.
+4. Configure environment variables as needed.
+
+## Environment Setup
+
+The Bruno collection includes an "ENVIRONMENT SETUP" folder with requests for:
+- Adding an SMTP server
+- Creating persons and savings products
+- Creating and activating savings accounts
+- Creating loan products and accounts
+- Disbursing and repaying loans
+
+These help you set up test data before exploring the self-service endpoints.
+
+## Related
+
+- [Endpoints Summary](/user-guide/api-reference/endpoints-summary)
+- [Swagger / OpenAPI](/user-guide/api-reference/swagger-openapi)

@@ -1,0 +1,43 @@
+# =============================================================================
+# .dockerignore — Mifos Self Service Plugin documentation
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Dependency directories
+node_modules
+npm-debug.log*
+.pnpm-store
+.yarn-integrity
+
+# Build outputs
+dist
+astro-env.d.ts
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation / misc
+README.md
+README-DOCKER.md
+LICENSE
+
+# Environment files (do not commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Temporary / cache
+.cache
+.turbo
+tmp

@@ -1,0 +1,541 @@
+/* ==========================================================================
+   Mifos Self Service Plugin — Premium Design System
+   ==========================================================================
+   Inspired by Stripe, Linear, and Apple developer sites.
+   Banking palette: deep navy / charcoal primary, warm gray backgrounds,
+   refined teal accent. Glassmorphism + subtle motion.
+   ========================================================================== */
+
+/* ── Design Tokens ───────────────────────────────────────────────────────── */
+:root {
+  /* Brand colors */
+  --mifos-navy: #0b1120;
+  --mifos-navy-light: #131a2b;
+  --mifos-slate: #334155;
+  --mifos-teal: #0ea5a3;
+  --mifos-teal-soft: rgba(14, 165, 163, 0.12);
+  --mifos-gold: #b48a4f;
+  --mifos-gold-soft: rgba(180, 138, 79, 0.10);
+
+  /* Semantic */
+  --mifos-bg: #fafaf9;
+  --mifos-bg-elevated: #ffffff;
+  --mifos-text: #0f172a;
+  --mifos-text-muted: #64748b;
+  --mifos-border: rgba(15, 23, 42, 0.08);
+  --mifos-border-strong: rgba(15, 23, 42, 0.16);
+
+  /* Glass */
+  --mifos-glass-bg: rgba(255, 255, 255, 0.65);
+  --mifos-glass-border: rgba(255, 255, 255, 0.5);
+  --mifos-glass-blur: blur(16px) saturate(1.15);
+
+  /* Radius & shadows */
+  --mifos-radius-sm: 8px;
+  --mifos-radius-md: 14px;
+  --mifos-radius-lg: 20px;
+  --mifos-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --mifos-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --mifos-shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.10);
+
+  /* Motion */
+  --mifos-duration-fast: 200ms;
+  --mifos-duration-base: 400ms;
+  --mifos-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --mifos-ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Dark mode tokens */
+.dark {
+  --mifos-bg: #070a0f;
+  --mifos-bg-elevated: #0f172a;
+  --mifos-text: #f8fafc;
+  --mifos-text-muted: #94a3b8;
+  --mifos-border: rgba(255, 255, 255, 0.06);
+  --mifos-border-strong: rgba(255, 255, 255, 0.12);
+  --mifos-glass-bg: rgba(15, 23, 42, 0.55);
+  --mifos-glass-border: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Starlight Theme Overrides ──────────────────────────────────────────── */
+:root {
+  --sl-color-primary: var(--mifos-teal);
+  --sl-color-primary-light: var(--mifos-teal-soft);
+  --sl-color-secondary: var(--mifos-slate);
+  --sl-color-background: var(--mifos-bg);
+  --sl-color-foreground: var(--mifos-text);
+  --sl-color-muted: var(--mifos-text-muted);
+  --sl-color-border: var(--mifos-border);
+  --sl-font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sl-font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", monospace;
+  --sl-radius-md: var(--mifos-radius-md);
+  --sl-radius-lg: var(--mifos-radius-lg);
+}
+
+.dark {
+  --sl-color-background: var(--mifos-bg);
+  --sl-color-foreground: var(--mifos-text);
+}
+
+/* ── Base Typography ─────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--mifos-bg);
+  color: var(--mifos-text);
+  font-family: var(--sl-font-sans);
+  line-height: 1.65;
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--mifos-text);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  font-size: 1.875rem;
+  margin-top: 3rem;
+}
+
+h3 {
+  font-size: 1.375rem;
+  margin-top: 2rem;
+}
+
+p {
+  color: var(--mifos-text-muted);
+  margin-bottom: 1.25rem;
+}
+
+a {
+  color: var(--mifos-teal);
+  text-decoration: none;
+  transition: color var(--mifos-duration-fast) var(--mifos-ease);
+}
+
+a:hover {
+  color: var(--mifos-navy);
+  text-decoration: underline;
+}
+
+.dark a:hover {
+  color: #6ee7e6;
+}
+
+/* ── Glassmorphism Utilities ─────────────────────────────────────────────── */
+.glass {
+  background: var(--mifos-glass-bg);
+  backdrop-filter: var(--mifos-glass-blur);
+  -webkit-backdrop-filter: var(--mifos-glass-blur);
+  border: 1px solid var(--mifos-glass-border);
+  box-shadow: var(--mifos-shadow-sm);
+}
+
+.glass-card {
+  @apply glass;
+  background: var(--mifos-bg-elevated);
+  border-radius: var(--mifos-radius-lg);
+  padding: 2rem;
+  transition: transform var(--mifos-duration-base) var(--mifos-ease),
+    box-shadow var(--mifos-duration-base) var(--mifos-ease),
+    border-color var(--mifos-duration-base) var(--mifos-ease);
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mifos-shadow-md);
+  border-color: var(--mifos-teal-soft);
+  /* ensure dark mode variant also shows accent */
+}
+
+.dark .glass-card:hover {
+  border-color: rgba(14, 165, 163, 0.25);
+}
+
+/* ── Scroll Reveal ───────────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity var(--mifos-duration-base) var(--mifos-ease-out),
+    transform var(--mifos-duration-base) var(--mifos-ease-out);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 {
+  transition-delay: 80ms;
+}
+.reveal-delay-2 {
+  transition-delay: 160ms;
+}
+.reveal-delay-3 {
+  transition-delay: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ── Premium Callout / Aside Enhancements ────────────────────────────────── */
+.sl-aside {
+  border-left: 3px solid var(--mifos-teal);
+  background: var(--mifos-teal-soft);
+  border-radius: 0 var(--mifos-radius-md) var(--mifos-radius-md) 0;
+}
+
+.sl-aside.tip {
+  border-left-color: var(--mifos-teal);
+  background: var(--mifos-teal-soft);
+}
+
+.sl-aside.caution {
+  border-left-color: var(--mifos-gold);
+  background: var(--mifos-gold-soft);
+}
+
+.sl-aside.danger {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+/* ── Code Block Polish ───────────────────────────────────────────────────── */
+pre[class*="language-"] {
+  border-radius: var(--mifos-radius-md);
+  border: 1px solid var(--mifos-border);
+  box-shadow: var(--mifos-shadow-sm);
+}
+
+/* ── Button Polish ───────────────────────────────────────────────────────── */
+.sl-button,
+a.sl-button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--mifos-radius-md);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all var(--mifos-duration-fast) var(--mifos-ease);
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--mifos-navy);
+  color: #ffffff;
+  border: 1px solid var(--mifos-navy);
+}
+
+.button-primary:hover {
+  background: var(--mifos-slate);
+  box-shadow: var(--mifos-shadow-md);
+}
+
+.button-outline {
+  background: transparent;
+  color: var(--mifos-text);
+  border: 1px solid var(--mifos-border);
+}
+
+.button-outline:hover {
+  background: var(--mifos-bg-elevated);
+  border-color: var(--mifos-teal);
+  color: var(--mifos-teal);
+}
+
+/* ── Feature Card Grid ───────────────────────────────────────────────────── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.feature-card {
+  background: var(--mifos-bg-elevated);
+  border: 1px solid var(--mifos-border);
+  border-radius: var(--mifos-radius-lg);
+  padding: 1.75rem;
+  transition: transform var(--mifos-duration-base) var(--mifos-ease),
+    box-shadow var(--mifos-duration-base) var(--mifos-ease),
+    border-color var(--mifos-duration-base) var(--mifos-ease);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--mifos-shadow-md);
+  border-color: var(--mifos-teal-soft);
+}
+
+.feature-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.125rem;
+}
+
+.feature-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--mifos-text-muted);
+}
+
+/* ── Section Spacing ─────────────────────────────────────────────────────── */
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  max-width: 720px;
+  margin: 0 auto 3rem;
+  text-align: center;
+}
+
+.section-header h2 {
+  font-size: 1.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-header p {
+  color: var(--mifos-text-muted);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* ── Installation Tab Panels ─────────────────────────────────────────────── */
+.install-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--mifos-border);
+}
+
+.install-tab {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--mifos-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--mifos-duration-fast), border-color var(--mifos-duration-fast);
+}
+
+.install-tab.active {
+  color: var(--mifos-teal);
+  border-bottom-color: var(--mifos-teal);
+}
+
+.install-tab-panel {
+  display: none;
+  animation: fadeIn var(--mifos-duration-base) var(--mifos-ease);
+}
+
+.install-tab-panel.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Premium Table ───────────────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+}
+
+th {
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mifos-text-muted);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--mifos-border);
+}
+
+td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--mifos-border);
+  font-size: 0.95rem;
+  color: var(--mifos-text);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:hover td {
+  background: var(--mifos-teal-soft);
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-navy {
+  background: var(--mifos-navy);
+  color: #ffffff;
+}
+
+.badge-teal {
+  background: var(--mifos-teal-soft);
+  color: var(--mifos-teal);
+}
+
+.badge-gold {
+  background: var(--mifos-gold-soft);
+  color: var(--mifos-gold);
+}
+
+/* ── Starlight Component Overrides ───────────────────────────────────────── */
+.sl-banner a,
+.sl-banner {
+  color: inherit;
+}
+
+.navbar {
+  background: var(--mifos-glass-bg);
+  backdrop-filter: var(--mifos-glass-blur);
+  -webkit-backdrop-filter: var(--mifos-glass-blur);
+  border-bottom: 1px solid var(--mifos-glass-border);
+}
+
+.sidebar {
+  border-right: 1px solid var(--mifos-border);
+}
+
+/* ── Hero Gradient Text ──────────────────────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, var(--mifos-navy) 0%, var(--mifos-slate) 40%, var(--mifos-teal) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Ambient Background Shapes (light mode) ──────────────────────────────── */
+.ambient {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.15;
+  animation: drift 20s ease-in-out infinite alternate;
+}
+
+.ambient-blob-1 {
+  top: -10%;
+  left: -10%;
+  width: 40vw;
+  height: 40vw;
+  background: var(--mifos-teal);
+  animation-duration: 24s;
+}
+
+.ambient-blob-2 {
+  bottom: -10%;
+  right: -10%;
+  width: 35vw;
+  height: 35vw;
+  background: var(--mifos-navy);
+  animation-duration: 28s;
+  animation-delay: -6s;
+}
+
+@keyframes drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(30px, 50px) scale(1.1);
+  }
+}
+
+.dark .ambient-blob-1 {
+  background: var(--mifos-teal);
+  opacity: 0.08;
+}
+.dark .ambient-blob-2 {
+  background: var(--mifos-navy);
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob {
+    animation: none;
+  }
+}
+
+/* ── Mobile Adjustments ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  .section {
+    padding: 2.5rem 0;
+  }
+  .glass-card {
+    padding: 1.5rem;
+  }
+  .feature-card {
+    padding: 1.5rem;
+  }
+}

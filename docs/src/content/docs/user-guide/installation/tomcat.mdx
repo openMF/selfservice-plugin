@@ -1,0 +1,54 @@
+---
+title: Deploy with Tomcat
+description: Deploy the Mifos Self Service Plugin into Fineract running on Tomcat
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Deploy with Tomcat
+
+When Fineract runs on Tomcat, copy the plugin JAR into Fineract's `WEB-INF/lib` directory and restart.
+
+<Aside type="tip">
+  <strong>No extra configuration needed.</strong> The plugin auto-registers its endpoints under `/v1/self/...` and runs Liquibase migrations against every configured tenant at startup.
+</Aside>
+
+## 1. Build the Plugin JAR
+
+```bash
+cd selfservice-plugin
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+## 2. Copy the JAR into Fineract's Library Directory
+
+```bash
+cp target/selfservice-plugin-*.jar $TOMCAT_HOME/webapps/fineract-provider/WEB-INF/lib/
+```
+
+## 3. Restart Tomcat
+
+```bash
+$TOMCAT_HOME/bin/shutdown.sh
+$TOMCAT_HOME/bin/startup.sh
+```
+
+## 4. Verify
+
+Once Tomcat is back up, the plugin's endpoints are available at:
+
+```bash
+curl https://<tomcat-host>:8080/fineract-provider/v1/self/registration
+curl https://<tomcat-host>:8080/fineract-provider/v1/self/authentication
+curl https://<tomcat-host>:8080/fineract-provider/v1/self/savingsaccounts
+```
+
+<CardGrid>
+<Card title="Next: Configure the plugin">
+  Set up notifications, step-up OTP, and activity retention per tenant.
+
+  <div slot="footer" style="display: flex; gap: 0.5rem;">
+    <a href="/user-guide/configuration/basic-settings/" style="text-decoration: none; color: inherit; font-weight: 500;">Configuration →</a>
+  </div>
+</Card>
+</CardGrid>

@@ -1,0 +1,87 @@
+---
+title: Build from Source
+description: Build the Mifos Self Service Plugin from source using Maven
+---
+
+import { Aside, Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Build from Source
+
+Clone the repository and build the plugin JAR. The plugin compiles against Apache Fineract 1.16.0-SNAPSHOT and produces a deployable JAR.
+
+```bash
+git clone https://github.com/openMF/selfservice-plugin.git
+cd selfservice-plugin
+./mvnw clean package -Dmaven.test.skip=true
+```
+
+<Aside type="tip">
+  <strong>First build may take longer.</strong> Maven downloads Apache Fineract libraries from the Mifos JFrog Artifactory repositories. Subsequent builds are incremental and much faster.
+</Aside>
+
+This produces a JAR at:
+
+```
+target/selfservice-plugin-1.16.0-SNAPSHOT.jar
+```
+
+## Build Options
+
+<CardGrid>
+<Card title="Skip tests (faster)">
+  Use this for rapid iteration during development.
+
+  ```bash
+  ./mvnw clean package -Dmaven.test.skip=true
+  ```
+</Card>
+
+<Card title="Run unit tests">
+  Executes `*Test.java` classes via Surefire.
+
+  ```bash
+  ./mvnw test
+  ```
+</Card>
+
+<Card title="Run integration tests">
+  Executes `*IntegrationTest.java` classes via Failsafe during `verify`.
+
+  ```bash
+  ./mvnw verify
+  ```
+</Card>
+</CardGrid>
+
+## Build Output
+
+| Artifact | Path |
+|---|---|
+| Plugin JAR | `target/selfservice-plugin-1.16.0-SNAPSHOT.jar` |
+| Test plugins directory | `target/test-plugins/` |
+| JaCoCo coverage reports | `target/jacoco-merged/` |
+
+## Deploy the Built JAR
+
+Once built, copy the JAR into your Fineract deployment:
+
+- **Docker:** `cp target/selfservice-plugin-*.jar /opt/fineract/plugins/`
+- **Tomcat:** `cp target/selfservice-plugin-*.jar $TOMCAT_HOME/webapps/fineract-provider/WEB-INF/lib/`
+
+See [Deploy with Docker](/user-guide/installation/docker) and [Deploy with Tomcat](/user-guide/installation/tomcat) for full instructions.
+
+## Prerequisites
+
+<CardGrid>
+<Card title="Java 25 (JDK)">
+  Required to build and run the plugin.
+</Card>
+
+<Card title="Maven 3.6+">
+  Or use the included `./mvnw` wrapper.
+</Card>
+
+<Card title="Network access">
+  Mifos JFrog Artifactory and Spring/OSS snapshot repositories (see [Configuration Properties](/reference/configuration-properties)).
+</Card>
+</CardGrid>

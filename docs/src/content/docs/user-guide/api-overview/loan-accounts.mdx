@@ -1,0 +1,32 @@
+---
+title: Loan Accounts
+description: Loan account management API endpoints
+---
+
+# Loan Accounts
+
+Endpoints under `/v1/self/loans` for managing loan accounts and applications.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/self/loans` | `GET` | List loan accounts |
+| `/v1/self/loans` | `POST` | Apply for a new loan |
+| `/v1/self/loans/{accountId}` | `GET` | Get loan account details |
+| `/v1/self/loans/{accountId}/transactions` | `GET` | List loan account transactions |
+| `/v1/self/loans/{accountId}/charges` | `GET` | List loan account charges |
+| `/v1/self/loans/template` | `GET` | Get loan application template |
+| `/v1/self/loanproducts` | `GET` | List available loan products |
+
+## What You Can Do
+
+- Browse loan details and repayment schedules
+- View charges and guarantors
+- Apply for new loans
+- Track loan application status
+
+## Related
+
+- [Products Catalog](/user-guide/api-overview/products-catalog)
+- [Savings Accounts](/user-guide/api-overview/savings-accounts)

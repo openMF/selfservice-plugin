@@ -1,0 +1,44 @@
+---
+title: Prerequisites
+description: Software and environment requirements for building and deploying the Mifos Self Service Plugin
+---
+
+# Prerequisites
+
+## Software Requirements
+
+| Requirement | Version | Notes |
+|---|---|---|
+| **Java (JDK)** | **25** | Required to build and run the plugin. |
+| **Maven** | 3.6+ | Or use the included `./mvnw` wrapper. |
+| **Apache Fineract** | **1.16.0-SNAPSHOT** | `develop` branch. A running Fineract instance (JAR or Docker) is needed to deploy the plugin into. |
+| **Database** | PostgreSQL or MySQL | Managed by Fineract; the plugin does not own a separate database. |
+| **Node.js** | — | Only needed if you work on this documentation site (Starlight/Astro). |
+
+> **Note:** You do *not* need to install Fineract from source to use the plugin. You just need a running Fineract instance (JAR or Docker) to deploy the plugin into.
+
+## Network / Artifact Repositories
+
+The plugin's `pom.xml` resolves Apache Fineract libraries from:
+
+- **Mifos JFrog Artifactory**
+  - `https://mifos.jfrog.io/artifactory/libs-release`
+  - `https://mifos.jfrog.io/artifactory/libs-snapshot`
+  - `https://mifos.jfrog.io/artifactory/libs-release-local`
+- **OSS Sonatype snapshots** — `https://oss.sonatype.org/content/repositories/snapshots/`
+- **Spring repositories** — `https://repo.spring.io/snapshot` and `https://repo.spring.io/milestone`
+
+Ensure your build machine can reach these hosts (directly or via a Maven proxy such as Nexus or Artifactory).
+
+## What You Need Before Starting
+
+1. A running **Apache Fineract 1.16.0-SNAPSHOT** instance.
+2. The Fineract instance must be reachable over HTTP/HTTPS.
+3. Database credentials for the Fineract instance (PostgreSQL or MySQL).
+4. SMTP and/or SMS credentials if you plan to use notifications or step-up OTP.
+
+## Next Steps
+
+- [Installation → Build from Source](/user-guide/installation/build-from-source)
+- [Installation → Deploy with Docker](/user-guide/installation/docker)
+- [Installation → Deploy with Tomcat](/user-guide/installation/tomcat)

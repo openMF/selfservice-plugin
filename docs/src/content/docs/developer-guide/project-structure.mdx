@@ -1,0 +1,66 @@
+---
+title: Project Structure
+description: Overview of the Mifos Self Service Plugin source code structure
+---
+
+# Project Structure
+
+```
+src/main/java/org/apache/fineract/selfservice/
+├── account/                  # Transfers, beneficiaries, pockets, remittance, sinpe, payment links
+│   ├── api/                  # JAX-RS resources (AccountTransfer, BeneficiariesTPT, Pocket, etc.)
+│   ├── data/                 # Request/response DTOs and validators
+│   ├── domain/               # JPA entities and repositories
+│   ├── exception/            # Custom exceptions
+│   ├── handler/              # Command handlers
+│   ├── service/              # Business logic and platform service implementations
+│   └── starter/              # Spring configuration
+├── activity/                 # Activity history logging and purging
+│   ├── api/, data/, domain/, service/
+├── branding/                 # Tenant branding
+├── client/                   # Client profile, images, charges, transactions
+├── configuration/            # External service configuration (step-up, activity, notifications)
+├── contentstore/             # Content processing
+├── core/                     # Email service, transaction date utilities
+├── loanaccount/              # Loan account operations
+├── onboarding/               # Onboarding steps
+├── offices/                  # Office details, services, geolocation
+├── pockets/                  # Pocket account mapping
+├── products/                 # Product catalog (savings, loan, share)
+├── registration/             # Self-registration, enrollment, forgot password
+├── runreport/                # Self-service reports
+├── savings/                  # Savings account operations
+├── security/                 # Authentication, authorization, step-up OTP, TOTP
+│   ├── api/                  # Authentication, user, forgot password, step-up resources
+│   ├── filter/               # Security filters
+│   ├── guard/                # Ownership guards
+│   ├── service/              # Security services, token management
+│   └── starter/              # Security configuration
+├── shareaccounts/            # Share account operations
+├── spm/                      # Surveys and scorecards
+├── stepup/                   # Step-up OTP and TOTP logic
+│   ├── api/, data/, domain/, event/, exception/, service/, totp/
+└── useradministration/       # User administration (activate, inactivate, link client, TOTP reset)
+```
+
+## Key Conventions
+
+- **Resources** are JAX-RS `@Path("/v1/self/...")` classes with `ApiResource` suffix.
+- **Swagger annotations** are in separate `*ApiResourceSwagger` classes.
+- **Services** implement `*ReadPlatformService` / `*WritePlatformService` interfaces.
+- **DTOs** live in `data/` packages; validators end in `DataValidator`.
+- **Domain entities** live in `domain/` with JPA repositories.
+- **Starters** (`*Configuration` classes) wire up Spring beans per feature area.
+- **Lombok** reduces boilerplate; **Spotless** enforces Google Java Format.
+
+## Build Plugins
+
+| Plugin | Purpose |
+|---|---|
+| `spring-boot-maven-plugin` | Package the executable JAR |
+| `maven-compiler-plugin` | Java 25 compilation with Mapstruct and Lombok annotation processors |
+| `spotless-maven-plugin` | Google Java Format enforcement at compile phase |
+| `maven-surefire-plugin` | Unit tests (`*Test.java`) |
+| `maven-failsafe-plugin` | Integration tests (`*IntegrationTest.java`) |
+| `jacoco-maven-plugin` | Code coverage (unit + integration, merged report) |
+| `maven-dependency-plugin` | Copy test plugins for integration tests |

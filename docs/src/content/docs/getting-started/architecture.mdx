@@ -1,0 +1,67 @@
+---
+title: Architecture Overview
+description: High-level architecture of the Mifos Self Service Plugin and how it extends Apache Fineract
+---
+
+# Architecture Overview
+
+The Self Service Plugin sits between client applications (mobile app, web portal, chatbot) and Apache Fineract core, exposing customer-facing operations through REST endpoints under `/v1/self/...`.
+
+## Logical Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Client Applications                   │
+│          (Mobile App / Web Portal / Chatbot)            │
+└────────────────────────┬────────────────────────────────┘
+                         │  HTTPS  /v1/self/*
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│              Self Service Plugin (this repo)            │
+│  ┌─────────────┐ ┌──────────┐ ┌──────────────────────┐  │
+│  │ Registration│ │ Security │ │ Notifications        │  │
+│  │ & Enrollment│ │ & Auth   │ │ (Email / SMS)        │  │
+│  └─────────────┘ └──────────┘ └──────────────────────┘  │
+│  ┌─────────────┐ ┌──────────┐ ┌──────────────────────┐  │
+│  │ Clients     │ │ Savings  │ │ Loans                │  │
+│  └─────────────┘ └──────────┘ └──────────────────────┘  │
+│  ┌─────────────┐ ┌──────────┐ ┌──────────────────────┐  │
+│  │ Shares      │ │ Transfers│ │ Products / Reports   │  │
+│  └─────────────┘ └──────────┘ └──────────────────────┘  │
+└────────────────────────┬────────────────────────────────┘
+                         │  delegates to
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│               Apache Fineract Core                      │
+│        (fineract-provider, fineract-core, etc.)         │
+│                   Multi-Tenant DB                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+## How It Works
+
+1. **Client calls** an endpoint such as `POST /v1/self/registration` or `GET /v1/self/savingsaccounts`.
+2. **The plugin's JAX-RS resource** receives the request, validates input, and delegates to a service layer.
+3. **The service layer** calls Fineract's platform services (via `ReadPlatformService` / `WritePlatformService` abstractions) to perform the operation on behalf of the authenticated self-service user.
+4. **Fineract core** persists the result in the multi-tenant database and returns a response.
+5. **The plugin** maps the Fineract domain objects to self-service DTOs and returns them to the client.
+
+## Multi-Tenancy
+
+The plugin inherits Fineract's multi-tenant model:
+
+- Each Fineract tenant has its own database schema.
+- Plugin Liquibase migrations run against **every configured tenant** at startup.
+- Per-tenant configuration (notifications, step-up OTP, activity retention) is stored in `c_external_service` / `c_external_service_properties` tables, seeded by Liquibase.
+
+## Tech Stack at a Glance
+
+| Layer | Technology |
+|---|---|
+| API | JAX-RS (REST), Swagger/OpenAPI |
+| Framework | Spring Boot 4, Spring Security |
+| Data Access | JPA / EclipseLink, Spring Data JPA |
+| Migrations | Liquibase (multi-tenant) |
+| Build | Maven 3.6+ / `./mvnw` |
+| Runtime | Apache Fineract 1.16.0-SNAPSHOT |
+| Database | PostgreSQL or MySQL (managed by Fineract) |
