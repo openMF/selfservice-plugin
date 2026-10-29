@@ -21,19 +21,24 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoanTransactionsApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoansApiResource;
+import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanTemplateTypeRequiredException;
 import org.apache.fineract.portfolio.loanaccount.exception.NotSupportedLoanTemplateTypeException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiResource;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
+import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorsRequest;
+import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
-import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
@@ -58,6 +63,7 @@ class SelfLoansApiResourceTest {
   @Mock private SelfLoansDataValidator dataValidator;
   @Mock private GuarantorsApiResource guarantorsApiResource;
   @Mock private UriInfo uriInfo;
+  @Mock private LoanRepositoryWrapper loanRepositoryWrapper;
 
   // NEW MOCKS for notification dependencies
   @Mock private ApplicationEventPublisher applicationEventPublisher;
@@ -84,7 +90,8 @@ class SelfLoansApiResourceTest {
             guarantorsApiResource,
             applicationEventPublisher, 
             env,
-            notificationDeliveryModeUtil); 
+            notificationDeliveryModeUtil,
+            loanRepositoryWrapper);
   }
 
   private void mockAuthenticatedUser() {
@@ -368,5 +375,144 @@ class SelfLoansApiResourceTest {
 
     assertThrows(
         LoanNotFoundException.class, () -> resource.retrieveGuarantorDetails(LOAN_ID, uriInfo));
+  }
+
+  // --- guarantor template, create, update, delete (MX-502) ---
+
+  private static final Long GUARANTOR_ID = 3L;
+  private static final Long SAVINGS_ID = 11L;
+
+  private void mockLoanPendingApproval(final boolean pending) {
+    Loan loan = mock(Loan.class);
+    when(loan.isSubmittedAndPendingApproval()).thenReturn(pending);
+    when(loanRepositoryWrapper.findOneWithNotFoundDetection(LOAN_ID)).thenReturn(loan);
+  }
+
+  private static GuarantorsRequest guarantor(final Long savingsId) {
+    GuarantorsRequest request = new GuarantorsRequest();
+    request.setGuarantorTypeId(3);
+    request.setFirstname("Ana");
+    request.setLastname("Mora");
+    request.setSavingsId(savingsId);
+    return request;
+  }
+
+  @Test
+  void guarantorTemplate_mappedLoan_returnsTemplate() {
+    GuarantorData template = mock(GuarantorData.class);
+    when(guarantorsApiResource.newGuarantorTemplate(LOAN_ID)).thenReturn(template);
+
+    assertEquals(template, resource.newGuarantorTemplate(LOAN_ID));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+  }
+
+  @Test
+  void guarantorTemplate_unmappedLoan_throws() {
+    mockLoanNotMapped();
+
+    assertThrows(LoanNotFoundException.class, () -> resource.newGuarantorTemplate(LOAN_ID));
+    verify(guarantorsApiResource, never()).newGuarantorTemplate(any());
+  }
+
+  @Test
+  void createGuarantor_withoutSavings_createsOnOwnLoan() {
+    GuarantorsRequest request = guarantor(null);
+    CommandProcessingResult created = CommandProcessingResult.resourceResult(GUARANTOR_ID);
+    when(guarantorsApiResource.createGuarantor(LOAN_ID, request)).thenReturn(created);
+
+    assertEquals(created, resource.createGuarantor(LOAN_ID, request));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+    verify(selfServiceOwnershipGuard, never()).validateSavingsOwnership(any());
+  }
+
+  @Test
+  void createGuarantor_withOwnSavings_checksTheSavingsAccount() {
+    GuarantorsRequest request = guarantor(SAVINGS_ID);
+    CommandProcessingResult created = CommandProcessingResult.resourceResult(GUARANTOR_ID);
+    when(guarantorsApiResource.createGuarantor(LOAN_ID, request)).thenReturn(created);
+
+    assertEquals(created, resource.createGuarantor(LOAN_ID, request));
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(SAVINGS_ID);
+  }
+
+  @Test
+  void createGuarantor_withSomeoneElsesSavings_throwsAndCreatesNothing() {
+    org.mockito.Mockito.doThrow(new SavingsAccountNotFoundException(SAVINGS_ID))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(SAVINGS_ID);
+
+    assertThrows(
+        SavingsAccountNotFoundException.class,
+        () -> resource.createGuarantor(LOAN_ID, guarantor(SAVINGS_ID)));
+    verify(guarantorsApiResource, never()).createGuarantor(any(), any());
+  }
+
+  @Test
+  void createGuarantor_unmappedLoan_throwsAndCreatesNothing() {
+    mockLoanNotMapped();
+
+    assertThrows(
+        LoanNotFoundException.class, () -> resource.createGuarantor(LOAN_ID, guarantor(null)));
+    verify(guarantorsApiResource, never()).createGuarantor(any(), any());
+  }
+
+  @Test
+  void updateGuarantor_mappedLoan_updates() {
+    mockLoanPendingApproval(true);
+    GuarantorsRequest request = guarantor(null);
+    CommandProcessingResult updated = CommandProcessingResult.resourceResult(GUARANTOR_ID);
+    when(guarantorsApiResource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request)).thenReturn(updated);
+
+    assertEquals(updated, resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+  }
+
+  @Test
+  void updateGuarantor_unmappedLoan_throwsAndUpdatesNothing() {
+    mockLoanNotMapped();
+
+    assertThrows(
+        LoanNotFoundException.class,
+        () -> resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, guarantor(null)));
+    verify(guarantorsApiResource, never()).updateGuarantor(any(), any(), any());
+  }
+
+  @Test
+  void deleteGuarantor_mappedLoan_deletesWithTheFundingId() {
+    mockLoanPendingApproval(true);
+    CommandProcessingResult deleted = CommandProcessingResult.resourceResult(GUARANTOR_ID);
+    when(guarantorsApiResource.deleteGuarantor(LOAN_ID, GUARANTOR_ID, 4L)).thenReturn(deleted);
+
+    assertEquals(deleted, resource.deleteGuarantor(LOAN_ID, GUARANTOR_ID, 4L));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+  }
+
+  @Test
+  void deleteGuarantor_unmappedLoan_throwsAndDeletesNothing() {
+    mockLoanNotMapped();
+
+    assertThrows(
+        LoanNotFoundException.class, () -> resource.deleteGuarantor(LOAN_ID, GUARANTOR_ID, null));
+    verify(guarantorsApiResource, never()).deleteGuarantor(any(), any(), any());
+  }
+
+  @Test
+  void updateGuarantor_afterApproval_throwsAndUpdatesNothing() {
+    mockLoanPendingApproval(false);
+
+    assertThrows(
+        GeneralPlatformDomainRuleException.class,
+        () -> resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, guarantor(null)));
+    verify(guarantorsApiResource, never()).updateGuarantor(any(), any(), any());
+  }
+
+  @Test
+  void deleteGuarantor_afterApproval_throwsAndDeletesNothing() {
+    mockLoanPendingApproval(false);
+
+    assertThrows(
+        GeneralPlatformDomainRuleException.class,
+        () -> resource.deleteGuarantor(LOAN_ID, GUARANTOR_ID, null));
+    verify(guarantorsApiResource, never()).deleteGuarantor(any(), any(), any());
   }
 }

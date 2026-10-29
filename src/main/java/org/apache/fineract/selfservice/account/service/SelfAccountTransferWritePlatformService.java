@@ -22,6 +22,19 @@ public interface SelfAccountTransferWritePlatformService {
 
   Object resendTransferOtp(ResendOtpRequest resendRequest, HttpServletRequest httpRequest);
 
+  /** Pending transfers of the ENTITY clients where the caller is an active signatory. */
+  Object retrievePendingApprovals();
+
+  /**
+   * Second signature on a held transfer: the caller must be an active signatory of the client other
+   * than the initiator, with a step-up token for APPROVE_SECOND_SIGNATURE bound to {@code
+   * approvalId}. Executes the initiator's transfer at most once.
+   */
+  Object approveTransfer(Long approvalId, HttpServletRequest httpRequest);
+
+  /** Closes a held transfer without moving money. Same signatory rules as approval, no token. */
+  Object rejectTransfer(Long approvalId);
+
   CommandProcessingResult createTransfer(
       String type, String apiRequestBodyAsJson, HttpServletRequest httpRequest);
 }

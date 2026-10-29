@@ -28,6 +28,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -45,6 +46,8 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
@@ -52,10 +55,12 @@ import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoanTransactionsApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoansApiResource;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanTemplateTypeRequiredException;
 import org.apache.fineract.portfolio.loanaccount.exception.NotSupportedLoanTemplateTypeException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiResource;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
+import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorsRequest;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -88,6 +93,7 @@ public class SelfLoansApiResource {
   private final Environment env;
   
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  private final LoanRepositoryWrapper loanRepositoryWrapper;
 
   @GET
   @Path("{loanId}")
@@ -511,6 +517,21 @@ public class SelfLoansApiResource {
     this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
   }
 
+  /**
+   * Once a loan is approved the guarantors are part of the bank's security for it (approved and
+   * disbursed loans may hold guarantee funds). The borrower may change or remove them only while the
+   * application is waiting for approval; after that, bank staff do it.
+   */
+  private void validateGuarantorsCanBeChanged(final Long loanId, final String action) {
+    if (!this.loanRepositoryWrapper.findOneWithNotFoundDetection(loanId).isSubmittedAndPendingApproval()) {
+      throw new GeneralPlatformDomainRuleException(
+          "error.msg.selfservice.loan.guarantor." + action + ".not.pending.approval",
+          "Guarantors can only be changed or removed while the loan application is waiting for"
+              + " approval.",
+          loanId);
+    }
+  }
+
   private boolean is(final String commandParam, final String commandValue) {
     return StringUtils.isNotBlank(commandParam)
         && commandParam.trim().equalsIgnoreCase(commandValue);
@@ -525,6 +546,74 @@ public class SelfLoansApiResource {
 
     validateAppSelfServiceUserLoanMapping(loanId);
     return this.guarantorsApiResource.retrieveGuarantorDetails(loanId);
+  }
+
+  @GET
+  @Path("{loanId}/guarantors/template")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Retrieve Guarantor Details Template",
+      description = "Guarantor types and relationship options for adding a guarantor to own loan.")
+  public GuarantorData newGuarantorTemplate(@PathParam("loanId") final Long loanId) {
+    validateAppSelfServiceUserLoanMapping(loanId);
+    return this.guarantorsApiResource.newGuarantorTemplate(loanId);
+  }
+
+  @POST
+  @Path("{loanId}/guarantors")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Create a Guarantor",
+      description =
+          "Adds a guarantor to own loan. A savings account given as guarantee (savingsId) must"
+              + " belong to the self-service user: guarantee funds are held on that account.")
+  public CommandProcessingResult createGuarantor(
+      @PathParam("loanId") final Long loanId, final GuarantorsRequest guarantorsRequest) {
+    validateAppSelfServiceUserLoanMapping(loanId);
+    if (guarantorsRequest != null && guarantorsRequest.getSavingsId() != null) {
+      // Fineract only checks that the account exists, so without this a user could hold funds
+      // on another customer's savings account as the guarantee for their own loan.
+      this.selfServiceOwnershipGuard.validateSavingsOwnership(guarantorsRequest.getSavingsId());
+    }
+    return this.guarantorsApiResource.createGuarantor(loanId, guarantorsRequest);
+  }
+
+  @PUT
+  @Path("{loanId}/guarantors/{guarantorId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Update a Guarantor",
+      description =
+          "Updates the details (name, address, contact, relationship) of a guarantor of own"
+              + " loan, while the loan application is waiting for approval.")
+  public CommandProcessingResult updateGuarantor(
+      @PathParam("loanId") final Long loanId,
+      @PathParam("guarantorId") final Long guarantorId,
+      final GuarantorsRequest guarantorsRequest) {
+    validateAppSelfServiceUserLoanMapping(loanId);
+    validateGuarantorsCanBeChanged(loanId, "update");
+    return this.guarantorsApiResource.updateGuarantor(loanId, guarantorId, guarantorsRequest);
+  }
+
+  @DELETE
+  @Path("{loanId}/guarantors/{guarantorId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Remove a Guarantor",
+      description =
+          "Removes a guarantor of own loan, or only one guarantee fund when guarantorFundingId"
+              + " is given, while the loan application is waiting for approval.")
+  public CommandProcessingResult deleteGuarantor(
+      @PathParam("loanId") final Long loanId,
+      @PathParam("guarantorId") final Long guarantorId,
+      @QueryParam("guarantorFundingId") final Long guarantorFundingId) {
+    validateAppSelfServiceUserLoanMapping(loanId);
+    validateGuarantorsCanBeChanged(loanId, "delete");
+    return this.guarantorsApiResource.deleteGuarantor(loanId, guarantorId, guarantorFundingId);
   }
 
   // --- Helper Methods for Notifications ---
