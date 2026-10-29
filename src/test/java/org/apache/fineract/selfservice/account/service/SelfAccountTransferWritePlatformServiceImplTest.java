@@ -1220,7 +1220,21 @@ class SelfAccountTransferWritePlatformServiceImplTest {
                 eq("CRC")))
         .thenReturn(threshold == null ? List.of() : List.of(new BigDecimal(threshold)));
     tenantDualApproval(List.of("true"));
+    otherActiveSignatories(1L);
     return ownSavings;
+  }
+
+  /** Active signatories of the own client other than the initiator. */
+  private void otherActiveSignatories(Long count) {
+    lenient()
+        .when(
+            jdbcTemplate.queryForObject(
+                contains("m_selfservice_entity_signatory"),
+                eq(Long.class),
+                eq(OWN_CLIENT_ID),
+                eq(USER_ID),
+                eq(true)))
+        .thenReturn(count);
   }
 
   /** Values of the tenant's SELF_SERVICE_DUAL_APPROVAL.enabled property (empty = no row). */
@@ -1398,6 +1412,22 @@ class SelfAccountTransferWritePlatformServiceImplTest {
             () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
 
     assertTrue(errorCodes(ex).contains("otp.not.configured"));
+    verifyNoInteractions(transferApprovalRepository, pinExternalTransferService);
+  }
+
+  @Test
+  void confirmTransfer_heldTransfer_failsClosedWhenNoOtherSignatoryCanDecide() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    otherActiveSignatories(0L);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    assertTrue(errorCodes(ex).contains("no.other.signatory"));
     verifyNoInteractions(transferApprovalRepository, pinExternalTransferService);
   }
 

@@ -398,6 +398,7 @@ UPDATE c_external_service_properties SET value = 'true' WHERE name = 'enabled'
 - **Threshold:** set per client and currency in `m_selfservice_client_approval_threshold`. A transfer is held when its amount, **excluding the fee**, is **greater than or equal to** the threshold for the source account's currency. The currency is read from the account, not from the request. There is no tenant-wide threshold.
 - **Signatories:** self-service users who may approve for a client are listed in `m_selfservice_entity_signatory` (`is_active = false` revokes them). The one-owner-per-client mapping (`unique_self_client`) is unchanged.
 - **Approver OTP:** the tenant must have step-up enabled with `APPROVE_SECOND_SIGNATURE` in `protectedActions`. Otherwise a transfer that needs approval is refused (`validation.msg.transferapproval.approvalId.otp.not.configured`) instead of being held where nobody could approve it.
+- **Another signatory:** the client needs at least one active signatory other than the initiator. Otherwise the transfer is refused (`validation.msg.transferapproval.approvalId.no.other.signatory`), because nobody could decide it.
 
 ```sql
 INSERT INTO m_selfservice_client_approval_threshold (client_id, currency_code, threshold_amount)

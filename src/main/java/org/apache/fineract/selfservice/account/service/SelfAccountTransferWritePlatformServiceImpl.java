@@ -483,6 +483,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
       AppSelfServiceUser initiator,
       SavingsAccount sourceSavingsAccount) {
     requireApproverOtpAvailable();
+    requireAnotherActiveSignatory(sourceSavingsAccount.getClient().getId(), initiator.getId());
     validateSufficientFunds(
         sourceSavingsAccount,
         request.getTransferAmount(),
@@ -694,6 +695,25 @@ public class SelfAccountTransferWritePlatformServiceImpl
       throw approvalError(
           "otp.not.configured",
           "Dual approval needs step-up enabled for APPROVE_SECOND_SIGNATURE on this tenant.");
+    }
+  }
+
+  /**
+   * Fails closed: a held transfer that only the initiator could decide would stay PENDING forever,
+   * since the initiator cannot decide it and held transfers do not expire.
+   */
+  private void requireAnotherActiveSignatory(Long clientId, Long initiatorId) {
+    Long others =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM m_selfservice_entity_signatory"
+                + " WHERE client_id = ? AND appuser_id <> ? AND is_active = ?",
+            Long.class,
+            clientId,
+            initiatorId,
+            true);
+    if (others == null || others == 0) {
+      throw approvalError(
+          "no.other.signatory", "No other active signatory can approve this transfer.");
     }
   }
 
