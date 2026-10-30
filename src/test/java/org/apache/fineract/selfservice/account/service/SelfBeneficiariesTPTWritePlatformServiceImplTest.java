@@ -14,6 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
@@ -24,6 +25,7 @@ import org.apache.fineract.selfservice.account.data.SelfBeneficiariesTPTDataVali
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPT;
 import org.apache.fineract.selfservice.account.domain.SelfBeneficiariesTPTRepository;
 import org.apache.fineract.selfservice.account.exception.InvalidAccountInformationException;
+import org.apache.fineract.selfservice.account.exception.InvalidBeneficiaryException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,5 +119,35 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
         InvalidAccountInformationException.class,
         () -> service.add(command(external("SINPE", "\"holder\":\"Ana Mora\""))));
     verify(repository, never()).saveAndFlush(any());
+  }
+
+  private SelfBeneficiariesTPT existing(final boolean active) {
+    SelfBeneficiariesTPT beneficiary =
+        new SelfBeneficiariesTPT(7L, "Ana", 1L, 2L, 3L, 2, 1000L, "SAME_BANK", "CRC");
+    beneficiary.setActive(active);
+    when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(beneficiary));
+    return beneficiary;
+  }
+
+  // MX-518: a deleted beneficiary is hidden from every read, so it can't be updated either.
+  @Test
+  void aDeletedBeneficiaryCannotBeUpdated() {
+    existing(false);
+
+    assertThrows(
+        InvalidBeneficiaryException.class,
+        () -> service.update(5L, command("{\"name\":\"Mom\",\"transferLimit\":5000}")));
+    verify(repository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void anActiveBeneficiaryIsStillUpdated() {
+    SelfBeneficiariesTPT beneficiary = existing(true);
+
+    service.update(5L, command("{\"name\":\"Mom\",\"transferLimit\":5000}"));
+
+    verify(repository).saveAndFlush(beneficiary);
+    assertEquals("Mom", beneficiary.getName());
+    assertEquals(5000L, beneficiary.getTransferLimit());
   }
 }
