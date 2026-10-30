@@ -87,6 +87,9 @@ public class SelfBeneficiariesTPTDataValidator {
       new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
 
   /** Allowed paymentType values for TPT beneficiaries (multi-tenant safe string codes). */
+  /** Account types of external beneficiaries (see SelfBeneficiariesTPTReadPlatformServiceImpl). */
+  private static final Object[] EXTERNAL_ACCOUNT_TYPES = {3, 4};
+
   private static final String[] ALLOWED_PAYMENT_TYPES = {
     "SAME_BANK", "SINPE", "SINPE_MOVIL", "PIN"
   };
@@ -158,17 +161,21 @@ public class SelfBeneficiariesTPTDataValidator {
             ACCOUNT_TYPE_PARAM_NAME,
             element,
             this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
+    // Same-bank beneficiaries point to a loan or savings account; external ones (SINPE, SINPE_MOVIL,
+    // PIN) are only listed and offered for transfers with account type 3 or 4, so any other value
+    // would save a beneficiary the user can never see or use.
+    final Object[] allowedAccountTypes =
+        "SAME_BANK".equals(paymentType)
+            ? new Object[] {
+              PortfolioAccountType.LOAN.getValue(), PortfolioAccountType.SAVINGS.getValue()
+            }
+            : EXTERNAL_ACCOUNT_TYPES;
     baseDataValidator
         .reset()
         .parameter(ACCOUNT_TYPE_PARAM_NAME)
         .value(accountType)
         .notNull()
-        .isOneOfTheseValues(
-            PortfolioAccountType.LOAN.getValue(),
-            PortfolioAccountType.SAVINGS.getValue(),
-            2,
-            3,
-            4);
+        .isOneOfTheseValues(allowedAccountTypes);
 
     final Long transferLimit =
         this.fromApiJsonHelper.extractLongNamed(TRANSFER_LIMIT_PARAM_NAME, element);
