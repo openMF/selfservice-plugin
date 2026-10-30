@@ -196,7 +196,8 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                 }
             }
         } else if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
-            // External beneficiaries: length/format validation is already guaranteed by SelfBeneficiariesTPTDataValidator
+            // External beneficiaries: SelfBeneficiariesTPTDataValidator checks the IBAN (SINPE, PIN) or phone number
+            // (SINPE_MOVIL) format when one is given; here it only has to be present
             validAccountDetails = (externalAccountNumber != null && !externalAccountNumber.trim().isEmpty());
             log.info(
                     "Processing external {} beneficiary, accountNumber present={}",
