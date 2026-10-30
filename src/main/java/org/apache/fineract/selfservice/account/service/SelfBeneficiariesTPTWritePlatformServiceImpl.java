@@ -85,6 +85,9 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
         Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
         String paymentType = (String) params.get(PAYMENT_TYPE_PARAM_NAME);
         String currency = (String) params.get(CURRENCY_PARAM_NAME);
+        // For external beneficiaries the validator resolves the destination from destinationIban (SINPE, PIN) or
+        // phoneNumber (SINPE_MOVIL), falling back to accountNumber.
+        String externalAccountNumber = (String) params.get("customAccountNumber");
 
         log.info(
                 "Creating TPT beneficiary: name={}, paymentType={}, currency={}, accountType={}, transferLimit={}",
@@ -194,7 +197,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
             }
         } else if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
             // External beneficiaries: length/format validation is already guaranteed by SelfBeneficiariesTPTDataValidator
-            validAccountDetails = (accountNumber != null && !accountNumber.trim().isEmpty());
+            validAccountDetails = (externalAccountNumber != null && !externalAccountNumber.trim().isEmpty());
             log.info(
                     "Processing external {} beneficiary, accountNumber present={}",
                     paymentType,
@@ -237,7 +240,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
             // Populate external-specific fields only when applicable
             if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
-                beneficiary.setCustomAccountNumber(accountNumber);
+                beneficiary.setCustomAccountNumber(externalAccountNumber);
                 beneficiary.setHolderName((String) params.get("holderName"));
                 beneficiary.setHolderId((String) params.get("holderId"));
                 beneficiary.setHolderIdType((Integer) params.get("holderIdType"));
