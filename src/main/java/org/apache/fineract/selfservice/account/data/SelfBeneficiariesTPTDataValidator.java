@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
@@ -86,10 +87,16 @@ public class SelfBeneficiariesTPTDataValidator {
   private static final Set<String> UPDATE_REQUEST_DATA_PARAMETERS =
       new HashSet<>(Arrays.asList(NAME_PARAM_NAME, TRANSFER_LIMIT_PARAM_NAME));
 
-  /** Allowed paymentType values for TPT beneficiaries (multi-tenant safe string codes). */
   /** Account types of external beneficiaries (see SelfBeneficiariesTPTReadPlatformServiceImpl). */
   private static final Object[] EXTERNAL_ACCOUNT_TYPES = {3, 4};
 
+  /** A Costa Rican IBAN: CR, two check digits and 18 more digits. */
+  private static final String IBAN_REGEX = "^CR\\d{20}$";
+
+  /** A SINPE Móvil phone number, as in SelfServiceSinpeEnrollmentWritePlatformServiceImpl. */
+  private static final String SINPE_MOVIL_PHONE_REGEX = "^\\d{8}$";
+
+  /** Allowed paymentType values for TPT beneficiaries (multi-tenant safe string codes). */
   private static final String[] ALLOWED_PAYMENT_TYPES = {
     "SAME_BANK", "SINPE", "SINPE_MOVIL", "PIN"
   };
@@ -186,14 +193,35 @@ public class SelfBeneficiariesTPTDataValidator {
         .ignoreIfNull()
         .longGreaterThanZero();
 
-    String customAccountNumber =
-        this.fromApiJsonHelper.extractStringNamed(ACCOUNT_NUMBER_PARAM_NAME, element);
+    String customAccountNumberParam = ACCOUNT_NUMBER_PARAM_NAME;
     if (this.fromApiJsonHelper.parameterExists(DESTINATION_IBAN_PARAM_NAME, element)) {
-      customAccountNumber =
-          this.fromApiJsonHelper.extractStringNamed(DESTINATION_IBAN_PARAM_NAME, element);
+      customAccountNumberParam = DESTINATION_IBAN_PARAM_NAME;
     } else if (this.fromApiJsonHelper.parameterExists(PHONE_NUMBER_PARAM_NAME, element)) {
-      customAccountNumber =
-          this.fromApiJsonHelper.extractStringNamed(PHONE_NUMBER_PARAM_NAME, element);
+      customAccountNumberParam = PHONE_NUMBER_PARAM_NAME;
+    }
+    String customAccountNumber =
+        this.fromApiJsonHelper.extractStringNamed(customAccountNumberParam, element);
+
+    // The destination of an external beneficiary is what the gateway sends the money to, so it is
+    // checked here instead of saving a beneficiary that can never receive a transfer. Spaces are
+    // dropped so "CR21 0152 ..." and "8888 7777" are stored the way they are matched later.
+    if (customAccountNumber != null && !"SAME_BANK".equals(paymentType)) {
+      customAccountNumber = StringUtils.deleteWhitespace(customAccountNumber);
+      if ("SINPE_MOVIL".equals(paymentType)) {
+        baseDataValidator
+            .reset()
+            .parameter(customAccountNumberParam)
+            .value(customAccountNumber)
+            .matchesRegularExpression(
+                SINPE_MOVIL_PHONE_REGEX, "A SINPE Móvil phone number must have 8 digits.");
+      } else if ("SINPE".equals(paymentType) || "PIN".equals(paymentType)) {
+        customAccountNumber = customAccountNumber.toUpperCase(Locale.ROOT);
+        baseDataValidator
+            .reset()
+            .parameter(customAccountNumberParam)
+            .value(customAccountNumber)
+            .matchesRegularExpression(IBAN_REGEX, "An IBAN must be CR followed by 20 digits.");
+      }
     }
 
     String holderName = this.fromApiJsonHelper.extractStringNamed(HOLDER_PARAM_NAME, element);
