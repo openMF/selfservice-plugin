@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.savings.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +23,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
@@ -307,4 +309,51 @@ class SelfSavingsAccountApiResourceTest {
         () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest));
     verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
   }
+
+  // --- MX-520: the account cannot be moved to another customer ---
+
+  @Test
+  void modifySavingsAccountApplication_otherUsersClient_throwsAndChangesNothing() {
+    mockSavingsMapped();
+    final String json = "{\"clientId\":" + CLIENT_ID + "}";
+    final HashMap<String, Object> attr = new HashMap<>();
+    attr.put("clientId", CLIENT_ID);
+    when(dataValidator.validateSavingsApplication(json)).thenReturn(attr);
+    mockClientNotMapped();
+
+    assertThrows(
+        ClientNotFoundException.class,
+        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, null, json, httpRequest));
+    verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+  }
+
+  @Test
+  void modifySavingsAccountApplication_ownClient_updates() {
+    mockSavingsMapped();
+    final String json = "{\"clientId\":" + CLIENT_ID + ",\"externalId\":\"x\"}";
+    final HashMap<String, Object> attr = new HashMap<>();
+    attr.put("clientId", CLIENT_ID);
+    when(dataValidator.validateSavingsApplication(json)).thenReturn(attr);
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, json, null)).thenReturn("{}");
+
+    assertNotNull(resource.modifySavingsAccountApplication(ACCOUNT_ID, null, json, httpRequest));
+    verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+  }
+
+  @Test
+  void modifySavingsAccountApplication_groupId_throwsAndChangesNothing() {
+    mockSavingsMapped();
+    final String json = "{\"clientId\":" + CLIENT_ID + ",\"groupId\":3}";
+    final HashMap<String, Object> attr = new HashMap<>();
+    attr.put("clientId", CLIENT_ID);
+    when(dataValidator.validateSavingsApplication(json)).thenReturn(attr);
+
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, null, json, httpRequest));
+    assertEquals("groupId", error.getErrors().get(0).getParameterName());
+    verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+  }
 }
+
