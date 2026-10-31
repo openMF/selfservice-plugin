@@ -14,9 +14,23 @@
  */
 package org.apache.fineract.selfservice.account.domain;
 
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface SelfBeneficiariesTPTRepository
     extends JpaRepository<SelfBeneficiariesTPT, Long>,
-        JpaSpecificationExecutor<SelfBeneficiariesTPT> {}
+        JpaSpecificationExecutor<SelfBeneficiariesTPT> {
+
+  /**
+   * Loads a beneficiary taking a pessimistic write lock, so an update and a soft delete of the same
+   * beneficiary are serialised and the update can't change a beneficiary deleted after it was read.
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT b FROM SelfBeneficiariesTPT b WHERE b.id = :id")
+  Optional<SelfBeneficiariesTPT> findByIdForUpdate(@Param("id") Long id);
+}

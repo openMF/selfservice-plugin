@@ -302,7 +302,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
         // Java 21 idiomatic retrieval with immediate security validation
         SelfBeneficiariesTPT beneficiary =
                 this.repository
-                        .findById(beneficiaryId)
+                        .findByIdForUpdate(beneficiaryId)
                         .orElseThrow(
                                 () -> {
                                     log.warn("Beneficiary not found for update: id={}", beneficiaryId);
@@ -315,6 +315,12 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
                     user.getId(),
                     beneficiaryId,
                     beneficiary.getAppSelfServiceUserId());
+            throw new InvalidBeneficiaryException(beneficiaryId);
+        }
+
+        // A deleted beneficiary is hidden from every read, so it can't be updated either
+        if (!beneficiary.isActive()) {
+            log.warn("Beneficiary id={} is soft-deleted and cannot be updated", beneficiaryId);
             throw new InvalidBeneficiaryException(beneficiaryId);
         }
 
@@ -368,7 +374,7 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
         SelfBeneficiariesTPT beneficiary =
                 this.repository
-                        .findById(beneficiaryId)
+                        .findByIdForUpdate(beneficiaryId)
                         .orElseThrow(
                                 () -> {
                                     log.warn("Beneficiary not found for delete: id={}", beneficiaryId);
