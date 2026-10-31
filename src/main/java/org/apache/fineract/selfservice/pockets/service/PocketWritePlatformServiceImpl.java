@@ -18,7 +18,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.accountnumberformat.domain.EntityAccountType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -66,6 +68,9 @@ public class PocketWritePlatformServiceImpl implements PocketWritePlatformServic
     }
 
     final List<PocketAccountMapping> pocketAccounts = new ArrayList<>();
+    // The mappings are only saved after the loop, so an account listed twice in this request would
+    // pass the database check below both times and then break the unique constraint on save
+    final Set<String> accountsInRequest = new HashSet<>();
 
     for (int i = 0; i < accountsDetail.size(); i++) {
       final JsonObject element = accountsDetail.get(i).getAsJsonObject();
@@ -84,8 +89,9 @@ public class PocketWritePlatformServiceImpl implements PocketWritePlatformServic
                           accountType));
       accountEntityService.validateSelfUserAccountMapping(accountId);
       Integer accountTypeValue = EntityAccountType.valueOf(accountType.toUpperCase()).getValue();
-      if (this.pocketAccountMappingReadPlatformService.validatePocketAndAccountMapping(
-          pocketId, accountId, accountTypeValue)) {
+      if (!accountsInRequest.add(accountId + ":" + accountTypeValue)
+          || this.pocketAccountMappingReadPlatformService.validatePocketAndAccountMapping(
+              pocketId, accountId, accountTypeValue)) {
         throw new PlatformDataIntegrityException(
             PocketApiConstants.duplicateMappingException,
             PocketApiConstants.duplicateMappingExceptionMessage,
