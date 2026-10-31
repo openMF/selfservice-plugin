@@ -14,6 +14,7 @@
  */
 package org.apache.fineract.selfservice.savings.api;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +50,10 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.portfolio.client.domain.Client;
+import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
@@ -476,7 +480,16 @@ public class SelfSavingsAccountApiResource {
       @Context HttpServletRequest httpRequest) {
 
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
-    this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
+    HashMap<String, Object> attr =
+        this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
+    // Fineract moves the account to the client (or group) given in the body, so the client must be
+    // one of the user's own, as on submit, and a group cannot be set at all.
+    final Long clientId =
+        attr == null ? null : (Long) attr.get(SelfSavingsAccountConstants.clientIdParameterName);
+    if (clientId != null) {
+      validateAppSelfServiceUserClientsMapping(clientId);
+    }
+    rejectGroupId(apiRequestBodyAsJson);
 
     String responseJson =
         this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
@@ -500,6 +513,18 @@ public class SelfSavingsAccountApiResource {
     publishSavingsEvent(eventType, accountId, contextData, httpRequest);
 
     return responseJson;
+  }
+
+  private static void rejectGroupId(final String apiRequestBodyAsJson) {
+    final JsonElement body = JsonParser.parseString(apiRequestBodyAsJson);
+    if (body.isJsonObject() && body.getAsJsonObject().has(SavingsApiConstants.groupIdParamName)) {
+      throw new PlatformApiDataValidationException(
+          List.of(
+              ApiParameterError.parameterError(
+                  "validation.msg.savingsaccount.groupId.not.allowed",
+                  "A self-service user cannot move a savings account to a group.",
+                  SavingsApiConstants.groupIdParamName)));
+    }
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
