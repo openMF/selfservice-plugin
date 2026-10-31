@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.selfservice.pockets.api.PocketApiConstants;
 import org.apache.fineract.selfservice.pockets.data.PocketDataValidator;
 import org.apache.fineract.selfservice.pockets.domain.Pocket;
 import org.apache.fineract.selfservice.pockets.domain.PocketAccountMapping;
@@ -143,6 +145,51 @@ class PocketWritePlatformServiceImplTest {
     JsonCommand command = singleLoanLinkCommand();
     assertThrows(PlatformDataIntegrityException.class, () -> service.linkAccounts(command));
     verify(pocketAccountMappingRepositoryWrapper, never()).save(anyList());
+  }
+
+  @Test
+  void linkAccounts_sameAccountTwiceInRequest_throwsDuplicateAndDoesNotSave() {
+    mockAuthenticatedUser();
+    when(pocketRepositoryWrapper.findByAppUserId(USER_ID)).thenReturn(POCKET_ID);
+    when(accountEntityServiceFactory.getAccountEntityService("SAVINGS"))
+        .thenReturn(Optional.of(accountEntityService));
+    // Neither copy is in the database yet, so only the request itself shows the duplicate.
+    when(pocketAccountMappingReadPlatformService.validatePocketAndAccountMapping(
+            eq(POCKET_ID), eq(ACCOUNT_ID), eq(EntityAccountType.SAVINGS.getValue())))
+        .thenReturn(false);
+    when(accountEntityService.retrieveAccountNumberByAccountId(ACCOUNT_ID)).thenReturn("000000011");
+
+    JsonCommand command =
+        command(
+            "{\"accountsDetail\":["
+                + "{\"accountId\":11,\"accountType\":\"SAVINGS\"},"
+                + "{\"accountId\":11,\"accountType\":\"SAVINGS\"}]}");
+    PlatformDataIntegrityException exception =
+        assertThrows(PlatformDataIntegrityException.class, () -> service.linkAccounts(command));
+    assertEquals(
+        PocketApiConstants.duplicateMappingException, exception.getGlobalisationMessageCode());
+    verify(pocketAccountMappingRepositoryWrapper, never()).save(anyList());
+  }
+
+  @Test
+  void linkAccounts_sameIdWithDifferentAccountTypes_savesBoth() {
+    mockAuthenticatedUser();
+    when(pocketRepositoryWrapper.findByAppUserId(USER_ID)).thenReturn(POCKET_ID);
+    when(accountEntityServiceFactory.getAccountEntityService(any()))
+        .thenReturn(Optional.of(accountEntityService));
+    when(pocketAccountMappingReadPlatformService.validatePocketAndAccountMapping(
+            eq(POCKET_ID), eq(ACCOUNT_ID), any()))
+        .thenReturn(false);
+    when(accountEntityService.retrieveAccountNumberByAccountId(ACCOUNT_ID)).thenReturn("000000011");
+
+    service.linkAccounts(
+        command(
+            "{\"accountsDetail\":["
+                + "{\"accountId\":11,\"accountType\":\"LOAN\"},"
+                + "{\"accountId\":11,\"accountType\":\"SAVINGS\"}]}"));
+
+    verify(pocketAccountMappingRepositoryWrapper)
+        .save(argThat((List<PocketAccountMapping> list) -> list.size() == 2));
   }
 
   @Test
