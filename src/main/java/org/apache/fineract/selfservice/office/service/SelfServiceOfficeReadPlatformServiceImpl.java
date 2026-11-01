@@ -25,6 +25,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -175,8 +176,7 @@ public class SelfServiceOfficeReadPlatformServiceImpl
       return addresses;
     }
 
-    final String placeholders =
-        String.join(",", Collections.nCopies(officeIds.size(), "?"));
+    final String placeholders = String.join(",", Collections.nCopies(officeIds.size(), "?"));
 
     final String sql =
         "SELECT oa.office_id, a.street, a.postal_code, a.city, a.state_province,"
@@ -201,18 +201,16 @@ public class SelfServiceOfficeReadPlatformServiceImpl
 
     jdbcTemplate.query(
         sql,
-        rs -> {
-          while (rs.next()) {
-            addresses.put(
-                rs.getLong("office_id"),
-                SelfOfficeAddressData.instance(
-                    rs.getString("street"),
-                    rs.getString("postal_code"),
-                    rs.getString("city"),
-                    rs.getString("state_province"),
-                    rs.getString("country_name")));
-          }
-        },
+        (RowCallbackHandler)
+            rs ->
+                addresses.put(
+                    rs.getLong("office_id"),
+                    SelfOfficeAddressData.instance(
+                        rs.getString("street"),
+                        rs.getString("postal_code"),
+                        rs.getString("city"),
+                        rs.getString("state_province"),
+                        rs.getString("country_name"))),
         args);
 
     return addresses;
@@ -229,8 +227,7 @@ public class SelfServiceOfficeReadPlatformServiceImpl
       return geolocations;
     }
 
-    final String placeholders =
-        String.join(",", Collections.nCopies(officeIds.size(), "?"));
+    final String placeholders = String.join(",", Collections.nCopies(officeIds.size(), "?"));
 
     final String sql =
         "SELECT g.office_id, g.latitude, g.longitude"
@@ -251,14 +248,12 @@ public class SelfServiceOfficeReadPlatformServiceImpl
 
     jdbcTemplate.query(
         sql,
-        rs -> {
-          while (rs.next()) {
-            geolocations.put(
-                rs.getLong("office_id"),
-                OfficeGeolocationData.instance(
-                    rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude")));
-          }
-        },
+        (RowCallbackHandler)
+            rs ->
+                geolocations.put(
+                    rs.getLong("office_id"),
+                    OfficeGeolocationData.instance(
+                        rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude"))),
         args);
 
     return geolocations;
