@@ -324,8 +324,16 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
             throw new InvalidBeneficiaryException(beneficiaryId);
         }
 
-        String name = (String) params.get(NAME_PARAM_NAME);
-        Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+        // Only the fields in the request change. A field that was not sent keeps its value: a rename must
+        // not drop the transfer limit (no limit lets any amount through), and a new limit must not empty the name.
+        String name =
+                params.containsKey(NAME_PARAM_NAME)
+                        ? (String) params.get(NAME_PARAM_NAME)
+                        : beneficiary.getName();
+        Long transferLimit =
+                params.containsKey(TRANSFER_LIMIT_PARAM_NAME)
+                        ? (Long) params.get(TRANSFER_LIMIT_PARAM_NAME)
+                        : beneficiary.getTransferLimit();
         log.info(
                 "Update payload for beneficiary id={}: name={}, transferLimit={}",
                 beneficiaryId,
