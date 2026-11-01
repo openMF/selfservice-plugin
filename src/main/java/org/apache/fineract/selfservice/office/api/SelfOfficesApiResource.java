@@ -22,6 +22,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +44,10 @@ import org.apache.fineract.selfservice.office.data.OfficeServiceData;
 import org.apache.fineract.selfservice.office.data.SelfOfficeAddressData;
 import org.apache.fineract.selfservice.office.service.SelfServiceOfficeReadPlatformService;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 @Path("/v1/self/offices")
 @Component
@@ -78,6 +83,8 @@ public class SelfOfficesApiResource {
 
   private static final String RESOURCE_NAME_FOR_PERMISSIONS = "OFFICE";
 
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
   private final SelfOfficeSwaggerMapper officeSwaggerMapper;
   private final PlatformSecurityContext context;
   private final OfficeReadPlatformService readPlatformService;
@@ -96,7 +103,7 @@ public class SelfOfficesApiResource {
               + "offices\n"
               + "\n"
               + "\n"
-              + "offices?fields=id,name,openingDate")
+              + "offices?fields=id,name,openingDate,address,geolocation")
   @ApiResponse(
       responseCode = "200",
       description = "OK",
@@ -109,13 +116,8 @@ public class SelfOfficesApiResource {
                               implementation =
                                   SelfOfficesApiResourceSwagger.GetOfficesResponse.class))))
   /**
-   * Lists all offices visible to the authenticated self-service user.
-   *
-   * @param uriInfo JAX-RS URI context for query parameter processing
-   * @param onlyManualEntries whether to include all offices or only manual entries
-   * @param orderBy optional column name to sort results by
-   * @param sortOrder optional sort direction ({@code ASC} or {@code DESC})
-   * @return JSON array of office data
+   * Lists all offices visible to the authenticated self-service user, including address and
+   * geolocation information when available.
    */
   public String retrieveOffices(
       @Context final UriInfo uriInfo,
@@ -125,16 +127,94 @@ public class SelfOfficesApiResource {
           final boolean onlyManualEntries,
       @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
       @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
+
     context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
     sqlValidator.validate(orderBy);
     sqlValidator.validate(sortOrder);
+
     final SearchParameters searchParameters =
         SearchParameters.builder().orphansOnly(false).orderBy(orderBy).sortOrder(sortOrder).build();
+
     final Collection<OfficeData> offices =
         readPlatformService.retrieveAllOffices(onlyManualEntries, searchParameters);
+
     final ApiRequestJsonSerializationSettings settings =
         apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    return toApiJsonSerializer.serialize(settings, offices, RESPONSE_DATA_PARAMETERS);
+
+    // Preserve the existing Fineract office serialization and field selection.
+    final String serializedOffices =
+        toApiJsonSerializer.serialize(settings, offices, RESPONSE_DATA_PARAMETERS);
+
+    // Determine whether additional fields were requested.
+    final String fields = uriInfo.getQueryParameters().getFirst("fields");
+
+    final Set<String> requestedFields =
+        fields == null || fields.isBlank()
+            ? null
+            : new HashSet<>(Arrays.asList(fields.split(",")));
+
+    final boolean includeAddress =
+        requestedFields == null || requestedFields.contains("address");
+
+    final boolean includeGeolocation =
+        requestedFields == null || requestedFields.contains("geolocation");
+
+    if (!includeAddress && !includeGeolocation) {
+      return serializedOffices;
+    }
+
+    try {
+      final JsonNode root = OBJECT_MAPPER.readTree(serializedOffices);
+
+      if (!(root instanceof ArrayNode officeArray)) {
+        return serializedOffices;
+      }
+
+      int index = 0;
+
+      for (OfficeData office : offices) {
+
+        if (index >= officeArray.size()) {
+          break;
+        }
+
+        final JsonNode officeNode = officeArray.get(index++);
+
+        if (!(officeNode instanceof ObjectNode officeJson)) {
+          continue;
+        }
+
+        if (includeAddress) {
+          final SelfOfficeAddressData address =
+              selfServiceOfficeReadPlatformService.retrieveOfficeAddress(office.getId());
+
+          if (address != null) {
+            officeJson.set(
+                "address",
+                OBJECT_MAPPER.valueToTree(
+                    officeSwaggerMapper.toGetOfficeAddressResponse(address)));
+          }
+        }
+
+        if (includeGeolocation) {
+          final OfficeGeolocationData geolocation =
+              selfServiceOfficeReadPlatformService.retrieveOfficeGeolocation(office.getId());
+
+          if (geolocation != null) {
+            officeJson.set(
+                "geolocation",
+                OBJECT_MAPPER.valueToTree(
+                    officeSwaggerMapper.toGetOfficeGeolocationResponse(geolocation)));
+          }
+        }
+      }
+
+      return OBJECT_MAPPER.writeValueAsString(root);
+
+    } catch (Exception exception) {
+      throw new IllegalStateException(
+          "Failed to enrich office list with address and geolocation data", exception);
+    }
   }
 
   @GET
@@ -163,9 +243,6 @@ public class SelfOfficesApiResource {
                           SelfOfficesApiResourceSwagger.GetOfficesTemplateResponse.class)))
   /**
    * Retrieves the office creation template containing default fields and allowed parent offices.
-   *
-   * @param uriInfo JAX-RS URI context for query parameter processing
-   * @return JSON representation of the office template
    */
   public String retrieveOfficeTemplate(@Context final UriInfo uriInfo) {
     context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
@@ -202,10 +279,6 @@ public class SelfOfficesApiResource {
                   @Schema(implementation = SelfOfficesApiResourceSwagger.GetOfficesResponse.class)))
   /**
    * Retrieves a single office by its database identifier.
-   *
-   * @param officeId the office identifier
-   * @param uriInfo JAX-RS URI context for query parameter processing
-   * @return JSON representation of the office
    */
   public String retrieveOffice(
       @PathParam("officeId") @Parameter(description = "officeId") final Long officeId,
@@ -239,10 +312,6 @@ public class SelfOfficesApiResource {
               + "offices/external-id/asd123?fields=id,name,parentName")
   /**
    * Retrieves a single office by its external identifier.
-   *
-   * @param externalId the external identifier assigned to the office
-   * @param uriInfo JAX-RS URI context for query parameter processing
-   * @return the office details mapped to the Swagger response model
    */
   public SelfOfficesApiResourceSwagger.GetOfficesResponse retrieveOfficeByExternalId(
       @PathParam("externalId") @Parameter(description = "externalId") final String externalId,
@@ -268,7 +337,7 @@ public class SelfOfficesApiResource {
       description =
           "Returns the office id, name, and external id.\n\n"
               + "Example Request:\n\n"
-              + "self/offices/1/details")
+              + "self/offices/1")
   @ApiResponse(
       responseCode = "200",
       description = "OK",
@@ -280,10 +349,6 @@ public class SelfOfficesApiResource {
                           SelfOfficesApiResourceSwagger.GetOfficeDetailsResponse.class)))
   /**
    * Retrieves the id, name, and external id of a specific office.
-   *
-   * @param officeId the office identifier
-   * @return JSON representation of the office details
-   * @throws OfficeNotFoundException if the office does not exist or is outside the user's hierarchy
    */
   public String retrieveOfficeDetails(
       @PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
@@ -318,10 +383,6 @@ public class SelfOfficesApiResource {
                                   SelfOfficesApiResourceSwagger.GetOfficeServicesResponse.class))))
   /**
    * Retrieves the list of services offered by a specific office.
-   *
-   * @param officeId the office identifier
-   * @return JSON array of office service data
-   * @throws OfficeNotFoundException if the office does not exist or is outside the user's hierarchy
    */
   public String retrieveOfficeServices(
       @PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
@@ -354,10 +415,6 @@ public class SelfOfficesApiResource {
                           SelfOfficesApiResourceSwagger.GetOfficeGeolocationResponse.class)))
   /**
    * Retrieves the latitude and longitude of a specific office.
-   *
-   * @param officeId the office identifier
-   * @return JSON representation of the geolocation, or {@code null} if no geolocation is recorded
-   * @throws OfficeNotFoundException if the office does not exist or is outside the user's hierarchy
    */
   public String retrieveOfficeGeolocation(
       @PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
@@ -390,10 +447,6 @@ public class SelfOfficesApiResource {
                           SelfOfficesApiResourceSwagger.GetOfficeAddressResponse.class)))
   /**
    * Retrieves the physical address of a specific office.
-   *
-   * @param officeId the office identifier
-   * @return JSON representation of the address, or {@code null} if unavailable
-   * @throws OfficeNotFoundException if the office does not exist or is outside the user's hierarchy
    */
   public String retrieveOfficeAddress(
       @PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
