@@ -150,4 +150,36 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
     assertEquals("Mom", beneficiary.getName());
     assertEquals(5000L, beneficiary.getTransferLimit());
   }
+
+  // MX-522: a field that is not in the request keeps its value.
+  @Test
+  void aRenameKeepsTheTransferLimit() {
+    SelfBeneficiariesTPT beneficiary = existing(true);
+
+    service.update(5L, command("{\"name\":\"Mom\"}"));
+
+    verify(repository).saveAndFlush(beneficiary);
+    assertEquals("Mom", beneficiary.getName());
+    assertEquals(1000L, beneficiary.getTransferLimit());
+  }
+
+  @Test
+  void aNewTransferLimitKeepsTheName() {
+    SelfBeneficiariesTPT beneficiary = existing(true);
+
+    service.update(5L, command("{\"transferLimit\":300}"));
+
+    verify(repository).saveAndFlush(beneficiary);
+    assertEquals("Ana", beneficiary.getName());
+    assertEquals(300L, beneficiary.getTransferLimit());
+  }
+
+  @Test
+  void anUnchangedValueSavesNothing() {
+    existing(true);
+
+    service.update(5L, command("{\"name\":\"Ana\"}"));
+
+    verify(repository, never()).saveAndFlush(any());
+  }
 }
