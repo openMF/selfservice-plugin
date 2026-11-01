@@ -621,11 +621,12 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       throw new IllegalArgumentException("No Client mapped to the authenticated self-service user");
     }
 
-    // 2. Extraer el externalId (Cédula) del wrapper ExternalId de Fineract
+    // 2. Extraer el externalId (Cédula) del wrapper ExternalId de Fineract.
+    // Nunca usar el customerId del request: podría ser la cédula de otra persona.
     ExternalId externalIdWrapper = client.getExternalId();
     String rawExternalId = (externalIdWrapper != null && !externalIdWrapper.isEmpty())
             ? externalIdWrapper.getValue()
-            : request.getCustomerId();
+            : null;
 
     if (StringUtils.isBlank(rawExternalId)) {
       throw new IllegalArgumentException("Client externalId (cédula) is missing or blank");
