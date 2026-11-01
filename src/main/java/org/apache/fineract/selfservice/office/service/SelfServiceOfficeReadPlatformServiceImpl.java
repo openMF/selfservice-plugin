@@ -11,6 +11,9 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.organisation.office.exception.OfficeNotFoundException;
@@ -22,6 +25,7 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -140,9 +144,11 @@ public class SelfServiceOfficeReadPlatformServiceImpl
   public SelfOfficeAddressData retrieveOfficeAddress(final Long officeId) {
     this.context.authenticatedSelfServiceUser();
     validateOfficeExistsInHierarchy(officeId);
+
     if (!officeAddressTableAvailable) {
       return null;
     }
+
     try {
       return this.jdbcTemplate.queryForObject(
           "SELECT a.street, a.postal_code, a.city, a.state_province, cv.code_value AS country_name"
@@ -157,6 +163,100 @@ public class SelfServiceOfficeReadPlatformServiceImpl
     } catch (final EmptyResultDataAccessException e) {
       return null;
     }
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public Map<Long, SelfOfficeAddressData> retrieveOfficeAddresses(
+      final Collection<Long> officeIds) {
+
+    final Map<Long, SelfOfficeAddressData> addresses = new HashMap<>();
+
+    if (officeIds == null || officeIds.isEmpty() || !officeAddressTableAvailable) {
+      return addresses;
+    }
+
+    final String placeholders = String.join(",", Collections.nCopies(officeIds.size(), "?"));
+
+    final String sql =
+        "SELECT oa.office_id, a.street, a.postal_code, a.city, a.state_province,"
+            + " cv.code_value AS country_name"
+            + " FROM m_office_address oa"
+            + " JOIN m_address a ON oa.address_id = a.id"
+            + " JOIN m_office o ON oa.office_id = o.id"
+            + " LEFT JOIN m_code_value cv ON a.country_id = cv.id"
+            + " WHERE oa.is_active = true"
+            + " AND o.hierarchy LIKE ?"
+            + " AND oa.office_id IN ("
+            + placeholders
+            + ")";
+
+    final Object[] args = new Object[officeIds.size() + 1];
+    args[0] = getHierarchySearchString();
+
+    int index = 1;
+    for (Long officeId : officeIds) {
+      args[index++] = officeId;
+    }
+
+    jdbcTemplate.query(
+        sql,
+        (RowCallbackHandler)
+            rs ->
+                addresses.put(
+                    rs.getLong("office_id"),
+                    SelfOfficeAddressData.instance(
+                        rs.getString("street"),
+                        rs.getString("postal_code"),
+                        rs.getString("city"),
+                        rs.getString("state_province"),
+                        rs.getString("country_name"))),
+        args);
+
+    return addresses;
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public Map<Long, OfficeGeolocationData> retrieveOfficeGeolocations(
+      final Collection<Long> officeIds) {
+
+    final Map<Long, OfficeGeolocationData> geolocations = new HashMap<>();
+
+    if (officeIds == null || officeIds.isEmpty()) {
+      return geolocations;
+    }
+
+    final String placeholders = String.join(",", Collections.nCopies(officeIds.size(), "?"));
+
+    final String sql =
+        "SELECT g.office_id, g.latitude, g.longitude"
+            + " FROM m_selfservice_office_geolocation g"
+            + " JOIN m_office o ON g.office_id = o.id"
+            + " WHERE o.hierarchy LIKE ?"
+            + " AND g.office_id IN ("
+            + placeholders
+            + ")";
+
+    final Object[] args = new Object[officeIds.size() + 1];
+    args[0] = getHierarchySearchString();
+
+    int index = 1;
+    for (Long officeId : officeIds) {
+      args[index++] = officeId;
+    }
+
+    jdbcTemplate.query(
+        sql,
+        (RowCallbackHandler)
+            rs ->
+                geolocations.put(
+                    rs.getLong("office_id"),
+                    OfficeGeolocationData.instance(
+                        rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude"))),
+        args);
+
+    return geolocations;
   }
 
   private static final class OfficeDetailsRowMapper implements RowMapper<OfficeDetailsData> {
