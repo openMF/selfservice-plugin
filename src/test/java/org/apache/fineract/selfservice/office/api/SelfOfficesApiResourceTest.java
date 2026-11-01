@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,6 +22,7 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.UriInfo;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -41,7 +43,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.mockito.ArgumentMatchers.anyCollection;
 
 @ExtendWith(MockitoExtension.class)
 class SelfOfficesApiResourceTest {
@@ -185,15 +186,19 @@ class SelfOfficesApiResourceTest {
     when(toApiJsonSerializer.serialize(any(), anyCollection(), anySet()))
         .thenReturn("[{\"id\":1,\"name\":\"Head Office\"}]");
 
-    when(selfServiceOfficeReadPlatformService.retrieveOfficeAddress(OFFICE_ID))
+    when(selfServiceOfficeReadPlatformService.retrieveOfficeAddresses(List.of(OFFICE_ID)))
         .thenReturn(
-            SelfOfficeAddressData.instance(
-                "Av. Reforma 505", "06500", "CDMX", "CDMX", "Mexico"));
+            Map.of(
+                OFFICE_ID,
+                SelfOfficeAddressData.instance(
+                    "Av. Reforma 505", "06500", "CDMX", "CDMX", "Mexico")));
 
-    when(selfServiceOfficeReadPlatformService.retrieveOfficeGeolocation(OFFICE_ID))
+    when(selfServiceOfficeReadPlatformService.retrieveOfficeGeolocations(List.of(OFFICE_ID)))
         .thenReturn(
-            OfficeGeolocationData.instance(
-                new BigDecimal("19.4326077"), new BigDecimal("-99.1332080")));
+            Map.of(
+                OFFICE_ID,
+                OfficeGeolocationData.instance(
+                    new BigDecimal("19.4326077"), new BigDecimal("-99.1332080"))));
 
     String result = resource.retrieveOffices(uriInfo, false, null, null);
 
@@ -201,7 +206,9 @@ class SelfOfficesApiResourceTest {
     assertTrue(result.contains("\"address\""));
     assertTrue(result.contains("\"geolocation\""));
 
-    verify(selfServiceOfficeReadPlatformService).retrieveOfficeAddress(OFFICE_ID);
-    verify(selfServiceOfficeReadPlatformService).retrieveOfficeGeolocation(OFFICE_ID);
+    verify(selfServiceOfficeReadPlatformService)
+        .retrieveOfficeAddresses(List.of(OFFICE_ID));
+    verify(selfServiceOfficeReadPlatformService)
+        .retrieveOfficeGeolocations(List.of(OFFICE_ID));
   }
 }
