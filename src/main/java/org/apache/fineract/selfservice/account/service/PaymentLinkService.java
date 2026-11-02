@@ -34,6 +34,7 @@ public class PaymentLinkService {
 
     @Transactional(readOnly = true)
     public AccountTransferQuoteResponse preparePaymentLink(PaymentLinkPrepareRequest request) {
+        requireRequestBody(request);
         log.info("Preparing payment link quote - amount: {}, currency: {}, transferType: {}, transferMode: {}, clientAccount: {}",
                 request.getAmount(), request.getCurrency(), request.getTransferType(),
                 request.getTransferMode(), request.getClientAccount());
@@ -49,7 +50,15 @@ public class PaymentLinkService {
                     "Transfer Type is required to calculate the fee for confirmation"
             );
         }
-        
+
+        if (request.getAmount() == null || request.getAmount().signum() <= 0) {
+            log.warn("Payment link prepare rejected: amount must be positive. amount={}, clientAccount={}",
+                    request.getAmount(), request.getClientAccount());
+            throw new GeneralPlatformDomainRuleException(
+                    "error.msg.payment.link.amount.invalid",
+                    "A positive amount is required to calculate the fee"
+            );
+        }
 
         log.info("Looking up active fee config for transferType={}, transferMode={}, currency={}",
                 transferType, transferMode, currencyCode);
@@ -97,6 +106,15 @@ public class PaymentLinkService {
 
         BigDecimal totalAmount = request.getAmount().subtract(feeAmount);
 
+        if (totalAmount.signum() <= 0) {
+            log.warn("Payment link prepare rejected: fee {} is not lower than amount {}. clientAccount={}",
+                    feeAmount, request.getAmount(), request.getClientAccount());
+            throw new GeneralPlatformDomainRuleException(
+                    "error.msg.payment.link.amount.not.greater.than.fee",
+                    "The amount must be greater than the fee"
+            );
+        }
+
         log.info("Payment link quote prepared successfully - principal: {}, fee: {}, total: {}, currency: {}, description: {}",
                 request.getAmount(), feeAmount, totalAmount, request.getCurrency(), feeDescription);
 
@@ -110,6 +128,7 @@ public class PaymentLinkService {
 
     @Transactional
     public PaymentLinkResponse confirmPaymentLink(PaymentLinkConfirmRequest request) {
+        requireRequestBody(request);
         log.info("Confirming payment link - amount: {}, currency: {}, transferType: {}, transferMode: {}, clientAccount: {}, payerEmail: {}",
                 request.getAmount(), request.getCurrency(), request.getTransferType(),
                 request.getTransferMode(), request.getClientAccount(), request.getPayerEmail());
@@ -174,5 +193,15 @@ public class PaymentLinkService {
                 request.getClientAccount());
 
         return response;
+    }
+
+    // Gson turns an empty or "null" body into a null request
+    private void requireRequestBody(Object request) {
+        if (request == null) {
+            throw new GeneralPlatformDomainRuleException(
+                    "error.msg.payment.link.invalid.request",
+                    "A request body is required"
+            );
+        }
     }
 }
