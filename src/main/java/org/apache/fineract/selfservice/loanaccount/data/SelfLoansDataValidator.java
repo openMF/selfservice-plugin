@@ -154,6 +154,17 @@ public class SelfLoansDataValidator {
           .longGreaterThanZero();
     }
 
+    // Fineract refuses a group for an individual loan on create, but on modify it attaches the loan
+    // to the group given in the body.
+    final String groupIdParameterName = "groupId";
+    if (this.fromApiJsonHelper.parameterExists(groupIdParameterName, element)) {
+      dataValidationErrors.add(
+          ApiParameterError.parameterError(
+              "validation.msg.loan.groupId.not.allowed",
+              "A self-service loan cannot belong to a group.",
+              groupIdParameterName));
+    }
+
     if (!dataValidationErrors.isEmpty()) {
       throw new PlatformApiDataValidationException(dataValidationErrors);
     }
