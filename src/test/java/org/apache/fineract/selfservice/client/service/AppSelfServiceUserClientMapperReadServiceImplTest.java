@@ -66,7 +66,7 @@ class AppSelfServiceUserClientMapperReadServiceImplTest {
 
     verify(jdbcTemplate)
         .queryForObject(
-            contains("m_selfservice_user_client_mapping"),
+            contains("m_selfservice_user_client_mapping where client_id = ? and appuser_id = ?"),
             eq(Boolean.class),
             eq(CLIENT_ID),
             eq(USER_ID));
