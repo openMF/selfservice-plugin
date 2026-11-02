@@ -27,7 +27,9 @@ import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrat
 import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrationReadPlatformServiceImpl;
 import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrationWritePlatformService;
 import org.apache.fineract.selfservice.registration.service.SelfServiceRegistrationWritePlatformServiceImpl;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
 import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
+import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMappingRepository;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.apache.fineract.selfservice.useradministration.domain.SelfServiceUserDomainService;
@@ -122,7 +124,9 @@ public class SelfRegistrationConfiguration {
       Environment env,
       TransactionDateUtil transactionDateUtil,
       NotificationDeliveryModeUtil notificationDeliveryModeUtil,
-     NotificationCooldownCache notificationCooldownCache) {
+     NotificationCooldownCache notificationCooldownCache,
+      StepUpSettingsProvider stepUpSettingsProvider,
+      SelfServiceAuthenticationTokenService authenticationTokenService) {
 
     return new SelfServiceForgotPasswordWritePlatformServiceImpl(
         dataValidator,
@@ -135,6 +139,8 @@ public class SelfRegistrationConfiguration {
         env,
         transactionDateUtil,
         notificationDeliveryModeUtil,
-        notificationCooldownCache);
+        notificationCooldownCache,
+        stepUpSettingsProvider,
+        authenticationTokenService);
   }
 }
