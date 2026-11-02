@@ -33,13 +33,7 @@ public class StepUpSettingsProvider {
   /** Current settings for the tenant bound to the calling thread. */
   public StepUpSettings current() {
     try {
-      final ExternalServiceConfigurationData config =
-          externalServiceConfigurationService.getConfiguration(StepUpSettings.SERVICE_NAME);
-      if (config == null || config.getProperties() == null) {
-        return StepUpSettings.defaults();
-      }
-      final Map<String, String> properties = config.getProperties();
-      return StepUpSettings.fromProperties(properties);
+      return currentStrict();
     } catch (Exception e) {
       log.error(
           "Could not read step-up configuration '{}'; falling back to defaults (step-up disabled)."
@@ -48,5 +42,20 @@ public class StepUpSettingsProvider {
           e.getMessage());
       return StepUpSettings.defaults();
     }
+  }
+
+  /**
+   * Like {@link #current()}, but a failed read is thrown instead of falling back to the defaults. A
+   * missing configuration still gives the defaults. For security checks that must not be skipped
+   * silently, such as revoking sessions after a password reset.
+   */
+  public StepUpSettings currentStrict() {
+    final ExternalServiceConfigurationData config =
+        externalServiceConfigurationService.getConfiguration(StepUpSettings.SERVICE_NAME);
+    if (config == null || config.getProperties() == null) {
+      return StepUpSettings.defaults();
+    }
+    final Map<String, String> properties = config.getProperties();
+    return StepUpSettings.fromProperties(properties);
   }
 }

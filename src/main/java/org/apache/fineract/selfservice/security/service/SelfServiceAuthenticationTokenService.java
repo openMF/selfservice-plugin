@@ -19,6 +19,7 @@ import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.selfservice.security.domain.SelfServiceAuthenticationToken;
 import org.apache.fineract.selfservice.security.domain.SelfServiceAuthenticationTokenRepository;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,13 +28,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class SelfServiceAuthenticationTokenService {
 
   private final SelfServiceAuthenticationTokenRepository repository;
+  private final AppSelfServiceUserRepository userRepository;
 
   // Add Record for returning both tokens
   public record TokenPair(String accessToken, String refreshToken) {}
 
   public SelfServiceAuthenticationTokenService(
-      SelfServiceAuthenticationTokenRepository repository) {
+      SelfServiceAuthenticationTokenRepository repository,
+      AppSelfServiceUserRepository userRepository) {
     this.repository = repository;
+    this.userRepository = userRepository;
   }
 
   @Transactional
@@ -87,7 +91,18 @@ public class SelfServiceAuthenticationTokenService {
                 LocalDateTime.now())
             .orElseThrow(() -> new BadCredentialsException("Invalid or expired refresh token"));
 
-    repository.deleteByUserId(refreshEntity.getUserId());
+    // MX-528: take the same user lock as invalidateAllForUser(), then use the refresh token up with
+    // a DELETE. If a password reset or change revoked it while this request waited for the lock,
+    // nothing is deleted and no new pair is issued. If this refresh got the lock first, the
+    // revocation waits for it and then removes the new pair as well.
+    userRepository
+        .findByIdForUpdate(refreshEntity.getUserId())
+        .orElseThrow(() -> new BadCredentialsException("Invalid or expired refresh token"));
+    if (repository.deleteValidToken(
+            rawRefreshToken, SelfServiceAuthenticationToken.TokenType.REFRESH, LocalDateTime.now())
+        == 0) {
+      throw new BadCredentialsException("Invalid or expired refresh token");
+    }
     return generateTokens(refreshEntity.getUserId(), refreshEntity.getUsername());
   }
 
@@ -165,7 +180,10 @@ public class SelfServiceAuthenticationTokenService {
   @Transactional
   public void invalidateAllForUser(Long userId) {
     if (userId != null) {
-      repository.deleteByUserId(userId);
+      // Same user lock as refreshTokens(), so a refresh running at the same time can't leave a
+      // new token pair behind.
+      userRepository.findByIdForUpdate(userId);
+      repository.deleteAllOfUser(userId);
     }
   }
 

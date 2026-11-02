@@ -32,6 +32,8 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetNoContactException;
 import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetTokenException;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceUserNotFoundException;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -76,6 +78,9 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
   /** Cache manager to bypass notification rate-limits for critical security alerts. */
   private final NotificationCooldownCache notificationCooldownCache;
+
+  private final StepUpSettingsProvider stepUpSettingsProvider;
+  private final SelfServiceAuthenticationTokenService authenticationTokenService;
 
   // -------------------------------------------------------------------------
   // Request password reset
@@ -216,6 +221,13 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     request.markConsumed();
     selfServiceRegistrationRepository.saveAndFlush(request);
+
+    // MX-528: same as PUT /v1/self/user, a reset revokes every session of the user so a stolen
+    // access or refresh token stops working once the password is reset. The strict read fails the
+    // reset when the settings can't be read, instead of silently skipping the revocation.
+    if (stepUpSettingsProvider.currentStrict().invalidateSessionsOnPasswordChange()) {
+      authenticationTokenService.invalidateAllForUser(user.getId());
+    }
 
     final Map<String, Object> contextData = new HashMap<>();
     contextData.put("username", user.getUsername());

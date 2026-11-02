@@ -14,11 +14,14 @@
  */
 package org.apache.fineract.selfservice.useradministration.domain;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
+import java.util.Optional;
 import org.apache.fineract.selfservice.security.domain.PlatformSelfServiceUserRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -40,6 +43,17 @@ public interface AppSelfServiceUserRepository
           + " :officeHierarchy")
   AppSelfServiceUser findByIdAndOfficeHierarchy(
       @Param("userId") Long userId, @Param("officeHierarchy") String officeHierarchy);
+
+  /**
+   * Loads the user taking a pessimistic write lock until the transaction ends. Token refresh and
+   * session revocation both take it first, so a refresh can't hand out new tokens while a password
+   * reset or change is revoking them.
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select appSelfServiceUser from AppSelfServiceUser appSelfServiceUser where"
+          + " appSelfServiceUser.id = :userId")
+  Optional<AppSelfServiceUser> findByIdForUpdate(@Param("userId") Long userId);
 
   @EntityGraph(attributePaths = {"appUserClientMappings", "appUserClientMappings.client"})
   @Query(
