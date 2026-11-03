@@ -59,6 +59,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -118,33 +120,9 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   @Test
   void createForgotPasswordRequest_persistsPasswordResetRequest() {
     // Given
-    when(dataValidator.validateAndExtractUsername("{\"username\":\"jdoe\"}")).thenReturn("jdoe");
-    when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
-
     LocalDateTime createdAt = LocalDateTime.of(2026, 4, 13, 12, 0, 0);
     LocalDateTime expectedExpiry = LocalDateTime.of(2026, 4, 13, 12, 0, 30);
-    when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
-    when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expectedExpiry);
-
-    AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
-    when(appUser.getId()).thenReturn(1L);
-    when(appUser.getEmail()).thenReturn("test@test.com");
-    when(appUser.getFirstname()).thenReturn("John");
-    when(appUser.getLastname()).thenReturn("Doe");
-    when(appUser.getUsername()).thenReturn("jdoe");
-
-    Client client = mock(Client.class);
-    when(client.getAccountNumber()).thenReturn("0001");
-    when(client.getMobileNo()).thenReturn("5551234567");
-
-    AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
-    when(mapping.getClient()).thenReturn(client);
-    Set<AppSelfServiceUserClientMapping> mappings = new HashSet<>();
-    mappings.add(mapping);
-    when(appUser.getAppUserClientMappings()).thenReturn(mappings);
-
-    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
-    when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
+    stubResetRequest(createdAt, expectedExpiry);
 
     // When
     SelfServiceRegistration result =
@@ -167,6 +145,52 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     assertEquals("jdoe", event.getUsername());
     assertEquals("test@test.com", event.getEmail());
     assertEquals("5551234567", event.getMobileNumber());
+    // A 30-second token is announced as 1 minute, not the old hardcoded 10.
+    assertEquals(1, event.getContextData().get("expirationMinutes"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"30, 1", "60, 1", "61, 2", "600, 10", "3600, 60"})
+  void createForgotPasswordRequest_messageShowsTheRealTokenLifetime(
+      long expirySeconds, int expectedMinutes) {
+    LocalDateTime createdAt = LocalDateTime.of(2026, 4, 13, 12, 0, 0);
+    stubResetRequest(createdAt, createdAt.plusSeconds(expirySeconds));
+
+    service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
+
+    ArgumentCaptor<SelfServiceNotificationEvent> eventCaptor =
+        ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
+    verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+    assertEquals(
+        expectedMinutes, eventCaptor.getValue().getContextData().get("expirationMinutes"));
+  }
+
+  /** Stubs a reset request for user "jdoe" whose token is created and expires at the given times. */
+  private void stubResetRequest(LocalDateTime createdAt, LocalDateTime expiry) {
+    when(dataValidator.validateAndExtractUsername("{\"username\":\"jdoe\"}")).thenReturn("jdoe");
+    when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
+    when(transactionDateUtil.getCurrentTenantLocalDateTime()).thenReturn(createdAt);
+    when(selfServiceAuthorizationTokenService.calculateExpiry(any())).thenReturn(expiry);
+
+    AppSelfServiceUser appUser = mock(AppSelfServiceUser.class);
+    when(appUser.getId()).thenReturn(1L);
+    when(appUser.getEmail()).thenReturn("test@test.com");
+    when(appUser.getFirstname()).thenReturn("John");
+    when(appUser.getLastname()).thenReturn("Doe");
+    when(appUser.getUsername()).thenReturn("jdoe");
+
+    Client client = mock(Client.class);
+    when(client.getAccountNumber()).thenReturn("0001");
+    when(client.getMobileNo()).thenReturn("5551234567");
+
+    AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
+    when(mapping.getClient()).thenReturn(client);
+    Set<AppSelfServiceUserClientMapping> mappings = new HashSet<>();
+    mappings.add(mapping);
+    when(appUser.getAppUserClientMappings()).thenReturn(mappings);
+
+    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
+    when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
   }
 
   @Test
