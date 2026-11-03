@@ -284,6 +284,24 @@ class SelfSavingsAccountApiResourceTest {
     verify(savingsAccountsApiResource, never()).submitApplication(any());
   }
 
+  // --- MX-525: a new account cannot belong to a group ---
+
+  @Test
+  void submitSavingsAccountApplication_groupId_throwsAndCreatesNothing() {
+    mockClientMapped();
+    final String json = "{\"clientId\":" + CLIENT_ID + ",\"groupId\":3}";
+    HashMap<String, Object> map = new HashMap<>();
+    map.put(SelfSavingsAccountConstants.clientIdParameterName, CLIENT_ID);
+    when(dataValidator.validateSavingsApplication(json)).thenReturn(map);
+
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> resource.submitSavingsAccountApplication(null, uriInfo, json, httpRequest));
+    assertEquals("groupId", error.getErrors().get(0).getParameterName());
+    verify(savingsAccountsApiResource, never()).submitApplication(any());
+  }
+
   // --- modifySavingsAccountApplication ---
 
   @Test
