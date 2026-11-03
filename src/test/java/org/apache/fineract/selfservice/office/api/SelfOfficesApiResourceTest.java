@@ -8,16 +8,25 @@ package org.apache.fineract.selfservice.office.api;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriInfo;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
+import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.apache.fineract.organisation.office.data.OfficeData;
@@ -151,5 +160,55 @@ class SelfOfficesApiResourceTest {
   void retrieveOfficeAddress_invalidId_throws() {
     mockAuthenticatedUserWithPermission();
     assertThrows(OfficeNotFoundException.class, () -> resource.retrieveOfficeAddress(-1L));
+  }
+
+  @Test
+  void retrieveOffices_includesAddressAndGeolocationByDefault() {
+    mockAuthenticatedUserWithPermission();
+
+    UriInfo uriInfo = mock(UriInfo.class);
+    MultivaluedMap<String, String> queryParameters = mock(MultivaluedMap.class);
+    ApiRequestJsonSerializationSettings settings =
+        mock(ApiRequestJsonSerializationSettings.class);
+
+    OfficeData office = mock(OfficeData.class);
+    when(office.getId()).thenReturn(OFFICE_ID);
+
+    when(uriInfo.getQueryParameters()).thenReturn(queryParameters);
+    when(queryParameters.getFirst("fields")).thenReturn(null);
+    when(apiRequestParameterHelper.process(queryParameters)).thenReturn(settings);
+
+    List<OfficeData> offices = List.of(office);
+
+    when(readPlatformService.retrieveAllOffices(anyBoolean(), any(SearchParameters.class)))
+        .thenReturn(offices);
+
+    when(toApiJsonSerializer.serialize(any(), anyCollection(), anySet()))
+        .thenReturn("[{\"id\":1,\"name\":\"Head Office\"}]");
+
+    when(selfServiceOfficeReadPlatformService.retrieveOfficeAddresses(List.of(OFFICE_ID)))
+        .thenReturn(
+            Map.of(
+                OFFICE_ID,
+                SelfOfficeAddressData.instance(
+                    "Av. Reforma 505", "06500", "CDMX", "CDMX", "Mexico")));
+
+    when(selfServiceOfficeReadPlatformService.retrieveOfficeGeolocations(List.of(OFFICE_ID)))
+        .thenReturn(
+            Map.of(
+                OFFICE_ID,
+                OfficeGeolocationData.instance(
+                    new BigDecimal("19.4326077"), new BigDecimal("-99.1332080"))));
+
+    String result = resource.retrieveOffices(uriInfo, false, null, null);
+
+    assertNotNull(result);
+    assertTrue(result.contains("\"address\""));
+    assertTrue(result.contains("\"geolocation\""));
+
+    verify(selfServiceOfficeReadPlatformService)
+        .retrieveOfficeAddresses(List.of(OFFICE_ID));
+    verify(selfServiceOfficeReadPlatformService)
+        .retrieveOfficeGeolocations(List.of(OFFICE_ID));
   }
 }

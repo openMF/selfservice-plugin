@@ -15,12 +15,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.exception.OfficeNotFoundException;
 import org.apache.fineract.selfservice.office.data.OfficeDetailsData;
@@ -36,7 +39,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class SelfServiceOfficeReadPlatformServiceImplTest {
@@ -172,6 +177,59 @@ class SelfServiceOfficeReadPlatformServiceImplTest {
     mockOfficeNotInHierarchy();
 
     assertThrows(OfficeNotFoundException.class, () -> service.retrieveOfficeAddress(OFFICE_ID));
+  }
+
+  @Test
+  void retrieveOfficeAddresses_singleRow_returnsAddressData() throws Exception {
+    mockAuthenticatedUser();
+    ReflectionTestUtils.setField(service, "officeAddressTableAvailable", true);
+
+    ResultSet resultSet = mock(ResultSet.class);
+    when(resultSet.getLong("office_id")).thenReturn(OFFICE_ID);
+    when(resultSet.getString("street")).thenReturn("Main Street");
+    when(resultSet.getString("postal_code")).thenReturn("10001");
+    when(resultSet.getString("city")).thenReturn("New York");
+    when(resultSet.getString("state_province")).thenReturn("NY");
+    when(resultSet.getString("country_name")).thenReturn("USA");
+
+    doAnswer(
+            invocation -> {
+              RowCallbackHandler callback = invocation.getArgument(1);
+              callback.processRow(resultSet);
+              return null;
+            })
+        .when(jdbcTemplate)
+        .query(anyString(), any(RowCallbackHandler.class), any(Object[].class));
+
+    Map<Long, SelfOfficeAddressData> result = service.retrieveOfficeAddresses(List.of(OFFICE_ID));
+
+    assertNotNull(result.get(OFFICE_ID));
+  }
+
+  @Test
+  void retrieveOfficeGeolocations_singleRow_returnsGeolocationData() throws Exception {
+    mockAuthenticatedUser();
+
+    ResultSet resultSet = mock(ResultSet.class);
+    when(resultSet.getLong("office_id")).thenReturn(OFFICE_ID);
+    when(resultSet.getBigDecimal("latitude")).thenReturn(new BigDecimal("19.4326077"));
+    when(resultSet.getBigDecimal("longitude")).thenReturn(new BigDecimal("-99.1332080"));
+
+    doAnswer(
+            invocation -> {
+              RowCallbackHandler callback = invocation.getArgument(1);
+              callback.processRow(resultSet);
+              return null;
+            })
+        .when(jdbcTemplate)
+        .query(anyString(), any(RowCallbackHandler.class), any(Object[].class));
+
+    Map<Long, OfficeGeolocationData> result =
+        service.retrieveOfficeGeolocations(List.of(OFFICE_ID));
+
+    assertNotNull(result.get(OFFICE_ID));
+    assertEquals(new BigDecimal("19.4326077"), result.get(OFFICE_ID).getLatitude());
+    assertEquals(new BigDecimal("-99.1332080"), result.get(OFFICE_ID).getLongitude());
   }
 
   @Test
