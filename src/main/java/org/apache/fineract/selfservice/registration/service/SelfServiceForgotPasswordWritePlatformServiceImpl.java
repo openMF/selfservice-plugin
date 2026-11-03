@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.registration.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -143,7 +144,10 @@ public class SelfServiceForgotPasswordWritePlatformServiceImpl
 
     final Map<String, Object> contextData = new HashMap<>();
     contextData.put("authCode", token);
-    contextData.put("expirationMinutes", 10);
+    // MX-529: tell the user the real lifetime of the code (mifos.self.service.token.expiry.time,
+    // in seconds), rounded up to whole minutes like the step-up messages do.
+    final long expirySeconds = Duration.between(createdAt, expiry).getSeconds();
+    contextData.put("expirationMinutes", (int) Math.max(1, (expirySeconds + 59) / 60));
     contextData.put("username", username);
 
     final boolean emailMode =
