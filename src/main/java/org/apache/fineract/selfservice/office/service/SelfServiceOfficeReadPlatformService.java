@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.office.service;
 
 import java.util.Collection;
+import java.util.Map;
 import org.apache.fineract.organisation.office.exception.OfficeNotFoundException;
 import org.apache.fineract.selfservice.office.data.OfficeDetailsData;
 import org.apache.fineract.selfservice.office.data.OfficeGeolocationData;
@@ -26,7 +27,7 @@ public interface SelfServiceOfficeReadPlatformService {
    * @return the office details
    * @throws OfficeNotFoundException if the office does not exist within the user's hierarchy
    */
-  OfficeDetailsData retrieveOfficeDetails(Long officeId);
+  OfficeDetailsData retrieveOfficeDetails(final Long officeId);
 
   /**
    * Retrieves the list of services offered by the given office.
@@ -35,7 +36,7 @@ public interface SelfServiceOfficeReadPlatformService {
    * @return a collection of services; empty if none are configured
    * @throws OfficeNotFoundException if the office does not exist within the user's hierarchy
    */
-  Collection<OfficeServiceData> retrieveOfficeServices(Long officeId);
+  Collection<OfficeServiceData> retrieveOfficeServices(final Long officeId);
 
   /**
    * Retrieves the latitude and longitude of the given office.
@@ -44,7 +45,7 @@ public interface SelfServiceOfficeReadPlatformService {
    * @return the geolocation data, or {@code null} if no geolocation is recorded
    * @throws OfficeNotFoundException if the office does not exist within the user's hierarchy
    */
-  OfficeGeolocationData retrieveOfficeGeolocation(Long officeId);
+  OfficeGeolocationData retrieveOfficeGeolocation(final Long officeId);
 
   /**
    * Retrieves the physical address of the given office.
@@ -54,7 +55,7 @@ public interface SelfServiceOfficeReadPlatformService {
    *     exists
    * @throws OfficeNotFoundException if the office does not exist within the user's hierarchy
    */
-  SelfOfficeAddressData retrieveOfficeAddress(Long officeId);
+  SelfOfficeAddressData retrieveOfficeAddress(final Long officeId);
 
   /**
    * Indicates whether the {@code m_office_address} table exists in the current tenant database.
@@ -62,4 +63,20 @@ public interface SelfServiceOfficeReadPlatformService {
    * @return {@code true} if the table is available; {@code false} otherwise
    */
   boolean isOfficeAddressTableAvailable();
+
+  /**
+   * Retrieves addresses for the given offices within the authenticated user's hierarchy.
+   *
+   * @param officeIds the office identifiers
+   * @return addresses keyed by office identifier
+   */
+  Map<Long, SelfOfficeAddressData> retrieveOfficeAddresses(final Collection<Long> officeIds);
+
+  /**
+   * Retrieves geolocations for the given offices within the authenticated user's hierarchy.
+   *
+   * @param officeIds the office identifiers
+   * @return geolocations keyed by office identifier
+   */
+  Map<Long, OfficeGeolocationData> retrieveOfficeGeolocations(final Collection<Long> officeIds);
 }

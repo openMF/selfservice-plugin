@@ -91,4 +91,16 @@ class SelfLoansDataValidatorTest {
     HashMap<String, Object> result = validator.validateModifyLoanApplication(json);
     assertEquals(5L, result.get("clientId"));
   }
+
+  // --- MX-525: a loan cannot be attached to a group ---
+
+  @Test
+  void validateModifyLoanApplication_shouldThrowOnGroupId() {
+    String json = "{\"loanType\": \"individual\", \"groupId\": 3}";
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> validator.validateModifyLoanApplication(json));
+    assertEquals("groupId", error.getErrors().get(0).getParameterName());
+  }
 }

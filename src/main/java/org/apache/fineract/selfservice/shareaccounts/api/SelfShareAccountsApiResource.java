@@ -38,6 +38,7 @@ import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.portfolio.accounts.api.AccountsApiResource;
@@ -171,9 +172,14 @@ public class SelfShareAccountsApiResource {
                                         .PostNewShareApplicationResponse.class))))
   })
   public CommandProcessingResult createAccount(final AccountRequest apiRequestBodyAsJson) {
+    if (apiRequestBodyAsJson == null) {
+      throw new InvalidJsonException();
+    }
+    // Validate the same JSON that AccountsApiResource builds from the request, not the Lombok
+    // toString() of the request object.
     HashMap<String, Object> attr =
         selfShareAccountsDataValidator.validateShareAccountApplication(
-            apiRequestBodyAsJson.toString());
+            toApiJsonSerializer.serialize(apiRequestBodyAsJson));
     final Long clientId = (Long) attr.get(ShareAccountApiConstants.clientid_paramname);
     validateAppuserClientsMapping(clientId);
     String accountType = ShareAccountApiConstants.shareEntityType;

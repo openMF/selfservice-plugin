@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
@@ -46,6 +47,9 @@ import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestTyp
 import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetNoContactException;
 import org.apache.fineract.selfservice.registration.exception.SelfServicePasswordResetTokenException;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceUserNotFoundException;
+import org.apache.fineract.selfservice.security.service.SelfServiceAuthenticationTokenService;
+import org.apache.fineract.selfservice.stepup.service.StepUpSettings;
+import org.apache.fineract.selfservice.stepup.service.StepUpSettingsProvider;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -75,6 +79,8 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   @Mock private NotificationCooldownCache notificationCooldownCache;
+  @Mock private StepUpSettingsProvider stepUpSettingsProvider;
+  @Mock private SelfServiceAuthenticationTokenService authenticationTokenService;
 
   private SelfServiceForgotPasswordWritePlatformServiceImpl service;
 
@@ -92,7 +98,9 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             env,
             transactionDateUtil,
             notificationDeliveryModeUtil,
-            notificationCooldownCache);
+            notificationCooldownCache,
+            stepUpSettingsProvider,
+            authenticationTokenService);
 
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
@@ -215,6 +223,69 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
 
   @Test
   void renewPassword_updatesEncodedPasswordFromExternalToken() {
+    when(stepUpSettingsProvider.currentStrict()).thenReturn(StepUpSettings.defaults());
+    SelfServiceRegistration request = mock(SelfServiceRegistration.class);
+    AppSelfServiceUser appUser = stubSuccessfulRenew(request);
+
+    CommandProcessingResult result = service.renewPassword("{}");
+
+    assertNotNull(result);
+    assertEquals(7L, result.getResourceId());
+    verify(appUser).updatePassword("Strong#Abc123"); // first call with plain text
+    verify(appUser).updatePassword("encoded-password"); // second call with encoded
+    verify(appUser).updatePasswordResetRequired(false);
+    verify(appSelfServiceUserRepository).saveAndFlush(appUser);
+    verify(request).markConsumed();
+    verify(selfServiceRegistrationRepository).saveAndFlush(request);
+    verify(applicationEventPublisher).publishEvent(any(SelfServiceNotificationEvent.class));
+  }
+
+  @Test
+  void renewPassword_revokesAllSessionsWhenSettingIsOn() {
+    when(stepUpSettingsProvider.currentStrict())
+        .thenReturn(
+            StepUpSettings.fromProperties(Map.of("invalidateSessionsOnPasswordChange", "true")));
+    stubSuccessfulRenew(mock(SelfServiceRegistration.class));
+
+    service.renewPassword("{}");
+
+    verify(authenticationTokenService).invalidateAllForUser(7L);
+  }
+
+  @Test
+  void renewPassword_keepsSessionsWhenSettingIsOff() {
+    when(stepUpSettingsProvider.currentStrict())
+        .thenReturn(
+            StepUpSettings.fromProperties(Map.of("invalidateSessionsOnPasswordChange", "false")));
+    stubSuccessfulRenew(mock(SelfServiceRegistration.class));
+
+    service.renewPassword("{}");
+
+    verify(authenticationTokenService, never()).invalidateAllForUser(any());
+  }
+
+  @Test
+  void renewPassword_failsWhenSettingsCannotBeRead() {
+    when(stepUpSettingsProvider.currentStrict())
+        .thenThrow(new IllegalStateException("settings unavailable"));
+    when(dataValidator.validateForRenew("{}"))
+        .thenReturn(new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token"));
+    SelfServiceRegistration request = mock(SelfServiceRegistration.class);
+    when(request.getUsername()).thenReturn("jdoe");
+    when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+            "external-token", SelfServiceRequestType.PASSWORD_RESET))
+        .thenReturn(request);
+    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe"))
+        .thenReturn(mock(AppSelfServiceUser.class));
+
+    assertThrows(IllegalStateException.class, () -> service.renewPassword("{}"));
+
+    verify(authenticationTokenService, never()).invalidateAllForUser(any());
+    verify(applicationEventPublisher, never()).publishEvent(any());
+  }
+
+  /** Stubs a valid, unconsumed, unexpired reset token for user "jdoe" (id 7). */
+  private AppSelfServiceUser stubSuccessfulRenew(SelfServiceRegistration request) {
     RenewPasswordData data =
         new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
     when(dataValidator.validateForRenew("{}")).thenReturn(data);
@@ -224,7 +295,6 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         .thenReturn(policy);
     // validatePasswordAgainstPolicy is void – do nothing (default)
 
-    SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.getUsername()).thenReturn("jdoe");
     when(request.isConsumed()).thenReturn(false);
     when(request.isExpired(any())).thenReturn(false);
@@ -242,18 +312,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     when(appSelfServiceUserRepository.findAppSelfServiceUserByName("jdoe")).thenReturn(appUser);
     when(platformPasswordEncoder.encode(any())).thenReturn("encoded-password");
     when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
-
-    CommandProcessingResult result = service.renewPassword("{}");
-
-    assertNotNull(result);
-    assertEquals(7L, result.getResourceId());
-    verify(appUser).updatePassword("Strong#Abc123"); // first call with plain text
-    verify(appUser).updatePassword("encoded-password"); // second call with encoded
-    verify(appUser).updatePasswordResetRequired(false);
-    verify(appSelfServiceUserRepository).saveAndFlush(appUser);
-    verify(request).markConsumed();
-    verify(selfServiceRegistrationRepository).saveAndFlush(request);
-    verify(applicationEventPublisher).publishEvent(any(SelfServiceNotificationEvent.class));
+    return appUser;
   }
 
   @Test

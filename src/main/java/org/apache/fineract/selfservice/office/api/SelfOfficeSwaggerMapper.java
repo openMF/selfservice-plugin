@@ -16,6 +16,7 @@ import org.apache.fineract.selfservice.office.data.OfficeGeolocationData;
 import org.apache.fineract.selfservice.office.data.OfficeServiceData;
 import org.apache.fineract.selfservice.office.data.SelfOfficeAddressData;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 /** MapStruct mapper for converting office domain objects to Swagger API response models. */
 @Mapper(config = MapstructMapperConfig.class, componentModel = "spring")
@@ -38,6 +39,8 @@ public interface SelfOfficeSwaggerMapper {
   }
 
   /** Maps a core {@link OfficeData} to the GET office response model. */
+  @Mapping(target = "address", ignore = true)
+  @Mapping(target = "geolocation", ignore = true)
   SelfOfficesApiResourceSwagger.GetOfficesResponse toGetOfficesResponse(OfficeData officeData);
 
   /** Maps an {@link OfficeDetailsData} to the GET office details response model. */

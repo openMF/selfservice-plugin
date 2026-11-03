@@ -444,6 +444,8 @@ public class SelfSavingsAccountApiResource {
     final Long clientId =
         (Long) parameterMap.get(SelfSavingsAccountConstants.clientIdParameterName);
     validateAppSelfServiceUserClientsMapping(clientId);
+    // Fineract would open a group (JLG) account for the group given in the body.
+    rejectGroupId(apiRequestBodyAsJson);
 
     String responseJson = this.savingsAccountsApiResource.submitApplication(apiRequestBodyAsJson);
 
@@ -522,7 +524,7 @@ public class SelfSavingsAccountApiResource {
           List.of(
               ApiParameterError.parameterError(
                   "validation.msg.savingsaccount.groupId.not.allowed",
-                  "A self-service user cannot move a savings account to a group.",
+                  "A self-service savings account cannot belong to a group.",
                   SavingsApiConstants.groupIdParamName)));
     }
   }

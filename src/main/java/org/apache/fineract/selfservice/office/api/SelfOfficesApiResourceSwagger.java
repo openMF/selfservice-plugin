@@ -42,6 +42,12 @@ final class SelfOfficesApiResourceSwagger {
     @Schema(example = "en")
     public String locale;
 
+    @Schema(description = "Office physical address")
+    public GetOfficeAddressResponse address;
+
+    @Schema(description = "Office geographical coordinates")
+    public GetOfficeGeolocationResponse geolocation;
+
     public Collection<GetOfficesResponse> allowedParents;
   }
 
