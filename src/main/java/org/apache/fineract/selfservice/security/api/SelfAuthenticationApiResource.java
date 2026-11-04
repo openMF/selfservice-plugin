@@ -152,7 +152,7 @@ public class SelfAuthenticationApiResource {
                       implementation =
                           SelfAuthenticationApiResourceSwagger.PostSelfAuthenticationResponse
                               .class)))
-  @ApiResponse(responseCode = "400", description = "Unauthenticated. Please login")
+  @ApiResponse(responseCode = "400", description = "Invalid or missing request body, or blank username/password")
   @ApiResponse(responseCode = "403", description = "Password reset required")
   public String authenticate(
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
