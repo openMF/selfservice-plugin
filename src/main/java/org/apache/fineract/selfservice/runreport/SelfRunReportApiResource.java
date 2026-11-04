@@ -35,9 +35,12 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +48,9 @@ import org.apache.fineract.infrastructure.dataqueries.api.RunreportsApiResource;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/runreports")
@@ -88,6 +93,8 @@ public class SelfRunReportApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
   private final RunreportsApiResource runreportsApiResource;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   /**
    * Comma-separated allowlist of report names permitted for self-service. Deny by default when
@@ -139,25 +146,54 @@ public class SelfRunReportApiResource {
     return Response.ok(availableReports).build();
   }
 
+  /**
+   * Retrieves the configured parameters for an authorized self-service report.
+   *
+   * @param reportName the report name
+   * @return a JSON array of report parameters
+   */
   @GET
   @Path("{reportName}/parameters")
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
       summary = "Retrieve Self-Service Report Parameters",
       description = "Returns parameters for an authorized self-service report.")
-  public Response retrieveReportParameters(
-      @PathParam("reportName") final String reportName,
-      @Context final UriInfo uriInfo) {
+  public Response retrieveReportParameters(@PathParam("reportName") final String reportName) {
 
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
 
     validateReportAccess(user, reportName);
 
-    final MultivaluedMap<String, String> params = new MultivaluedHashMap<>();
-    params.putSingle("parameterType", "true");
+    final String sql =
+        """
+        SELECT
+            rp.report_parameter_name AS parameterName,
+            p.parameter_name AS parameterLabel
+        FROM stretchy_report r
+        INNER JOIN stretchy_report_parameter rp ON rp.report_id = r.id
+        INNER JOIN stretchy_parameter p ON p.id = rp.parameter_id
+        WHERE r.report_name = ?
+        ORDER BY rp.parameter_id
+        """;
 
-    return this.runreportsApiResource.runReport(
-        reportName, new UriInfoWithQueryParams(uriInfo, params));
+    final List<Map<String, Object>> parameters =
+        this.jdbcTemplate.query(
+            sql,
+            rs -> {
+              final List<Map<String, Object>> results = new ArrayList<>();
+
+              while (rs.next()) {
+                final Map<String, Object> parameter = new LinkedHashMap<>();
+                parameter.put("parameterName", rs.getString("parameterName"));
+                parameter.put("parameterLabel", rs.getString("parameterLabel"));
+                results.add(parameter);
+              }
+
+              return results;
+            },
+            reportName);
+
+    return Response.ok(parameters).build();
   }
 
   @GET
@@ -201,18 +237,18 @@ public class SelfRunReportApiResource {
 
     validateReportAccess(user, reportName);
 
-    // Preserve report filters supplied by the caller, except R_clientId.
-   // R_clientId is always derived from the authenticated user's mapping.
-   final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
+     // Preserve report filters supplied by the caller, except R_clientId.
+    // R_clientId is always derived from the authenticated user's mapping.
+    final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
 
-  uriInfo
-    .getQueryParameters(true)
-    .forEach(
-        (key, value) -> {
-          if (!"R_clientId".equalsIgnoreCase(key)) {
-            qp.put(key, value);
-          }
-        });
+    uriInfo
+        .getQueryParameters(true)
+        .forEach(
+            (key, value) -> {
+              if (!"R_clientId".equalsIgnoreCase(key)) {
+                qp.put(key, value);
+              }
+            });
 
     // Restrict report execution to the authenticated user's mapped client.
     final var mappings = user.getAppUserClientMappings();
