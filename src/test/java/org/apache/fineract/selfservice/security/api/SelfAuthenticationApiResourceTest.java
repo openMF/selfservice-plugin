@@ -6,6 +6,7 @@
  */
 package org.apache.fineract.selfservice.security.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,6 +19,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Set;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
@@ -103,25 +106,51 @@ class SelfAuthenticationApiResourceTest {
   }
 
   @Test
-  void authenticate_nullBody_throwsIllegalArgumentException() {
+  void authenticate_missingBody_throwsInvalidJsonException() {
     assertThrows(
-        IllegalArgumentException.class,
-        () -> resource.authenticate(null, true, httpServletRequest));
+        InvalidJsonException.class, () -> resource.authenticate(null, true, httpServletRequest));
     assertThrows(
-        IllegalArgumentException.class,
+        InvalidJsonException.class, () -> resource.authenticate("", true, httpServletRequest));
+    assertThrows(
+        InvalidJsonException.class,
         () -> resource.authenticate("null", true, httpServletRequest));
   }
 
   @Test
-  void authenticate_throwsOnNullUsernameOrPassword() {
-    assertThrows(
-        IllegalArgumentException.class, () -> resource.authenticate("", true, httpServletRequest));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> resource.authenticate("{\"username\":\"\"}", true, httpServletRequest));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> resource.authenticate("{\"password\":\"\"}", true, httpServletRequest));
+  void authenticate_blankUsername_throwsValidationErrorOnUsername() {
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () ->
+                resource.authenticate(
+                    "{\"username\":\"\",\"password\":\"secret\"}", true, httpServletRequest));
+    assertEquals(1, error.getErrors().size());
+    assertEquals("username", error.getErrors().get(0).getParameterName());
+  }
+
+  @Test
+  void authenticate_blankPassword_throwsValidationErrorOnPassword() {
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () ->
+                resource.authenticate(
+                    "{\"username\":\"user\",\"password\":\"\"}", true, httpServletRequest));
+    assertEquals(1, error.getErrors().size());
+    assertEquals("password", error.getErrors().get(0).getParameterName());
+  }
+
+  @Test
+  void authenticate_blankUsernameAndPassword_reportsBothFields() {
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () ->
+                resource.authenticate(
+                    "{\"username\":\"\",\"password\":\"\"}", true, httpServletRequest));
+    assertEquals(2, error.getErrors().size());
+    assertEquals("username", error.getErrors().get(0).getParameterName());
+    assertEquals("password", error.getErrors().get(1).getParameterName());
   }
 
   @Test
