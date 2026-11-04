@@ -15,6 +15,8 @@ import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamE
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SelfPublicLoanSimulationDataValidatorTest {
 
@@ -98,5 +100,14 @@ class SelfPublicLoanSimulationDataValidatorTest {
     assertThrows(
         InvalidJsonException.class,
         () -> validator.validatePublicSimulationRequest("calculateLoanSchedule", "{bad json}"));
+  }
+
+  // MX-530: valid JSON that isn't an object used to fail with IllegalStateException (a 500).
+  @ParameterizedTest
+  @ValueSource(strings = {"[]", "[{\"clientId\": 1}]", "\"x\"", "123", "null", "true"})
+  void validateBody_nonObjectJson_throwsInvalidJsonException(String json) {
+    assertThrows(
+        InvalidJsonException.class,
+        () -> validator.validatePublicSimulationRequest("calculateLoanSchedule", json));
   }
 }
