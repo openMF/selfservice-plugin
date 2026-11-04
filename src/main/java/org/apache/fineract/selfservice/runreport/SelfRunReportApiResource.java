@@ -1,7 +1,7 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
  * agreements. See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License. You may obtain a
  * copy of the License at
  *
@@ -47,7 +47,6 @@ import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecur
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriTemplate;
 
 @Path("/v1/self/runreports")
 @Component("selfservicePluginSelfRunReportApiResource")
@@ -97,6 +96,70 @@ public class SelfRunReportApiResource {
   @Value("${fineract.modules.selfservice.runreports.allowlist:}")
   private String allowlistedReportsCsv;
 
+  private Set<String> getAllowlistedReports() {
+    return Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
+        .map(String::trim)
+        .filter(s -> !s.isBlank())
+        .map(s -> s.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toSet());
+  }
+
+  private void validateReportAccess(AppSelfServiceUser user, String reportName) {
+    final Set<String> allowlist = getAllowlistedReports();
+
+    if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
+      throw new NoAuthorizationException(
+          "Self-service is not permitted to access this report: " + reportName);
+    }
+
+    if (user.hasNotPermissionForReport(reportName)) {
+      throw new NoAuthorizationException(
+          "You do not have permission to access report: " + reportName);
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "List Available Self-Service Reports",
+      description =
+          "Returns reports enabled for self-service and permitted for the authenticated user.")
+  public Response retrieveAllowedReports() {
+    final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    final List<String> availableReports =
+        Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
+            .map(String::trim)
+            .filter(reportName -> !reportName.isBlank())
+            .filter(reportName -> !user.hasNotPermissionForReport(reportName))
+            .distinct()
+            .sorted()
+            .toList();
+
+    return Response.ok(availableReports).build();
+  }
+
+  @GET
+  @Path("{reportName}/parameters")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "Retrieve Self-Service Report Parameters",
+      description = "Returns parameters for an authorized self-service report.")
+  public Response retrieveReportParameters(
+      @PathParam("reportName") final String reportName,
+      @Context final UriInfo uriInfo) {
+
+    final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    validateReportAccess(user, reportName);
+
+    final MultivaluedMap<String, String> params = new MultivaluedHashMap<>();
+    params.putSingle("parameterType", "true");
+
+    return this.runreportsApiResource.runReport(
+        reportName, new UriInfoWithQueryParams(uriInfo, params));
+  }
+
   @GET
   @Path("{reportName}")
   @Consumes({MediaType.APPLICATION_JSON})
@@ -133,36 +196,40 @@ public class SelfRunReportApiResource {
   public Response runReport(
       @PathParam("reportName") @Parameter(description = "reportName") final String reportName,
       @Context final UriInfo uriInfo) {
+
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final Set<String> allowlist =
-        Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
-            .map(String::trim)
-            .filter(s -> !s.isBlank())
-            .map(s -> s.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toSet());
-    if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
+
+    validateReportAccess(user, reportName);
+
+    // Preserve report filters supplied by the caller, except R_clientId.
+   // R_clientId is always derived from the authenticated user's mapping.
+   final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
+
+  uriInfo
+    .getQueryParameters(true)
+    .forEach(
+        (key, value) -> {
+          if (!"R_clientId".equalsIgnoreCase(key)) {
+            qp.put(key, value);
+          }
+        });
+
+    // Restrict report execution to the authenticated user's mapped client.
+    final var mappings = user.getAppUserClientMappings();
+
+    if (mappings == null || mappings.isEmpty()) {
+      throw new NoAuthorizationException("No client is associated with this self-service user.");
+    }
+
+    if (mappings.size() != 1) {
       throw new NoAuthorizationException(
-          "Self-service is not permitted to run this report: " + reportName);
+          "This user has multiple linked clients. Client selection is required.");
     }
-    // Scrub all R_* parameters and re-inject trusted scoping params derived from the
-    // authenticated self-service user mapping.
-    final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
-    uriInfo
-        .getQueryParameters(true)
-        .forEach(
-            (k, v) -> {
-              if (!k.startsWith("R_")) {
-                qp.put(k, v);
-              }
-            });
-    // Force report scope to the user's mapped clientId (if any).
-    final Long mappedClientId =
-        user.getAppUserClientMappings() == null || user.getAppUserClientMappings().isEmpty()
-            ? null
-            : user.getAppUserClientMappings().iterator().next().getClient().getId();
-    if (mappedClientId != null) {
-      qp.putSingle("R_clientId", String.valueOf(mappedClientId));
-    }
+
+    final Long mappedClientId = mappings.iterator().next().getClient().getId();
+
+    qp.putSingle("R_clientId", String.valueOf(mappedClientId));
+
     return this.runreportsApiResource.runReport(
         reportName, new UriInfoWithQueryParams(uriInfo, qp));
   }
