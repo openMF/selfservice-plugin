@@ -1,7 +1,7 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
  * agreements. See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License. You may obtain a
  * copy of the License at
  *
@@ -35,9 +35,12 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -46,8 +49,8 @@ import org.apache.fineract.infrastructure.security.exception.NoAuthorizationExce
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriTemplate;
 
 @Path("/v1/self/runreports")
 @Component("selfservicePluginSelfRunReportApiResource")
@@ -89,13 +92,107 @@ public class SelfRunReportApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
   private final RunreportsApiResource runreportsApiResource;
+  private final JdbcTemplate jdbcTemplate;
 
-  /**
-   * Comma-separated allowlist of report names permitted for self-service. Deny by default when
-   * empty to avoid IDOR via tenant-custom reports.
-   */
   @Value("${fineract.modules.selfservice.runreports.allowlist:}")
   private String allowlistedReportsCsv;
+
+  private Set<String> getAllowlistedReports() {
+    return Arrays.stream(
+            (allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
+        .map(String::trim)
+        .filter(name -> !name.isBlank())
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  private String resolveAllowedReportName(String reportName) {
+    final List<String> matches =
+        getAllowlistedReports().stream()
+            .filter(name -> name.equals(reportName))
+            .toList();
+
+    if (matches.size() != 1) {
+      throw new NoAuthorizationException(
+          "Self-service is not permitted to run this report: " + reportName);
+    }
+
+    return matches.get(0);
+  }
+
+  private void validateReportAccess(AppSelfServiceUser user, String reportName) {
+    final String resolvedName = resolveAllowedReportName(reportName);
+
+    if (user.hasNotPermissionForReport(resolvedName)) {
+      throw new NoAuthorizationException(
+          "You do not have permission to access report: " + resolvedName);
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "List Available Self-Service Reports",
+      description =
+          "Returns reports enabled for self-service and permitted for the authenticated user.")
+  public Response retrieveAllowedReports() {
+    final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    final var mappings = user.getAppUserClientMappings();
+    if (mappings == null || mappings.size() != 1) {
+      return Response.ok(List.<String>of()).build();
+    }
+
+    final List<String> availableReports =
+        getAllowlistedReports().stream()
+            .filter(reportName -> !user.hasNotPermissionForReport(reportName))
+            .sorted()
+            .toList();
+
+    return Response.ok(availableReports).build();
+  }
+
+  @GET
+  @Path("{reportName}/parameters")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "Retrieve Self-Service Report Parameters",
+      description = "Returns parameters for an authorized self-service report.")
+  public Response retrieveReportParameters(@PathParam("reportName") final String reportName) {
+
+    final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    final String resolvedReportName = resolveAllowedReportName(reportName);
+    validateReportAccess(user, resolvedReportName);
+
+    final String sql =
+        """
+        SELECT
+            rp.report_parameter_name AS parameterName,
+            p.parameter_name AS parameterLabel
+        FROM stretchy_report r
+        INNER JOIN stretchy_report_parameter rp ON rp.report_id = r.id
+        INNER JOIN stretchy_parameter p ON p.id = rp.parameter_id
+        WHERE r.report_name = ?
+        ORDER BY rp.parameter_id
+        """;
+
+    final List<Map<String, Object>> parameters =
+        this.jdbcTemplate.query(
+            sql,
+            rs -> {
+              final List<Map<String, Object>> results = new ArrayList<>();
+              while (rs.next()) {
+                final Map<String, Object> parameter = new LinkedHashMap<>();
+                parameter.put("parameterName", rs.getString("parameterName"));
+                parameter.put("parameterLabel", rs.getString("parameterLabel"));
+                results.add(parameter);
+              }
+              return results;
+            },
+            resolvedReportName);
+
+    return Response.ok(parameters).build();
+  }
 
   @GET
   @Path("{reportName}")
@@ -133,36 +230,36 @@ public class SelfRunReportApiResource {
   public Response runReport(
       @PathParam("reportName") @Parameter(description = "reportName") final String reportName,
       @Context final UriInfo uriInfo) {
+
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    final Set<String> allowlist =
-        Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
-            .map(String::trim)
-            .filter(s -> !s.isBlank())
-            .map(s -> s.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toSet());
-    if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
-      throw new NoAuthorizationException(
-          "Self-service is not permitted to run this report: " + reportName);
-    }
-    // Scrub all R_* parameters and re-inject trusted scoping params derived from the
-    // authenticated self-service user mapping.
+
+    validateReportAccess(user, reportName);
+
     final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
+
     uriInfo
         .getQueryParameters(true)
         .forEach(
-            (k, v) -> {
-              if (!k.startsWith("R_")) {
-                qp.put(k, v);
+            (key, value) -> {
+              if (!"R_clientId".equalsIgnoreCase(key)) {
+                qp.put(key, value);
               }
             });
-    // Force report scope to the user's mapped clientId (if any).
-    final Long mappedClientId =
-        user.getAppUserClientMappings() == null || user.getAppUserClientMappings().isEmpty()
-            ? null
-            : user.getAppUserClientMappings().iterator().next().getClient().getId();
-    if (mappedClientId != null) {
-      qp.putSingle("R_clientId", String.valueOf(mappedClientId));
+
+    final var mappings = user.getAppUserClientMappings();
+
+    if (mappings == null || mappings.isEmpty()) {
+      throw new NoAuthorizationException("No client is associated with this self-service user.");
     }
+
+    if (mappings.size() != 1) {
+      throw new NoAuthorizationException(
+          "This user has multiple linked clients. Client selection is required.");
+    }
+
+    final Long mappedClientId = mappings.iterator().next().getClient().getId();
+    qp.putSingle("R_clientId", String.valueOf(mappedClientId));
+
     return this.runreportsApiResource.runReport(
         reportName, new UriInfoWithQueryParams(uriInfo, qp));
   }
@@ -273,7 +370,6 @@ public class SelfRunReportApiResource {
       return delegate.relativize(uri);
     }
 
-    /** Required by Jakarta REST {@link UriInfo}; return type is String. */
     @Override
     public String getMatchedResourceTemplate() {
       return delegate.getMatchedResourceTemplate();
