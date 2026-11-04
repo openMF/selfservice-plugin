@@ -149,6 +149,8 @@ class SelfAuthenticationApiResourceTest {
                 resource.authenticate(
                     "{\"username\":\"\",\"password\":\"\"}", true, httpServletRequest));
     assertEquals(2, error.getErrors().size());
+    assertEquals("username", error.getErrors().get(0).getParameterName());
+    assertEquals("password", error.getErrors().get(1).getParameterName());
   }
 
   @Test
