@@ -39,7 +39,10 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
@@ -158,14 +161,25 @@ public class SelfAuthenticationApiResource {
 
     AuthenticateRequest request = gson.fromJson(apiRequestBodyAsJson, AuthenticateRequest.class);
     if (request == null) {
-      throw new IllegalArgumentException(
-          "Invalid JSON in BODY (no longer URL param; see FINERACT-726) of POST to /authentication:"
-              + " "
-              + apiRequestBodyAsJson);
+      throw new InvalidJsonException();
     }
-    if (StringUtils.isBlank(request.username) || StringUtils.isBlank(request.password)) {
-      throw new IllegalArgumentException(
-          "Username or Password is blank in JSON (see FINERACT-726) of POST to /authentication.");
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    if (StringUtils.isBlank(request.username)) {
+      dataValidationErrors.add(
+          ApiParameterError.parameterError(
+              "validation.msg.selfservice.authentication.username.cannot.be.blank",
+              "The parameter `username` is mandatory.",
+              "username"));
+    }
+    if (StringUtils.isBlank(request.password)) {
+      dataValidationErrors.add(
+          ApiParameterError.parameterError(
+              "validation.msg.selfservice.authentication.password.cannot.be.blank",
+              "The parameter `password` is mandatory.",
+              "password"));
+    }
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
     }
 
     final Authentication authentication =
