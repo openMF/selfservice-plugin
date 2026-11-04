@@ -28,6 +28,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class SelfRunReportApiResourceTest {
 
@@ -35,7 +36,7 @@ class SelfRunReportApiResourceTest {
   void runReport_deniesWhenNotAllowlisted() {
     PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
     RunreportsApiResource core = mock(RunreportsApiResource.class);
-    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core);
+    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
     ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "");
 
     when(ctx.authenticatedSelfServiceUser()).thenReturn(mock(AppSelfServiceUser.class));
@@ -49,7 +50,7 @@ class SelfRunReportApiResourceTest {
   void runReport_preservesReportParamsAndInjectsMappedClientId() {
     PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
     RunreportsApiResource core = mock(RunreportsApiResource.class);
-    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core);
+    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
     ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "Client Details");
 
     // The authenticated user is mapped to client 123.
@@ -98,7 +99,7 @@ class SelfRunReportApiResourceTest {
 void runReport_preservesPdfExportParameters() {
   PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
   RunreportsApiResource core = mock(RunreportsApiResource.class);
-  SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core);
+  SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
   ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "Client Details");
 
   Client client = mock(Client.class);

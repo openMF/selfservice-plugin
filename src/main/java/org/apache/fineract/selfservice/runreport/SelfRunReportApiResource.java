@@ -38,8 +38,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -48,7 +48,6 @@ import org.apache.fineract.infrastructure.dataqueries.api.RunreportsApiResource;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -93,35 +92,39 @@ public class SelfRunReportApiResource {
 
   private final PlatformSelfServiceSecurityContext context;
   private final RunreportsApiResource runreportsApiResource;
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  /**
-   * Comma-separated allowlist of report names permitted for self-service. Deny by default when
-   * empty to avoid IDOR via tenant-custom reports.
-   */
   @Value("${fineract.modules.selfservice.runreports.allowlist:}")
   private String allowlistedReportsCsv;
 
   private Set<String> getAllowlistedReports() {
-    return Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
+    return Arrays.stream(
+            (allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
         .map(String::trim)
-        .filter(s -> !s.isBlank())
-        .map(s -> s.toLowerCase(Locale.ROOT))
-        .collect(Collectors.toSet());
+        .filter(name -> !name.isBlank())
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  private String resolveAllowedReportName(String reportName) {
+    final List<String> matches =
+        getAllowlistedReports().stream()
+            .filter(name -> name.equals(reportName))
+            .toList();
+
+    if (matches.size() != 1) {
+      throw new NoAuthorizationException(
+          "Self-service is not permitted to run this report: " + reportName);
+    }
+
+    return matches.get(0);
   }
 
   private void validateReportAccess(AppSelfServiceUser user, String reportName) {
-    final Set<String> allowlist = getAllowlistedReports();
+    final String resolvedName = resolveAllowedReportName(reportName);
 
-    if (allowlist.isEmpty() || !allowlist.contains(reportName.toLowerCase(Locale.ROOT))) {
+    if (user.hasNotPermissionForReport(resolvedName)) {
       throw new NoAuthorizationException(
-          "Self-service is not permitted to access this report: " + reportName);
-    }
-
-    if (user.hasNotPermissionForReport(reportName)) {
-      throw new NoAuthorizationException(
-          "You do not have permission to access report: " + reportName);
+          "You do not have permission to access report: " + resolvedName);
     }
   }
 
@@ -134,24 +137,20 @@ public class SelfRunReportApiResource {
   public Response retrieveAllowedReports() {
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
 
+    final var mappings = user.getAppUserClientMappings();
+    if (mappings == null || mappings.size() != 1) {
+      return Response.ok(List.<String>of()).build();
+    }
+
     final List<String> availableReports =
-        Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
-            .map(String::trim)
-            .filter(reportName -> !reportName.isBlank())
+        getAllowlistedReports().stream()
             .filter(reportName -> !user.hasNotPermissionForReport(reportName))
-            .distinct()
             .sorted()
             .toList();
 
     return Response.ok(availableReports).build();
   }
 
-  /**
-   * Retrieves the configured parameters for an authorized self-service report.
-   *
-   * @param reportName the report name
-   * @return a JSON array of report parameters
-   */
   @GET
   @Path("{reportName}/parameters")
   @Produces(MediaType.APPLICATION_JSON)
@@ -162,7 +161,8 @@ public class SelfRunReportApiResource {
 
     final AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
 
-    validateReportAccess(user, reportName);
+    final String resolvedReportName = resolveAllowedReportName(reportName);
+    validateReportAccess(user, resolvedReportName);
 
     final String sql =
         """
@@ -181,17 +181,15 @@ public class SelfRunReportApiResource {
             sql,
             rs -> {
               final List<Map<String, Object>> results = new ArrayList<>();
-
               while (rs.next()) {
                 final Map<String, Object> parameter = new LinkedHashMap<>();
                 parameter.put("parameterName", rs.getString("parameterName"));
                 parameter.put("parameterLabel", rs.getString("parameterLabel"));
                 results.add(parameter);
               }
-
               return results;
             },
-            reportName);
+            resolvedReportName);
 
     return Response.ok(parameters).build();
   }
@@ -237,8 +235,6 @@ public class SelfRunReportApiResource {
 
     validateReportAccess(user, reportName);
 
-     // Preserve report filters supplied by the caller, except R_clientId.
-    // R_clientId is always derived from the authenticated user's mapping.
     final MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
 
     uriInfo
@@ -250,7 +246,6 @@ public class SelfRunReportApiResource {
               }
             });
 
-    // Restrict report execution to the authenticated user's mapped client.
     final var mappings = user.getAppUserClientMappings();
 
     if (mappings == null || mappings.isEmpty()) {
@@ -263,7 +258,6 @@ public class SelfRunReportApiResource {
     }
 
     final Long mappedClientId = mappings.iterator().next().getClient().getId();
-
     qp.putSingle("R_clientId", String.valueOf(mappedClientId));
 
     return this.runreportsApiResource.runReport(
@@ -376,7 +370,6 @@ public class SelfRunReportApiResource {
       return delegate.relativize(uri);
     }
 
-    /** Required by Jakarta REST {@link UriInfo}; return type is String. */
     @Override
     public String getMatchedResourceTemplate() {
       return delegate.getMatchedResourceTemplate();
