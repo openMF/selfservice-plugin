@@ -49,7 +49,7 @@ public class SelfPublicLoanSimulationDataValidator {
    * @param json the request body JSON
    * @throws UnrecognizedQueryParamException if {@code command} is not {@code
    *     "calculateLoanSchedule"}
-   * @throws InvalidJsonException if the request body is blank
+   * @throws InvalidJsonException if the request body is blank, malformed or not a JSON object
    * @throws PlatformApiDataValidationException if the request body contains {@code clientId}
    */
   public void validatePublicSimulationRequest(final String commandParam, final String json) {
@@ -77,6 +77,11 @@ public class SelfPublicLoanSimulationDataValidator {
     try {
       element = this.fromJsonHelper.parse(json);
     } catch (com.google.gson.JsonSyntaxException e) {
+      throw new InvalidJsonException();
+    }
+    // Valid JSON that isn't an object (e.g. [], "x", 123) would make parameterExists() throw
+    // IllegalStateException, which surfaces as a 500.
+    if (!element.isJsonObject()) {
       throw new InvalidJsonException();
     }
 

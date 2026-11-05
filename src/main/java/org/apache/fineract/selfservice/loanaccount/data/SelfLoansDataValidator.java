@@ -129,6 +129,11 @@ public class SelfLoansDataValidator {
         new DataValidatorBuilder(dataValidationErrors).resource("loan");
 
     final JsonElement element = this.fromApiJsonHelper.parse(json);
+    // A blank body parses to null, and valid JSON that isn't an object (e.g. [], "x", 123) would
+    // make parameterExists() throw IllegalStateException, which surfaces as a 500.
+    if (element == null || !element.isJsonObject()) {
+      throw new InvalidJsonException();
+    }
 
     final String loanTypeParameterName = "loanType";
     if (this.fromApiJsonHelper.parameterExists(loanTypeParameterName, element)) {
