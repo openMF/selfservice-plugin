@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.account.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,8 +20,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TimeZone;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.selfservice.account.data.RemittancePayoutRequest;
@@ -34,6 +39,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -67,6 +73,27 @@ class RemittanceServiceTest {
         .thenReturn("{}");
     when(remittanceRepository.findByPinAndVendor(anyString(), anyString()))
         .thenReturn(Optional.empty());
+  }
+
+  @Test
+  void rejectPayout_sendsClientTimestampInUtc_whenServerIsNotOnUtc() {
+    when(externalService.rejectPayout(anyString(), anyString(), any())).thenReturn("{}");
+    TimeZone serverZone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("America/Costa_Rica"));
+    Instant timestamp;
+    try {
+      remittanceService.rejectPayout("RIA", "PIN1", new RemittancePayoutRequest());
+
+      ArgumentCaptor<Object> body = ArgumentCaptor.forClass(Object.class);
+      verify(externalService).rejectPayout(eq("RIA"), eq("PIN1"), body.capture());
+      // a value with no zone (server wall clock) can't be parsed as an Instant
+      timestamp = Instant.parse((String) ((Map<?, ?>) body.getValue()).get("clientTimestampUtc"));
+    } finally {
+      TimeZone.setDefault(serverZone);
+    }
+
+    // Costa Rica is UTC-6, so the old wall-clock value was 6 hours off
+    assertTrue(Duration.between(timestamp, Instant.now()).abs().toMinutes() < 1);
   }
 
   @Test
