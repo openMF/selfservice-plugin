@@ -302,7 +302,10 @@ public class SelfAccountTransferApiResource {
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(schema = @Schema(implementation = String.class)))
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Missing or invalid request body, or missing or blank txnId")
   })
   public String retrieveTransactionDetails(
       @PathParam("accountId") final Long accountId, final String apiRequestBodyAsJson) {
@@ -330,7 +333,8 @@ public class SelfAccountTransferApiResource {
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(schema = @Schema(implementation = String.class)))
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(responseCode = "400", description = "Blank txnId")
   })
   public String retrieveTransactionDetailsGet(
       @PathParam("accountId") final Long accountId,
