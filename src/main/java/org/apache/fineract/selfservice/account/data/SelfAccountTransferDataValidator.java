@@ -51,6 +51,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class SelfAccountTransferDataValidator {
 
+  private static final String TXN_ID_PARAM = "txnId";
+  private static final String TRANSFER_TYPE_PARAM = "transferType";
+  private static final String DEFAULT_TRANSFER_TYPE = "SAME_BANK";
+
+  /** A validated transaction details request. */
+  public record TransactionDetailsRequest(String txnId, String transferType) {}
+
   private final PlatformSelfServiceSecurityContext context;
   private final SelfAccountTransferReadService selfAccountTransferReadService;
   private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
@@ -66,6 +73,51 @@ public class SelfAccountTransferDataValidator {
     this.selfAccountTransferReadService = selfAccountTransferReadService;
     this.tptBeneficiaryReadPlatformService = tptBeneficiaryReadPlatformService;
     this.fromApiJsonHelper = fromApiJsonHelper;
+  }
+
+  /**
+   * Validates the body of {@code POST /v1/self/accounttransfers/{accountId}/details}.
+   *
+   * @param apiRequestBodyAsJson request body; must be a JSON object with a non-blank txnId
+   * @return the txnId and the transferType (SAME_BANK when not given)
+   * @throws InvalidJsonException when the body is missing or is not a JSON object
+   * @throws PlatformApiDataValidationException when txnId is missing, blank or not a string
+   */
+  public TransactionDetailsRequest validateTransactionDetails(final String apiRequestBodyAsJson) {
+    if (StringUtils.isBlank(apiRequestBodyAsJson)) {
+      throw new InvalidJsonException();
+    }
+    final JsonElement element = this.fromApiJsonHelper.parse(apiRequestBodyAsJson);
+    if (element == null || !element.isJsonObject()) {
+      throw new InvalidJsonException();
+    }
+
+    // extractStringNamed returns null for a missing, blank or non-string value.
+    final String txnId = this.fromApiJsonHelper.extractStringNamed(TXN_ID_PARAM, element);
+    validateTransactionId(txnId);
+
+    final String transferType =
+        this.fromApiJsonHelper.extractStringNamed(TRANSFER_TYPE_PARAM, element);
+    return new TransactionDetailsRequest(
+        txnId, transferType != null ? transferType : DEFAULT_TRANSFER_TYPE);
+  }
+
+  /**
+   * Validates a transaction id, such as the {@code txnId} path parameter of {@code GET
+   * /v1/self/accounttransfers/{accountId}/details/{txnId}}.
+   *
+   * @throws PlatformApiDataValidationException when txnId is null or blank
+   */
+  public void validateTransactionId(final String txnId) {
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    new DataValidatorBuilder(dataValidationErrors)
+        .resource(ACCOUNT_TRANSFER_RESOURCE_NAME)
+        .parameter(TXN_ID_PARAM)
+        .value(txnId)
+        .notBlank();
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
+    }
   }
 
   public Map<String, Object> validateCreate(String type, String apiRequestBodyAsJson) {
