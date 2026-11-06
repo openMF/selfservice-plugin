@@ -78,10 +78,14 @@ public class SelfAccountTransferDataValidator {
   /**
    * Validates the body of {@code POST /v1/self/accounttransfers/{accountId}/details}.
    *
+   * <p>A numeric txnId is accepted and read as text, because transaction ids can be numeric (the
+   * audit id, the Fineract transfer id or a savings transaction id).
+   *
    * @param apiRequestBodyAsJson request body; must be a JSON object with a non-blank txnId
-   * @return the txnId and the transferType (SAME_BANK when not given)
+   * @return the txnId and the transferType (SAME_BANK when missing or blank)
    * @throws InvalidJsonException when the body is missing or is not a JSON object
-   * @throws PlatformApiDataValidationException when txnId is missing, blank or not a string
+   * @throws PlatformApiDataValidationException when txnId is missing or blank, or is an object or
+   *     array
    */
   public TransactionDetailsRequest validateTransactionDetails(final String apiRequestBodyAsJson) {
     if (StringUtils.isBlank(apiRequestBodyAsJson)) {
@@ -92,14 +96,21 @@ public class SelfAccountTransferDataValidator {
       throw new InvalidJsonException();
     }
 
-    // extractStringNamed returns null for a missing, blank or non-string value.
+    // extractStringNamed returns null for a missing or blank value and for an object or array.
     final String txnId = this.fromApiJsonHelper.extractStringNamed(TXN_ID_PARAM, element);
     validateTransactionId(txnId);
 
     final String transferType =
         this.fromApiJsonHelper.extractStringNamed(TRANSFER_TYPE_PARAM, element);
-    return new TransactionDetailsRequest(
-        txnId, transferType != null ? transferType : DEFAULT_TRANSFER_TYPE);
+    return new TransactionDetailsRequest(txnId, resolveTransferType(transferType));
+  }
+
+  /**
+   * Returns the transfer type to look a transaction up with: SAME_BANK when it is null or blank,
+   * otherwise the given value.
+   */
+  public String resolveTransferType(final String transferType) {
+    return StringUtils.isBlank(transferType) ? DEFAULT_TRANSFER_TYPE : transferType;
   }
 
   /**

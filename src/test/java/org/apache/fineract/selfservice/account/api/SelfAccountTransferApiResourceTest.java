@@ -116,13 +116,27 @@ class SelfAccountTransferApiResourceTest {
   }
 
   @Test
-  void retrieveTransactionDetails_nonStringTxnId_throwsValidationErrorOnTxnId() {
+  void retrieveTransactionDetails_objectOrArrayTxnId_throwsValidationErrorOnTxnId() {
     assertTxnIdError(() -> resource.retrieveTransactionDetails(1L, "{\"txnId\":{}}"));
+    assertTxnIdError(() -> resource.retrieveTransactionDetails(1L, "{\"txnId\":[]}"));
+  }
+
+  @Test
+  void retrieveTransactionDetails_numericTxnId_isPassedOnAsText() {
+    // Transaction ids can be numeric (audit id, Fineract transfer id, savings transaction id).
+    resource.retrieveTransactionDetails(1L, "{\"txnId\":12345}");
+    verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "12345", "SAME_BANK");
   }
 
   @Test
   void retrieveTransactionDetails_noTransferType_defaultsToSameBank() {
     resource.retrieveTransactionDetails(1L, "{\"txnId\":\"abc\"}");
+    verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "abc", "SAME_BANK");
+  }
+
+  @Test
+  void retrieveTransactionDetails_blankTransferType_defaultsToSameBank() {
+    resource.retrieveTransactionDetails(1L, "{\"txnId\":\"abc\",\"transferType\":\"   \"}");
     verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "abc", "SAME_BANK");
   }
 
@@ -140,6 +154,13 @@ class SelfAccountTransferApiResourceTest {
   @Test
   void retrieveTransactionDetailsGet_validTxnId_callsReadService() {
     resource.retrieveTransactionDetailsGet(1L, "abc", "SAME_BANK");
+    verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "abc", "SAME_BANK");
+  }
+
+  @Test
+  void retrieveTransactionDetailsGet_blankTransferType_defaultsToSameBank() {
+    // ?transferType= arrives as "", since @DefaultValue only covers a missing parameter.
+    resource.retrieveTransactionDetailsGet(1L, "abc", "");
     verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "abc", "SAME_BANK");
   }
 

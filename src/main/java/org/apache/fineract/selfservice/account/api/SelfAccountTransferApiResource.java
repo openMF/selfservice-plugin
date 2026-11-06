@@ -345,7 +345,7 @@ public class SelfAccountTransferApiResource {
 
     Map<String, Object> details =
         this.selfAccountTransferReadService.retrieveTransactionDetails(
-            accountId, txnId, transferType);
+            accountId, txnId, this.dataValidator.resolveTransferType(transferType));
 
     return this.toApiJsonSerializer.serialize(details);
   }
