@@ -14,6 +14,8 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SelfLoansDataValidatorTest {
 
@@ -90,6 +92,15 @@ class SelfLoansDataValidatorTest {
     String json = "{\"loanType\": \"individual\", \"clientId\": \"5\"}";
     HashMap<String, Object> result = validator.validateModifyLoanApplication(json);
     assertEquals(5L, result.get("clientId"));
+  }
+
+  // --- MX-530: a blank or non-object body is a 400, not a 500 ---
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   ", "[]", "[{\"clientId\": 1}]", "\"x\"", "123", "null", "true"})
+  void validateModifyLoanApplication_shouldThrowOnBlankOrNonObjectJson(String json) {
+    assertThrows(
+        InvalidJsonException.class, () -> validator.validateModifyLoanApplication(json));
   }
 
   // --- MX-525: a loan cannot be attached to a group ---
