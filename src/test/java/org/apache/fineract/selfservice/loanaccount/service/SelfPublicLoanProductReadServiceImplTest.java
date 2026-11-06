@@ -49,11 +49,19 @@ class SelfPublicLoanProductReadServiceImplTest {
 
     ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
     verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class));
+
     String executedSql = sqlCaptor.getValue();
-    assertTrue(executedSql.contains("close_date IS NULL"), "Should filter by close_date IS NULL");
+
+    assertTrue(
+        executedSql.contains("start_date IS NULL"), "Should include products without a start date");
+    assertTrue(
+        executedSql.contains("start_date <= CURRENT_DATE"),
+        "Should exclude products starting in the future");
+    assertTrue(
+        executedSql.contains("close_date IS NULL"), "Should include products without a close date");
     assertTrue(
         executedSql.contains("close_date >= CURRENT_DATE"),
-        "Should filter by close_date >= currentBusinessDate");
+        "Should exclude products that have already closed");
   }
 
   @Test

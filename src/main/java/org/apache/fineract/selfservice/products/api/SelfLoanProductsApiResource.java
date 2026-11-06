@@ -26,11 +26,13 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.time.LocalDate;
 import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanproduct.data.LoanProductData;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
@@ -233,11 +235,26 @@ public class SelfLoanProductsApiResource {
   public String retrieveAllLoanProducts(@Context final UriInfo uriInfo) {
 
     this.context.validateHasReadPermission("LOANPRODUCT");
+
     final ApiRequestJsonSerializationSettings settings =
         this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+
+    final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+
     final Collection<LoanProductData> products =
         this.loanProductReadPlatformService.retrieveAllLoanProducts();
-    return this.toApiJsonSerializer.serialize(settings, products);
+
+    final Collection<LoanProductData> activeProducts =
+        products.stream()
+            .filter(
+                product ->
+                    (product.getStartDate() == null
+                            || !product.getStartDate().isAfter(businessDate))
+                        && (product.getCloseDate() == null
+                            || !product.getCloseDate().isBefore(businessDate)))
+            .toList();
+
+    return this.toApiJsonSerializer.serialize(settings, activeProducts);
   }
 
   @GET

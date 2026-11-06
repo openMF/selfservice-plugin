@@ -38,11 +38,15 @@ public class SelfPublicLoanProductReadServiceImpl implements SelfPublicLoanProdu
   @Override
   public Collection<SelfPublicLoanProductData> retrieveAllActiveLoanProducts() {
     final SimulationLoanProductMapper mapper = new SimulationLoanProductMapper();
+    final String businessDate = sqlGenerator.currentBusinessDate();
+
     final String sql =
         "SELECT "
             + mapper.schema()
-            + " WHERE (lp.close_date IS NULL OR lp.close_date >= "
-            + sqlGenerator.currentBusinessDate()
+            + " WHERE (lp.start_date IS NULL OR lp.start_date <= "
+            + businessDate
+            + ") AND (lp.close_date IS NULL OR lp.close_date >= "
+            + businessDate
             + ")";
 
     return jdbcTemplate.query(sql, mapper);
