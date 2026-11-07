@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -27,14 +28,21 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.sql.Date;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.portfolio.products.data.ProductData;
 import org.apache.fineract.portfolio.products.service.ShareProductReadPlatformService;
+import org.apache.fineract.portfolio.shareproducts.data.ShareProductData;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/self/products/share")
@@ -47,6 +55,26 @@ public class SelfShareProductsApiResource {
   private final ShareProductReadPlatformService shareProductReadPlatformService;
   private final DefaultToApiJsonSerializer<ProductData> toApiJsonSerializer;
   private final ApiRequestParameterHelper apiRequestParameterHelper;
+  private final JdbcTemplate jdbcTemplate;
+
+  private Set<Long> retrieveActiveShareProductIds() {
+    final Date businessDate = Date.valueOf(DateUtils.getBusinessLocalDate());
+
+    return jdbcTemplate
+        .queryForList(
+            "SELECT id FROM m_share_product "
+                + "WHERE (start_date IS NULL OR start_date <= ?) "
+                + "AND (end_date IS NULL OR end_date >= ?)",
+            Long.class,
+            businessDate,
+            businessDate)
+        .stream()
+        .collect(Collectors.toSet());
+  }
+
+  private Long getProductId(final ProductData product) {
+    return ((ShareProductData) product).getId();
+  }
 
   @GET
   @Path("{productId}")
@@ -54,7 +82,7 @@ public class SelfShareProductsApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
       summary = "Retrieve a Share Product",
-      description = "Retrieves a share product by its identifier.")
+      description = "Retrieves an active share product by its identifier.")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK"),
     @ApiResponse(responseCode = "403", description = "Forbidden"),
@@ -64,10 +92,17 @@ public class SelfShareProductsApiResource {
       @PathParam("productId") final Long productId, @Context final UriInfo uriInfo) {
 
     this.context.authenticatedSelfServiceUser();
+
+    if (!retrieveActiveShareProductIds().contains(productId)) {
+      throw new NotFoundException("Share product not found or inactive");
+    }
+
     final ApiRequestJsonSerializationSettings settings =
         this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+
     final ProductData productData =
         this.shareProductReadPlatformService.retrieveOne(productId, false);
+
     return this.toApiJsonSerializer.serialize(settings, productData);
   }
 
@@ -76,7 +111,7 @@ public class SelfShareProductsApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(
       summary = "List Share Products",
-      description = "Lists all available share products with optional pagination.")
+      description = "Lists all active share products with optional pagination.")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK"),
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -87,10 +122,27 @@ public class SelfShareProductsApiResource {
       @Context final UriInfo uriInfo) {
 
     this.context.authenticatedSelfServiceUser();
+
     final ApiRequestJsonSerializationSettings settings =
         this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-    final Page<ProductData> products =
-        this.shareProductReadPlatformService.retrieveAllProducts(offset, limit);
-    return this.toApiJsonSerializer.serialize(settings, products);
+
+    final Set<Long> activeIds = retrieveActiveShareProductIds();
+
+    final Page<ProductData> allProducts =
+        this.shareProductReadPlatformService.retrieveAllProducts(null, null);
+
+    final List<ProductData> activeProducts =
+        allProducts.getPageItems().stream()
+            .filter(product -> activeIds.contains(getProductId(product)))
+            .toList();
+
+    final int total = activeProducts.size();
+    final int start = Math.min(Math.max(offset == null ? 0 : offset, 0), total);
+    final int pageSize = limit == null ? total : Math.max(limit, 0);
+    final int end = (int) Math.min((long) start + pageSize, total);
+
+    final Page<ProductData> result = new Page<>(activeProducts.subList(start, end), total);
+
+    return this.toApiJsonSerializer.serialize(settings, result);
   }
 }
