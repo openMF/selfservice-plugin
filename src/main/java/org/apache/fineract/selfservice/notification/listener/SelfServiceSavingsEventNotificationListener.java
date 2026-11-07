@@ -24,6 +24,7 @@ import org.apache.fineract.avro.savings.v1.SavingsAccountTransactionDataV1;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsService;
 import org.apache.fineract.portfolio.client.data.ClientData;
@@ -166,7 +167,8 @@ public class SelfServiceSavingsEventNotificationListener {
       ThreadLocalContextUtil.setTenant(tenant);
       // ThreadLocalContextUtil.setBusinessDates expects a concrete HashMap
       HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
-      businessDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.now());
+      // The tenant is set just above, so this is the tenant's day, not the server's
+      businessDates.put(BusinessDateType.BUSINESS_DATE, DateUtils.getLocalDateOfTenant());
       ThreadLocalContextUtil.setBusinessDates(businessDates);
 
       // JMS threads have no HTTP security context. Core services (e.g. ClientReadPlatformService)
@@ -421,7 +423,7 @@ public class SelfServiceSavingsEventNotificationListener {
     LocalDate transactionDate =
         txnData.getDate() != null
             ? LocalDate.parse(txnData.getDate().toString())
-            : LocalDate.now();
+            : DateUtils.getLocalDateOfTenant();
     String accountNumber = txnData.getAccountNo();
 
     Long clientId = null;

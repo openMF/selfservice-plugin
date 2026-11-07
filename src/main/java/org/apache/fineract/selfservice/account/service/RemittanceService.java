@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -187,7 +188,8 @@ public class RemittanceService {
     body.put("reasonCode", request.getReasonCode() != null
         ? request.getReasonCode() : "PAYERS-API.REJECT.UNKNOWN");
     body.put("reason", request.getReason() != null ? request.getReason() : "Rejected from Self Service");
-    body.put("clientTimestampUtc", LocalDateTime.now().toString());
+    // Instant is always UTC (ISO-8601 with a trailing Z), whatever zone the server runs in
+    body.put("clientTimestampUtc", Instant.now().toString());
 
     String raw = externalService.rejectPayout(vendor, transactionId, body);
     updateLocalStatus(transactionId, vendor, "REJECTED", raw);

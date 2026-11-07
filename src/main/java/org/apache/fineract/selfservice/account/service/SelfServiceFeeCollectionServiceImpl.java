@@ -11,7 +11,7 @@ import com.google.gson.JsonElement;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
@@ -594,7 +594,13 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
               .currencyCode(req.getCurrencyCode())
               .transferAmount(req.getTransferAmount())
               .feeAmount(fee)
-              .processingDate(OffsetDateTime.now())
+              // MX-531: tenant wall clock, like the transfer service's audit rows. The daily
+              // SINPE Móvil total matches DATE(processing_date) against the tenant's date, so the
+              // server clock put evening transfers on the wrong day.
+              .processingDate(
+                  DateUtils.getLocalDateTimeOfTenant()
+                      .atZone(ZoneId.systemDefault())
+                      .toOffsetDateTime())
               .status(status)
               .build();
       transferAuditRepository.saveAndFlush(audit);
