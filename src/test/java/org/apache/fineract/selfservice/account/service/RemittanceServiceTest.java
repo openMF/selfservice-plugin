@@ -26,9 +26,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
+import org.apache.fineract.selfservice.account.data.RemittanceConfirmRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePayoutRequest;
+import org.apache.fineract.selfservice.account.data.RemittancePrepareRequest;
 import org.apache.fineract.selfservice.account.data.RemittanceResponse;
 import org.apache.fineract.selfservice.account.domain.SelfServiceRemittanceRepository;
 import org.apache.fineract.selfservice.security.exception.SelfServiceAccessDeniedException;
@@ -143,5 +146,60 @@ class RemittanceServiceTest {
         () -> remittanceService.confirmPayout("RIA", "PIN1", request));
 
     verify(externalService, never()).confirmPayout(anyString(), anyString(), anyString(), any());
+  }
+
+  @Test
+  void confirmPayout_userWithoutLinkedClient_isRejected() {
+    loginUserWithClientMappings(Set.of());
+
+    GeneralPlatformDomainRuleException ex =
+        assertThrows(
+            GeneralPlatformDomainRuleException.class,
+            () -> remittanceService.confirmPayout("RIA", "PIN1", new RemittancePayoutRequest()));
+
+    assertEquals("error.msg.remittance.no.client.mapping", ex.getGlobalisationMessageCode());
+    verify(externalService, never()).confirmPayout(anyString(), anyString(), anyString(), any());
+  }
+
+  @Test
+  void findRemittance_userWithoutLinkedClient_isRejected() {
+    loginUserWithClientMappings(Set.of());
+    when(externalService.findTransaction("RIA", "PIN1")).thenReturn("{\"status\":\"AVAILABLE\"}");
+    when(remittanceRepository.findByPin("PIN1")).thenReturn(Optional.empty());
+
+    assertThrows(
+        GeneralPlatformDomainRuleException.class,
+        () -> remittanceService.findRemittance("RIA", "PIN1"));
+
+    verify(remittanceRepository, never()).save(any());
+  }
+
+  @Test
+  void prepareRemittance_userWithoutLinkedClient_isRejected() {
+    loginUserWithClientMappings(Set.of());
+
+    assertThrows(
+        GeneralPlatformDomainRuleException.class,
+        () -> remittanceService.prepareRemittance(new RemittancePrepareRequest()));
+
+    verify(remittanceRepository, never()).save(any());
+  }
+
+  @Test
+  void confirmRemittance_userWithoutLinkedClient_isRejected() {
+    loginUserWithClientMappings(null);
+
+    assertThrows(
+        GeneralPlatformDomainRuleException.class,
+        () -> remittanceService.confirmRemittance(new RemittanceConfirmRequest()));
+
+    verify(externalService, never()).createRemittance(any(), any());
+    verify(remittanceRepository, never()).save(any());
+  }
+
+  private void loginUserWithClientMappings(Set<AppSelfServiceUserClientMapping> mappings) {
+    AppSelfServiceUser user = mock(AppSelfServiceUser.class);
+    when(user.getAppUserClientMappings()).thenReturn(mappings);
+    when(context.authenticatedSelfServiceUser()).thenReturn(user);
   }
 }

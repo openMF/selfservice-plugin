@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.account.data.RemittanceConfirmRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePayoutRequest;
@@ -87,7 +88,7 @@ public class RemittanceService {
     remittanceRepository.findByPin(id).orElseGet(() -> {
       SelfServiceRemittance entity = new SelfServiceRemittance();
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      Client client = user.getAppUserClientMappings().iterator().next().getClient();
+      Client client = linkedClientOf(user);
       entity.setAppSelfServiceUserId(user.getId());
       entity.setClientId(client.getId());
       entity.setVendor(vendor);
@@ -136,8 +137,8 @@ public class RemittanceService {
   public RemittanceResponse confirmPayout(String vendor, String transactionId,
       RemittancePayoutRequest request) {
       
-    AppSelfServiceUser user = context.authenticatedSelfServiceUser();  
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    Client client = linkedClientOf(user);
     
     Long clientId = client.getId();
     if (request.getClientIdMifos() != null) {
@@ -208,7 +209,7 @@ public class RemittanceService {
   public RemittanceResponse prepareRemittance(RemittancePrepareRequest request) {
     // For now return a local quote structure; full quote may call external if MS exposes it
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Client client = linkedClientOf(user);
 
     SelfServiceRemittance entity = new SelfServiceRemittance();
     entity.setAppSelfServiceUserId(user.getId());
@@ -254,7 +255,7 @@ public class RemittanceService {
   @Transactional
   public RemittanceResponse confirmRemittance(RemittanceConfirmRequest request) {
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-    Client client = user.getAppUserClientMappings().iterator().next().getClient();
+    Client client = linkedClientOf(user);
 
     // Build payload for external create
     Map<String, Object> payload = buildCreatePayload(request);
@@ -324,6 +325,19 @@ public class RemittanceService {
         .createdOn(entity.getCreatedOn())
         .message("Remittance created successfully")
         .build();
+  }
+
+  /**
+   * Returns the client linked to the self-service user. A user can be left with no linked client
+   * (e.g. updated with an empty clients list), so fail with a clear error instead of a 500.
+   */
+  private Client linkedClientOf(AppSelfServiceUser user) {
+    if (user.getAppUserClientMappings() == null || user.getAppUserClientMappings().isEmpty()) {
+      throw new GeneralPlatformDomainRuleException(
+          "error.msg.remittance.no.client.mapping",
+          "Authenticated self-service user has no linked client");
+    }
+    return user.getAppUserClientMappings().iterator().next().getClient();
   }
 
   /** Returns null for a non-numeric id so the ownership guard rejects it. */
