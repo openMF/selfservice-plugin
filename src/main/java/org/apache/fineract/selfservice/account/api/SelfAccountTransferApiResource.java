@@ -38,6 +38,7 @@ import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
+import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator.TransactionDetailsRequest;
 import org.apache.fineract.selfservice.account.service.AccountTransferQuoteService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferReadService;
 import org.apache.fineract.selfservice.account.service.SelfAccountTransferWritePlatformService;
@@ -301,30 +302,20 @@ public class SelfAccountTransferApiResource {
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(schema = @Schema(implementation = String.class)))
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Missing or invalid request body, or missing or blank txnId")
   })
   public String retrieveTransactionDetails(
       @PathParam("accountId") final Long accountId, final String apiRequestBodyAsJson) {
 
-    com.google.gson.JsonObject jsonObject =
-        new Gson().fromJson(apiRequestBodyAsJson, com.google.gson.JsonObject.class);
-
-    String txnId =
-        jsonObject.has("txnId") && !jsonObject.get("txnId").isJsonNull()
-            ? jsonObject.get("txnId").getAsString()
-            : null;
-    String transferType =
-        jsonObject.has("transferType") && !jsonObject.get("transferType").isJsonNull()
-            ? jsonObject.get("transferType").getAsString()
-            : "SAME_BANK";
-
-    if (txnId == null || txnId.isBlank()) {
-      throw new IllegalArgumentException("The 'txnId' parameter is required.");
-    }
+    final TransactionDetailsRequest request =
+        this.dataValidator.validateTransactionDetails(apiRequestBodyAsJson);
 
     Map<String, Object> details =
         this.selfAccountTransferReadService.retrieveTransactionDetails(
-            accountId, txnId, transferType);
+            accountId, request.txnId(), request.transferType());
 
     return this.toApiJsonSerializer.serialize(details);
   }
@@ -342,20 +333,19 @@ public class SelfAccountTransferApiResource {
     @ApiResponse(
         responseCode = "200",
         description = "OK",
-        content = @Content(schema = @Schema(implementation = String.class)))
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(responseCode = "400", description = "Blank txnId")
   })
   public String retrieveTransactionDetailsGet(
       @PathParam("accountId") final Long accountId,
       @PathParam("txnId") final String txnId,
       @DefaultValue("SAME_BANK") @QueryParam("transferType") final String transferType) {
 
-    if (txnId == null || txnId.isBlank()) {
-      throw new IllegalArgumentException("The 'txnId' path parameter is required.");
-    }
+    this.dataValidator.validateTransactionId(txnId);
 
     Map<String, Object> details =
         this.selfAccountTransferReadService.retrieveTransactionDetails(
-            accountId, txnId, transferType);
+            accountId, txnId, this.dataValidator.resolveTransferType(transferType));
 
     return this.toApiJsonSerializer.serialize(details);
   }
