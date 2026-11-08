@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.api.ApiParameterHelper;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -80,6 +81,43 @@ public class SelfLoansDataValidator {
     validateTemplate(uriInfo, unsupportedParams);
 
     throwExceptionIfReqd(unsupportedParams);
+  }
+
+  public void validateRetrieveAllLoanTransactions(UriInfo uriInfo, String transactionType) {
+    List<String> unsupportedParams = new ArrayList<>();
+
+    validateTemplate(uriInfo, unsupportedParams);
+
+    if (StringUtils.isNotBlank(transactionType)) {
+      Set<String> allowedTypes = getAllowedTransactionTypes();
+      List<String> requestedTypes = Arrays.stream(transactionType.split(","))
+          .map(String::trim)
+          .filter(StringUtils::isNotBlank)
+          .collect(Collectors.toList());
+      for (String type : requestedTypes) {
+        if (!allowedTypes.contains(type.toLowerCase())) {
+          unsupportedParams.add("transactionType value '" + type + "' is not supported. "
+              + "Supported values: " + String.join(", ", allowedTypes));
+        }
+      }
+    }
+
+    throwExceptionIfReqd(unsupportedParams);
+  }
+
+  private Set<String> getAllowedTransactionTypes() {
+    return new HashSet<>(
+        Arrays.asList(
+            "disbursement",
+            "repayment",
+            "repaymentatdisbursement",
+            "charge",
+            "fee",
+            "waiver",
+            "writeoff",
+            "recoveryrepayment",
+            "accrual",
+            "contra"));
   }
 
   public HashMap<String, Object> validateLoanApplication(final String json) {

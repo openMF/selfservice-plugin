@@ -14,8 +14,11 @@
  */
 package org.apache.fineract.selfservice.loanaccount.api;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.Gson;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -39,10 +42,14 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -182,6 +189,168 @@ public class SelfLoansApiResource {
 
     return this.loanTransactionsApiResource.retrieveTransaction(
         loanId, transactionId, fields, uriInfo);
+  }
+
+  @GET
+  @Path("{loanId}/transactions")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "List Loan Transactions",
+      description =
+          "Lists loan transactions with optional filtering by transaction type.\n\n"
+              + "Example Requests:\n"
+              + "\n"
+              + "self/loans/5/transactions\n"
+              + "\n"
+              + "\n"
+              + "self/loans/5/transactions?transactionType=disbursement,repayment\n"
+              + "\n"
+              + "\n"
+              + "self/loans/5/transactions?transactionType=repayment,charge,fee&fields=id,date,amount,type")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content =
+            @Content(
+                array =
+                    @ArraySchema(
+                        schema =
+                            @Schema(
+                                implementation =
+                                    SelfLoansApiResourceSwagger.GetSelfLoansLoanIdTransactionsResponse.class))))
+  })
+  public String retrieveAllLoanTransactions(
+      @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
+      @QueryParam("transactionType")
+          @Parameter(
+              in = ParameterIn.QUERY,
+              name = "transactionType",
+              description =
+                  "Comma-separated list of transaction types to filter by. "
+                      + "Supported values: disbursement, repayment, repaymentAtDisbursement, "
+                      + "charge, fee, waiver, writeOff, recoveryRepayment, accrual, contra",
+              required = false,
+              example = "disbursement,repayment,charge")
+          final String transactionType,
+      @QueryParam("fields")
+          @Parameter(
+              in = ParameterIn.QUERY,
+              name = "fields",
+              description = "Optional comma-separated list of fields to return",
+              required = false,
+              example = "id,date,amount,type")
+          final String fields,
+      @Context final UriInfo uriInfo) {
+
+    this.dataValidator.validateRetrieveAllLoanTransactions(uriInfo, transactionType);
+
+    validateAppSelfServiceUserLoanMapping(loanId);
+
+    // Retrieve loan with transactions association
+    final boolean staffInSelectedOfficeOnly = false;
+    final String associations = "transactions";
+    final String exclude = null;
+    String loanJson =
+        this.loansApiResource.retrieveLoan(
+            loanId, staffInSelectedOfficeOnly, associations, exclude, fields, uriInfo);
+
+    // Filter transactions by type if requested
+    if (StringUtils.isNotBlank(transactionType)) {
+      loanJson = filterTransactionsByType(loanJson, transactionType);
+    }
+
+    return loanJson;
+  }
+
+  /**
+   * Filters the transactions in the loan JSON response by the requested transaction types.
+   *
+   * @param loanJson the full loan JSON response containing a "transactions" array
+   * @param transactionType comma-separated list of transaction types to include
+   * @return filtered loan JSON with only matching transactions
+   */
+  private String filterTransactionsByType(String loanJson, String transactionType) {
+    try {
+      Set<String> requestedTypes =
+          Arrays.stream(transactionType.split(","))
+              .map(String::trim)
+              .map(String::toLowerCase)
+              .filter(StringUtils::isNotBlank)
+              .collect(Collectors.toSet());
+
+      JsonObject loanObject = JsonParser.parseString(loanJson).getAsJsonObject();
+      if (!loanObject.has("transactions")) {
+        return loanJson;
+      }
+
+      JsonArray transactions = loanObject.getAsJsonArray("transactions");
+      JsonArray filteredTransactions = new JsonArray();
+
+      for (JsonElement txnElement : transactions) {
+        if (!txnElement.isJsonObject()) {
+          continue;
+        }
+        JsonObject txn = txnElement.getAsJsonObject();
+        if (txn.has("type") && txn.get("type").isJsonObject()) {
+          JsonObject typeObj = txn.getAsJsonObject("type");
+          String typeCode = null;
+          if (typeObj.has("code") && typeObj.get("code").isJsonPrimitive()) {
+            typeCode = typeObj.get("code").getAsString().toLowerCase();
+          }
+          // Map Fineract transaction type codes to our simplified type names
+          String simplifiedType = mapTransactionTypeCode(typeCode);
+          if (requestedTypes.contains(simplifiedType)) {
+            filteredTransactions.add(txn);
+          }
+        }
+      }
+
+      loanObject.add("transactions", filteredTransactions);
+      return new Gson().toJson(loanObject);
+    } catch (Exception e) {
+      log.warn("Failed to filter transactions by type: {}", e.getMessage());
+      return loanJson; // Return unfiltered on error
+    }
+  }
+
+  /**
+   * Maps Fineract loan transaction type codes to simplified type names.
+   */
+  private String mapTransactionTypeCode(String typeCode) {
+    if (typeCode == null) {
+      return "";
+    }
+    String code = typeCode.toLowerCase();
+    if (code.contains("disbursement") && !code.contains("repayment")) {
+      return "disbursement";
+    }
+    if (code.contains("repaymentatdisbursement") || code.contains("repayment_at_disbursement")) {
+      return "repaymentatdisbursement";
+    }
+    if (code.contains("repayment")) {
+      return "repayment";
+    }
+    if (code.contains("charge") || code.contains("fee")) {
+      return "charge";
+    }
+    if (code.contains("waiver") || code.contains("waive")) {
+      return "waiver";
+    }
+    if (code.contains("writeoff") || code.contains("write_off")) {
+      return "writeoff";
+    }
+    if (code.contains("recovery") || code.contains("recoveryrepayment")) {
+      return "recoveryrepayment";
+    }
+    if (code.contains("accrual")) {
+      return "accrual";
+    }
+    if (code.contains("contra")) {
+      return "contra";
+    }
+    return code;
   }
 
   @GET

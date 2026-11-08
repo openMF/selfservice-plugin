@@ -731,6 +731,71 @@ final class SelfLoansApiResourceSwagger {
     public Float interestPortion;
   }
 
+  @Schema(description = "GetSelfLoansLoanIdTransactionsResponse")
+  public static final class GetSelfLoansLoanIdTransactionsResponse {
+
+    private GetSelfLoansLoanIdTransactionsResponse() {}
+
+    static final class GetSelfLoansLoanIdTransactionsType {
+
+      private GetSelfLoansLoanIdTransactionsType() {}
+
+      @Schema(example = "2")
+      public Integer id;
+
+      @Schema(example = "loanTransactionType.repayment")
+      public String code;
+
+      @Schema(example = "Repayment")
+      public String description;
+
+      @Schema(example = "false")
+      public Boolean disbursement;
+
+      @Schema(example = "false")
+      public Boolean repaymentAtDisbursement;
+
+      @Schema(example = "true")
+      public Boolean repayment;
+
+      @Schema(example = "false")
+      public Boolean contra;
+
+      @Schema(example = "false")
+      public Boolean waiveInterest;
+
+      @Schema(example = "false")
+      public Boolean waiveCharges;
+
+      @Schema(example = "false")
+      public Boolean writeOff;
+
+      @Schema(example = "false")
+      public Boolean recoveryRepayment;
+    }
+
+    @Schema(example = "3")
+    public Integer id;
+
+    public GetSelfLoansLoanIdTransactionsType type;
+
+    @Schema(example = "[2012, 5, 14]")
+    public LocalDate date;
+
+    @Schema(example = "false")
+    public Boolean manuallyReversed;
+
+    public GetSelfLoansLoanIdResponse.GetSelfLoanIdSummary.GetLoansLoanIdOverdueCharges
+            .GetLoanCurrency
+        currency;
+
+    @Schema(example = "559.88")
+    public Float amount;
+
+    @Schema(example = "559.88")
+    public Float interestPortion;
+  }
+
   @Schema(description = "GetSelfLoansLoanIdChargesResponse")
   public static final class GetSelfLoansLoanIdChargesResponse {
 

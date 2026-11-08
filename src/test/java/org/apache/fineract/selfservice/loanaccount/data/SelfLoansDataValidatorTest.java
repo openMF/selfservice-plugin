@@ -7,10 +7,15 @@
 package org.apache.fineract.selfservice.loanaccount.data;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.UriInfo;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,10 +26,19 @@ class SelfLoansDataValidatorTest {
 
   private SelfLoansDataValidator validator;
 
+  private UriInfo uriInfo;
+
   @BeforeEach
   void setUp() {
     FromJsonHelper fromJsonHelper = new FromJsonHelper();
     validator = new SelfLoansDataValidator(fromJsonHelper);
+    uriInfo = mockUriInfo();
+  }
+
+  private UriInfo mockUriInfo() {
+    UriInfo uriInfo = mock(UriInfo.class);
+    when(uriInfo.getQueryParameters()).thenReturn(new MultivaluedHashMap<>());
+    return uriInfo;
   }
 
   // --- validateLoanApplication ---
@@ -113,5 +127,66 @@ class SelfLoansDataValidatorTest {
             PlatformApiDataValidationException.class,
             () -> validator.validateModifyLoanApplication(json));
     assertEquals("groupId", error.getErrors().get(0).getParameterName());
+  }
+
+  // --- validateRetrieveAllLoanTransactions ---
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldPassWithNoTransactionType() {
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, null));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, ""));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "   "));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldPassWithValidSingleTransactionType() {
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "disbursement"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "repayment"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "charge"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "fee"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "waiver"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "writeoff"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "recoveryrepayment"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "accrual"));
+    assertDoesNotThrow(() -> validator.validateRetrieveAllLoanTransactions(uriInfo, "contra"));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldPassWithValidMultipleTransactionTypes() {
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "disbursement,repayment"));
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "charge,fee,waiver"));
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "disbursement, repayment, charge"));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldPassWithCaseInsensitiveTransactionTypes() {
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "DISBURSEMENT,REPAYMENT"));
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "Disbursement,Repayment"));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldThrowOnInvalidTransactionType() {
+    assertThrows(
+        UnsupportedParameterException.class,
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "invalid"));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldThrowOnMixedValidAndInvalidTransactionTypes() {
+    assertThrows(
+        UnsupportedParameterException.class,
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "disbursement,invalid,repayment"));
+  }
+
+  @Test
+  void validateRetrieveAllLoanTransactions_shouldThrowOnEmptyTransactionTypeInList() {
+    // Empty values between commas should be ignored (filtered out by StringUtils.isNotBlank)
+    assertDoesNotThrow(
+        () -> validator.validateRetrieveAllLoanTransactions(uriInfo, "disbursement,,repayment"));
   }
 }

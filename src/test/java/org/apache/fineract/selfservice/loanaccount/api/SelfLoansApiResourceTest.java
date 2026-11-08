@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,9 +22,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
+import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterException;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
@@ -171,6 +175,56 @@ class SelfLoansApiResourceTest {
     assertThrows(
         LoanNotFoundException.class,
         () -> resource.retrieveTransaction(LOAN_ID, 99L, "fields", uriInfo));
+  }
+
+  // --- retrieveAllLoanTransactions ---
+
+  @Test
+  void retrieveAllLoanTransactions_mappedLoan_returnsData() {
+    mockLoanMapped();
+    when(loansApiResource.retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo)))
+        .thenReturn("{\"transactions\":[]}");
+
+    String result = resource.retrieveAllLoanTransactions(LOAN_ID, "disbursement,repayment", "fields", uriInfo);
+
+    assertNotNull(result);
+    verify(dataValidator).validateRetrieveAllLoanTransactions(uriInfo, "disbursement,repayment");
+    verify(loansApiResource).retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo));
+  }
+
+  @Test
+  void retrieveAllLoanTransactions_mappedLoan_noFilter_returnsData() {
+    mockLoanMapped();
+    when(loansApiResource.retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo)))
+        .thenReturn("{\"transactions\":[]}");
+
+    String result = resource.retrieveAllLoanTransactions(LOAN_ID, null, "fields", uriInfo);
+
+    assertNotNull(result);
+    verify(dataValidator).validateRetrieveAllLoanTransactions(uriInfo, null);
+    verify(loansApiResource).retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo));
+  }
+
+  @Test
+  void retrieveAllLoanTransactions_unmappedLoan_throws() {
+    mockLoanNotMapped();
+
+    assertThrows(
+        LoanNotFoundException.class,
+        () -> resource.retrieveAllLoanTransactions(LOAN_ID, "disbursement", "fields", uriInfo));
+  }
+
+  @Test
+  void retrieveAllLoanTransactions_invalidTransactionType_throws() {
+    mockLoanMapped();
+    doThrow(new UnsupportedParameterException(
+            List.of("transactionType value 'invalid' is not supported. Supported values: disbursement, repayment, repaymentatdisbursement, charge, fee, waiver, writeoff, recoveryrepayment, accrual, contra")))
+        .when(dataValidator)
+        .validateRetrieveAllLoanTransactions(uriInfo, "invalid");
+
+    assertThrows(
+        UnsupportedParameterException.class,
+        () -> resource.retrieveAllLoanTransactions(LOAN_ID, "invalid", "fields", uriInfo));
   }
 
   // --- retrieveAllLoanCharges ---
