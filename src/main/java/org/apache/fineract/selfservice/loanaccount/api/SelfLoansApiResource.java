@@ -256,22 +256,45 @@ public class SelfLoansApiResource {
         this.loansApiResource.retrieveLoan(
             loanId, staffInSelectedOfficeOnly, associations, exclude, fields, uriInfo);
 
+    // Extract and return only the transactions array
+    String transactionsJson = extractTransactionsArray(loanJson);
+
     // Filter transactions by type if requested
     if (StringUtils.isNotBlank(transactionType)) {
-      loanJson = filterTransactionsByType(loanJson, transactionType);
+      transactionsJson = filterTransactionsByType(transactionsJson, transactionType);
     }
 
-    return loanJson;
+    return transactionsJson;
   }
 
   /**
-   * Filters the transactions in the loan JSON response by the requested transaction types.
+   * Extracts the transactions array from the loan JSON response.
    *
    * @param loanJson the full loan JSON response containing a "transactions" array
-   * @param transactionType comma-separated list of transaction types to include
-   * @return filtered loan JSON with only matching transactions
+   * @return JSON array string of transactions, or empty array if not found
    */
-  private String filterTransactionsByType(String loanJson, String transactionType) {
+  private String extractTransactionsArray(String loanJson) {
+    try {
+      JsonObject loanObject = JsonParser.parseString(loanJson).getAsJsonObject();
+      if (!loanObject.has("transactions")) {
+        return "[]";
+      }
+      JsonArray transactions = loanObject.getAsJsonArray("transactions");
+      return new Gson().toJson(transactions);
+    } catch (Exception e) {
+      log.warn("Failed to extract transactions array: {}", e.getMessage());
+      return "[]";
+    }
+  }
+
+  /**
+   * Filters the transactions in the JSON array by the requested transaction types.
+   *
+   * @param transactionsJson JSON array string of transactions
+   * @param transactionType comma-separated list of transaction types to include
+   * @return filtered JSON array string with only matching transactions
+   */
+  private String filterTransactionsByType(String transactionsJson, String transactionType) {
     try {
       Set<String> requestedTypes =
           Arrays.stream(transactionType.split(","))
@@ -280,12 +303,7 @@ public class SelfLoansApiResource {
               .filter(StringUtils::isNotBlank)
               .collect(Collectors.toSet());
 
-      JsonObject loanObject = JsonParser.parseString(loanJson).getAsJsonObject();
-      if (!loanObject.has("transactions")) {
-        return loanJson;
-      }
-
-      JsonArray transactions = loanObject.getAsJsonArray("transactions");
+      JsonArray transactions = JsonParser.parseString(transactionsJson).getAsJsonArray();
       JsonArray filteredTransactions = new JsonArray();
 
       for (JsonElement txnElement : transactions) {
@@ -307,11 +325,10 @@ public class SelfLoansApiResource {
         }
       }
 
-      loanObject.add("transactions", filteredTransactions);
-      return new Gson().toJson(loanObject);
+      return new Gson().toJson(filteredTransactions);
     } catch (Exception e) {
       log.warn("Failed to filter transactions by type: {}", e.getMessage());
-      return loanJson; // Return unfiltered on error
+      return transactionsJson; // Return unfiltered on error
     }
   }
 

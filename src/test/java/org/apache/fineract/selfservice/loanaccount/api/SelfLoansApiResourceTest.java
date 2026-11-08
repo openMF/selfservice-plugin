@@ -9,6 +9,7 @@ package org.apache.fineract.selfservice.loanaccount.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -183,11 +184,12 @@ class SelfLoansApiResourceTest {
   void retrieveAllLoanTransactions_mappedLoan_returnsData() {
     mockLoanMapped();
     when(loansApiResource.retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo)))
-        .thenReturn("{\"transactions\":[]}");
+        .thenReturn("{\"transactions\":[{\"id\":1,\"amount\":100}]}");
 
     String result = resource.retrieveAllLoanTransactions(LOAN_ID, "disbursement,repayment", "fields", uriInfo);
 
     assertNotNull(result);
+    assertTrue(result.startsWith("[")); // Should return array, not object
     verify(dataValidator).validateRetrieveAllLoanTransactions(uriInfo, "disbursement,repayment");
     verify(loansApiResource).retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo));
   }
@@ -196,11 +198,12 @@ class SelfLoansApiResourceTest {
   void retrieveAllLoanTransactions_mappedLoan_noFilter_returnsData() {
     mockLoanMapped();
     when(loansApiResource.retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo)))
-        .thenReturn("{\"transactions\":[]}");
+        .thenReturn("{\"transactions\":[{\"id\":1,\"amount\":100}]}");
 
     String result = resource.retrieveAllLoanTransactions(LOAN_ID, null, "fields", uriInfo);
 
     assertNotNull(result);
+    assertTrue(result.startsWith("[")); // Should return array, not object
     verify(dataValidator).validateRetrieveAllLoanTransactions(uriInfo, null);
     verify(loansApiResource).retrieveLoan(eq(LOAN_ID), eq(false), eq("transactions"), eq(null), eq("fields"), eq(uriInfo));
   }
