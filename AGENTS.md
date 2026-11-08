@@ -48,6 +48,9 @@ The plugin uses Liquibase for database migrations. Scripts are located in `src/m
 ### Running the Plugin
 This is a library/plugin that extends Apache Fineract. It runs as part of the Fineract application, not as a standalone service.
 
+To install, verify, troubleshoot or remove the plugin with Docker Compose, load the
+`selfservice-docker-compose` skill in `.agents/skills/selfservice-docker-compose/SKILL.md` and follow it.
+
 #### Deployment Options:
 ```bash
 # With Apache Fineract (Docker)

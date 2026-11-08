@@ -1,0 +1,112 @@
+# Local demo: Apache Fineract (develop image) with this plugin, on PostgreSQL.
+# docker compose up -d   then   https://localhost:8443/fineract-provider (self-signed certificate)
+# Not for production: fixed demo database password, self-signed TLS, default Fineract login.
+name: selfservice
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fineract_tenants
+    # Fineract also needs the default tenant's database; it doesn't create it.
+    configs:
+      - source: create-tenant-db
+        target: /docker-entrypoint-initdb.d/create-tenant-db.sql
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: during first-run initialisation PostgreSQL listens on its Unix socket only.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 5s
+      retries: 20
+
+  # Builds the plugin JAR from this checkout and puts it in the shared "plugins" volume.
+  # The source is mounted read-only and copied, so nothing in the checkout changes.
+  plugin-build:
+    image: maven:3.9.15-eclipse-temurin-25
+    volumes:
+      - .:/src:ro
+      - plugins:/plugins
+      - maven-repo:/root/.m2
+    command:
+      - sh
+      - -ec
+      - |
+        rm -rf /tmp/build && mkdir /tmp/build
+        tar -C /src --exclude=./target --exclude=./.git --exclude=./docs -cf - . | tar -C /tmp/build -xf -
+        cd /tmp/build
+        # Each dependency is looked up in the pom's 5 extra repositories before Maven Central, about
+        # 1 s per miss. Resolving in parallel cuts a first build from over an hour.
+        # The plugin also needs the Mifos plugins it depends on (savings-plugin and what it pulls
+        # in); the Fineract image doesn't have them. The integration tests copy the same set.
+        mvn -B -q package dependency:copy-dependencies -Dmaven.test.skip=true \
+          -Dspotless.check.skip=true -DincludeGroupIds=community.mifos -DincludeScope=runtime \
+          -DexcludeArtifactIds=selfservice-plugin -DoutputDirectory=/tmp/build/mifos-deps \
+          -Daether.dependencyCollector.impl=bf -Daether.dependencyCollector.bf.threads=16 \
+          -Daether.connector.basic.threads=16
+        jar=$$(ls target/selfservice-plugin-*.jar | grep -vE -- '-(sources|javadoc|tests)\.jar$$')
+        # Each build goes into its own directory under /plugins/sets. Fineract's classpath only
+        # picks up /plugins/*.jar, so the set is published through one JAR whose manifest
+        # Class-Path lists it. Replacing that JAR is a single rename on the same volume: an
+        # interrupted build leaves the previous set fully in place.
+        mkdir -p /plugins/sets
+        set=$$(mktemp -d /plugins/sets/XXXXXX)
+        chmod 755 $$set
+        cp $$jar $$set/selfservice-plugin.jar
+        cp mifos-deps/*.jar $$set/
+        id=$${set##*/}
+        echo 'Class-Path: ' > manifest
+        for f in $$set/*.jar; do echo "  sets/$$id/$${f##*/}" >> manifest; done
+        jar --create --file /plugins/.selfservice-plugin.jar.new --manifest manifest
+        mv -f /plugins/.selfservice-plugin.jar.new /plugins/selfservice-plugin.jar
+        # Older sets, and JARs from the previous flat layout, are no longer referenced.
+        find /plugins -maxdepth 1 -name '*.jar' ! -name selfservice-plugin.jar -delete
+        find /plugins/sets -mindepth 1 -maxdepth 1 ! -name $$id -exec rm -rf {} +
+        ls $$set
+
+  fineract:
+    image: apache/fineract:develop
+    depends_on:
+      db:
+        condition: service_healthy
+      plugin-build:
+        condition: service_completed_successfully
+    environment:
+      FINERACT_HIKARI_JDBC_URL: jdbc:postgresql://db:5432/fineract_tenants
+      FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME: org.postgresql.Driver
+      FINERACT_HIKARI_USERNAME: postgres
+      FINERACT_HIKARI_PASSWORD: postgres
+      FINERACT_DEFAULT_TENANTDB_HOSTNAME: db
+      FINERACT_DEFAULT_TENANTDB_PORT: "5432"
+      FINERACT_DEFAULT_TENANTDB_UID: postgres
+      FINERACT_DEFAULT_TENANTDB_PWD: postgres
+      FINERACT_DEFAULT_TENANTDB_CONN_PARAMS: ""
+      # The plugin replaces some Fineract beans.
+      SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
+      FINERACT_SERVER_SSL_ENABLED: "true"
+      FINERACT_SERVER_PORT: "8443"
+      JAVA_TOOL_OPTIONS: -Xmx2G
+      TZ: UTC
+    # The image's classpath starts with /app/plugins/*.
+    volumes:
+      - plugins:/app/plugins:ro
+    ports:
+      - "127.0.0.1:8443:8443"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--no-check-certificate",
+             "https://localhost:8443/fineract-provider/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 10m
+      retries: 4
+
+configs:
+  create-tenant-db:
+    content: CREATE DATABASE fineract_default;
+
+volumes:
+  db-data:
+  plugins:
+  maven-repo:

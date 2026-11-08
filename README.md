@@ -20,6 +20,8 @@ A Spring Boot plugin that extends [Apache Fineract](https://fineract.apache.org/
   - [Build from Source](#build-from-source)
   - [Deploy with Fineract (Docker)](#deploy-with-fineract-docker)
   - [Deploy with Fineract (Tomcat)](#deploy-with-fineract-tomcat)
+  - [Run with Docker Compose](#run-with-docker-compose)
+  - [Install with an AI agent](#install-with-an-ai-agent)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
 - [History](#history)
@@ -134,6 +136,78 @@ $TOMCAT_HOME/bin/shutdown.sh && $TOMCAT_HOME/bin/startup.sh
 ```
 
 The plugin auto-registers its endpoints, runs its own Liquibase migrations against every configured tenant, and is ready to use — **no additional configuration needed**.
+
+### Run with Docker Compose
+
+[`docker-compose.yml`](docker-compose.yml) runs the plugin inside Fineract on your machine. You only
+need Docker with Compose 2.23.1 or later (`docker compose version`), about 4 GB of memory for
+Docker, and internet access for the images and Maven dependencies. Java and Maven run inside a
+container.
+
+```bash
+git clone https://github.com/openMF/selfservice-plugin.git
+cd selfservice-plugin
+docker compose up -d
+sh .agents/skills/selfservice-docker-compose/scripts/verify-install.sh
+```
+
+It starts PostgreSQL, builds the plugin JAR from your checkout, and starts `apache/fineract:develop`
+with the JAR in `/app/plugins`. The Mifos plugins this one depends on (`savings-plugin`) go into
+`/app/plugins` too; without them Fineract fails to start with a `ClassNotFoundException`.
+
+With an empty Maven cache, `docker compose up -d` to all checks passing took 8 min 21 s on a
+laptop, about 7.5 min of it the Maven build downloading dependencies. Later runs reuse the
+`maven-repo` volume, and the build takes under a minute. The verify script waits for Fineract and
+prints a PASS or FAIL line for health, the mounted JAR, the admin login, and the plugin's
+`/v1/self/authentication` endpoint.
+
+- API: `https://localhost:8443/fineract-provider/api/v1` (self-signed certificate, so `curl -k`),
+  with the header `Fineract-Platform-TenantId: default`. Admin login: `mifos` / `password`.
+- After changing the source: `docker compose up -d --force-recreate plugin-build fineract`.
+- Stop: `docker compose down`. Delete the database too: `docker compose down -v`.
+
+The `fineract` service sets these environment variables in `docker-compose.yml` (edit them there):
+
+| Variable | Value |
+|---|---|
+| `FINERACT_HIKARI_JDBC_URL` | `jdbc:postgresql://db:5432/fineract_tenants` |
+| `FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME` | `org.postgresql.Driver` |
+| `FINERACT_HIKARI_USERNAME` / `FINERACT_HIKARI_PASSWORD` | `postgres` / `postgres` |
+| `FINERACT_DEFAULT_TENANTDB_HOSTNAME` / `FINERACT_DEFAULT_TENANTDB_PORT` | `db` / `5432` |
+| `FINERACT_DEFAULT_TENANTDB_UID` / `FINERACT_DEFAULT_TENANTDB_PWD` | `postgres` / `postgres` |
+| `FINERACT_DEFAULT_TENANTDB_CONN_PARAMS` | empty |
+| `SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING` | `true` (the plugin replaces some Fineract beans) |
+| `FINERACT_SERVER_SSL_ENABLED` / `FINERACT_SERVER_PORT` | `true` / `8443` |
+| `JAVA_TOOL_OPTIONS` | `-Xmx2G` |
+| `TZ` | `UTC` |
+
+The `db` service sets `POSTGRES_USER`, `POSTGRES_PASSWORD` (both `postgres`) and `POSTGRES_DB`
+(`fineract_tenants`), and creates the `fineract_default` tenant database on first start.
+
+This is a local demo setup. The database password and the admin login are fixed defaults, and
+Fineract listens on `127.0.0.1` only.
+
+### Install with an AI agent
+
+[`.agents/skills/selfservice-docker-compose/SKILL.md`](.agents/skills/selfservice-docker-compose/SKILL.md)
+is an [Agent Skill](https://agentskills.io) that runs the Docker Compose install above, watches for
+known failures, and checks the result with the verify script. It also covers stopping and
+uninstalling. Run your agent from the repository root:
+
+| Agent | Setup |
+|---|---|
+| OpenCode | None. OpenCode loads skills from `.agents/skills/` |
+| Codex | None. Codex loads skills from `.agents/skills/` |
+| Pi Agent | None. Pi loads skills from `.agents/skills/` once you trust the project |
+| Claude Code | `mkdir -p .claude/skills && ln -s ../../.agents/skills/selfservice-docker-compose .claude/skills/` |
+| Hermes Agent | `mkdir -p ~/.hermes/skills/devops && cp -r .agents/skills/selfservice-docker-compose ~/.hermes/skills/devops/` |
+
+Then ask, for example: *"Install the self service plugin with Docker Compose"*, or *"Remove the
+self service plugin Docker setup"*. The agent runs `docker compose` and `verify-install.sh`;
+approve those when it asks.
+
+The skill was tested with OpenCode and the local `gpt-oss:20b` model. The other rows use each
+agent's documented skill location and were not run against this skill.
 
 ### Pre-Built JARs
 
