@@ -1,5 +1,6 @@
 package org.apache.fineract.selfservice.account.api;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,8 +13,16 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionEditRequest;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
@@ -29,6 +38,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SelfSinpeEnrollmentApiResource {
 
+  private static final String MOBILE_NUMBER = "mobileNumber";
+  private static final String OTP = "otp";
+
   private final PlatformSelfServiceSecurityContext context;
   private final DefaultToApiJsonSerializer<CommandProcessingResult> toApiJsonSerializer;
   private final SelfServiceSinpeEnrollmentWritePlatformService writePlatformService;
@@ -43,8 +55,8 @@ public class SelfSinpeEnrollmentApiResource {
   public String requestEnrollment(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("SSBENEFICIARYTPT");
 
-    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String mobileNumber = json.get("mobileNumber").getAsString();
+    JsonObject json = parseBody(apiRequestBodyAsJson);
+    String mobileNumber = requiredFields(json, MOBILE_NUMBER).get(MOBILE_NUMBER);
 
     CommandProcessingResult result = writePlatformService.requestEnrollment(mobileNumber);
     return toApiJsonSerializer.serialize(result);
@@ -60,11 +72,11 @@ public class SelfSinpeEnrollmentApiResource {
   public String confirmEnrollment(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("SSBENEFICIARYTPT");
 
-    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String mobileNumber = json.get("mobileNumber").getAsString();
-    String otp = json.get("otp").getAsString();
+    JsonObject json = parseBody(apiRequestBodyAsJson);
+    Map<String, String> fields = requiredFields(json, MOBILE_NUMBER, OTP);
 
-    CommandProcessingResult result = writePlatformService.confirmEnrollment(mobileNumber, otp);
+    CommandProcessingResult result =
+        writePlatformService.confirmEnrollment(fields.get(MOBILE_NUMBER), fields.get(OTP));
     return toApiJsonSerializer.serialize(result);
   }
 
@@ -79,8 +91,8 @@ public class SelfSinpeEnrollmentApiResource {
   public String createSubscription(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("SSBENEFICIARYTPT");
 
-    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String otp = json.get("otp").getAsString();
+    JsonObject json = parseBody(apiRequestBodyAsJson);
+    String otp = requiredFields(json, OTP).get(OTP);
 
     // Remove otp from JSON before mapping to DTO to avoid sending it to the external API
     json.remove("otp");
@@ -103,8 +115,8 @@ public class SelfSinpeEnrollmentApiResource {
   public String editSubscription(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasUpdatePermission("SSBENEFICIARYTPT");
 
-    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String otp = json.get("otp").getAsString();
+    JsonObject json = parseBody(apiRequestBodyAsJson);
+    String otp = requiredFields(json, OTP).get(OTP);
     json.remove("otp");
     String cleanJson = json.toString();
 
@@ -124,8 +136,8 @@ public class SelfSinpeEnrollmentApiResource {
   public String requestDeleteSubscription(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasDeletePermission("SSBENEFICIARYTPT");
 
-    JsonObject json = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-    String phoneNumber = json.get("mobileNumber").getAsString();
+    JsonObject json = parseBody(apiRequestBodyAsJson);
+    String phoneNumber = requiredFields(json, MOBILE_NUMBER).get(MOBILE_NUMBER);
 
     CommandProcessingResult result = writePlatformService.requestDeleteSubscription(phoneNumber);
     return toApiJsonSerializer.serialize(result);
@@ -143,5 +155,45 @@ public class SelfSinpeEnrollmentApiResource {
 
     CommandProcessingResult result = writePlatformService.deleteSubscription(phoneNumber, otp);
     return toApiJsonSerializer.serialize(result);
+  }
+
+  /**
+   * Parses the request body as a JSON object. A blank body, or valid JSON that isn't an object
+   * (e.g. [], "x", 123), is rejected with a 400 instead of failing later with a 500.
+   */
+  private static JsonObject parseBody(String apiRequestBodyAsJson) {
+    if (StringUtils.isBlank(apiRequestBodyAsJson)) {
+      throw new InvalidJsonException();
+    }
+    JsonElement element = JsonParser.parseString(apiRequestBodyAsJson);
+    if (!element.isJsonObject()) {
+      throw new InvalidJsonException();
+    }
+    return element.getAsJsonObject();
+  }
+
+  /**
+   * Returns the values of the given fields, keyed by name. A field that is missing, null, not a
+   * plain value or blank is reported as a 400 validation error, all at once.
+   */
+  private static Map<String, String> requiredFields(JsonObject json, String... names) {
+    final Map<String, String> values = new LinkedHashMap<>();
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    for (String name : names) {
+      JsonElement value = json.get(name);
+      if (value != null && value.isJsonPrimitive() && StringUtils.isNotBlank(value.getAsString())) {
+        values.put(name, value.getAsString());
+      } else {
+        dataValidationErrors.add(
+            ApiParameterError.parameterError(
+                "validation.msg.sinpe.enrollment." + name + ".cannot.be.blank",
+                "The parameter `" + name + "` is mandatory.",
+                name));
+      }
+    }
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
+    }
+    return values;
   }
 }
