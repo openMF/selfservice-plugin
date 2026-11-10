@@ -59,6 +59,14 @@ public class RemittanceService {
     return externalService.getDeliveryMethods(vendor, countryAbbrev, productId, acceptLanguage);
   }
 
+  /**
+   * Looks up a payout transaction at the vendor and saves a local audit row for it the first time
+   * it's seen. PINs are only unique per vendor, so the existing row is matched on PIN and vendor.
+   *
+   * @param vendor the remittance vendor, e.g. {@code RIA}
+   * @param id the payout PIN
+   * @return the transaction details from the vendor
+   */
   public RemittanceResponse findRemittance(String vendor, String id) {
     String raw = externalService.findTransaction(vendor, id);
     JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
@@ -84,8 +92,9 @@ public class RemittanceService {
       // leave as is; external may use different format
     }
 
-    // Persist / update local audit if not exists
-    remittanceRepository.findByPin(id).orElseGet(() -> {
+    // Persist / update local audit if not exists. PINs are only unique per vendor, so match on
+    // both, the same way updateLocalStatus does.
+    remittanceRepository.findByPinAndVendor(id, vendor).orElseGet(() -> {
       SelfServiceRemittance entity = new SelfServiceRemittance();
       AppSelfServiceUser user = context.authenticatedSelfServiceUser();
       Client client = linkedClientOf(user);

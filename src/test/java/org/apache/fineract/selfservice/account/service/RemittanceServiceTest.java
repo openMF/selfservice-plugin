@@ -33,6 +33,7 @@ import org.apache.fineract.selfservice.account.data.RemittanceConfirmRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePayoutRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePrepareRequest;
 import org.apache.fineract.selfservice.account.data.RemittanceResponse;
+import org.apache.fineract.selfservice.account.domain.SelfServiceRemittance;
 import org.apache.fineract.selfservice.account.domain.SelfServiceRemittanceRepository;
 import org.apache.fineract.selfservice.security.exception.SelfServiceAccessDeniedException;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
@@ -165,11 +166,40 @@ class RemittanceServiceTest {
   void findRemittance_userWithoutLinkedClient_isRejected() {
     loginUserWithClientMappings(Set.of());
     when(externalService.findTransaction("RIA", "PIN1")).thenReturn("{\"status\":\"AVAILABLE\"}");
-    when(remittanceRepository.findByPin("PIN1")).thenReturn(Optional.empty());
 
     assertThrows(
         GeneralPlatformDomainRuleException.class,
         () -> remittanceService.findRemittance("RIA", "PIN1"));
+
+    verify(remittanceRepository, never()).save(any());
+  }
+
+  @Test
+  void findRemittance_samePinFromAnotherVendor_stillSavesRowForThisVendor() {
+    // another vendor already has a row for this PIN; PINs are only unique per vendor
+    when(remittanceRepository.findByPinAndVendor("PIN1", "OTHER"))
+        .thenReturn(Optional.of(new SelfServiceRemittance()));
+    when(externalService.findTransaction("RIA", "PIN1")).thenReturn("{\"status\":\"AVAILABLE\"}");
+    when(remittanceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    remittanceService.findRemittance("RIA", "PIN1");
+
+    verify(remittanceRepository).findByPinAndVendor("PIN1", "RIA");
+    ArgumentCaptor<SelfServiceRemittance> saved =
+        ArgumentCaptor.forClass(SelfServiceRemittance.class);
+    verify(remittanceRepository).save(saved.capture());
+    assertEquals("RIA", saved.getValue().getVendor());
+    assertEquals("PIN1", saved.getValue().getPin());
+    assertEquals(OWN_CLIENT_ID, saved.getValue().getClientId());
+  }
+
+  @Test
+  void findRemittance_existingRowForThisVendor_isNotSavedAgain() {
+    when(remittanceRepository.findByPinAndVendor("PIN1", "RIA"))
+        .thenReturn(Optional.of(new SelfServiceRemittance()));
+    when(externalService.findTransaction("RIA", "PIN1")).thenReturn("{\"status\":\"AVAILABLE\"}");
+
+    remittanceService.findRemittance("RIA", "PIN1");
 
     verify(remittanceRepository, never()).save(any());
   }

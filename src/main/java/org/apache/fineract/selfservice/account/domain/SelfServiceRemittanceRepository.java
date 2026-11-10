@@ -14,8 +14,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SelfServiceRemittanceRepository extends JpaRepository<SelfServiceRemittance, Long> {
 
-  Optional<SelfServiceRemittance> findByPin(String pin);
-
   Optional<SelfServiceRemittance> findByExternalId(String externalId);
 
   Optional<SelfServiceRemittance> findByPinAndVendor(String pin, String vendor);
