@@ -14,6 +14,8 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -360,5 +362,76 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     assertThrows(
         org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException.class,
         () -> service.createSelfServiceUser("{}", httpServletRequest));
+  }
+
+  @Test
+  void createRegistrationRequest_rejectsMissingPassword() {
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.accountNumberParamName), any()))
+        .thenReturn("12345");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.firstNameParamName), any()))
+        .thenReturn("John");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.middleNameParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.lastNameParamName), any()))
+        .thenReturn("Doe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn("email");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.emailParamName), any()))
+        .thenReturn("john@test.com");
+
+    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn(".*");
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
+    when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(false);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.createRegistrationRequest("{}"));
+    assertOnlyPasswordError(ex);
+    verify(platformPasswordEncoder, never()).encode(any());
+  }
+
+  @Test
+  void selfEnroll_rejectsMissingPassword() {
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn("email");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.emailParamName), any()))
+        .thenReturn("john@test.com");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.mobileNumberParamName), any()))
+        .thenReturn(null);
+
+    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn(".*");
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.selfEnroll("{}", httpServletRequest));
+    assertOnlyPasswordError(ex);
+    verify(clientWritePlatformService, never()).createClient(any());
+  }
+
+  private static void assertOnlyPasswordError(PlatformApiDataValidationException ex) {
+    assertEquals(1, ex.getErrors().size());
+    assertEquals(
+        SelfServiceApiConstants.passwordParamName, ex.getErrors().get(0).getParameterName());
   }
 }
