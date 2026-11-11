@@ -7,8 +7,10 @@
 package org.apache.fineract.selfservice.pockets.data;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterException;
@@ -95,6 +97,40 @@ class PocketDataValidatorTest {
     String json = "{\"accountsDetail\":[{\"accountId\":11,\"accountType\":\"LOAN\",\"foo\":1}]}";
     assertThrows(
         UnsupportedParameterException.class, () -> validator.validateForLinkingAccounts(json));
+  }
+
+  @Test
+  void validateForLinkingAccounts_shouldThrowOnNumberElement() {
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> validator.validateForLinkingAccounts("{\"accountsDetail\":[5]}"));
+    ApiParameterError error = ex.getErrors().get(0);
+    assertEquals(
+        "validation.msg.pockets.accountsDetail.element.not.an.object",
+        error.getUserMessageGlobalisationCode());
+    assertEquals("Each accountsDetail entry must be an object.", error.getDefaultUserMessage());
+  }
+
+  @Test
+  void validateForLinkingAccounts_shouldThrowOnNullElement() {
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> validator.validateForLinkingAccounts("{\"accountsDetail\":[null]}"));
+  }
+
+  @Test
+  void validateForLinkingAccounts_shouldThrowOnStringElement() {
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> validator.validateForLinkingAccounts("{\"accountsDetail\":[\"abc\"]}"));
+  }
+
+  @Test
+  void validateForLinkingAccounts_shouldThrowWhenOneElementIsNotAnObject() {
+    String json = "{\"accountsDetail\":[{\"accountId\":11,\"accountType\":\"LOAN\"},5]}";
+    assertThrows(
+        PlatformApiDataValidationException.class, () -> validator.validateForLinkingAccounts(json));
   }
 
   // --- validateForDeLinkingAccounts ---

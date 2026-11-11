@@ -83,6 +83,16 @@ public class PocketDataValidator {
 
     if (accountsDetail != null) {
       for (JsonElement accountDetails : accountsDetail) {
+        // Each entry must be an object; a number, string or null here (e.g. [5], ["abc"], [null])
+        // would make getAsJsonObject() throw and the request fail with a 500 instead of a 400.
+        if (accountDetails == null || !accountDetails.isJsonObject()) {
+          baseDataValidator
+              .reset()
+              .parameter(PocketApiConstants.accountsDetail)
+              .failWithCodeAndMessage(
+                  "element.not.an.object", "Each accountsDetail entry must be an object.");
+          continue;
+        }
         this.fromApiJsonHelper.checkForUnsupportedParameters(
             accountDetails.getAsJsonObject(), ACCOUNT_DETAIL_SUPPORTED_PARAMETERS);
 
