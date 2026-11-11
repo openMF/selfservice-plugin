@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.account.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +34,7 @@ import org.apache.fineract.selfservice.account.data.RemittanceConfirmRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePayoutRequest;
 import org.apache.fineract.selfservice.account.data.RemittancePrepareRequest;
 import org.apache.fineract.selfservice.account.data.RemittanceResponse;
+import org.apache.fineract.selfservice.account.domain.SelfServiceRemittance;
 import org.apache.fineract.selfservice.account.domain.SelfServiceRemittanceRepository;
 import org.apache.fineract.selfservice.security.exception.SelfServiceAccessDeniedException;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
@@ -195,6 +197,64 @@ class RemittanceServiceTest {
 
     verify(externalService, never()).createRemittance(any(), any());
     verify(remittanceRepository, never()).save(any());
+  }
+
+  @Test
+  void confirmRemittance_vendorSendsNullFields_stillSavesAuditRow() {
+    SelfServiceRemittance saved =
+        confirmWithVendorResponse(
+            "{\"pin\":null,\"referenceNumber\":null,\"OrderNo\":null,\"status\":null}");
+
+    assertNull(saved.getPin());
+    assertNull(saved.getReferenceNumber());
+    assertEquals("POSTED", saved.getStatus());
+  }
+
+  @Test
+  void confirmRemittance_nullReferenceNumber_fallsBackToOrderNo() {
+    SelfServiceRemittance saved =
+        confirmWithVendorResponse(
+            "{\"pin\":\"PIN1\",\"referenceNumber\":null,\"OrderNo\":\"ORD1\","
+                + "\"status\":null,\"OrderStatus\":\"PAID\"}");
+
+    assertEquals("PIN1", saved.getPin());
+    assertEquals("ORD1", saved.getReferenceNumber());
+    assertEquals("PAID", saved.getStatus());
+  }
+
+  @Test
+  void confirmRemittance_objectInsteadOfText_isIgnored() {
+    SelfServiceRemittance saved =
+        confirmWithVendorResponse("{\"pin\":{\"value\":\"PIN1\"},\"status\":[\"SENT\"]}");
+
+    assertNull(saved.getPin());
+    assertEquals("POSTED", saved.getStatus());
+  }
+
+  @Test
+  void confirmRemittance_plainValues_areStillRead() {
+    SelfServiceRemittance saved =
+        confirmWithVendorResponse(
+            "{\"pin\":\"PIN1\",\"referenceNumber\":\"REF1\",\"status\":\"SENT\"}");
+
+    assertEquals("PIN1", saved.getPin());
+    assertEquals("REF1", saved.getReferenceNumber());
+    assertEquals("SENT", saved.getStatus());
+  }
+
+  /** Confirms a remittance with the given vendor response and returns the saved audit row. */
+  private SelfServiceRemittance confirmWithVendorResponse(String vendorResponse) {
+    when(externalService.createRemittance(any(), any())).thenReturn(vendorResponse);
+    when(remittanceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    RemittanceResponse response =
+        remittanceService.confirmRemittance(new RemittanceConfirmRequest());
+
+    assertEquals("Remittance created successfully", response.getMessage());
+    ArgumentCaptor<SelfServiceRemittance> saved =
+        ArgumentCaptor.forClass(SelfServiceRemittance.class);
+    verify(remittanceRepository).save(saved.capture());
+    return saved.getValue();
   }
 
   private void loginUserWithClientMappings(Set<AppSelfServiceUserClientMapping> mappings) {
