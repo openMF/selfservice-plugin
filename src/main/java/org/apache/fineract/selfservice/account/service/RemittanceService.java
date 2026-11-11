@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.account.service;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.math.BigDecimal;
@@ -299,18 +300,20 @@ public class RemittanceService {
     entity.setCreatedOn(LocalDateTime.now());
     entity.setExternalResponse(raw);
 
+    // The vendor has already created the remittance at this point, so a null or odd field in its
+    // response must not throw: that would return 500 and roll back the audit row.
     if (json != null) {
-      if (json.has("pin")) {
-        entity.setPin(json.get("pin").getAsString());
+      String pin = stringField(json, "pin");
+      if (pin != null) {
+        entity.setPin(pin);
       }
-      if (json.has("OrderNo") || json.has("orderNo") || json.has("referenceNumber")) {
-        String ref = json.has("referenceNumber") ? json.get("referenceNumber").getAsString()
-            : (json.has("OrderNo") ? json.get("OrderNo").getAsString() : json.get("orderNo").getAsString());
+      String ref = stringField(json, "referenceNumber", "OrderNo", "orderNo");
+      if (ref != null) {
         entity.setReferenceNumber(ref);
       }
-      if (json.has("status") || json.has("OrderStatus")) {
-        entity.setStatus(json.has("status") ? json.get("status").getAsString()
-            : json.get("OrderStatus").getAsString());
+      String status = stringField(json, "status", "OrderStatus");
+      if (status != null) {
+        entity.setStatus(status);
       }
     }
 
@@ -347,6 +350,21 @@ public class RemittanceService {
           "Authenticated self-service user has no linked client");
     }
     return user.getAppUserClientMappings().iterator().next().getClient();
+  }
+
+  /**
+   * Returns the value of the first of {@code names} that is present with a plain (non-null) value.
+   * {@code has()} is true for a JSON null, and {@code getAsString()} throws on a null, object or
+   * array, so those are skipped.
+   */
+  private static String stringField(JsonObject json, String... names) {
+    for (String name : names) {
+      JsonElement value = json.get(name);
+      if (value != null && value.isJsonPrimitive()) {
+        return value.getAsString();
+      }
+    }
+    return null;
   }
 
   /** Returns null for a non-numeric id so the ownership guard rejects it. */
