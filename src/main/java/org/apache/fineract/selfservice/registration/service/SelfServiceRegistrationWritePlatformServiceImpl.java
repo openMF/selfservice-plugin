@@ -220,6 +220,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .reset()
         .parameter(SelfServiceApiConstants.passwordParamName)
         .value(password)
+        // matchesRegularExpression() skips null, so without this a missing password ends in a 500
+        .notBlank()
         .matchesRegularExpression(validationPolicy.getRegex(), validationPolicy.getDescription())
         .notExceedingLengthOf(100);
 
@@ -535,6 +537,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .reset()
         .parameter(SelfServiceApiConstants.passwordParamName)
         .value(password)
+        // matchesRegularExpression() skips null, so without this a missing password ends in a 500
+        .notBlank()
         .matchesRegularExpression(validationPolicy.getRegex(), validationPolicy.getDescription())
         .notExceedingLengthOf(100);
 
