@@ -14,9 +14,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionRequest;
@@ -101,6 +104,70 @@ class SelfServiceSinpeEnrollmentWritePlatformServiceImplTest {
         () -> service.createSubscription(subscriptionRequest(OTHER_CEDULA), OTP));
 
     verify(sinpeExternalApiClient, never()).createSubscription(any());
+  }
+
+  @Test
+  void requestEnrollment_withSevenDigitNumber_returnsValidationError() {
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.requestEnrollment("1234567"));
+
+    assertSingleError(
+        ex, "mobileNumber", "validation.msg.sinpe.enrollment.mobileNumber.invalid.format");
+  }
+
+  @Test
+  void confirmEnrollment_withWrongOtp_returnsValidationError() {
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmEnrollment(PHONE, "000000"));
+
+    assertSingleError(ex, "otp", "validation.msg.sinpe.enrollment.otp.invalid.or.expired");
+    verify(registrationRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void confirmEnrollment_withOtherPhoneNumber_returnsValidationError() {
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmEnrollment("88880000", OTP));
+
+    assertSingleError(
+        ex, "mobileNumber", "validation.msg.sinpe.enrollment.mobileNumber.does.not.match.otp");
+    verify(registrationRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void createSubscription_withWrongOtp_returnsValidationError() {
+    when(client.getExternalId()).thenReturn(new ExternalId(OWN_CEDULA));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.createSubscription(subscriptionRequest(null), "000000"));
+
+    assertSingleError(ex, "otp", "validation.msg.sinpe.enrollment.otp.invalid.or.expired");
+    verify(sinpeExternalApiClient, never()).createSubscription(any());
+  }
+
+  @Test
+  void deleteSubscription_withBlankOtp_returnsValidationError() {
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.deleteSubscription(PHONE, " "));
+
+    assertSingleError(ex, "otp", "validation.msg.sinpe.enrollment.otp.cannot.be.blank");
+    verify(sinpeExternalApiClient, never()).deleteSubscription(any());
+  }
+
+  private static void assertSingleError(
+      PlatformApiDataValidationException ex, String parameter, String code) {
+    List<ApiParameterError> errors = ex.getErrors();
+    assertEquals(1, errors.size());
+    assertEquals(parameter, errors.get(0).getParameterName());
+    assertEquals(code, errors.get(0).getUserMessageGlobalisationCode());
   }
 
   private SinpeSubscriptionRequest subscriptionRequest(String customerId) {
