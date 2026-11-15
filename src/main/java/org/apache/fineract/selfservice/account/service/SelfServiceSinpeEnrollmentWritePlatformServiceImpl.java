@@ -9,13 +9,16 @@ package org.apache.fineract.selfservice.account.service;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.selfservice.account.data.SinpeSubscriptionEditRequest;
@@ -156,7 +159,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       log.info(
               "requestEnrollment rejected: invalid mobileNumber format (null or not 8 digits). value={}",
               mobileNumber);
-      throw new IllegalArgumentException("Invalid SINPE Móvil phone number. Must be 8 digits.");
+      throw invalidParameter(
+          "mobileNumber", "invalid.format", "Invalid SINPE Móvil phone number. Must be 8 digits.");
     }
 
     var existingVerified =
@@ -285,7 +289,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
       log.info(
               "confirmEnrollment: no SelfServiceRegistration found for clientId={} and provided OTP",
               clientId);
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+      throw invalidOtp();
     }
 
     boolean consumed = request.isConsumed();
@@ -303,7 +307,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
               consumed,
               expired,
               request.getId());
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+      throw invalidOtp();
     }
 
     if (!request.getMobileNumber().equals(mobileNumber)) {
@@ -311,7 +315,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
               "confirmEnrollment: phone mismatch. requestMobile={}, providedMobile={}",
               request.getMobileNumber(),
               mobileNumber);
-      throw new IllegalArgumentException("Phone number mismatch.");
+      throw invalidParameter("mobileNumber", "does.not.match.otp", "Phone number mismatch.");
     }
 
     request.markConsumed();
@@ -493,7 +497,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     if (phoneNumber == null || !phoneNumber.replaceAll("\\s+", "").matches("\\d{8}")) {
       log.info("requestDeleteSubscription rejected: invalid phoneNumber format. value={}", phoneNumber);
-      throw new IllegalArgumentException("Invalid SINPE Móvil phone number. Must be 8 digits.");
+      throw invalidParameter(
+          "mobileNumber", "invalid.format", "Invalid SINPE Móvil phone number. Must be 8 digits.");
     }
 
     String otp = String.format("%06d", new SecureRandom().nextInt(999999));
@@ -660,7 +665,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     if (StringUtils.isBlank(otp)) {
       log.info("validateOtp: OTP is blank");
-      throw new IllegalArgumentException("OTP is required for this operation.");
+      throw invalidParameter("otp", "cannot.be.blank", "OTP is required for this operation.");
     }
 
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
@@ -676,7 +681,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     if (request == null) {
       log.info("validateOtp: no registration found for clientId={} and provided OTP", clientId);
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+      throw invalidOtp();
     }
 
     boolean expired = request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime());
@@ -689,7 +694,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
     if (expired) {
       log.info("validateOtp: OTP expired for registrationId={}", request.getId());
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+      throw invalidOtp();
     }
 
     if (!request.getMobileNumber().equals(mobileNumber)) {
@@ -697,7 +702,8 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
               "validateOtp: phone mismatch registrationMobile={}, providedMobile={}",
               request.getMobileNumber(),
               mobileNumber);
-      throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
+      throw invalidParameter(
+          "phoneNumber", "does.not.match.otp", "Phone number mismatch for the provided OTP.");
     }
 
     log.info(
@@ -706,7 +712,7 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
 
   private void validateAndConsumeOtp(String mobileNumber, String otp) {
     if (StringUtils.isBlank(otp)) {
-      throw new IllegalArgumentException("OTP is required for this operation.");
+      throw invalidParameter("otp", "cannot.be.blank", "OTP is required for this operation.");
     }
 
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
@@ -716,18 +722,35 @@ public class SelfServiceSinpeEnrollmentWritePlatformServiceImpl
             registrationRepository
                     .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
                             clientId, SelfServiceRequestType.SINPE_ENROLLMENT, otp)
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
+                    .orElseThrow(() -> invalidOtp());
 
     boolean expired = request.isExpired(transactionDateUtil.getCurrentTenantLocalDateTime());
     if (request.isConsumed() || expired) {
-      throw new IllegalArgumentException("Invalid or expired OTP.");
+      throw invalidOtp();
     }
     if (!request.getMobileNumber().equals(mobileNumber)) {
-      throw new IllegalArgumentException("Phone number mismatch for the provided OTP.");
+      throw invalidParameter(
+          "phoneNumber", "does.not.match.otp", "Phone number mismatch for the provided OTP.");
     }
 
     // Invalida el OTP tras usarse en el borrado
     request.markConsumed();
     registrationRepository.saveAndFlush(request);
+  }
+
+  private static PlatformApiDataValidationException invalidOtp() {
+    return invalidParameter("otp", "invalid.or.expired", "Invalid or expired OTP.");
+  }
+
+  /**
+   * Builds a 400 validation error on the given request parameter. Used for mistakes the user can
+   * make (wrong or expired OTP, bad phone number), which used to surface as a 500.
+   */
+  private static PlatformApiDataValidationException invalidParameter(
+      String parameter, String code, String message) {
+    return new PlatformApiDataValidationException(
+        List.of(
+            ApiParameterError.parameterError(
+                "validation.msg.sinpe.enrollment." + parameter + "." + code, message, parameter)));
   }
 }
