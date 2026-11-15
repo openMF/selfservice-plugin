@@ -25,8 +25,13 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.spm.api.ScorecardApiResource;
@@ -43,6 +48,8 @@ public class SelfScorecardApiResource {
   private final PlatformSelfServiceSecurityContext context;
   private final ScorecardApiResource scorecardApiResource;
   private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
+
+  private static final String RESOURCE_NAME = "scorecard";
 
   @GET
   @Path("clients/{clientId}")
@@ -70,18 +77,40 @@ public class SelfScorecardApiResource {
   @Transactional
   @Operation(
       summary = "Create a Scorecard",
-      description = "Submits a scorecard entry for the specified survey.")
+      description =
+          "Submits a scorecard entry for the specified survey.\n\n"
+              + "Mandatory Fields: clientId")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "403", description = "Forbidden"),
     @ApiResponse(responseCode = "404", description = "Not Found")
   })
   public void createScorecard(
       @PathParam("surveyId") final Long surveyId, final ScorecardData scorecardData) {
-    if (scorecardData.getClientId() != null) {
-      validateAppSelfServiceUserClientsMapping(scorecardData.getClientId());
-      this.scorecardApiResource.createScorecard(surveyId, scorecardData);
+    // An empty body is deserialized by JAX-RS into null; fail fast with a 400
+    // instead of crashing later with a NullPointerException.
+    if (scorecardData == null) {
+      throw new InvalidJsonException();
     }
+
+    // clientId is mandatory: without it there is no client the scorecard belongs
+    // to, so the entry can never be stored. Report a 400 validation error rather
+    // than silently accepting the request with a 204 and saving nothing.
+    final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+    final DataValidatorBuilder baseDataValidator =
+        new DataValidatorBuilder(dataValidationErrors)
+            .resource(RESOURCE_NAME)
+            .parameter("clientId")
+            .value(scorecardData.getClientId())
+            .notNull();
+
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
+    }
+
+    validateAppSelfServiceUserClientsMapping(scorecardData.getClientId());
+    this.scorecardApiResource.createScorecard(surveyId, scorecardData);
   }
 
   private void validateAppSelfServiceUserClientsMapping(final Long clientId) {
