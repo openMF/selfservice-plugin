@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -309,14 +310,13 @@ class SelfSavingsAccountApiResourceTest {
   void modifySavingsAccountApplication_mappedAccount_returnsData() {
     mockSavingsMapped();
 
-    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", "update")).thenReturn("{}");
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", null)).thenReturn("{}");
 
-    String result =
-        resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest);
+    String result = resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest);
 
     assertNotNull(result);
     verify(dataValidator).validateSavingsApplication("{}");
-    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "{}", "update");
+    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "{}", null);
   }
 
   @Test
@@ -325,8 +325,22 @@ class SelfSavingsAccountApiResourceTest {
 
     assertThrows(
         SavingsAccountNotFoundException.class,
-        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest));
+        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest));
     verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+  }
+
+  @Test
+  void modifySavingsAccountApplication_unsupportedCommand_throwsAndChangesNothing() {
+    UnrecognizedQueryParamException error =
+        assertThrows(
+            UnrecognizedQueryParamException.class,
+            () ->
+                resource.modifySavingsAccountApplication(
+                    ACCOUNT_ID, "updateWithHoldTax", "{}", httpRequest));
+
+    assertEquals("command", error.getQueryParamKey());
+    assertEquals("updateWithHoldTax", error.getQueryParamValue());
+    verifyNoInteractions(savingsAccountsApiResource, applicationEventPublisher);
   }
 
   // --- MX-520: the account cannot be moved to another customer ---
