@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
@@ -31,6 +33,7 @@ import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
+import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
@@ -40,6 +43,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -308,14 +312,13 @@ class SelfSavingsAccountApiResourceTest {
   void modifySavingsAccountApplication_mappedAccount_returnsData() {
     mockSavingsMapped();
 
-    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", "update")).thenReturn("{}");
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", null)).thenReturn("{}");
 
-    String result =
-        resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest);
+    String result = resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest);
 
     assertNotNull(result);
     verify(dataValidator).validateSavingsApplication("{}");
-    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "{}", "update");
+    verify(savingsAccountsApiResource).update(ACCOUNT_ID, "{}", null);
   }
 
   @Test
@@ -324,8 +327,38 @@ class SelfSavingsAccountApiResourceTest {
 
     assertThrows(
         SavingsAccountNotFoundException.class,
-        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, "update", "{}", httpRequest));
+        () -> resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest));
     verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+  }
+
+  // --- MX-606: only a plain modify is supported, so no false "withdrawn" notification ---
+
+  @Test
+  void modifySavingsAccountApplication_withdrawnByApplicantCommand_throwsAndChangesNothing() {
+    UnrecognizedQueryParamException error =
+        assertThrows(
+            UnrecognizedQueryParamException.class,
+            () ->
+                resource.modifySavingsAccountApplication(
+                    ACCOUNT_ID, "withdrawnByApplicant", "{}", httpRequest));
+
+    assertEquals("command", error.getQueryParamKey());
+    assertEquals("withdrawnByApplicant", error.getQueryParamValue());
+    verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+    verifyNoInteractions(applicationEventPublisher);
+  }
+
+  @Test
+  void modifySavingsAccountApplication_noCommand_publishesSavingsUpdated() {
+    mockAuthenticatedUser();
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", null)).thenReturn("{}");
+
+    resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest);
+
+    ArgumentCaptor<SelfServiceNotificationEvent> event =
+        ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
+    verify(applicationEventPublisher).publishEvent(event.capture());
+    assertEquals(SelfServiceNotificationEvent.Type.SAVINGS_UPDATED, event.getValue().getType());
   }
 
   // --- MX-520: the account cannot be moved to another customer ---
