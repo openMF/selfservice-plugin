@@ -52,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
@@ -480,6 +481,12 @@ public class SelfSavingsAccountApiResource {
       @QueryParam("command") final String commandParam,
       final String apiRequestBodyAsJson,
       @Context HttpServletRequest httpRequest) {
+    // Fineract treats any command other than updateWithHoldTax as a plain modify, so a command
+    // such as withdrawnByApplicant would only edit the application. Only a plain modify is
+    // supported here.
+    if (StringUtils.isNotBlank(commandParam)) {
+      throw new UnrecognizedQueryParamException("command", commandParam);
+    }
 
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
     HashMap<String, Object> attr =
@@ -494,12 +501,7 @@ public class SelfSavingsAccountApiResource {
     rejectGroupId(apiRequestBodyAsJson);
 
     String responseJson =
-        this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
-
-    SelfServiceNotificationEvent.Type eventType =
-        "withdrawnByApplicant".equalsIgnoreCase(commandParam)
-            ? SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN
-            : SelfServiceNotificationEvent.Type.SAVINGS_UPDATED;
+        this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, null);
 
     Map<String, Object> contextData = new HashMap<>();
     try {
@@ -512,7 +514,8 @@ public class SelfSavingsAccountApiResource {
       log.warn("Failed to parse savings modification JSON for notification", e);
     }
 
-    publishSavingsEvent(eventType, accountId, contextData, httpRequest);
+    publishSavingsEvent(
+        SelfServiceNotificationEvent.Type.SAVINGS_UPDATED, accountId, contextData, httpRequest);
 
     return responseJson;
   }
