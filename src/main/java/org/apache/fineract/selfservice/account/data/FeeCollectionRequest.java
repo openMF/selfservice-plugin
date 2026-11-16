@@ -59,7 +59,4 @@ public class FeeCollectionRequest implements Serializable {
 
   /** Locale string, e.g. "en" */
   @Builder.Default private String locale = "en";
-
-  /** Fee amount the client quoted (informational, may be null / 0) */
-  private BigDecimal clientFeeAmount;
 }
