@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountTransactionsApiResource;
@@ -31,6 +32,7 @@ import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.client.service.AppSelfServiceUserClientMapperReadService;
+import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsAccountConstants;
 import org.apache.fineract.selfservice.savings.data.SelfSavingsDataValidator;
@@ -40,6 +42,7 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -159,7 +162,6 @@ class SelfSavingsAccountApiResourceTest {
         SavingsAccountNotFoundException.class,
         () -> resource.retrieveSavings(ACCOUNT_ID, "all", null, null, null, false, uriInfo));
   }
-
 
   // --- retrieveSavingsTransaction ---
 
@@ -373,5 +375,94 @@ class SelfSavingsAccountApiResourceTest {
     assertEquals("groupId", error.getErrors().get(0).getParameterName());
     verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
   }
-}
 
+  // --- MX-610: a withdraw withdraws the application before the customer is told ---
+
+  private static final String WITHDRAW_JSON =
+      "{\"withdrawnOnDate\":\"18 November 2026\",\"dateFormat\":\"dd MMMM yyyy\","
+          + "\"locale\":\"en\"}";
+
+  private SelfServiceNotificationEvent.Type publishedEventType() {
+    ArgumentCaptor<SelfServiceNotificationEvent> event =
+        ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
+    verify(applicationEventPublisher).publishEvent(event.capture());
+    return event.getValue().getType();
+  }
+
+  @Test
+  void withdraw_ownApplication_withdrawsInFineractAndNotifiesWithdrawn() {
+    mockAuthenticatedUser();
+    when(savingsAccountsApiResource.handleCommands(
+            ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON))
+        .thenReturn("{\"resourceId\":5}");
+
+    assertEquals(
+        "{\"resourceId\":5}",
+        resource.stateTransitions(ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON, httpRequest));
+
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(ACCOUNT_ID);
+    verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+    assertEquals(SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN, publishedEventType());
+  }
+
+  @Test
+  void withdraw_otherUsersApplication_throwsAndWithdrawsNothing() {
+    mockSavingsNotMapped();
+
+    assertThrows(
+        SavingsAccountNotFoundException.class,
+        () ->
+            resource.stateTransitions(
+                ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON, httpRequest));
+    verify(savingsAccountsApiResource, never()).handleCommands(anyLong(), any(), any());
+    verify(applicationEventPublisher, never()).publishEvent(any());
+  }
+
+  @Test
+  void withdraw_otherCommand_isRejected() {
+    assertThrows(
+        UnrecognizedQueryParamException.class,
+        () -> resource.stateTransitions(ACCOUNT_ID, "approve", WITHDRAW_JSON, httpRequest));
+    verify(savingsAccountsApiResource, never()).handleCommands(anyLong(), any(), any());
+  }
+
+  @Test
+  void withdraw_fineractRefuses_customerIsNotToldItWasWithdrawn() {
+    when(savingsAccountsApiResource.handleCommands(
+            ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON))
+        .thenThrow(new IllegalStateException("not pending approval"));
+
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            resource.stateTransitions(
+                ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON, httpRequest));
+    verify(applicationEventPublisher, never()).publishEvent(any());
+  }
+
+  @Test
+  void modifyWithWithdrawCommand_withdrawsInsteadOfModifying() {
+    mockAuthenticatedUser();
+    when(savingsAccountsApiResource.handleCommands(
+            ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON))
+        .thenReturn("{\"resourceId\":5}");
+
+    resource.modifySavingsAccountApplication(
+        ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON, httpRequest);
+
+    verify(savingsAccountsApiResource, never()).update(anyLong(), any(), any());
+    verify(savingsAccountsApiResource)
+        .handleCommands(ACCOUNT_ID, "withdrawnByApplicant", WITHDRAW_JSON);
+    assertEquals(SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN, publishedEventType());
+  }
+
+  @Test
+  void modify_notifiesUpdatedNotWithdrawn() {
+    mockAuthenticatedUser();
+    when(savingsAccountsApiResource.update(ACCOUNT_ID, "{}", null)).thenReturn("{}");
+
+    resource.modifySavingsAccountApplication(ACCOUNT_ID, null, "{}", httpRequest);
+
+    assertEquals(SelfServiceNotificationEvent.Type.SAVINGS_UPDATED, publishedEventType());
+  }
+}
