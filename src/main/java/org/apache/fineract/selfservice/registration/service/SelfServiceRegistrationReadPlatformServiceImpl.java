@@ -6,6 +6,8 @@
  */
 package org.apache.fineract.selfservice.registration.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -23,26 +25,27 @@ public class SelfServiceRegistrationReadPlatformServiceImpl
       String lastName,
       String mobileNumber,
       boolean isEmailAuthenticationMode) {
-    String sql =
-        "select count(*) from m_client where account_no = ? and firstname = ? and lastname = ?";
-    Object[] params = new Object[] {accountNumber, firstName, lastName};
-    if (!isEmailAuthenticationMode) {
-      sql = sql + " and mobile_no = ?";
-      params = new Object[] {accountNumber, firstName, lastName, mobileNumber};
-    }
-
+    // Each condition adds its placeholder and its value together, so the two cannot get out of step
+    final StringBuilder sql =
+        new StringBuilder(
+            "select count(*) from m_client"
+                + " where account_no = ? and firstname = ? and lastname = ?");
+    final List<Object> params = new ArrayList<>();
+    params.add(accountNumber);
+    params.add(firstName);
+    params.add(lastName);
     if (!isNullOrEmpty(middleName)) {
-      sql = sql + " and middlename = ?";
-      params = new Object[] {accountNumber, firstName, lastName, middleName};
+      sql.append(" and middlename = ?");
+      params.add(middleName);
+    }
+    if (!isEmailAuthenticationMode) {
+      sql.append(" and mobile_no = ?");
+      params.add(mobileNumber);
     }
 
-    if (!isNullOrEmpty(middleName) && !isEmailAuthenticationMode) {
-      sql = sql + " and middlename = ? and mobile_no = ?";
-      params = new Object[] {accountNumber, firstName, lastName, middleName, mobileNumber};
-    }
-
-    int count = this.jdbcTemplate.queryForObject(sql, Integer.class, params);
-    return count != 0;
+    Integer count =
+        this.jdbcTemplate.queryForObject(sql.toString(), Integer.class, params.toArray());
+    return count != null && count != 0;
   }
 
   public static boolean isNullOrEmpty(String str) {
