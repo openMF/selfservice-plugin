@@ -416,6 +416,42 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
         .statusCode(404);
   }
 
+  @Test
+  @Order(25)
+  @DisplayName("POST /simulate cannot widen the product's limits with bounds in the request")
+  void calculateSchedule_boundsInTheRequest_areIgnored() {
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .queryParam("command", "calculateLoanSchedule")
+        .body(
+            simulationRequest(LIMITED_PRODUCT_ID, "5000000", 12, "1")
+                .replace(
+                    "\"locale\": \"en\"",
+                    "\"locale\": \"en\", \"minPrincipal\": 1, \"maxPrincipal\": 5000000"))
+        .when()
+        .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
+        .then()
+        .statusCode(400)
+        .body("errors[0].parameterName", equalTo("principal"));
+  }
+
+  @Test
+  @Order(26)
+  @DisplayName("POST /simulate cannot skip the rate limits by claiming a floating rate")
+  void calculateSchedule_floatingRateClaim_isIgnored() {
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .queryParam("command", "calculateLoanSchedule")
+        .body(
+            simulationRequest(LIMITED_PRODUCT_ID, "10000", 12, "5")
+                .replace(
+                    "\"locale\": \"en\"",
+                    "\"locale\": \"en\", \"isLinkedToFloatingInterestRates\": true"))
+        .when()
+        .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
+        .then()
+        .statusCode(400)
+        .body("errors[0].parameterName", equalTo("interestRatePerPeriod"));
+  }
+
   // =====================================================================
   // Authenticated endpoints remain protected
   // =====================================================================

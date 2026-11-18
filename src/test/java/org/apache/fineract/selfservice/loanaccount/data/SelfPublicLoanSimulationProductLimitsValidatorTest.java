@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.util.List;
 import java.util.Optional;
@@ -84,5 +85,34 @@ class SelfPublicLoanSimulationProductLimitsValidatorTest {
         ResourceNotFoundException.class,
         () -> validator.validateWithinProductLimits(json("{\"productId\": 1}")));
     verify(loanProductRepository).findById(1L);
+  }
+
+  @Test
+  void simulationInputs_dropsBoundsSentInTheRequest() {
+    JsonObject inputs =
+        SelfPublicLoanSimulationProductLimitsValidator.simulationInputs(
+            json(
+                """
+                {"productId": 1, "principal": 5000000, "maxPrincipal": 5000000,
+                 "numberOfRepayments": 60, "maxNumberOfRepayments": 60,
+                 "interestRatePerPeriod": 5, "maxInterestRatePerPeriod": 5,
+                 "isLinkedToFloatingInterestRates": true, "locale": "en"}
+                """));
+
+    assertEquals(
+        json(
+            """
+            {"principal": 5000000, "numberOfRepayments": 60, "interestRatePerPeriod": 5,
+             "locale": "en"}
+            """),
+        inputs);
+  }
+
+  @Test
+  void simulationInputs_keepsOnlyWhatWasSent() {
+    assertEquals(
+        json("{\"principal\": 10000}"),
+        SelfPublicLoanSimulationProductLimitsValidator.simulationInputs(
+            json("{\"productId\": 1, \"principal\": 10000}")));
   }
 }

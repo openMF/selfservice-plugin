@@ -7,6 +7,7 @@
 package org.apache.fineract.selfservice.loanaccount.data;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,14 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class SelfPublicLoanSimulationProductLimitsValidator {
+
+  /**
+   * The only request fields the limits are checked against. Fineract's validator also reads
+   * minPrincipal, maxPrincipal, the repayment and rate bounds and isLinkedToFloatingInterestRates
+   * from the request (it is shared with the loan product form), so a caller could send wider limits.
+   */
+  private static final List<String> SIMULATION_INPUTS =
+      List.of("principal", "numberOfRepayments", "interestRatePerPeriod", "locale");
 
   private final FromJsonHelper fromJsonHelper;
   private final SelfPublicLoanProductReadService loanProductReadService;
@@ -67,14 +76,29 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
 
     final List<ApiParameterError> errors = new ArrayList<>();
     final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource("loan");
+    final JsonObject inputs = simulationInputs(element);
     if (loanProduct.isUseBorrowerCycle()) {
-      // A public simulation has no client, so the first cycle's limits apply
-      this.loanProductDataValidator.validateMinMaxConstraints(element, validator, loanProduct, 0);
+      // A visitor has no loans of the product, and Fineract gives such a client the product's own
+      // limits (its loan template applies the borrower-cycle variations only from cycle 1)
+      this.loanProductDataValidator.validateMinMaxConstraints(inputs, validator, loanProduct, 0);
     } else {
-      this.loanProductDataValidator.validateMinMaxConstraints(element, validator, loanProduct);
+      this.loanProductDataValidator.validateMinMaxConstraints(inputs, validator, loanProduct);
     }
     if (!errors.isEmpty()) {
       throw new PlatformApiDataValidationException(errors);
     }
+  }
+
+  /** A copy of the request with only the {@link #SIMULATION_INPUTS} that were sent. */
+  static JsonObject simulationInputs(final JsonElement element) {
+    final JsonObject inputs = new JsonObject();
+    if (element != null && element.isJsonObject()) {
+      for (final String name : SIMULATION_INPUTS) {
+        if (element.getAsJsonObject().has(name)) {
+          inputs.add(name, element.getAsJsonObject().get(name));
+        }
+      }
+    }
+    return inputs;
   }
 }
