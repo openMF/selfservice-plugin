@@ -43,6 +43,8 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
   private static final List<String> SIMULATION_INPUTS =
       List.of("principal", "numberOfRepayments", "interestRatePerPeriod", "locale");
 
+  private static final String INTEREST_RATE_FREQUENCY_TYPE = "interestRateFrequencyType";
+
   private final FromJsonHelper fromJsonHelper;
   private final SelfPublicLoanProductReadService loanProductReadService;
   private final LoanProductRepository loanProductRepository;
@@ -76,17 +78,41 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
 
     final List<ApiParameterError> errors = new ArrayList<>();
     final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource("loan");
-    final JsonObject inputs = simulationInputs(element);
-    if (loanProduct.isUseBorrowerCycle()) {
-      // A visitor has no loans of the product, and Fineract gives such a client the product's own
-      // limits (its loan template applies the borrower-cycle variations only from cycle 1)
-      this.loanProductDataValidator.validateMinMaxConstraints(inputs, validator, loanProduct, 0);
-    } else {
-      this.loanProductDataValidator.validateMinMaxConstraints(inputs, validator, loanProduct);
-    }
+    validateInterestRateFrequency(element, loanProduct, validator);
     if (!errors.isEmpty()) {
       throw new PlatformApiDataValidationException(errors);
     }
+    // A visitor has no loans of the product, and Fineract gives such a client the product's own
+    // limits, also for a product with borrower cycles (their variations apply from cycle 1). The
+    // borrower-cycle overload is not used for cycle 0: when the product has no min/max limits, it
+    // takes the default number of repayments as the maximum interest rate.
+    this.loanProductDataValidator.validateMinMaxConstraints(
+        simulationInputs(element), validator, loanProduct);
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  /**
+   * The product's interest rate limits are per its own interest period, and the schedule uses the
+   * period sent in the request, so a rate sent per another period would not be limited (2 per month
+   * on a product limited to 2 per year).
+   */
+  private void validateInterestRateFrequency(
+      final JsonElement element,
+      final LoanProduct loanProduct,
+      final DataValidatorBuilder validator) {
+    if (!this.fromJsonHelper.parameterExists(INTEREST_RATE_FREQUENCY_TYPE, element)) {
+      return;
+    }
+    final Integer frequencyType =
+        this.fromJsonHelper.extractIntegerWithLocaleNamed(INTEREST_RATE_FREQUENCY_TYPE, element);
+    validator
+        .reset()
+        .parameter(INTEREST_RATE_FREQUENCY_TYPE)
+        .value(frequencyType)
+        .ignoreIfNull()
+        .isOneOfTheseValues(loanProduct.getInterestPeriodFrequencyType().getValue());
   }
 
   /** A copy of the request with only the {@link #SIMULATION_INPUTS} that were sent. */

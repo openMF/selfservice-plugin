@@ -8,6 +8,7 @@ package org.apache.fineract.selfservice.loanaccount.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,8 @@ import java.util.Optional;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.ResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.apache.fineract.selfservice.loanaccount.service.SelfPublicLoanProductReadService;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +88,27 @@ class SelfPublicLoanSimulationProductLimitsValidatorTest {
         ResourceNotFoundException.class,
         () -> validator.validateWithinProductLimits(json("{\"productId\": 1}")));
     verify(loanProductRepository).findById(1L);
+  }
+
+  @Test
+  void interestRateFrequencyOtherThanTheProducts_isRejected() {
+    LoanProduct loanProduct = mock(LoanProduct.class);
+    when(loanProduct.getInterestPeriodFrequencyType()).thenReturn(PeriodFrequencyType.MONTHS);
+    when(loanProductReadService.retrieveAllActiveLoanProducts()).thenReturn(List.of(product(1L)));
+    when(loanProductRepository.findById(1L)).thenReturn(Optional.of(loanProduct));
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () ->
+                validator.validateWithinProductLimits(
+                    json(
+                        """
+                        {"productId": 1, "interestRatePerPeriod": 2,
+                         "interestRateFrequencyType": 3, "locale": "en"}
+                        """)));
+
+    assertEquals("interestRateFrequencyType", exception.getErrors().get(0).getParameterName());
   }
 
   @Test

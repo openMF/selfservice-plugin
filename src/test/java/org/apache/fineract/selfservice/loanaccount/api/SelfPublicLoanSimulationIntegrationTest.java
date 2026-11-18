@@ -41,6 +41,8 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
   private static final int SEEDED_PRODUCT_ID = 99;
   // Principal 5,000-15,000, 8-12 repayments, interest 0-2% per period
   private static final int LIMITED_PRODUCT_ID = 98;
+  // Borrower cycles on, no min/max limits, 12 repayments
+  private static final int BORROWER_CYCLE_PRODUCT_ID = 97;
 
   @BeforeAll
   static void seedLoanProduct() {
@@ -131,6 +133,45 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
         ) ON CONFLICT (id) DO NOTHING;
         """,
         LIMITED_PRODUCT_ID, LIMITED_PRODUCT_ID);
+
+    executeSqlInPostgres(
+        """
+        INSERT INTO m_product_loan (
+          id, name, short_name, currency_code, currency_digits, currency_multiplesof,
+          principal_amount, nominal_interest_rate_per_period, interest_period_frequency_enum,
+          annual_nominal_interest_rate, interest_method_enum, interest_calculated_in_period_enum,
+          repay_every, repayment_period_frequency_enum, number_of_repayments,
+          amortization_method_enum, accounting_type, arrearstolerance_amount,
+          loan_transaction_strategy_code, loan_transaction_strategy_name,
+          days_in_month_enum, days_in_year_enum, allow_multiple_disbursals, use_borrower_cycle
+        ) VALUES (
+          %s, 'Borrower Cycle Simulation Loan', 'BCL', 'USD', 2, 1,
+          10000.00, 1.00, 2,
+          12.00, 0, 1,
+          1, 2, 12,
+          1, 1, 0.00,
+          'mifos-standard-strategy', 'Mifos style',
+          1, 365, false, true
+        ) ON CONFLICT (id) DO NOTHING;
+        """,
+        BORROWER_CYCLE_PRODUCT_ID);
+    executeSqlInPostgres(
+        """
+        INSERT INTO m_product_loan_configurable_attributes (
+          id, loan_product_id,
+          amortization_method_enum, interest_method_enum,
+          loan_transaction_strategy_code, interest_calculated_in_period_enum,
+          arrearstolerance_amount, repay_every, moratorium,
+          grace_on_arrears_ageing
+        ) VALUES (
+          %s, %s,
+          true, true,
+          true, true,
+          true, true, true,
+          true
+        ) ON CONFLICT (id) DO NOTHING;
+        """,
+        BORROWER_CYCLE_PRODUCT_ID, BORROWER_CYCLE_PRODUCT_ID);
   }
 
   private static String simulationRequest(
@@ -450,6 +491,58 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
         .then()
         .statusCode(400)
         .body("errors[0].parameterName", equalTo("interestRatePerPeriod"));
+  }
+
+  @Test
+  @Order(27)
+  @DisplayName("POST /simulate with the rate per another period than the product's returns 400")
+  void calculateSchedule_interestRateFrequencyOtherThanTheProducts_returns400() {
+    // The product's rate limits are per month, so a rate per year can't be checked against them
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .queryParam("command", "calculateLoanSchedule")
+        .body(
+            simulationRequest(LIMITED_PRODUCT_ID, "10000", 12, "2")
+                .replace(
+                    "\"locale\": \"en\"",
+                    "\"locale\": \"en\", \"interestRateFrequencyType\": 3"))
+        .when()
+        .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
+        .then()
+        .statusCode(400)
+        .body("errors[0].parameterName", equalTo("interestRateFrequencyType"));
+  }
+
+  @Test
+  @Order(28)
+  @DisplayName("POST /simulate with the rate per the product's own period returns 200")
+  void calculateSchedule_interestRateFrequencyOfTheProduct_returns200() {
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .queryParam("command", "calculateLoanSchedule")
+        .body(
+            simulationRequest(LIMITED_PRODUCT_ID, "10000", 12, "2")
+                .replace(
+                    "\"locale\": \"en\"",
+                    "\"locale\": \"en\", \"interestRateFrequencyType\": 2"))
+        .when()
+        .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
+        .then()
+        .statusCode(200)
+        .body("periods.size()", greaterThan(0));
+  }
+
+  @Test
+  @Order(29)
+  @DisplayName("POST /simulate on a borrower-cycle product without limits accepts any rate")
+  void calculateSchedule_borrowerCycleProductWithoutLimits_returns200() {
+    // Fineract's borrower-cycle limits would take the 12 repayments as the maximum rate
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .queryParam("command", "calculateLoanSchedule")
+        .body(simulationRequest(BORROWER_CYCLE_PRODUCT_ID, "10000", 12, "13"))
+        .when()
+        .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
+        .then()
+        .statusCode(200)
+        .body("periods.size()", greaterThan(0));
   }
 
   // =====================================================================
