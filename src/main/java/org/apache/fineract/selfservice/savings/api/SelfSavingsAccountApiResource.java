@@ -52,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.api.SavingsAccountChargesApiResource;
@@ -79,6 +80,8 @@ import org.springframework.util.CollectionUtils;
 @RequiredArgsConstructor
 @Slf4j
 public class SelfSavingsAccountApiResource {
+
+  private static final String WITHDRAWN_BY_APPLICANT = "withdrawnByApplicant";
 
   private final PlatformSelfServiceSecurityContext context;
   private final SavingsAccountsApiResource savingsAccountsApiResource;
@@ -482,6 +485,10 @@ public class SelfSavingsAccountApiResource {
       @Context HttpServletRequest httpRequest) {
 
     validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    // Fineract's PUT only modifies the application, so a withdraw sent here is withdrawn for real
+    if (WITHDRAWN_BY_APPLICANT.equalsIgnoreCase(StringUtils.trimToEmpty(commandParam))) {
+      return withdrawApplication(accountId, apiRequestBodyAsJson, httpRequest);
+    }
     HashMap<String, Object> attr =
         this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
     // Fineract moves the account to the client (or group) given in the body, so the client must be
@@ -496,11 +503,6 @@ public class SelfSavingsAccountApiResource {
     String responseJson =
         this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
 
-    SelfServiceNotificationEvent.Type eventType =
-        "withdrawnByApplicant".equalsIgnoreCase(commandParam)
-            ? SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN
-            : SelfServiceNotificationEvent.Type.SAVINGS_UPDATED;
-
     Map<String, Object> contextData = new HashMap<>();
     try {
       JsonObject reqJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
@@ -512,8 +514,46 @@ public class SelfSavingsAccountApiResource {
       log.warn("Failed to parse savings modification JSON for notification", e);
     }
 
-    publishSavingsEvent(eventType, accountId, contextData, httpRequest);
+    publishSavingsEvent(
+        SelfServiceNotificationEvent.Type.SAVINGS_UPDATED, accountId, contextData, httpRequest);
 
+    return responseJson;
+  }
+
+  @POST
+  @Path("{accountId}")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Applicant Withdraws from Savings Application",
+      description =
+          "Applicant Withdraws from Savings Application\n\n"
+              + "Mandatory Fields: withdrawnOnDate, dateFormat, locale")
+  public String stateTransitions(
+      @PathParam("accountId") @Parameter(description = "accountId") final Long accountId,
+      @QueryParam("command") @Parameter(description = "command") final String commandParam,
+      @Parameter(hidden = true) final String apiRequestBodyAsJson,
+      @Context HttpServletRequest httpRequest) {
+    if (!WITHDRAWN_BY_APPLICANT.equalsIgnoreCase(StringUtils.trimToEmpty(commandParam))) {
+      throw new UnrecognizedQueryParamException("command", commandParam);
+    }
+    validateAppSelfServiceUserSavingsAccountMapping(accountId);
+    return withdrawApplication(accountId, apiRequestBodyAsJson, httpRequest);
+  }
+
+  /** Withdraws the application in Fineract and only then tells the customer it was withdrawn. */
+  private String withdrawApplication(
+      final Long accountId,
+      final String apiRequestBodyAsJson,
+      final HttpServletRequest httpRequest) {
+    final String responseJson =
+        this.savingsAccountsApiResource.handleCommands(
+            accountId, WITHDRAWN_BY_APPLICANT, apiRequestBodyAsJson);
+    publishSavingsEvent(
+        SelfServiceNotificationEvent.Type.SAVINGS_WITHDRAWN,
+        accountId,
+        new HashMap<>(),
+        httpRequest);
     return responseJson;
   }
 
