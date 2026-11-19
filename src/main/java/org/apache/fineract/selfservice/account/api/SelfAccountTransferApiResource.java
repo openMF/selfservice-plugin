@@ -28,6 +28,7 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -91,8 +92,8 @@ public class SelfAccountTransferApiResource {
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    if (request.getFromAccount() != null) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -110,8 +111,8 @@ public class SelfAccountTransferApiResource {
   public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    if (request.getFromAccount() != null) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -130,8 +131,8 @@ public class SelfAccountTransferApiResource {
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferConfirmRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    if (request.getFromAccount() != null) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -197,7 +198,7 @@ public class SelfAccountTransferApiResource {
   public String resendOtp(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    ResendOtpRequest request = new Gson().fromJson(apiRequestBodyAsJson, ResendOtpRequest.class);
+    ResendOtpRequest request = parseBody(apiRequestBodyAsJson, ResendOtpRequest.class);
     Object result = transferWritePlatformService.resendTransferOtp(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -348,5 +349,14 @@ public class SelfAccountTransferApiResource {
             accountId, txnId, this.dataValidator.resolveTransferType(transferType));
 
     return this.toApiJsonSerializer.serialize(details);
+  }
+
+  /** Parses a request body; an empty body is rejected with a 400 because Gson returns null. */
+  private static <T> T parseBody(final String apiRequestBodyAsJson, final Class<T> type) {
+    final T request = new Gson().fromJson(apiRequestBodyAsJson, type);
+    if (request == null) {
+      throw new InvalidJsonException();
+    }
+    return request;
   }
 }

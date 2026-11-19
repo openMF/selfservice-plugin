@@ -191,17 +191,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final String transferDescription = buildTransferDescription(request);
     final String reference = request.getReference();
     
-    if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new IllegalArgumentException(
-          "The transfer amount (transferAmount) must be greater than zero.");
-    }
-    if (toAccount == null || toAccount.isBlank()) {
-      throw new IllegalArgumentException(
-          "The destination account or number (toAccount) is required.");
-    }
-    if (fromAccount == null || fromAccount.isBlank()) {
-      throw new IllegalArgumentException("The source account (fromAccount) is required.");
-    }
+    validatePrepareRequest(request);
 
     SavingsAccount sourceSavingsAccount =
         validateSourceAccountOwnership(currentUser, fromAccount, request.getFromAccountType());
@@ -251,6 +241,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
   @Transactional
   public Object quoteTransfer(final AccountTransferPrepareRequest request) {
     log.info("QUOTE: Starting quote for channel: {}", request.getTransferType());
+
+    validateQuoteRequest(request);
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
     SavingsAccount sourceSavingsAccount =
@@ -3018,6 +3010,48 @@ public class SelfAccountTransferWritePlatformServiceImpl
         .map(Client::getId)
         .filter(Objects::nonNull)
         .collect(Collectors.toSet());
+  }
+
+  /**
+   * Rejects a prepare request with a missing, zero or negative transferAmount, or a missing
+   * toAccount or fromAccount. Every invalid field is reported at once.
+   */
+  private void validatePrepareRequest(final AccountTransferPrepareRequest request) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    final DataValidatorBuilder base = new DataValidatorBuilder(errors).resource("accounttransfer");
+    validateTransferAmount(base, request.getTransferAmount());
+    base.reset().parameter("toAccount").value(request.getToAccount()).notBlank();
+    base.reset().parameter("fromAccount").value(request.getFromAccount()).notBlank();
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  /**
+   * Rejects a quote request with a missing, zero or negative transferAmount. toAccount is not
+   * required here: the fee does not depend on it, and SINPE Movil sends toPhoneNumber instead.
+   */
+  private void validateQuoteRequest(final AccountTransferPrepareRequest request) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    validateTransferAmount(
+        new DataValidatorBuilder(errors).resource("accounttransfer"), request.getTransferAmount());
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  // Uses signum() instead of DataValidatorBuilder.positiveAmount(), which converts the amount to a
+  // double and throws for values beyond the double range.
+  private static void validateTransferAmount(
+      final DataValidatorBuilder base, final BigDecimal transferAmount) {
+    base.reset().parameter("transferAmount").value(transferAmount).notNull();
+    if (transferAmount != null && transferAmount.signum() <= 0) {
+      base.reset()
+          .parameter("transferAmount")
+          .value(transferAmount)
+          .failWithCode(
+              "not.greater.than.zero", "The parameter `transferAmount` must be greater than 0.");
+    }
   }
 
   private PlatformApiDataValidationException invalidSourceAccountException() {

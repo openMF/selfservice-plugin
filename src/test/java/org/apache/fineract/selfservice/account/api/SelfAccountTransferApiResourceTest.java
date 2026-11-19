@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -30,6 +31,7 @@ import org.apache.fineract.selfservice.account.service.SinpeExternalApiClient;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,6 +59,7 @@ class SelfAccountTransferApiResourceTest {
   @Mock private ConfigurationDomainService configurationDomainService;
   @Mock private AccountTransfersReadPlatformService accountTransfersReadPlatformService;
   @Mock private SelfServiceOwnershipGuard selfServiceOwnershipGuard;
+  @Mock private AppSelfServiceUser selfServiceUser;
 
   private SelfAccountTransferApiResource resource;
 
@@ -162,6 +165,46 @@ class SelfAccountTransferApiResourceTest {
     // ?transferType= arrives as "", since @DefaultValue only covers a missing parameter.
     resource.retrieveTransactionDetailsGet(1L, "abc", "");
     verify(selfAccountTransferReadService).retrieveTransactionDetails(1L, "abc", "SAME_BANK");
+  }
+
+  @Test
+  void prepare_missingBody_throwsInvalidJsonException() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    assertThrows(InvalidJsonException.class, () -> resource.prepare(null));
+    assertThrows(InvalidJsonException.class, () -> resource.prepare(""));
+    assertThrows(InvalidJsonException.class, () -> resource.prepare("null"));
+    verifyNoInteractions(transferWritePlatformService, selfServiceOwnershipGuard);
+  }
+
+  @Test
+  void quote_missingBody_throwsInvalidJsonException() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    assertThrows(InvalidJsonException.class, () -> resource.quote(null));
+    assertThrows(InvalidJsonException.class, () -> resource.quote(""));
+    assertThrows(InvalidJsonException.class, () -> resource.quote("null"));
+    verifyNoInteractions(transferWritePlatformService, selfServiceOwnershipGuard);
+  }
+
+  @Test
+  void confirm_missingBody_throwsInvalidJsonException() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    assertThrows(InvalidJsonException.class, () -> resource.confirm(null, null));
+    assertThrows(InvalidJsonException.class, () -> resource.confirm("", null));
+    assertThrows(InvalidJsonException.class, () -> resource.confirm("null", null));
+    verifyNoInteractions(transferWritePlatformService, selfServiceOwnershipGuard);
+  }
+
+  @Test
+  void resendOtp_missingBody_throwsInvalidJsonException() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    assertThrows(InvalidJsonException.class, () -> resource.resendOtp(null, null));
+    assertThrows(InvalidJsonException.class, () -> resource.resendOtp("", null));
+    assertThrows(InvalidJsonException.class, () -> resource.resendOtp("null", null));
+    verifyNoInteractions(transferWritePlatformService);
   }
 
   private void assertTxnIdError(Executable call) {

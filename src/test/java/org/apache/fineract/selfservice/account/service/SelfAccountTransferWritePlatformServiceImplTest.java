@@ -233,8 +233,12 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void prepareTransfer_rejectsMissingSourceBeforeAccountResolutionOrSideEffects() throws Exception {
     AccountTransferPrepareRequest request = prepareRequest(null);
 
-    assertThrows(IllegalArgumentException.class, () -> service.prepareTransfer(request));
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
 
+    assertEquals(
+        "validation.msg.accounttransfer.fromAccount.cannot.be.blank", errorCodes(exception));
     verifyNoInteractions(
         savingsAccountAssembler,
         savingsAccountRepositoryWrapper,
@@ -242,6 +246,114 @@ class SelfAccountTransferWritePlatformServiceImplTest {
         registrationRepository,
         accountTransfersWritePlatformService,
         applicationEventPublisher);
+  }
+
+  @Test
+  void prepareTransfer_rejectsMissingZeroOrNegativeAmountBeforeAccountResolution() {
+    PlatformApiDataValidationException missing =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(null)));
+    PlatformApiDataValidationException zero =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(BigDecimal.ZERO)));
+    PlatformApiDataValidationException negative =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(new BigDecimal("-5"))));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank", errorCodes(missing));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero", errorCodes(zero));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(negative));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void prepareTransfer_rejectsBlankDestinationBeforeAccountResolution() {
+    AccountTransferPrepareRequest request = prepareRequest(String.valueOf(SAVINGS_ID));
+    request.setToAccount("   ");
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals("validation.msg.accounttransfer.toAccount.cannot.be.blank", errorCodes(exception));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void prepareTransfer_reportsEveryInvalidFieldAtOnce() {
+    AccountTransferPrepareRequest request = prepareRequest(null);
+    request.setToAccount(null);
+    request.setTransferAmount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.toAccount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.fromAccount.cannot.be.blank",
+        errorCodes(exception));
+  }
+
+  @Test
+  void prepareTransfer_acceptsAnAmountBeyondTheDoubleRange() {
+    // DataValidatorBuilder.positiveAmount() would throw a NumberFormatException for this amount.
+    AccountTransferPrepareRequest request = requestWithAmount(new BigDecimal("1E+400"));
+    request.setToAccount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals("validation.msg.accounttransfer.toAccount.cannot.be.blank", errorCodes(exception));
+  }
+
+  @Test
+  void quoteTransfer_rejectsMissingZeroOrNegativeAmountBeforeFeeCalculation() {
+    PlatformApiDataValidationException missing =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(null)));
+    PlatformApiDataValidationException zero =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(BigDecimal.ZERO)));
+    PlatformApiDataValidationException negative =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(new BigDecimal("-5"))));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank", errorCodes(missing));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero", errorCodes(zero));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(negative));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void quoteTransfer_doesNotRequireToAccount() {
+    // SINPE Movil quotes send the destination in toPhoneNumber, so toAccount stays optional.
+    AccountTransferPrepareRequest request = requestWithAmount(new BigDecimal("-5"));
+    request.setToAccount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.quoteTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(exception));
   }
 
   @Test
@@ -1047,6 +1159,12 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     request.setTransferAmount(BigDecimal.TEN);
     request.setTransferType("SAME_BANK");
     request.setCurrencyCode("CRC");
+    return request;
+  }
+
+  private AccountTransferPrepareRequest requestWithAmount(BigDecimal transferAmount) {
+    AccountTransferPrepareRequest request = prepareRequest(String.valueOf(SAVINGS_ID));
+    request.setTransferAmount(transferAmount);
     return request;
   }
 
