@@ -8,6 +8,8 @@ package org.apache.fineract.selfservice.account.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -175,6 +177,25 @@ class SelfAccountTransferApiResourceTest {
     assertThrows(InvalidJsonException.class, () -> resource.prepare(""));
     assertThrows(InvalidJsonException.class, () -> resource.prepare("null"));
     verifyNoInteractions(transferWritePlatformService, selfServiceOwnershipGuard);
+  }
+
+  @Test
+  void prepare_blankSource_skipsOwnershipGuardAndReachesFieldValidation() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    resource.prepare("{\"fromAccount\":\"  \",\"toAccount\":\"\",\"transferAmount\":0}");
+
+    verify(selfServiceOwnershipGuard, never()).validateTransferSourceOwnership(any(), any());
+    verify(transferWritePlatformService).prepareTransfer(any());
+  }
+
+  @Test
+  void prepare_realSource_stillGoesThroughOwnershipGuard() {
+    when(context.authenticatedSelfServiceUser()).thenReturn(selfServiceUser);
+
+    resource.prepare("{\"fromAccount\":\"1\",\"fromAccountType\":2}");
+
+    verify(selfServiceOwnershipGuard).validateTransferSourceOwnership("1", 2);
   }
 
   @Test

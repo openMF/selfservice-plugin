@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
@@ -104,7 +105,9 @@ public class SelfAccountTransferApiResource {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
         parseBody(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request.getFromAccount() != null) {
+    // A blank source is not an account: prepareTransfer reports it as a field error, together
+    // with any other invalid field, before it resolves any account.
+    if (StringUtils.isNotBlank(request.getFromAccount())) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }

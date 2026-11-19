@@ -304,6 +304,24 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   }
 
   @Test
+  void prepareTransfer_reportsEveryBlankFieldAtOnce() {
+    AccountTransferPrepareRequest request = prepareRequest(" ");
+    request.setToAccount("");
+    request.setTransferAmount(BigDecimal.ZERO);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero,"
+            + "validation.msg.accounttransfer.toAccount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.fromAccount.cannot.be.blank",
+        errorCodes(exception));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
   void prepareTransfer_acceptsAnAmountBeyondTheDoubleRange() {
     // DataValidatorBuilder.positiveAmount() would throw a NumberFormatException for this amount.
     AccountTransferPrepareRequest request = requestWithAmount(new BigDecimal("1E+400"));
