@@ -111,7 +111,8 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
         .reset()
         .parameter(INTEREST_RATE_FREQUENCY_TYPE)
         .value(frequencyType)
-        .ignoreIfNull()
+        // Sent as null, Fineract's schedule takes it as an invalid period and charges no interest
+        .notNull()
         .isOneOfTheseValues(loanProduct.getInterestPeriodFrequencyType().getValue());
   }
 

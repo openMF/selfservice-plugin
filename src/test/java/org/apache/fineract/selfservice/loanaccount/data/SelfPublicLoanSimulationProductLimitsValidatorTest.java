@@ -112,6 +112,27 @@ class SelfPublicLoanSimulationProductLimitsValidatorTest {
   }
 
   @Test
+  void interestRateFrequencySentAsNull_isRejected() {
+    LoanProduct loanProduct = mock(LoanProduct.class);
+    when(loanProduct.getInterestPeriodFrequencyType()).thenReturn(PeriodFrequencyType.MONTHS);
+    when(loanProductReadService.retrieveAllActiveLoanProducts()).thenReturn(List.of(product(1L)));
+    when(loanProductRepository.findById(1L)).thenReturn(Optional.of(loanProduct));
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () ->
+                validator.validateWithinProductLimits(
+                    json(
+                        """
+                        {"productId": 1, "interestRatePerPeriod": 2,
+                         "interestRateFrequencyType": null, "locale": "en"}
+                        """)));
+
+    assertEquals("interestRateFrequencyType", exception.getErrors().get(0).getParameterName());
+  }
+
+  @Test
   void simulationInputs_dropsBoundsSentInTheRequest() {
     JsonObject inputs =
         SelfPublicLoanSimulationProductLimitsValidator.simulationInputs(
