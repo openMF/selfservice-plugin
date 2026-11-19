@@ -89,6 +89,17 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Prepare Transfer",
       description = "Validates and prepares the transfer details.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Missing or malformed body, missing, zero or negative transferAmount, missing"
+                + " toAccount or fromAccount, invalid source account, or insufficient funds")
+  })
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
@@ -108,6 +119,17 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Quote Transfer",
       description = "Calculates the transfer fee based on business rules.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Missing or malformed body, missing, zero or negative transferAmount, invalid source"
+                + " account, or insufficient funds")
+  })
   public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
@@ -127,6 +149,17 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Confirm Transfer",
       description = "Sends OTP or executes the transfer if OTP is valid.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Validation error, such as a missing or malformed body, an invalid or expired OTP, or"
+                + " an invalid source account")
+  })
   public String confirm(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
@@ -195,6 +228,15 @@ public class SelfAccountTransferApiResource {
       description =
           "Resends OTP for pending transfer confirmation. Regenerates new OTP and expires previous"
               + " if remaining time < 50% of total expiry.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Validation error, such as a missing or malformed body")
+  })
   public String resendOtp(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
