@@ -23,8 +23,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.gson.Gson;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
@@ -61,6 +63,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrap
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.selfservice.account.data.AccountTransferConfirmRequest;
+import org.apache.fineract.selfservice.account.data.AccountTransferConfirmResponse;
 import org.apache.fineract.selfservice.account.data.AccountTransferPrepareRequest;
 import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse;
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
@@ -69,9 +72,11 @@ import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransferAuditRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApproval;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApprovalRepository;
+import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAudit;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -185,6 +190,10 @@ class SelfAccountTransferWritePlatformServiceImplTest {
         .thenReturn(TEST_FINERACT_DATE);
     lenient().when(notificationDeliveryModeUtil.determineMode(any(), any())).thenReturn(true);
     lenient().when(transactionTemplate.getTransactionManager()).thenReturn(transactionManager);
+    // Default tenant configuration: no fee. Fee-specific tests override this quote.
+    lenient()
+        .when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(new AccountTransferQuoteResponse(BigDecimal.ZERO, BigDecimal.TEN, "CRC", "fee"));
     ThreadLocalContextUtil.setTenant(
         new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
   }
@@ -603,6 +612,384 @@ class SelfAccountTransferWritePlatformServiceImplTest {
                 .currency("CRC")
                 .build());
     return registration;
+  }
+
+  // ===================================================================================
+  // Fee authority: the server quote decides, never the client-supplied feeAmount
+  // ===================================================================================
+
+  /** The tenant quotes a fixed commission for the next confirm; scale 2, as stored. */
+  private void quotedFee(String fee) {
+    BigDecimal quoted = new BigDecimal(fee).setScale(2, RoundingMode.HALF_UP);
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(quoted, BigDecimal.TEN.add(quoted), "CRC", "fee"));
+  }
+
+  private void pinGatewayAccepts() {
+    when(pinExternalTransferService.getAccountInfo("DEST-IBAN"))
+        .thenReturn(
+            "{\"holder\":\"Receiver\",\"holderId\":\"1\",\"holderIdType\":1,\"currencyCode\":\"CRC\"}");
+    when(pinExternalTransferService.executePinTransfer(any()))
+        .thenReturn(
+            "{\"operationId\":\"op-1\",\"amount\":10,\"currency\":\"CRC\",\"stateCode\":32}");
+  }
+
+  private FeeCollectionResult feeCompleted(String fee) {
+    return FeeCollectionResult.builder()
+        .successful(true)
+        .status(FeeCollectionResult.Status.COMPLETED)
+        .feeAmount(new BigDecimal(fee))
+        .currency("CRC")
+        .build();
+  }
+
+  @SuppressWarnings("unchecked")
+  private BigDecimal commissionAmount(Object response) {
+    Map<String, Object> data = (Map<String, Object>) ((Map<String, Object>) response).get("data");
+    return new BigDecimal(String.valueOf(data.get("commissionAmount")));
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> responseData(Object response) {
+    return (Map<String, Object>) ((Map<String, Object>) response).get("data");
+  }
+
+  /** Regression: a low client fee used to pass a balance check the real fee does not fit. */
+  @Test
+  void confirmTransfer_clientFeeBelowQuote_isNotUsedForTheBalanceCheck() {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("12.00")));
+    quotedFee("3.00");
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(new BigDecimal("0.01"));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmTransfer(request, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("insufficient.account.balance"));
+    verifyNoInteractions(pinExternalTransferService, feeCollectionService);
+  }
+
+  @Test
+  void confirmTransfer_negativeClientFee_isIgnoredByTheBalanceCheck() {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("12.50")));
+    quotedFee("3.00");
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(new BigDecimal("-5.00"));
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.confirmTransfer(request, httpRequest));
+
+    assertTrue(errorCodes(ex).contains("insufficient.account.balance"));
+    verifyNoInteractions(pinExternalTransferService, feeCollectionService);
+  }
+
+  @Test
+  void confirmTransfer_clientFeeAboveQuote_isIgnoredAndTheQuoteIsReported() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(new BigDecimal("50.00"));
+
+    Object result = service.confirmTransfer(request, httpRequest);
+
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+    assertEquals(
+        0,
+        new BigDecimal("3.00").compareTo(request.getFeeAmount()),
+        "the request must carry the server fee, not the client one");
+    verify(pinExternalTransferService).executePinTransfer(any());
+    verify(feeCollectionService).collectFee(any());
+  }
+
+  @Test
+  void confirmTransfer_zeroClientFee_isReplacedByTheQuote() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(BigDecimal.ZERO);
+
+    Object result = service.confirmTransfer(request, httpRequest);
+
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+  }
+
+  @Test
+  void confirmTransfer_missingClientFee_isReplacedByTheQuote() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(null);
+
+    Object result = service.confirmTransfer(request, httpRequest);
+
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+  }
+
+  /** Exactly the transfer plus the quoted fee still fits, so the transfer must proceed. */
+  @Test
+  void confirmTransfer_balanceCoversTransferAndQuotedFee_executes() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("13.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+
+    Object result = service.confirmTransfer(confirmRequest("PIN"), httpRequest);
+
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+    assertFalse(responseData(result).containsKey("feeCollected"));
+    verify(pinExternalTransferService).executePinTransfer(any());
+  }
+
+  /**
+   * The gateway already moved the money, so the confirm cannot fail retroactively; the uncollected
+   * commission must be visible in the response and in the audit trail instead of disappearing.
+   */
+  @Test
+  void confirmTransfer_feeCollectionThrows_completesButFlagsAndAuditsTheOwedFee() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any()))
+        .thenThrow(new RuntimeException("fee destination account is not configured"));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(new BigDecimal("0.01"));
+
+    Object result = service.confirmTransfer(request, httpRequest);
+
+    assertEquals(Boolean.FALSE, responseData(result).get("feeCollected"));
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+
+    ArgumentCaptor<SelfServiceTransferAudit> audit =
+        ArgumentCaptor.forClass(SelfServiceTransferAudit.class);
+    verify(transferAuditRepository).saveAndFlush(audit.capture());
+    assertEquals("FAILED", audit.getValue().getStatus());
+    assertEquals(0, new BigDecimal("3.00").compareTo(audit.getValue().getFeeAmount()));
+    assertEquals(OWN_CLIENT_ID, audit.getValue().getClientId());
+    assertEquals("CRC", audit.getValue().getCurrencyCode());
+  }
+
+  /** A FAILED result (no exception) must be treated exactly like a thrown collection error. */
+  @Test
+  void confirmTransfer_feeCollectionReturnsFailed_recordsTheOwedFee() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    pinGatewayAccepts();
+    when(feeCollectionService.collectFee(any()))
+        .thenReturn(
+            FeeCollectionResult.builder()
+                .successful(false)
+                .status(FeeCollectionResult.Status.FAILED)
+                .feeAmount(BigDecimal.ZERO)
+                .currency("CRC")
+                .build());
+
+    Object result = service.confirmTransfer(confirmRequest("PIN"), httpRequest);
+
+    assertEquals(Boolean.FALSE, responseData(result).get("feeCollected"));
+    ArgumentCaptor<SelfServiceTransferAudit> audit =
+        ArgumentCaptor.forClass(SelfServiceTransferAudit.class);
+    verify(transferAuditRepository).saveAndFlush(audit.capture());
+    assertEquals("FAILED", audit.getValue().getStatus());
+    assertEquals(0, new BigDecimal("3.00").compareTo(audit.getValue().getFeeAmount()));
+  }
+
+  /** A broken fee configuration must refuse the transfer, not send it for free. */
+  @Test
+  void confirmTransfer_feeCannotBeCalculated_failsClosedBeforeMovingMoney() {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenThrow(new IllegalArgumentException("Exchange Rate not found"));
+
+    IllegalArgumentException ex =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    assertTrue(ex.getMessage().contains("fee could not be calculated"));
+    verifyNoInteractions(pinExternalTransferService, feeCollectionService);
+    verify(transferAuditRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void confirmTransfer_negativeQuotedFee_failsClosedBeforeMovingMoney() {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    when(quoteService.calculateFee(any(), any(Client.class)))
+        .thenReturn(
+            new AccountTransferQuoteResponse(
+                new BigDecimal("-1.00"), new BigDecimal("9.00"), "CRC", "fee"));
+
+    assertThrows(
+        IllegalArgumentException.class, () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyNoInteractions(pinExternalTransferService, feeCollectionService);
+  }
+
+  /** A held transfer must snapshot the server fee, not the value the client sent. */
+  @Test
+  void confirmTransfer_heldForApproval_storesTheServerFee() throws Exception {
+    validLegacyOtp();
+    approverOtpProtected(true);
+    entitySourceAccount("10.00");
+    quotedFee("3.00");
+    when(transferApprovalRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    AccountTransferConfirmRequest request = confirmRequest("PIN");
+    request.setFeeAmount(new BigDecimal("0.01"));
+
+    service.confirmTransfer(request, httpRequest);
+
+    ArgumentCaptor<SelfServiceTransferApproval> held =
+        ArgumentCaptor.forClass(SelfServiceTransferApproval.class);
+    verify(transferApprovalRepository).saveAndFlush(held.capture());
+    AccountTransferConfirmRequest stored =
+        new Gson().fromJson(held.getValue().getRequestJson(), AccountTransferConfirmRequest.class);
+    assertEquals(0, new BigDecimal("3.00").compareTo(stored.getFeeAmount()));
+    verifyNoInteractions(pinExternalTransferService, feeCollectionService);
+  }
+
+  @Test
+  void confirmTransfer_sinpeReportsTheQuotedFee() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    when(sinpeExternalApiClient.transferToPhone(any()))
+        .thenReturn("{\"operationId\":\"sinpe-1\",\"amount\":10,\"stateCode\":32}");
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+    AccountTransferConfirmRequest request = confirmRequest("SINPE_MOVIL");
+    request.setFeeAmount(BigDecimal.ZERO);
+
+    Object result = service.confirmTransfer(request, httpRequest);
+
+    assertEquals("SINPE_MOVIL", ((Map<?, ?>) result).get("transferType"));
+    assertEquals(0, new BigDecimal("3.00").compareTo(commissionAmount(result)));
+  }
+
+  /**
+   * SAME_BANK moves the money inside Fineract and records its own audit row; the fee reported and
+   * stored must be the tenant quote, not the client's value.
+   */
+  @Test
+  void confirmTransfer_sameBankReportsAndAuditsTheServerFee() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    Long destinationId = sameBankDestination();
+    sameBankTransferCompletes();
+    when(feeCollectionService.collectFee(any())).thenReturn(feeCompleted("3.00"));
+    AccountTransferConfirmRequest request = confirmRequest("SAME_BANK");
+    request.setToAccount(String.valueOf(destinationId));
+    request.setFeeAmount(new BigDecimal("0.01"));
+
+    Object response = service.confirmTransfer(request, httpRequest);
+
+    Map<String, Object> data = sameBankData(response);
+    assertEquals(
+        0,
+        new BigDecimal("3.00")
+            .compareTo(new BigDecimal(String.valueOf(data.get("commissionAmount")))));
+    assertFalse(data.containsKey("feeCollected"), "a collected fee needs no warning flag");
+
+    ArgumentCaptor<SelfServiceSameBankTransferAudit> audit =
+        ArgumentCaptor.forClass(SelfServiceSameBankTransferAudit.class);
+    verify(sameBankTransferAuditRepository).saveAndFlush(audit.capture());
+    assertEquals(0, new BigDecimal("3.00").compareTo(audit.getValue().getFeeAmount()));
+    assertEquals(0, BigDecimal.TEN.compareTo(audit.getValue().getTransferAmount()));
+    assertEquals(OWN_CLIENT_ID, audit.getValue().getClientId());
+    assertEquals("CRC", audit.getValue().getCurrencyCode());
+  }
+
+  @Test
+  void confirmTransfer_sameBankFeeCollectionFails_flagsAndAuditsTheOwedFee() throws Exception {
+    validLegacyOtp();
+    numericSourceAccount(
+        SAVINGS_ID, savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00")));
+    quotedFee("3.00");
+    Long destinationId = sameBankDestination();
+    sameBankTransferCompletes();
+    when(feeCollectionService.collectFee(any()))
+        .thenThrow(new RuntimeException("fee destination account is not configured"));
+    AccountTransferConfirmRequest request = confirmRequest("SAME_BANK");
+    request.setToAccount(String.valueOf(destinationId));
+
+    Object response = service.confirmTransfer(request, httpRequest);
+
+    Map<String, Object> data = sameBankData(response);
+    assertEquals(Boolean.FALSE, data.get("feeCollected"));
+    assertEquals(
+        0,
+        new BigDecimal("3.00")
+            .compareTo(new BigDecimal(String.valueOf(data.get("commissionAmount")))));
+
+    ArgumentCaptor<SelfServiceTransferAudit> audit =
+        ArgumentCaptor.forClass(SelfServiceTransferAudit.class);
+    verify(transferAuditRepository).saveAndFlush(audit.capture());
+    assertEquals("FAILED", audit.getValue().getStatus());
+    assertEquals(0, new BigDecimal("3.00").compareTo(audit.getValue().getFeeAmount()));
+  }
+
+  /** A second, internal destination account; Fineract resolves it by id in both lookups. */
+  private Long sameBankDestination() {
+    Long destinationId = SAVINGS_ID + 1;
+    SavingsAccount destination = savingsAccount(destinationId, secondClient, BigDecimal.ZERO);
+    when(savingsAccountAssembler.assembleFrom(destinationId, false)).thenReturn(destination);
+    when(savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(destinationId))
+        .thenReturn(destination);
+    return destinationId;
+  }
+
+  /**
+   * The internal transfer Fineract accepts. The transfer row resolves to no source savings
+   * transaction, which keeps the response path free of optional enrichment lookups.
+   */
+  private void sameBankTransferCompletes() {
+    CommandProcessingResult result = mock(CommandProcessingResult.class);
+    when(result.getResourceId()).thenReturn(900L);
+    when(accountTransfersWritePlatformService.create(any())).thenReturn(result);
+    when(savingsAccountTransactionRepository.findById(900L)).thenReturn(Optional.empty());
+    Map<String, Object> transferRow = new HashMap<>();
+    transferRow.put("from_savings_transaction_id", null);
+    transferRow.put("to_savings_transaction_id", 2L);
+    lenient()
+        .when(jdbcTemplate.queryForMap(anyString(), any(Object[].class)))
+        .thenReturn(transferRow);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> sameBankData(Object response) {
+    return (Map<String, Object>) ((AccountTransferConfirmResponse) response).getData();
   }
 
   @Test

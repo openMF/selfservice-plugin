@@ -352,57 +352,71 @@ public class SelfAccountTransferWritePlatformServiceImpl
       AppSelfServiceUser user,
       SavingsAccount sourceSavingsAccount,
       HttpServletRequest httpRequest) {
-    validateSufficientFunds(
-        sourceSavingsAccount,
-        request.getTransferAmount(),
-        feeForBalanceCheck(request, sourceSavingsAccount.getClient()));
+    // The fee is server-side only: it is the amount that will be charged, audited and reported.
+    // Any feeAmount sent by the client is ignored (and overwritten on the request).
+    BigDecimal feeAmount = resolveTransferFee(request, sourceSavingsAccount.getClient());
+    validateSufficientFunds(sourceSavingsAccount, request.getTransferAmount(), feeAmount);
 
     log.info(
         "CONFIRM: Starting two-step processing for channel: {} | Fee: {}",
         request.getTransferType(),
-        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO);
+        feeAmount);
 
     String cleanDestination =
         request.getToAccount() != null ? request.getToAccount().replaceAll("\\s+", "") : "";
 
     if ("PIN".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> PIN account detected. Executing PIN transfer.");
-      return executePinTransfer(request, user, sourceSavingsAccount, httpRequest);
+      return executePinTransfer(request, user, sourceSavingsAccount, httpRequest, feeAmount);
     } else if ("SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> SINPE_MOVIL account detected. Executing SINPE_MOVIL transfer.");
-      return executeSinpeTransfer(request, user, sourceSavingsAccount, httpRequest);
+      return executeSinpeTransfer(request, user, sourceSavingsAccount, httpRequest, feeAmount);
     } else if (isSameBankIbanAccount(cleanDestination)
         || "SAME_BANK".equalsIgnoreCase(request.getTransferType())) {
       log.info("CONFIRM -> Internal account detected. Executing local transfer.");
-      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest);
+      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest, feeAmount);
     } else {
       log.info("CONFIRM -> Fallback to internal transfer.");
-      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest);
+      return executeInternalTransfer(request, user, sourceSavingsAccount, httpRequest, feeAmount);
     }
   }
 
-  /** The client's fee, or a recalculated quote when the client sent none. */
-  private BigDecimal feeForBalanceCheck(AccountTransferConfirmRequest request, Client client) {
-    BigDecimal feeAmountFromClient =
-        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
-    if (feeAmountFromClient.compareTo(BigDecimal.ZERO) > 0) {
-      return feeAmountFromClient;
-    }
+  /**
+   * Calculates the authoritative fee for a confirmed transfer and stores it on the request.
+   *
+   * <p>{@code feeAmount} is accepted in the confirm payload for backwards compatibility, but it is
+   * client input and never drives money. The value used for the balance check, for the fee
+   * collection, for the audit trail and for the response is the one derived here from the tenant's
+   * fee configuration — the same calculation the quote endpoint shows and {@link
+   * SelfServiceFeeCollectionService} repeats when it debits the commission.
+   *
+   * <p>A fee that cannot be calculated aborts the transfer before any money moves, so a broken or
+   * missing configuration can never silently waive the commission (the previous behaviour fell back
+   * to the client value and then let the fee debit fail without failing the transfer).
+   */
+  private BigDecimal resolveTransferFee(AccountTransferConfirmRequest request, Client client) {
+    BigDecimal feeAmount;
     try {
-      AccountTransferPrepareRequest quoteReq = new AccountTransferPrepareRequest();
-      quoteReq.setTransferType(request.getTransferType());
-      quoteReq.setCurrencyCode(request.getCurrencyCode());
-      quoteReq.setTransferMode(request.getTransferMode());
-      quoteReq.setTransferAmount(request.getTransferAmount());
-      AccountTransferQuoteResponse quote = quoteService.calculateFee(quoteReq, client);
-      if (quote != null && quote.getFeeAmount() != null) {
-        request.setFeeAmount(feeAmountFromClient);
-        return quote.getFeeAmount();
-      }
-    } catch (Exception e) {
-      log.warn("CONFIRM: Could not re-calculate fee for balance check, using client value", e);
+      AccountTransferQuoteResponse quote = quoteService.calculateFee(request, client);
+      feeAmount = quote == null ? null : quote.getFeeAmount();
+    } catch (RuntimeException e) {
+      log.error(
+          "CONFIRM: Could not calculate the fee for type={}, currency={}. Refusing the transfer"
+              + " before any money moves.",
+          request.getTransferType(),
+          request.getCurrencyCode(),
+          e);
+      throw new IllegalArgumentException(
+          "The transfer fee could not be calculated. The transfer was not executed.");
     }
-    return feeAmountFromClient;
+    if (feeAmount == null || feeAmount.compareTo(BigDecimal.ZERO) < 0) {
+      log.error("CONFIRM: The fee quote returned an invalid amount: {}", feeAmount);
+      throw new IllegalArgumentException(
+          "The transfer fee could not be calculated. The transfer was not executed.");
+    }
+    // Keep later readers of the request (approval snapshot, notifications) on the same value.
+    request.setFeeAmount(feeAmount);
+    return feeAmount;
   }
 
   // =====================================================================
@@ -479,7 +493,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     validateSufficientFunds(
         sourceSavingsAccount,
         request.getTransferAmount(),
-        feeForBalanceCheck(request, sourceSavingsAccount.getClient()));
+        resolveTransferFee(request, sourceSavingsAccount.getClient()));
 
     request.setOtp(null);
     SelfServiceTransferApproval approval =
@@ -581,7 +595,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
     validateSufficientFunds(
         transfer.source(),
         transfer.request().getTransferAmount(),
-        feeForBalanceCheck(transfer.request(), transfer.source().getClient()));
+        resolveTransferFee(transfer.request(), transfer.source().getClient()));
     stepUpGuard.requireIfProtected(
         StepUpAction.APPROVE_SECOND_SIGNATURE,
         httpRequest,
@@ -889,7 +903,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
       SavingsAccount sourceSavingsAccount,
-      HttpServletRequest httpRequest) {
+      HttpServletRequest httpRequest,
+      BigDecimal feeAmount) {
 
     Client client = sourceSavingsAccount.getClient();
     Long fromClientId = client.getId();
@@ -982,8 +997,6 @@ public class SelfAccountTransferWritePlatformServiceImpl
     }
 
     log.info("Build the structured SAME_BANK response");
-    BigDecimal feeAmount =
-        request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO;
     BigDecimal transferAmount = request.getTransferAmount();
     BigDecimal totalAmount = transferAmount.add(feeAmount);
 
@@ -1086,7 +1099,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         registrationDate,
         processingDate);
 
-    executeFeeTransaction(request, sourceSavingsAccount);
+    boolean feeCollected = executeFeeTransaction(request, sourceSavingsAccount, feeAmount);
 
     log.info("Homologating SAME_BANK response structure");
     Map<String, Object> rawInternalMap = gson.fromJson(gson.toJson(responseData), Map.class);
@@ -1096,6 +1109,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
     // Ensure destinationCustomer survives homologation even if DTO JSON omits nested maps
     ensureSameBankCustomData(
         homologatedData, fromAccountIdentifier, toAccountIdentifier, destinationCustomer, request);
+
+    if (!feeCollected) {
+      // The transfer is already done; the uncollected commission must not be silent.
+      homologatedData.put("feeCollected", false);
+    }
 
     AccountTransferConfirmResponse wrappedResponse =
         AccountTransferConfirmResponse.builder()
@@ -1406,7 +1424,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
       SavingsAccount sourceSavingsAccount,
-      HttpServletRequest httpRequest) {
+      HttpServletRequest httpRequest,
+      BigDecimal feeAmount) {
     log.info(
         "CONFIRM PIN: Starting PIN flow with strict destination and origin metadata validation.");
 
@@ -1530,15 +1549,17 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       log.info("CONFIRM PIN: Successfully processed and debited by the external service.");
 
-      executeFeeTransaction(request, sourceSavingsAccount);
+      boolean feeCollected = executeFeeTransaction(request, sourceSavingsAccount, feeAmount);
 
       Map<String, Object> externalData = readAcceptedGatewayResponse("PIN", pinServiceResponse);
 
       Map<String, Object> homologatedData =
           homologateResponseData(externalData, request.getTransferAmount(), dynamicCurrencyCode);
 
-      if (request.getFeeAmount() != null) {
-        homologatedData.put("commissionAmount", request.getFeeAmount());
+      homologatedData.put("commissionAmount", feeAmount);
+      if (!feeCollected) {
+        // The PIN gateway already accepted the transfer; the uncollected fee must not be silent.
+        homologatedData.put("feeCollected", false);
       }
 
       Map<String, Object> response = new HashMap<>();
@@ -1561,7 +1582,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       AccountTransferConfirmRequest request,
       AppSelfServiceUser user,
       SavingsAccount sourceSavingsAccount,
-      HttpServletRequest httpRequest) {
+      HttpServletRequest httpRequest,
+      BigDecimal feeAmount) {
     Client client = sourceSavingsAccount.getClient();
 
     SinpeTransferRequest sinpeRequest =
@@ -1598,7 +1620,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     log.info("CONFIRM SINPE_MOVIL: Successfully processed by the external service.");
 
-    executeFeeTransaction(request, sourceSavingsAccount);
+    boolean feeCollected = executeFeeTransaction(request, sourceSavingsAccount, feeAmount);
 
     Map<String, Object> externalData =
         readAcceptedGatewayResponse("SINPE_MOVIL", sinpeServiceResponse);
@@ -1606,8 +1628,10 @@ public class SelfAccountTransferWritePlatformServiceImpl
     Map<String, Object> homologatedData =
         homologateResponseData(externalData, request.getTransferAmount(), "CRC");
 
-    if (request.getFeeAmount() != null) {
-      homologatedData.put("commissionAmount", request.getFeeAmount());
+    homologatedData.put("commissionAmount", feeAmount);
+    if (!feeCollected) {
+      // The SINPE gateway already accepted the transfer; the uncollected fee must not be silent.
+      homologatedData.put("feeCollected", false);
     }
 
     Map<String, Object> response = new HashMap<>();
@@ -2483,8 +2507,25 @@ public class SelfAccountTransferWritePlatformServiceImpl
       return "N/A";
     }
 
-  private void executeFeeTransaction(
-      AccountTransferConfirmRequest request, SavingsAccount sourceSavingsAccount) {
+  /**
+   * Charges the commission for a transfer whose principal has already been dispatched.
+   *
+   * <p>The amount is supplied by {@link #resolveTransferFee}: it comes from the tenant's fee
+   * configuration and matches both the balance check and what the fee service recomputes, so the
+   * debit, the request and the audit row always agree.
+   *
+   * <p>A failure does not roll the transfer back — for PIN and SINPE the external gateway has
+   * already moved the money, and a rollback would free the consumed OTP/step-up grant for a second
+   * send (MX-503) — but it is never silent: the audit row is stored as {@code FAILED} with the
+   * amount that should have been collected and the response reports {@code feeCollected=false}.
+   *
+   * @return {@code true} when the commission was collected or legitimately waived, {@code false}
+   *     when it remains owed
+   */
+  private boolean executeFeeTransaction(
+      AccountTransferConfirmRequest request,
+      SavingsAccount sourceSavingsAccount,
+      BigDecimal feeAmount) {
     log.info(
         "ACCOUNTING CONFIRM: Delegating fee collection for type={}, currency={}, amount={}",
         request.getTransferType(),
@@ -2508,10 +2549,28 @@ public class SelfAccountTransferWritePlatformServiceImpl
               .transferDateForFineract(getTransferDateForApacheFineract(request))
               .dateFormat(FINERACT_TRANSFER_DATE_FORMAT)
               .locale(FINERACT_TRANSFER_LOCALE)
-              .clientFeeAmount(request.getFeeAmount())
               .build();
 
       FeeCollectionResult result = feeCollectionService.collectFee(feeReq);
+
+      if (result == null || result.getStatus() == FeeCollectionResult.Status.FAILED) {
+        log.error(
+            "ACCOUNTING CONFIRM: Commission collection failed (status={}) for client={}, type={}."
+                + " Fee {} {} remains owed and is audited as FAILED.",
+            result == null ? "NO_RESULT" : result.getStatus(),
+            client.getId(),
+            request.getTransferType(),
+            feeAmount,
+            request.getCurrencyCode());
+        persistTransferAudit(
+            client.getId(),
+            request.getTransferType(),
+            request.getCurrencyCode(),
+            request.getTransferAmount(),
+            feeAmount,
+            "FAILED");
+        return false;
+      }
 
       log.info(
           "ACCOUNTING CONFIRM: Fee collection result → status={}, txnId={}, fee={} {}",
@@ -2519,19 +2578,23 @@ public class SelfAccountTransferWritePlatformServiceImpl
           result.getTransactionId(),
           result.getFeeAmount(),
           result.getCurrency());
+      return true;
 
     } catch (Exception e) {
       log.error(
-          "ACCOUNTING CONFIRM: Commission collection failed (non-fatal). "
-              + "Original transfer remains intact.",
+          "ACCOUNTING CONFIRM: Commission collection failed (non-fatal). Original transfer remains"
+              + " intact; fee {} {} is audited as FAILED.",
+          feeAmount,
+          request.getCurrencyCode(),
           e);
       persistTransferAudit(
           client.getId(),
           request.getTransferType(),
           request.getCurrencyCode(),
           request.getTransferAmount(),
-          request.getFeeAmount() != null ? request.getFeeAmount() : BigDecimal.ZERO,
+          feeAmount,
           "FAILED");
+      return false;
     }
   }
 
