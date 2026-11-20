@@ -13,12 +13,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -41,6 +44,7 @@ import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.registration.exception.SelfServiceEnrollmentConflictException;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceRegistrationNotFoundException;
 import org.apache.fineract.selfservice.security.service.SelfServiceDeviceFingerprintService;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
@@ -61,6 +65,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
@@ -191,6 +196,8 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
         .thenReturn(false);
 
     assertThrows(ClientNotFoundException.class, () -> service.createRegistrationRequest("{}"));
+    // An unmatched caller must not learn whether the account number has a self-service user
+    verify(appUserClientMappingRepository, never()).existsByClientId(any());
   }
 
   @Test
@@ -238,6 +245,56 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     SelfServiceRegistration result = service.createRegistrationRequest("{}");
     assertNotNull(result);
     assertEquals("encoded-password", result.getPassword());
+  }
+
+  @Test
+  void createRegistrationRequest_rejectsClientThatAlreadyHasUser() {
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.accountNumberParamName), any()))
+        .thenReturn("12345");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.firstNameParamName), any()))
+        .thenReturn("John");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.middleNameParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.lastNameParamName), any()))
+        .thenReturn("Doe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe2");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any()))
+        .thenReturn("Strong#Abc123");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn("email");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.emailParamName), any()))
+        .thenReturn("john@test.com");
+
+    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn(".*");
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
+    when(appUserReadPlatformService.isUsernameExist("jdoe2")).thenReturn(false);
+    when(selfServiceRegistrationReadPlatformService.isClientExist(
+            anyString(), anyString(), any(), anyString(), any(), anyBoolean()))
+        .thenReturn(true);
+
+    Client client = mock(Client.class);
+    when(client.getId()).thenReturn(7L);
+    when(clientRepository.getClientByAccountNumber("12345")).thenReturn(client);
+    when(appUserClientMappingRepository.existsByClientId(7L)).thenReturn(true);
+
+    SelfServiceEnrollmentConflictException ex =
+        assertThrows(
+            SelfServiceEnrollmentConflictException.class,
+            () -> service.createRegistrationRequest("{}"));
+    assertEquals(
+        "error.msg.self.service.client.already.linked", ex.getUserMessageGlobalisationCode());
+    assertEquals(SelfServiceApiConstants.accountNumberParamName, ex.getParameterName());
+    // Rejected before a token is created, stored or sent
+    verify(selfServiceAuthorizationTokenService, never()).generateToken();
+    verify(selfServiceRegistrationRepository, never()).saveAndFlush(any());
+    verifyNoInteractions(applicationEventPublisher);
   }
 
   @Test
@@ -347,6 +404,51 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     } finally {
       ThreadLocalContextUtil.setTenant(null);
     }
+  }
+
+  @Test
+  void createSelfServiceUser_rejectsClientThatAlreadyHasUser() {
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.externalAuthenticationTokenParamName), any()))
+        .thenReturn("external-token");
+
+    SelfServiceRegistration registration = mock(SelfServiceRegistration.class);
+    when(registration.getUsername()).thenReturn("jdoe2");
+    when(registration.getPassword()).thenReturn("encoded-pass");
+    when(registration.getEmail()).thenReturn("test@test.com");
+
+    Client client = mock(Client.class);
+    Office office = mock(Office.class);
+    when(client.getOffice()).thenReturn(office);
+    when(client.getFirstname()).thenReturn("John");
+    when(client.getLastname()).thenReturn("Doe");
+    when(registration.getClient()).thenReturn(client);
+
+    when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
+            "external-token", SelfServiceRequestType.REGISTRATION))
+        .thenReturn(registration);
+
+    Role role = mock(Role.class);
+    when(roleRepository.getRoleByName(SelfServiceApiConstants.SELF_SERVICE_USER_ROLE))
+        .thenReturn(role);
+
+    // A request created before the client got its user is only caught by the database
+    doThrow(
+            new DataIntegrityViolationException(
+                "could not execute statement",
+                new SQLException(
+                    "ERROR: duplicate key value violates unique constraint"
+                        + " \"unique_self_client\"")))
+        .when(appUserClientMappingRepository)
+        .saveClientUserMapping(any(), any());
+
+    SelfServiceEnrollmentConflictException ex =
+        assertThrows(
+            SelfServiceEnrollmentConflictException.class,
+            () -> service.createSelfServiceUser("{}", httpServletRequest));
+    assertEquals(
+        "error.msg.self.service.client.already.linked", ex.getUserMessageGlobalisationCode());
+    verifyNoInteractions(applicationEventPublisher);
   }
 
   @Test
