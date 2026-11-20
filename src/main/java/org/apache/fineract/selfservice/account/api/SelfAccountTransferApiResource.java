@@ -24,10 +24,12 @@ import java.util.Collection;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -88,11 +90,24 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Prepare Transfer",
       description = "Validates and prepares the transfer details.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Missing or malformed body, missing, zero or negative transferAmount, missing"
+                + " toAccount or fromAccount, invalid source account, or insufficient funds")
+  })
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    // A blank source is not an account: prepareTransfer reports it as a field error, together
+    // with any other invalid field, before it resolves any account.
+    if (StringUtils.isNotBlank(request.getFromAccount())) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -107,11 +122,22 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Quote Transfer",
       description = "Calculates the transfer fee based on business rules.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Missing or malformed body, missing, zero or negative transferAmount, invalid source"
+                + " account, or insufficient funds")
+  })
   public String quote(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferPrepareRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferPrepareRequest.class);
+    if (request.getFromAccount() != null) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -126,12 +152,23 @@ public class SelfAccountTransferApiResource {
   @Operation(
       summary = "Confirm Transfer",
       description = "Sends OTP or executes the transfer if OTP is valid.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Validation error, such as a missing or malformed body, an invalid or expired OTP, or"
+                + " an invalid source account")
+  })
   public String confirm(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     AccountTransferConfirmRequest request =
-        new Gson().fromJson(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
-    if (request != null && request.getFromAccount() != null) {
+        parseBody(apiRequestBodyAsJson, AccountTransferConfirmRequest.class);
+    if (request.getFromAccount() != null) {
       this.selfServiceOwnershipGuard.validateTransferSourceOwnership(
           request.getFromAccount(), request.getFromAccountType());
     }
@@ -194,10 +231,19 @@ public class SelfAccountTransferApiResource {
       description =
           "Resends OTP for pending transfer confirmation. Regenerates new OTP and expires previous"
               + " if remaining time < 50% of total expiry.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "OK",
+        content = @Content(schema = @Schema(implementation = String.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Validation error, such as a missing or malformed body")
+  })
   public String resendOtp(
       final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-    ResendOtpRequest request = new Gson().fromJson(apiRequestBodyAsJson, ResendOtpRequest.class);
+    ResendOtpRequest request = parseBody(apiRequestBodyAsJson, ResendOtpRequest.class);
     Object result = transferWritePlatformService.resendTransferOtp(request, httpRequest);
     return result instanceof String ? (String) result : new Gson().toJson(result);
   }
@@ -348,5 +394,14 @@ public class SelfAccountTransferApiResource {
             accountId, txnId, this.dataValidator.resolveTransferType(transferType));
 
     return this.toApiJsonSerializer.serialize(details);
+  }
+
+  /** Parses a request body; an empty body is rejected with a 400 because Gson returns null. */
+  private static <T> T parseBody(final String apiRequestBodyAsJson, final Class<T> type) {
+    final T request = new Gson().fromJson(apiRequestBodyAsJson, type);
+    if (request == null) {
+      throw new InvalidJsonException();
+    }
+    return request;
   }
 }
