@@ -420,4 +420,68 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
       executor.shutdownNow();
     }
   }
+
+  /**
+   * Verifies that registering a second self-service user for an existing client is rejected with a
+   * 409 before any registration request is created.
+   */
+  @Test
+  @DisplayName("Registration for a client that already has a self-service user returns 409")
+  void testRegistrationForClientWithSelfServiceUserReturnsConflict() {
+    String id = numericId();
+    String enrollmentPayload =
+        """
+        {
+          "username": "owner_%s",
+          "password": "Strong#Abc123",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "owner%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
+            .formatted(id, id, id);
+
+    // Self-enrollment creates the client together with its self-service user
+    Response enrollResponse = executeSelfEnrollment(enrollmentPayload, null);
+    assertEquals(
+        200,
+        enrollResponse.getStatusCode(),
+        "Enrollment must succeed. Body: " + enrollResponse.body().asString());
+    String accountNumber =
+        querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
+    assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
+
+    String secondUsername = "second_" + id;
+    String registrationPayload =
+        """
+        {
+          "username": "%s",
+          "accountNumber": "%s",
+          "password": "Strong#Abc123",
+          "firstName": "Test",
+          "lastName": "User",
+          "email": "second%s@fineract.test",
+          "authenticationMode": "email"
+        }
+        """
+            .formatted(secondUsername, accountNumber, id);
+
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .body(registrationPayload)
+        .when()
+        .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
+        .then()
+        .statusCode(409)
+        .body(
+            "userMessageGlobalisationCode",
+            equalTo("error.msg.self.service.client.already.linked"));
+
+    assertEquals(
+        0L,
+        queryCount("select count(*) from request_audit_table where username = ?", secondUsername),
+        "No registration request may be created for a client that already has a user");
+  }
 }

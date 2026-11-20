@@ -147,6 +147,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   /** Fineract legal form id for Entity (non-person). */
   private static final int LEGAL_FORM_ENTITY = 2;
 
+  /** Unique constraint that allows only one self-service user per client. */
+  private static final String CLIENT_MAPPING_UNIQUE_CONSTRAINT = "unique_self_client";
+
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
     Gson gson = new Gson();
@@ -273,11 +276,16 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         mobileNumber,
         isEmailAuthenticationMode);
 
+    // Only checked once the caller has matched the client, so an account number alone doesn't
+    // reveal whether the client has a self-service user.
+    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
+    if (this.appUserClientMappingRepository.existsByClientId(client.getId())) {
+      throw buildClientAlreadyRegisteredConflict();
+    }
+
     String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
     // Tenant-aware clock — never system LocalDateTime.now()
     LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
-
-    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
 
     SelfServiceRegistration selfServiceRegistration =
         SelfServiceRegistration.instance(
@@ -349,6 +357,17 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         userId,
         pendingConfirmation,
         onboarding);
+  }
+
+  /**
+   * A client can have only one self-service user. The caller isn't logged in, so the message names
+   * neither the client nor its existing user.
+   */
+  private SelfServiceEnrollmentConflictException buildClientAlreadyRegisteredConflict() {
+    return new SelfServiceEnrollmentConflictException(
+        "error.msg.self.service.client.already.linked",
+        "This client already has a self-service user.",
+        SelfServiceApiConstants.accountNumberParamName);
   }
 
   private void throwExceptionIfValidationError(
@@ -491,6 +510,11 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String normalizedMessage = realCause.getMessage().toLowerCase();
       if (normalizedMessage.contains("username") || normalizedMessage.contains("username_org")) {
         throw buildDuplicateUsernameConflict(username);
+      }
+      // A registration created before the client got its user, or two registrations for the same
+      // client at once, pass the check in createRegistrationRequest and only fail here.
+      if (normalizedMessage.contains(CLIENT_MAPPING_UNIQUE_CONSTRAINT)) {
+        throw buildClientAlreadyRegisteredConflict();
       }
     }
     throw ErrorHandler.getMappable(
