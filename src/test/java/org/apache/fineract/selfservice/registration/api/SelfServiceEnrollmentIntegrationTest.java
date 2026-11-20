@@ -173,6 +173,55 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   }
 
   /**
+   * Self-enrolls a new client "Test User", which creates the client together with its self-service
+   * user.
+   *
+   * @param id unique suffix for the username, mobile number and email
+   * @return the new client's account number
+   */
+  private String enrollClientWithUser(String id) {
+    String payload =
+        """
+        {
+          "username": "owner_%s",
+          "password": "Strong#Abc123",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "owner%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
+            .formatted(id, id, id);
+    Response response = executeSelfEnrollment(payload, null);
+    assertEquals(
+        200,
+        response.getStatusCode(),
+        "Enrollment must succeed. Body: " + response.body().asString());
+    String accountNumber =
+        querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
+    assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
+    return accountNumber;
+  }
+
+  /** Builds a registration request (email mode) for the client "Test User" with this account. */
+  private static String registrationPayload(String username, String accountNumber) {
+    return """
+    {
+      "username": "%s",
+      "accountNumber": "%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "%s@fineract.test",
+      "authenticationMode": "email"
+    }
+    """
+        .formatted(username, accountNumber, username);
+  }
+
+  /**
    * Verifies the full 2-step enrollment flow: 1. POST /client-user → 200 + disabled user created 2.
    * Query token from DB 3. User cannot login (disabled) 4. POST /client-user/confirm → 200 + user
    * enabled 5. User can login
@@ -429,48 +478,11 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   @DisplayName("Registration for a client that already has a self-service user returns 409")
   void testRegistrationForClientWithSelfServiceUserReturnsConflict() {
     String id = numericId();
-    String enrollmentPayload =
-        """
-        {
-          "username": "owner_%s",
-          "password": "Strong#Abc123",
-          "firstName": "Test",
-          "lastName": "User",
-          "mobileNumber": "555%s",
-          "email": "owner%s@fineract.test",
-          "authenticationMode": "email",
-          "active": true
-        }
-        """
-            .formatted(id, id, id);
-
-    // Self-enrollment creates the client together with its self-service user
-    Response enrollResponse = executeSelfEnrollment(enrollmentPayload, null);
-    assertEquals(
-        200,
-        enrollResponse.getStatusCode(),
-        "Enrollment must succeed. Body: " + enrollResponse.body().asString());
-    String accountNumber =
-        querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
-    assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
-
+    String accountNumber = enrollClientWithUser(id);
     String secondUsername = "second_" + id;
-    String registrationPayload =
-        """
-        {
-          "username": "%s",
-          "accountNumber": "%s",
-          "password": "Strong#Abc123",
-          "firstName": "Test",
-          "lastName": "User",
-          "email": "second%s@fineract.test",
-          "authenticationMode": "email"
-        }
-        """
-            .formatted(secondUsername, accountNumber, id);
 
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
-        .body(registrationPayload)
+        .body(registrationPayload(secondUsername, accountNumber))
         .when()
         .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
         .then()
