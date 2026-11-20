@@ -9,10 +9,12 @@ package org.apache.fineract.selfservice.registration.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -391,13 +393,13 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
     when(policy.getRegex()).thenReturn(".*");
     when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
         .thenReturn(policy);
-    when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(false);
 
     PlatformApiDataValidationException ex =
         assertThrows(
             PlatformApiDataValidationException.class,
             () -> service.createRegistrationRequest("{}"));
     assertOnlyPasswordError(ex);
+    verify(appUserReadPlatformService, never()).isUsernameExist(any());
     verify(platformPasswordEncoder, never()).encode(any());
   }
 
@@ -427,6 +429,54 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             () -> service.selfEnroll("{}", httpServletRequest));
     assertOnlyPasswordError(ex);
     verify(clientWritePlatformService, never()).createClient(any());
+  }
+
+  @Test
+  void createRegistrationRequest_rejectsMissingAuthenticationMode() {
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.accountNumberParamName), any()))
+        .thenReturn("12345");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.firstNameParamName), any()))
+        .thenReturn("John");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.lastNameParamName), any()))
+        .thenReturn("Doe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.usernameParamName), any()))
+        .thenReturn("jdoe");
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.passwordParamName), any()))
+        .thenReturn("Strong#Abc123");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.authenticationModeParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(eq(SelfServiceApiConstants.emailParamName), any()))
+        .thenReturn("john@test.com");
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.middleNameParamName), any()))
+        .thenReturn(null);
+    when(fromApiJsonHelper.extractStringNamed(
+            eq(SelfServiceApiConstants.mobileNumberParamName), any()))
+        .thenReturn(null);
+
+    PasswordValidationPolicy policy = mock(PasswordValidationPolicy.class);
+    when(policy.getRegex()).thenReturn(".*");
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
+        .thenReturn(policy);
+    // A taken username must not hide the validation error behind a 409
+    lenient().when(appUserReadPlatformService.isUsernameExist("jdoe")).thenReturn(true);
+
+    PlatformApiDataValidationException ex =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.createRegistrationRequest("{}"));
+    assertTrue(
+        ex.getErrors().stream()
+            .anyMatch(
+                error ->
+                    SelfServiceApiConstants.authenticationModeParamName.equals(
+                        error.getParameterName())));
+    verify(appUserReadPlatformService, never()).isUsernameExist(any());
+    verify(platformPasswordEncoder, never()).encode(any());
+    verify(selfServiceRegistrationRepository, never()).saveAndFlush(any());
   }
 
   private static void assertOnlyPasswordError(PlatformApiDataValidationException ex) {

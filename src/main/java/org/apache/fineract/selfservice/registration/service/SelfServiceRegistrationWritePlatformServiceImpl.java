@@ -247,8 +247,11 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .notBlank()
         .notExceedingLengthOf(100);
 
+    // The notBlank() error above is only thrown further down, so a missing authenticationMode must
+    // not be dereferenced here or the request ends in a 500 instead of that 400.
     boolean isEmailAuthenticationMode =
-        authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
+        authenticationMode != null
+            && authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
 
     String mobileNumber = null;
     if (!isEmailAuthenticationMode) {
@@ -259,8 +262,19 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           .reset()
           .parameter(SelfServiceApiConstants.mobileNumberParamName)
           .value(mobileNumber)
-          .notNull()
-          .validatePhoneNumber();
+          .notNull();
+      // validatePhoneNumber() dereferences the value, so only run it when a number was sent
+      if (mobileNumber != null) {
+        baseDataValidator
+            .reset()
+            .parameter(SelfServiceApiConstants.mobileNumberParamName)
+            .value(mobileNumber)
+            .validatePhoneNumber();
+      }
+    }
+    // Report bad input as a 400 before the duplicate-username check can turn it into a 409
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
     }
     validateForDuplicateUsername(username);
 

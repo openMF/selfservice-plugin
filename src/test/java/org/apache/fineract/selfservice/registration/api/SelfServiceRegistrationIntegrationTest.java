@@ -16,14 +16,14 @@ import org.junit.jupiter.api.Test;
 class SelfServiceRegistrationIntegrationTest extends SelfServiceIntegrationTestBase {
 
   @Test
-  @DisplayName("POST /v1/self/registration with missing body returns 500")
-  void createRegistration_emptyBody_returns500() {
+  @DisplayName("POST /v1/self/registration with an empty object returns 400")
+  void createRegistration_emptyBody_returns400() {
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body("{}")
         .when()
         .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
         .then()
-        .statusCode(500);
+        .statusCode(400);
   }
 
   @Test
