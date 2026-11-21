@@ -72,9 +72,10 @@ public class RemittanceExternalService {
       headers.set(headerName, headerValue);
     }
     // Tenant context for multi-tenancy
-    String tenantId = ThreadLocalContextUtil.getTenant() != null
-        ? ThreadLocalContextUtil.getTenant().getTenantIdentifier()
-        : "default";
+    String tenantId =
+        ThreadLocalContextUtil.getTenant() != null
+            ? ThreadLocalContextUtil.getTenant().getTenantIdentifier()
+            : "default";
     headers.set("tenant", tenantId);
     return headers;
   }
@@ -127,7 +128,8 @@ public class RemittanceExternalService {
     return executeGetRequest(url, headers);
   }
 
-  public String getDeliveryMethods(String vendor, String countryAbbrev, String productId, String acceptLanguage) {
+  public String getDeliveryMethods(
+      String vendor, String countryAbbrev, String productId, String acceptLanguage) {
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
       return "{\"deliveryMethods\":[]}";
@@ -163,8 +165,15 @@ public class RemittanceExternalService {
       return "{\"status\":\"disabled\"}";
     }
     String v = vendor != null ? vendor : getDefaultVendor(props);
-    String url = getHost(props) + "/" + getTenantIdentifier() + "/" + v + "/transactions/"
-        + transactionId + "/recipient";
+    String url =
+        getHost(props)
+            + "/"
+            + getTenantIdentifier()
+            + "/"
+            + v
+            + "/transactions/"
+            + transactionId
+            + "/recipient";
     return executePostRequest(url, recipientBody, buildHeaders(props));
   }
 
@@ -174,19 +183,35 @@ public class RemittanceExternalService {
       return "{\"status\":\"disabled\"}";
     }
     String v = vendor != null ? vendor : getDefaultVendor(props);
-    String url = getHost(props) + "/" + getTenantIdentifier() + "/" + v + "/transactions/"
-        + transactionId + "/payout-assignment";
+    String url =
+        getHost(props)
+            + "/"
+            + getTenantIdentifier()
+            + "/"
+            + v
+            + "/transactions/"
+            + transactionId
+            + "/payout-assignment";
     return executePostRequest(url, body, buildHeaders(props));
   }
 
-  public String confirmPayout(String vendor, String transactionId, String clientIdMifos, Object body) {
+  public String confirmPayout(
+      String vendor, String transactionId, String clientIdMifos, Object body) {
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
       return "{\"status\":\"disabled\"}";
     }
     String v = vendor != null ? vendor : getDefaultVendor(props);
-    String url = getHost(props) + "/" + getTenantIdentifier() + "/" + v + "/transactions/"
-        + transactionId + "/payout-confirmation/" + clientIdMifos;
+    String url =
+        getHost(props)
+            + "/"
+            + getTenantIdentifier()
+            + "/"
+            + v
+            + "/transactions/"
+            + transactionId
+            + "/payout-confirmation/"
+            + clientIdMifos;
     return executePostRequest(url, body, buildHeaders(props));
   }
 
@@ -195,10 +220,16 @@ public class RemittanceExternalService {
     if (!isEnabled(props)) {
       return "{\"status\":\"disabled\"}";
     }
-    // Note: Postman uses /v1/remittances path in some places; adapt to consistent tenant/vendor style
+    // Note: Postman uses /v1/remittances path in some places; adapt to consistent tenant/vendor
+    // style
     String v = vendor != null ? vendor : getDefaultVendor(props);
-    String url = getHost(props) + "/v1/remittances/" + getTenantIdentifier() + "/transactions/"
-        + transactionId + "/payout-assignment";
+    String url =
+        getHost(props)
+            + "/v1/remittances/"
+            + getTenantIdentifier()
+            + "/transactions/"
+            + transactionId
+            + "/payout-assignment";
     return executeDeleteRequest(url, body, buildHeaders(props));
   }
 

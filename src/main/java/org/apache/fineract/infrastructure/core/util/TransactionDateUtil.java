@@ -27,9 +27,9 @@ import org.springframework.stereotype.Component;
 /**
  * Centralized multi-tenant transaction-date utility.
  *
- * <p>Combines a client-supplied {@link LocalDate} with the current {@link OffsetTime}
- * of the tenant's zone so that Apache Fineract never rejects the date as "future"
- * while preserving full timezone integrity.
+ * <p>Combines a client-supplied {@link LocalDate} with the current {@link OffsetTime} of the
+ * tenant's zone so that Apache Fineract never rejects the date as "future" while preserving full
+ * timezone integrity.
  */
 @Slf4j
 @Component
@@ -42,17 +42,14 @@ public class TransactionDateUtil {
   private final TenantDatePreferenceRepository tenantDatePreferenceRepository;
 
   /**
-   * Resolves the {@link ZoneId} for the current tenant.
-   * Falls back to the JVM system default when no tenant context is present
-   * or when the tenant has no timezone preference configured.
+   * Resolves the {@link ZoneId} for the current tenant. Falls back to the JVM system default when
+   * no tenant context is present or when the tenant has no timezone preference configured.
    */
   private ZoneId resolveTenantZoneId() {
     try {
       FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
       if (tenant != null && StringUtils.isNotBlank(tenant.getTenantIdentifier())) {
-        log.info(
-            "Resolving timezone for tenantIdentifier='{}'",
-            tenant.getTenantIdentifier());
+        log.info("Resolving timezone for tenantIdentifier='{}'", tenant.getTenantIdentifier());
 
         Optional<String> tzOffset =
             tenantDatePreferenceRepository
@@ -61,10 +58,7 @@ public class TransactionDateUtil {
 
         if (tzOffset.isPresent() && StringUtils.isNotBlank(tzOffset.get())) {
           ZoneId zone = ZoneId.of(tzOffset.get());
-          log.info(
-              "Tenant '{}' timezone resolved to '{}'",
-              tenant.getTenantIdentifier(),
-              zone);
+          log.info("Tenant '{}' timezone resolved to '{}'", tenant.getTenantIdentifier(), zone);
           return zone;
         }
 
@@ -75,9 +69,7 @@ public class TransactionDateUtil {
         log.info("No tenant context available, using system default ZoneId");
       }
     } catch (Exception e) {
-      log.warn(
-          "Could not resolve tenant timezone, falling back to system default",
-          e);
+      log.warn("Could not resolve tenant timezone, falling back to system default", e);
     }
 
     ZoneId fallback = ZoneId.systemDefault();
@@ -88,12 +80,12 @@ public class TransactionDateUtil {
   /**
    * Centralized method to parse and format transaction dates for Apache Fineract.
    *
-   * <p>Uses tenant-aware {@link LocalDateTime} combined with the client {@link LocalDate}
-   * to guarantee multi-tenant timezone safety and to avoid "future date" validation issues.
+   * <p>Uses tenant-aware {@link LocalDateTime} combined with the client {@link LocalDate} to
+   * guarantee multi-tenant timezone safety and to avoid "future date" validation issues.
    *
-   * @param dateStr    raw date string supplied by the client (may be blank)
+   * @param dateStr raw date string supplied by the client (may be blank)
    * @param dateFormat client date pattern (defaults to {@code dd-MM-yyyy})
-   * @param localeStr  BCP-47 locale tag (defaults to {@code en})
+   * @param localeStr BCP-47 locale tag (defaults to {@code en})
    * @return ISO-8601 offset date-time string ready for Fineract command payloads
    */
   public String formatTransactionDateForFineract(
@@ -101,7 +93,8 @@ public class TransactionDateUtil {
 
     String tenantId = resolveTenantIdentifierForLog();
     log.info(
-        "[tenant={}] formatTransactionDateForFineract invoked – dateStr='{}', dateFormat='{}', localeStr='{}'",
+        "[tenant={}] formatTransactionDateForFineract invoked – dateStr='{}', dateFormat='{}',"
+            + " localeStr='{}'",
         tenantId,
         dateStr,
         dateFormat,
@@ -109,14 +102,10 @@ public class TransactionDateUtil {
 
     if (StringUtils.isNotBlank(dateStr)) {
       try {
-        String pattern =
-            StringUtils.isNotBlank(dateFormat) ? dateFormat : "dd-MM-yyyy";
+        String pattern = StringUtils.isNotBlank(dateFormat) ? dateFormat : "dd-MM-yyyy";
         Locale locale =
-            StringUtils.isNotBlank(localeStr)
-                ? Locale.forLanguageTag(localeStr)
-                : Locale.ENGLISH;
-        DateTimeFormatter clientFormatter =
-            DateTimeFormatter.ofPattern(pattern, locale);
+            StringUtils.isNotBlank(localeStr) ? Locale.forLanguageTag(localeStr) : Locale.ENGLISH;
+        DateTimeFormatter clientFormatter = DateTimeFormatter.ofPattern(pattern, locale);
 
         log.info(
             "[tenant={}] Parsing client date='{}' with pattern='{}' and locale='{}'",
@@ -131,10 +120,7 @@ public class TransactionDateUtil {
 
         // 2. Get current tenant-aware datetime (CRITICAL: prevents "future date" validation errors)
         LocalDateTime now = DateUtils.getLocalDateTimeOfTenant();
-        log.info(
-            "[tenant={}] Current tenant LocalDateTime (DateUtils) → {}",
-            tenantId,
-            now);
+        log.info("[tenant={}] Current tenant LocalDateTime (DateUtils) → {}", tenantId, now);
 
         // 3. Combine client date with current time to avoid "future date" issues
         LocalDateTime transferDateTime = clientDate.atTime(now.toLocalTime());
@@ -145,8 +131,7 @@ public class TransactionDateUtil {
 
         // 4. Convert to OffsetDateTime using tenant zone for multi-tenant safety
         ZoneId tenantZone = resolveTenantZoneId();
-        OffsetDateTime offsetDateTime =
-            transferDateTime.atZone(tenantZone).toOffsetDateTime();
+        OffsetDateTime offsetDateTime = transferDateTime.atZone(tenantZone).toOffsetDateTime();
         String formatted = offsetDateTime.format(FINERACT_OFFSET_DATETIME_FMT);
 
         log.info(
@@ -171,13 +156,12 @@ public class TransactionDateUtil {
 
         ZoneId tenantZone = resolveTenantZoneId();
         OffsetDateTime fallback =
-            DateUtils.getLocalDateTimeOfTenant()
-                .atZone(tenantZone)
-                .toOffsetDateTime();
+            DateUtils.getLocalDateTimeOfTenant().atZone(tenantZone).toOffsetDateTime();
         String formatted = fallback.format(FINERACT_OFFSET_DATETIME_FMT);
 
         log.info(
-            "[tenant={}] Fallback transaction date used – tenantZone='{}', offsetDateTime='{}', formatted='{}'",
+            "[tenant={}] Fallback transaction date used – tenantZone='{}', offsetDateTime='{}',"
+                + " formatted='{}'",
             tenantId,
             tenantZone,
             fallback,
@@ -191,13 +175,12 @@ public class TransactionDateUtil {
 
       ZoneId tenantZone = resolveTenantZoneId();
       OffsetDateTime now =
-          DateUtils.getLocalDateTimeOfTenant()
-              .atZone(tenantZone)
-              .toOffsetDateTime();
+          DateUtils.getLocalDateTimeOfTenant().atZone(tenantZone).toOffsetDateTime();
       String formatted = now.format(FINERACT_OFFSET_DATETIME_FMT);
 
       log.info(
-          "[tenant={}] Current tenant date used (no client input) – tenantZone='{}', offsetDateTime='{}', formatted='{}'",
+          "[tenant={}] Current tenant date used (no client input) – tenantZone='{}',"
+              + " offsetDateTime='{}', formatted='{}'",
           tenantId,
           tenantZone,
           now,
@@ -224,12 +207,8 @@ public class TransactionDateUtil {
     log.info("[tenant={}] Attempting to parse Fineract date string → '{}'", tenantId, dateStr);
 
     try {
-      OffsetDateTime parsed =
-          OffsetDateTime.parse(dateStr, FINERACT_OFFSET_DATETIME_FMT);
-      log.info(
-          "[tenant={}] Successfully parsed with ISO_OFFSET_DATE_TIME → {}",
-          tenantId,
-          parsed);
+      OffsetDateTime parsed = OffsetDateTime.parse(dateStr, FINERACT_OFFSET_DATETIME_FMT);
+      log.info("[tenant={}] Successfully parsed with ISO_OFFSET_DATE_TIME → {}", tenantId, parsed);
       return parsed;
     } catch (Exception e) {
       log.warn(
@@ -240,10 +219,7 @@ public class TransactionDateUtil {
           e);
       try {
         OffsetDateTime parsed = OffsetDateTime.parse(dateStr);
-        log.info(
-            "[tenant={}] Successfully parsed with plain ISO fallback → {}",
-            tenantId,
-            parsed);
+        log.info("[tenant={}] Successfully parsed with plain ISO fallback → {}", tenantId, parsed);
         return parsed;
       } catch (Exception ex) {
         log.error(
@@ -258,40 +234,37 @@ public class TransactionDateUtil {
   }
 
   /**
-   * Gets the current date and time for the current tenant as a {@link LocalDateTime}.
-   * Delegates to Fineract's {@link DateUtils} to ensure perfect alignment with internal
-   * validation logic (e.g., token expiration checks).
+   * Gets the current date and time for the current tenant as a {@link LocalDateTime}. Delegates to
+   * Fineract's {@link DateUtils} to ensure perfect alignment with internal validation logic (e.g.,
+   * token expiration checks).
    */
   public LocalDateTime getCurrentTenantLocalDateTime() {
     LocalDateTime now = DateUtils.getLocalDateTimeOfTenant();
     log.info(
-        "[tenant={}] getCurrentTenantLocalDateTime → {}",
-        resolveTenantIdentifierForLog(),
-        now);
+        "[tenant={}] getCurrentTenantLocalDateTime → {}", resolveTenantIdentifierForLog(), now);
     return now;
   }
 
   /**
-   * Gets the current date for the current tenant, formatted specifically for
-   * Fineract client JSON payloads (e.g., submittedOnDate).
+   * Gets the current date for the current tenant, formatted specifically for Fineract client JSON
+   * payloads (e.g., submittedOnDate).
    *
-   * <p>Uses {@link DateUtils#getLocalDateOfTenant()} instead of {@code LocalDate.now()}
-   * to guarantee the date is NEVER considered "in the future" by Fineract's
-   * internal Client.validate() checks.
+   * <p>Uses {@link DateUtils#getLocalDateOfTenant()} instead of {@code LocalDate.now()} to
+   * guarantee the date is NEVER considered "in the future" by Fineract's internal Client.validate()
+   * checks.
    */
   public String getCurrentDateForFineract(String dateFormat, String localeStr) {
     String tenantId = resolveTenantIdentifierForLog();
     LocalDate today = DateUtils.getLocalDateOfTenant();
     String pattern = StringUtils.isNotBlank(dateFormat) ? dateFormat : "yyyy-MM-dd";
     Locale locale =
-        StringUtils.isNotBlank(localeStr)
-            ? Locale.forLanguageTag(localeStr)
-            : Locale.ENGLISH;
+        StringUtils.isNotBlank(localeStr) ? Locale.forLanguageTag(localeStr) : Locale.ENGLISH;
 
     String formatted = today.format(DateTimeFormatter.ofPattern(pattern, locale));
 
     log.info(
-        "[tenant={}] getCurrentDateForFineract – today='{}', pattern='{}', locale='{}', formatted='{}'",
+        "[tenant={}] getCurrentDateForFineract – today='{}', pattern='{}', locale='{}',"
+            + " formatted='{}'",
         tenantId,
         today,
         pattern,
@@ -305,8 +278,8 @@ public class TransactionDateUtil {
   // ------------------------------------------------------------------
 
   /**
-   * Best-effort extraction of the current tenant identifier for structured logging.
-   * Never throws; returns {@code "unknown"} when context is unavailable.
+   * Best-effort extraction of the current tenant identifier for structured logging. Never throws;
+   * returns {@code "unknown"} when context is unavailable.
    */
   private String resolveTenantIdentifierForLog() {
     try {

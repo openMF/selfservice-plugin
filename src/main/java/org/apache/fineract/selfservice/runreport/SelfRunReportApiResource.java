@@ -98,8 +98,7 @@ public class SelfRunReportApiResource {
   private String allowlistedReportsCsv;
 
   private Set<String> getAllowlistedReports() {
-    return Arrays.stream(
-            (allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
+    return Arrays.stream((allowlistedReportsCsv == null ? "" : allowlistedReportsCsv).split(","))
         .map(String::trim)
         .filter(name -> !name.isBlank())
         .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -107,9 +106,7 @@ public class SelfRunReportApiResource {
 
   private String resolveAllowedReportName(String reportName) {
     final List<String> matches =
-        getAllowlistedReports().stream()
-            .filter(name -> name.equals(reportName))
-            .toList();
+        getAllowlistedReports().stream().filter(name -> name.equals(reportName)).toList();
 
     if (matches.size() != 1) {
       throw new NoAuthorizationException(

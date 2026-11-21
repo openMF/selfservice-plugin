@@ -156,7 +156,8 @@ public class StepUpChallengeService {
       repository.saveAll(open);
     }
 
-    // The code of an authenticator app is produced by the app: nothing is generated, stored or sent.
+    // The code of an authenticator app is produced by the app: nothing is generated, stored or
+    // sent.
     final String otp = totp ? null : crypto.generateOtp(settings.otpLength());
     final String salt = totp ? null : crypto.newSalt();
     final StepUpChallenge challenge =

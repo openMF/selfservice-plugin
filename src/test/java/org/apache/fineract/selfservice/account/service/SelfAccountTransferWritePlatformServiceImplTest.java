@@ -1121,8 +1121,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     when(dataValidator.validateCreate(eq(""), anyString()))
         .thenReturn(transferParams(1L, 2L, "100.00"));
     numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
-    when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any()))
-        .thenReturn("Rent");
+    when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any())).thenReturn("Rent");
     CommandProcessingResult result = mock(CommandProcessingResult.class);
     when(result.getResourceId()).thenReturn(77L);
     when(accountTransfersWritePlatformService.create(any())).thenReturn(result);

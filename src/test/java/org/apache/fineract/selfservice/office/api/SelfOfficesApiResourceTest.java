@@ -168,8 +168,7 @@ class SelfOfficesApiResourceTest {
 
     UriInfo uriInfo = mock(UriInfo.class);
     MultivaluedMap<String, String> queryParameters = mock(MultivaluedMap.class);
-    ApiRequestJsonSerializationSettings settings =
-        mock(ApiRequestJsonSerializationSettings.class);
+    ApiRequestJsonSerializationSettings settings = mock(ApiRequestJsonSerializationSettings.class);
 
     OfficeData office = mock(OfficeData.class);
     when(office.getId()).thenReturn(OFFICE_ID);
@@ -206,9 +205,7 @@ class SelfOfficesApiResourceTest {
     assertTrue(result.contains("\"address\""));
     assertTrue(result.contains("\"geolocation\""));
 
-    verify(selfServiceOfficeReadPlatformService)
-        .retrieveOfficeAddresses(List.of(OFFICE_ID));
-    verify(selfServiceOfficeReadPlatformService)
-        .retrieveOfficeGeolocations(List.of(OFFICE_ID));
+    verify(selfServiceOfficeReadPlatformService).retrieveOfficeAddresses(List.of(OFFICE_ID));
+    verify(selfServiceOfficeReadPlatformService).retrieveOfficeGeolocations(List.of(OFFICE_ID));
   }
 }

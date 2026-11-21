@@ -10,8 +10,8 @@ import org.apache.fineract.infrastructure.core.exception.AbstractPlatformDomainR
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 
 /**
- * Raised when a password-renew operation fails because the supplied reset token is invalid,
- * already consumed, or expired.
+ * Raised when a password-renew operation fails because the supplied reset token is invalid, already
+ * consumed, or expired.
  */
 public class SelfServicePasswordResetTokenException extends AbstractPlatformDomainRuleException {
 

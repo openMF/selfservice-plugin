@@ -43,12 +43,12 @@ public interface SelfServiceAccessAuditRepository
    */
   @Query(
       """
-        SELECT COUNT(a) FROM SelfServiceAccessAudit a
-        WHERE a.appUserId = :appUserId
-          AND a.resourceType = :resourceType
-          AND a.accessResult = :accessResult
-          AND a.createdAt >= :since
-        """)
+      SELECT COUNT(a) FROM SelfServiceAccessAudit a
+      WHERE a.appUserId = :appUserId
+        AND a.resourceType = :resourceType
+        AND a.accessResult = :accessResult
+        AND a.createdAt >= :since
+      """)
   long countByUserResourceTypeAndResult(
       @Param("appUserId") Long appUserId,
       @Param("resourceType") SelfServiceAccessAudit.ResourceType resourceType,
@@ -62,19 +62,19 @@ public interface SelfServiceAccessAuditRepository
    */
   @Query(
       """
-        SELECT COUNT(a) FROM SelfServiceAccessAudit a
-        WHERE a.appUserId = :appUserId
-          AND a.accessResult = :accessResult
-          AND a.createdAt >= :since
-        """)
+      SELECT COUNT(a) FROM SelfServiceAccessAudit a
+      WHERE a.appUserId = :appUserId
+        AND a.accessResult = :accessResult
+        AND a.createdAt >= :since
+      """)
   long countByUserAndResult(
       @Param("appUserId") Long appUserId,
       @Param("accessResult") SelfServiceAccessAudit.AccessResult accessResult,
       @Param("since") OffsetDateTime since);
 
   /**
-   * Deletes all audit records older than the specified date.
-   * Used by automated purge mechanisms to enforce retention policies.
+   * Deletes all audit records older than the specified date. Used by automated purge mechanisms to
+   * enforce retention policies.
    */
   void deleteByCreatedAtBefore(OffsetDateTime dateTime);
 }

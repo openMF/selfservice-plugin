@@ -768,7 +768,7 @@
             <configuration>
                 <java>
                     <googleJavaFormat>
-                      <version>1.21.0</version>   <!-- pin a recent version -->
+                      <version>1.30.0</version>   <!-- JVM 25 requires >= 1.30.0 -->
                       <style>GOOGLE</style>       <!-- or AOSP for 4-space indent -->
                       <reflowLongStrings>true</reflowLongStrings>
                     </googleJavaFormat>

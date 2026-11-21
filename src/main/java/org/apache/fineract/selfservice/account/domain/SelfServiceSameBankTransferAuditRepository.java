@@ -70,7 +70,7 @@ public interface SelfServiceSameBankTransferAuditRepository
   /**
    * Retrieves an audit detail validating ownership for a given client and account. Matches against
    * operationId, internalRefNumber, or fineractTransferId.
-   */  
+   */
   @Query(
       "SELECT a FROM SelfServiceSameBankTransferAudit a "
           + "WHERE a.clientId = :clientId "

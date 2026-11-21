@@ -81,7 +81,7 @@ public class SelfServiceAuthenticatedUserData {
 
   @SuppressWarnings("unused")
   private String refreshToken;
-  
+
   @SuppressWarnings("unused")
   private OnboardingProgressData onboarding;
 
@@ -94,7 +94,7 @@ public class SelfServiceAuthenticatedUserData {
     this.refreshToken = refreshToken;
     return this;
   }
-  
+
   public SelfServiceAuthenticatedUserData setOnboarding(OnboardingProgressData onboarding) {
     this.onboarding = onboarding;
     return this; // must return this for chaining
@@ -103,5 +103,4 @@ public class SelfServiceAuthenticatedUserData {
   public OnboardingProgressData getOnboarding() {
     return onboarding;
   }
-  
 }

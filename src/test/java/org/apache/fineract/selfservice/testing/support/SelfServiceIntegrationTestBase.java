@@ -22,7 +22,10 @@ import org.testcontainers.utility.MountableFile;
 
 public abstract class SelfServiceIntegrationTestBase {
 
-  /** Tenant HMAC secret the step-up integration test writes into the tenant settings (test value only). */
+  /**
+   * Tenant HMAC secret the step-up integration test writes into the tenant settings (test value
+   * only).
+   */
   protected static final String STEP_UP_HMAC_SECRET = "it-stepup-hmac-secret-it-stepup-hmac-1234";
 
   private static final Logger LOG = LoggerFactory.getLogger(SelfServiceIntegrationTestBase.class);
@@ -63,7 +66,8 @@ public abstract class SelfServiceIntegrationTestBase {
     String testPluginsPath = buildDir + "/test-plugins";
     java.io.File testPluginsDir = new java.io.File(testPluginsPath);
     if (!testPluginsDir.exists() && !testPluginsDir.mkdirs()) {
-      throw new IllegalStateException("Failed to create test-plugins directory at: " + testPluginsPath);
+      throw new IllegalStateException(
+          "Failed to create test-plugins directory at: " + testPluginsPath);
     }
     if (!testPluginsDir.isDirectory()) {
       throw new IllegalStateException("Path exists but is not a directory: " + testPluginsPath);
@@ -99,10 +103,10 @@ public abstract class SelfServiceIntegrationTestBase {
                   cmd.withEntrypoint(
                       "sh",
                       "-c",
-                      "CLASSPATH=$(cat /app/jib-classpath-file) && "
-                          + "exec java $JAVA_TOOL_OPTIONS "
-                          + "-Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Djava.security.egd=file:/dev/./urandom "
-                          + "-cp /app/plugins/selfservice-plugin.jar:/app/test-plugins/*:$CLASSPATH "
+                      "CLASSPATH=$(cat /app/jib-classpath-file) && exec java $JAVA_TOOL_OPTIONS"
+                          + " -Duser.home=/tmp -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
+                          + " -Djava.security.egd=file:/dev/./urandom -cp"
+                          + " /app/plugins/selfservice-plugin.jar:/app/test-plugins/*:$CLASSPATH "
                           + "org.apache.fineract.ServerApplication");
                   cmd.withCmd();
                 })
@@ -139,7 +143,9 @@ public abstract class SelfServiceIntegrationTestBase {
       }
       if (containerLogs.contains("Application run failed")) {
         LOG.error(
-            "Fineract container crashed during startup (Application run failed). Image: {}. Container logs:\n{}",
+            "Fineract container crashed during startup (Application run failed). Image: {}."
+                + " Container logs:\n"
+                + "{}",
             fineract.getDockerImageName(),
             containerLogs);
       } else {
@@ -178,10 +184,16 @@ public abstract class SelfServiceIntegrationTestBase {
       properties.load(in);
     }
     final java.nio.file.Path jar =
-        dir.resolve(properties.getProperty("artifactId") + "-" + properties.getProperty("version") + ".jar");
+        dir.resolve(
+            properties.getProperty("artifactId")
+                + "-"
+                + properties.getProperty("version")
+                + ".jar");
     if (!java.nio.file.Files.isRegularFile(jar)) {
       throw new IllegalStateException(
-          "The build metadata names " + jar + " but it does not exist. Run 'mvn clean package' first.");
+          "The build metadata names "
+              + jar
+              + " but it does not exist. Run 'mvn clean package' first.");
     }
     return jar.toString();
   }
@@ -202,7 +214,10 @@ public abstract class SelfServiceIntegrationTestBase {
               .toList();
       if (candidates.size() != 1) {
         throw new IllegalStateException(
-            "Expected exactly one plugin jar in " + dir + " but found " + candidates
+            "Expected exactly one plugin jar in "
+                + dir
+                + " but found "
+                + candidates
                 + ". Run 'mvn clean package' first.");
       }
       return dir.resolve(candidates.get(0)).toString();
@@ -221,11 +236,11 @@ public abstract class SelfServiceIntegrationTestBase {
   protected static void executeSqlInPostgres(String sql) {
     Container.ExecResult result =
         execPsql(
-                """
-                BEGIN;
-                %s
-                COMMIT;
-                """
+            """
+            BEGIN;
+            %s
+            COMMIT;
+            """
                 .formatted(sql),
             false);
     if (result.getExitCode() != 0) {

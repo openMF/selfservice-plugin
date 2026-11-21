@@ -17,8 +17,8 @@ import lombok.experimental.UtilityClass;
 import org.apache.commons.lang3.StringUtils;
 
 /**
- * Builds a stable device fingerprint from HTTP headers and selected JSON body fields.
- * Does not include password or one-time tokens.
+ * Builds a stable device fingerprint from HTTP headers and selected JSON body fields. Does not
+ * include password or one-time tokens.
  */
 @UtilityClass
 public class DeviceFingerprintUtil {
@@ -64,7 +64,8 @@ public class DeviceFingerprintUtil {
     String hash = sha256(material.toString());
     String label = buildLabel(userAgent, platform, ip);
 
-    return new DeviceSignals(hash, truncate(userAgent, 512), ip, truncate(acceptLanguage, 128), label);
+    return new DeviceSignals(
+        hash, truncate(userAgent, 512), ip, truncate(acceptLanguage, 128), label);
   }
 
   public static String resolveClientIp(HttpServletRequest request) {

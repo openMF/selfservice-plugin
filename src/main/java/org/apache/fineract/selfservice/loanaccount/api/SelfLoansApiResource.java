@@ -89,7 +89,7 @@ public class SelfLoansApiResource {
 
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
-  
+
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   private final LoanRepositoryWrapper loanRepositoryWrapper;
 
@@ -517,11 +517,13 @@ public class SelfLoansApiResource {
 
   /**
    * Once a loan is approved the guarantors are part of the bank's security for it (approved and
-   * disbursed loans may hold guarantee funds). The borrower may change or remove them only while the
-   * application is waiting for approval; after that, bank staff do it.
+   * disbursed loans may hold guarantee funds). The borrower may change or remove them only while
+   * the application is waiting for approval; after that, bank staff do it.
    */
   private void validateGuarantorsCanBeChanged(final Long loanId, final String action) {
-    if (!this.loanRepositoryWrapper.findOneWithNotFoundDetection(loanId).isSubmittedAndPendingApproval()) {
+    if (!this.loanRepositoryWrapper
+        .findOneWithNotFoundDetection(loanId)
+        .isSubmittedAndPendingApproval()) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.selfservice.loan.guarantor." + action + ".not.pending.approval",
           "Guarantors can only be changed or removed while the loan application is waiting for"

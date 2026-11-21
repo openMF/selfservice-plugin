@@ -173,7 +173,9 @@ public class SelfSavingsAccountApiResource {
               .filter(
                   t ->
                       t.getPaymentDetailData() != null
-                          || t.getTransfer() != null // account-transfer deposit/withdrawal (e.g. commission credit)
+                          || t.getTransfer()
+                              != null // account-transfer deposit/withdrawal (e.g. commission
+                          // credit)
                           || isFeeOrChargeTransaction(t)
                           || isHoldOrReleaseTransaction(t))
               .collect(Collectors.toList());
@@ -287,8 +289,7 @@ public class SelfSavingsAccountApiResource {
     }
     var type = t.getTransactionType();
     try {
-      if (Boolean.TRUE.equals(type.isAmountHold())
-          || Boolean.TRUE.equals(type.isAmountRelease())) {
+      if (Boolean.TRUE.equals(type.isAmountHold()) || Boolean.TRUE.equals(type.isAmountRelease())) {
         return true;
       }
     } catch (Exception ignored) {

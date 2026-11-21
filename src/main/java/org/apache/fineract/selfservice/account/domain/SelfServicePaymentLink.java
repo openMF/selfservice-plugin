@@ -61,7 +61,7 @@ public class SelfServicePaymentLink {
 
   @Column(name = "currency", nullable = false, length = 3)
   private String currency;
-  
+
   @Column(name = "fee_amount", nullable = false, precision = 19, scale = 6)
   private BigDecimal feeAmount;
 

@@ -51,8 +51,8 @@ import org.springframework.transaction.annotation.Transactional;
  * respected.
  *
  * <p>All input validation is performed by {@link SelfServiceForgotPasswordDataValidator} and
- * surfaced via {@code PlatformApiDataValidationException}. Business-rule failures use
- * {@code AbstractPlatformDomainRuleException} subclasses.
+ * surfaced via {@code PlatformApiDataValidationException}. Business-rule failures use {@code
+ * AbstractPlatformDomainRuleException} subclasses.
  */
 @Slf4j
 @Service

@@ -100,8 +100,7 @@ class AppSelfServiceUserClientMapperReadServiceImplTest {
   }
 
   private void givenMapping(final boolean mapped) {
-    when(jdbcTemplate.queryForObject(
-            anyString(), eq(Boolean.class), eq(CLIENT_ID), eq(USER_ID)))
+    when(jdbcTemplate.queryForObject(anyString(), eq(Boolean.class), eq(CLIENT_ID), eq(USER_ID)))
         .thenReturn(mapped);
   }
 

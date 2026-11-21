@@ -82,7 +82,8 @@ class SelfScorecardApiResourceTest {
   @Test
   void createScorecard_emptyBody_throwsInvalidJsonException() {
     assertThrows(
-        InvalidJsonException.class, () -> resource.createScorecard(SURVEY_ID, (ScorecardData) null));
+        InvalidJsonException.class,
+        () -> resource.createScorecard(SURVEY_ID, (ScorecardData) null));
 
     verifyNoInteractions(selfServiceOwnershipGuard, scorecardApiResource);
   }

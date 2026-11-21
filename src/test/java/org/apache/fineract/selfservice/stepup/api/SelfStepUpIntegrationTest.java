@@ -86,9 +86,9 @@ class SelfStepUpIntegrationTest extends SelfServiceIntegrationTestBase {
   }
 
   /**
-   * All integration test classes share one Fineract container and one tenant database, so this class
-   * must leave the step-up settings as it found them (disabled). Otherwise every test that runs
-   * after it and uses a protected endpoint is refused with "step-up required".
+   * All integration test classes share one Fineract container and one tenant database, so this
+   * class must leave the step-up settings as it found them (disabled). Otherwise every test that
+   * runs after it and uses a protected endpoint is refused with "step-up required".
    */
   @AfterAll
   static void restoreStepUpDefaults() {

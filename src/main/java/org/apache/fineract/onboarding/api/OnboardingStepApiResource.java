@@ -44,7 +44,9 @@ import org.springframework.stereotype.Component;
  */
 @Path("/v1/onboarding")
 @Component
-@Tag(name = "Self Service Onboarding Steps", description = "Track and update enrollment step status")
+@Tag(
+    name = "Self Service Onboarding Steps",
+    description = "Track and update enrollment step status")
 @RequiredArgsConstructor
 @Slf4j
 public class OnboardingStepApiResource {
@@ -71,9 +73,7 @@ public class OnboardingStepApiResource {
   public String getProgressByClientId(
       @PathParam("clientId") @Parameter(description = "Fineract client id") final Long clientId) {
 
-    this.context
-        .authenticatedUser()
-        .validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+    this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
     final OnboardingProgressData progress =
         this.onboardingStepService.getOrInitProgressByClientId(clientId);
@@ -91,8 +91,7 @@ public class OnboardingStepApiResource {
               + " Same body as the self-service PUT /steps endpoint.")
   @RequestBody(
       required = true,
-      content =
-          @Content(schema = @Schema(implementation = UpdateOnboardingStepRequest.class)))
+      content = @Content(schema = @Schema(implementation = UpdateOnboardingStepRequest.class)))
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK — full progress after update"),
     @ApiResponse(responseCode = "400", description = "Invalid stepCode or status"),
@@ -126,8 +125,7 @@ public class OnboardingStepApiResource {
               + " Default upToStepCode = REGISTRATION_COMPLETE.")
   @RequestBody(
       required = false,
-      content =
-          @Content(schema = @Schema(implementation = CompleteOnboardingUpToRequest.class)))
+      content = @Content(schema = @Schema(implementation = CompleteOnboardingUpToRequest.class)))
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK — full progress after completion"),
     @ApiResponse(responseCode = "404", description = "No self-service user mapped to client"),

@@ -34,7 +34,6 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 @AllArgsConstructor
 public class SelfServiceAccessAudit extends AbstractPersistableCustom<Long> {
 
-
   @Column(name = "appuser_id", nullable = false)
   private Long appUserId;
 

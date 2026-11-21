@@ -13,5 +13,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface TenantDatePreferenceRepository extends JpaRepository<TenantDatePreference, Long> {
-    Optional<TenantDatePreference> findByTenantId(String tenantId);
+  Optional<TenantDatePreference> findByTenantId(String tenantId);
 }

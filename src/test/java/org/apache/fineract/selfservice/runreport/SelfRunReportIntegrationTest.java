@@ -66,7 +66,7 @@ public class SelfRunReportIntegrationTest extends SelfServiceIntegrationTestBase
     String username = "user_" + UUID.randomUUID().toString().substring(0, 8);
 
     executeSqlInPostgres(
-            """
+"""
 WITH new_self_user AS (
     INSERT INTO m_appselfservice_user(
         office_id, username, password, email, firstname, lastname, is_deleted,

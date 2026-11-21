@@ -69,8 +69,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollectionService {
 
   /**
-   * Fallback payment type id used only when {@code fee_payment_type_id} is not configured in
-   * {@code SELF_SERVICE_FEE_CONFIG}. Prefer configuring the real ID of the payment type named "FEE".
+   * Fallback payment type id used only when {@code fee_payment_type_id} is not configured in {@code
+   * SELF_SERVICE_FEE_CONFIG}. Prefer configuring the real ID of the payment type named "FEE".
    */
   private static final long DEFAULT_FEE_PAYMENT_TYPE_ID = 1L;
 
@@ -270,7 +270,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       // Resolve payment type that must appear as "FEE" in paymentDetailData
       Long feePaymentTypeId = resolveFeePaymentTypeId(feeCfg);
       log.info(
-          "FEE_COLLECT [DEBUG]: Resolved feePaymentTypeId={} (source config key 'fee_payment_type_id' or default {})",
+          "FEE_COLLECT [DEBUG]: Resolved feePaymentTypeId={} (source config key"
+              + " 'fee_payment_type_id' or default {})",
           feePaymentTypeId,
           DEFAULT_FEE_PAYMENT_TYPE_ID);
 
@@ -316,8 +317,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
           cmd.containsKey("paymentTypeId"),
           cmd.get("paymentTypeId"));
       log.info(
-          "FEE_COLLECT [DEBUG]: routingCode/receiptNumber (SINPE-like ref) = {}",
-          sinpeLikeRef);
+          "FEE_COLLECT [DEBUG]: routingCode/receiptNumber (SINPE-like ref) = {}", sinpeLikeRef);
 
       String json = gson.toJson(cmd);
       log.info("FEE_COLLECT [DEBUG]: Serialized JSON payload = {}", json);
@@ -354,7 +354,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
 
       if (result != null && result.getResourceId() != null) {
         log.info(
-            "FEE_COLLECT: Commission collected. txnId={}, amount={} {} | paymentTypeId used={} | ref={}",
+            "FEE_COLLECT: Commission collected. txnId={}, amount={} {} | paymentTypeId used={} |"
+                + " ref={}",
             result.getResourceId(),
             feeAmount,
             currency,
@@ -408,8 +409,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
     String parentFromReq = extractParentRoutingFromRequest(req);
     if (StringUtils.isNotBlank(parentFromReq)) {
       String next = incrementSinpeSequence(parentFromReq.trim());
-      log.info(
-          "FEE_COLLECT: Fee ref from request parent routing {} → {}", parentFromReq, next);
+      log.info("FEE_COLLECT: Fee ref from request parent routing {} → {}", parentFromReq, next);
       return next;
     }
 
@@ -418,8 +418,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
       String parentFromDb = findLatestParentRoutingCode(fromAccountId);
       if (StringUtils.isNotBlank(parentFromDb)) {
         String next = incrementSinpeSequence(parentFromDb.trim());
-        log.info(
-            "FEE_COLLECT: Fee ref from DB parent routing {} → {}", parentFromDb, next);
+        log.info("FEE_COLLECT: Fee ref from DB parent routing {} → {}", parentFromDb, next);
         return next;
       }
     }
@@ -493,8 +492,8 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   }
 
   /**
-   * Increments the trailing numeric sequence of a SINPE-style routing code.
-   * {@code 2026102137322010000004900} → {@code 2026102137322010000004901}
+   * Increments the trailing numeric sequence of a SINPE-style routing code. {@code
+   * 2026102137322010000004900} → {@code 2026102137322010000004901}
    */
   private static String incrementSinpeSequence(String routingCode) {
     if (routingCode == null || routingCode.isBlank()) {
@@ -521,26 +520,24 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
   }
 
   /**
-   * Generates a standalone SINPE-like reference when no parent transfer is available.
-   * Format: {@code yyyyMMdd + entityCode + channelSegment + 10-digit sequence}
-   * Example: {@code 2026102137322010000012345}
+   * Generates a standalone SINPE-like reference when no parent transfer is available. Format:
+   * {@code yyyyMMdd + entityCode + channelSegment + 10-digit sequence} Example: {@code
+   * 2026102137322010000012345}
    */
   private String generateSinpeLikeReference() {
     LocalDate today = DateUtils.getLocalDateOfTenant();
     String datePart = today.format(DateTimeFormatter.BASIC_ISO_DATE); // yyyyMMdd
     // Use low-order millis for a reasonably unique 10-digit suffix
     long suffix = System.currentTimeMillis() % 10_000_000_000L;
-    return datePart
-        + SINPE_ENTITY_CODE
-        + SINPE_CHANNEL_SEGMENT
-        + String.format("%010d", suffix);
+    return datePart + SINPE_ENTITY_CODE + SINPE_CHANNEL_SEGMENT + String.format("%010d", suffix);
   }
 
   /**
-   * Resolves the payment type id that should be attached to fee transfers so that
-   * {@code paymentDetailData.paymentType.name} becomes {@code "FEE"}.
+   * Resolves the payment type id that should be attached to fee transfers so that {@code
+   * paymentDetailData.paymentType.name} becomes {@code "FEE"}.
    *
    * <p>Priority:
+   *
    * <ol>
    *   <li>{@code fee_payment_type_id} from tenant property set {@code SELF_SERVICE_FEE_CONFIG}
    *   <li>Hard-coded fallback {@value #DEFAULT_FEE_PAYMENT_TYPE_ID}
@@ -548,8 +545,7 @@ public class SelfServiceFeeCollectionServiceImpl implements SelfServiceFeeCollec
    */
   private Long resolveFeePaymentTypeId(Map<String, String> feeCfg) {
     String configured = feeCfg != null ? feeCfg.get("fee_payment_type_id") : null;
-    log.info(
-        "FEE_COLLECT [DEBUG]: resolveFeePaymentTypeId → raw config value='{}'", configured);
+    log.info("FEE_COLLECT [DEBUG]: resolveFeePaymentTypeId → raw config value='{}'", configured);
 
     if (StringUtils.isNotBlank(configured)) {
       try {
