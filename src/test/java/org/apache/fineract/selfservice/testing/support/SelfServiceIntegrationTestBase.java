@@ -128,6 +128,29 @@ public abstract class SelfServiceIntegrationTestBase {
           containerLogs);
       throw new ExceptionInInitializerError(e);
     }
+
+    // Fail fast if the container exited during or right after startup.
+    if (!fineract.isRunning()) {
+      String containerLogs = "";
+      try {
+        containerLogs = fineract.getLogs();
+      } catch (Exception logEx) {
+        containerLogs = "Failed to retrieve container logs: " + logEx.getMessage();
+      }
+      if (containerLogs.contains("Application run failed")) {
+        LOG.error(
+            "Fineract container crashed during startup (Application run failed). Image: {}. Container logs:\n{}",
+            fineract.getDockerImageName(),
+            containerLogs);
+      } else {
+        LOG.error(
+            "Fineract container is not running after startup. Image: {}. Container logs:\n{}",
+            fineract.getDockerImageName(),
+            containerLogs);
+      }
+      throw new ExceptionInInitializerError(
+          new IllegalStateException("Fineract container is not running after startup"));
+    }
   }
 
   /**
