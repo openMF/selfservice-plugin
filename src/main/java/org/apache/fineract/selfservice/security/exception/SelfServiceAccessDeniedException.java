@@ -45,8 +45,8 @@ public class SelfServiceAccessDeniedException extends AbstractPlatformDomainRule
   }
 
   /**
-   * Constructs an access denied exception for a string resource identifier.
-   * Intentionally sets the numeric resourceId to null.
+   * Constructs an access denied exception for a string resource identifier. Intentionally sets the
+   * numeric resourceId to null.
    *
    * @param appUserId the ID of the self-service user who was denied access
    * @param resourceType the type of resource attempted to access

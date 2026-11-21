@@ -92,11 +92,7 @@ public class SelfUserApiResource {
     final String response =
         this.passwordChangeService.changePassword(appUser, apiRequestBodyAsJson);
     this.activityLogService.record(
-        ActivityType.PASSWORD_CHANGED,
-        ActivityOutcome.SUCCESS,
-        appUser.getId(),
-        null,
-        null);
+        ActivityType.PASSWORD_CHANGED, ActivityOutcome.SUCCESS, appUser.getId(), null, null);
 
     // US-E01-03: the password change forces a re-login. All sessions of the user are revoked so a
     // stolen session cannot outlive the change.

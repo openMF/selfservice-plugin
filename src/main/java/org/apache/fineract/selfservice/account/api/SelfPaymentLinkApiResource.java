@@ -42,139 +42,147 @@ import org.springframework.stereotype.Component;
 @Path("/v1/self/paymentlink")
 @Component
 @Tag(
-        name = "Self Payment Request",
-        description = "Create payment/checkout request via external payment provider")
+    name = "Self Payment Request",
+    description = "Create payment/checkout request via external payment provider")
 @RequiredArgsConstructor
 public class SelfPaymentLinkApiResource {
 
-    private final PlatformSelfServiceSecurityContext context;
-    private final PaymentLinkService paymentLinkService;
-    private final DefaultToApiJsonSerializer<PaymentLinkResponse> toApiJsonSerializer;
-    private final ApplicationEventPublisher applicationEventPublisher;
-    private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
+  private final PlatformSelfServiceSecurityContext context;
+  private final PaymentLinkService paymentLinkService;
+  private final DefaultToApiJsonSerializer<PaymentLinkResponse> toApiJsonSerializer;
+  private final ApplicationEventPublisher applicationEventPublisher;
+  private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
 
-    private final Gson gson = new Gson();
+  private final Gson gson = new Gson();
 
-    @POST
-    @Path("/prepare")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    @Operation(
-            summary = "Prepare Payment Link",
-            description = "Calculates and responds with the fee charged for the PAYMENT_LINK transfer method. OTP is not required."
-    )
-    public String prepare(final String apiRequestBodyAsJson) {
-        context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-        PaymentLinkPrepareRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkPrepareRequest.class);
-        AccountTransferQuoteResponse response = paymentLinkService.preparePaymentLink(request);
-        return toApiJsonSerializer.serialize(response);
+  @POST
+  @Path("/prepare")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Prepare Payment Link",
+      description =
+          "Calculates and responds with the fee charged for the PAYMENT_LINK transfer method. OTP"
+              + " is not required.")
+  public String prepare(final String apiRequestBodyAsJson) {
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    PaymentLinkPrepareRequest request =
+        gson.fromJson(apiRequestBodyAsJson, PaymentLinkPrepareRequest.class);
+    AccountTransferQuoteResponse response = paymentLinkService.preparePaymentLink(request);
+    return toApiJsonSerializer.serialize(response);
+  }
+
+  @POST
+  @Path("/confirm")
+  @Consumes({MediaType.APPLICATION_JSON})
+  @Produces({MediaType.APPLICATION_JSON})
+  @Operation(
+      summary = "Confirm Payment Link",
+      description =
+          "Confirms the payment link transfer. The request must include the transferMethod to"
+              + " calculate the fee. OTP is not required.")
+  public String confirm(
+      final String apiRequestBodyAsJson, @Context HttpServletRequest httpRequest) {
+
+    context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
+    AppSelfServiceUser appSelfServiceUser = context.authenticatedSelfServiceUser();
+    PaymentLinkConfirmRequest request =
+        gson.fromJson(apiRequestBodyAsJson, PaymentLinkConfirmRequest.class);
+    PaymentLinkResponse response = paymentLinkService.confirmPaymentLink(request);
+
+    // Publicar evento pasando el objeto request desglosado
+    publishPaymentLinkNotificationEvent(appSelfServiceUser, request, response, httpRequest);
+
+    return toApiJsonSerializer.serialize(response);
+  }
+
+  private void publishPaymentLinkNotificationEvent(
+      AppSelfServiceUser user,
+      PaymentLinkConfirmRequest request,
+      PaymentLinkResponse response,
+      HttpServletRequest httpRequest) {
+
+    if (user == null || response == null) {
+      return;
     }
 
-    @POST
-    @Path("/confirm")
-    @Consumes({MediaType.APPLICATION_JSON})
-    @Produces({MediaType.APPLICATION_JSON})
-    @Operation(
-            summary = "Confirm Payment Link",
-            description = "Confirms the payment link transfer. The request must include the transferMethod to calculate the fee. OTP is not required."
-    )
-    public String confirm(
-            final String apiRequestBodyAsJson,
-            @Context HttpServletRequest httpRequest) {
+    String mobileNumber = extractMobile(user);
+    boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
+    String ipAddress = extractClientIp(httpRequest);
 
-        context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
-        AppSelfServiceUser appSelfServiceUser = context.authenticatedSelfServiceUser();
-        PaymentLinkConfirmRequest request = gson.fromJson(apiRequestBodyAsJson, PaymentLinkConfirmRequest.class);
-        PaymentLinkResponse response = paymentLinkService.confirmPaymentLink(request);
-
-        // Publicar evento pasando el objeto request desglosado
-        publishPaymentLinkNotificationEvent(appSelfServiceUser, request, response, httpRequest);
-
-        return toApiJsonSerializer.serialize(response);
+    // Formatear el monto leyendo los datos desglosados del objeto 'request'
+    String montoFormateado = "";
+    if (request != null) {
+      String currency = request.getCurrency() != null ? request.getCurrency() : "";
+      String amount = request.getAmount() != null ? request.getAmount().toString() : "";
+      montoFormateado = (currency + " " + amount).trim();
     }
 
-    private void publishPaymentLinkNotificationEvent(
-            AppSelfServiceUser user,
-            PaymentLinkConfirmRequest request,
-            PaymentLinkResponse response,
-            HttpServletRequest httpRequest) {
+    // Mapeo de parámetros para la plantilla HTML de la notificación
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("firstname", user.getFirstname());
+    contextData.put("lastname", user.getLastname());
+    contextData.put("numero", response.getCheckoutId() != null ? response.getCheckoutId() : "");
+    contextData.put("monto", montoFormateado);
+    contextData.put(
+        "estado", response.getPaymentStatus() != null ? response.getPaymentStatus() : "");
+    contextData.put("paymentUrl", response.getPaymentUrl() != null ? response.getPaymentUrl() : "");
 
-        if (user == null || response == null) {
-            return;
-        }
+    SelfServiceNotificationEvent.Type eventType =
+        SelfServiceNotificationEvent.Type.PAYMENT_LINK_CREATED;
 
-        String mobileNumber = extractMobile(user);
-        boolean emailMode = notificationDeliveryModeUtil.determineMode(user.getEmail(), mobileNumber);
-        String ipAddress = extractClientIp(httpRequest);
-
-        // Formatear el monto leyendo los datos desglosados del objeto 'request'
-        String montoFormateado = "";
-        if (request != null) {
-            String currency = request.getCurrency() != null ? request.getCurrency() : "";
-            String amount = request.getAmount() != null ? request.getAmount().toString() : "";
-            montoFormateado = (currency + " " + amount).trim();
-        }
-
-        // Mapeo de parámetros para la plantilla HTML de la notificación
-        Map<String, Object> contextData = new HashMap<>();
-        contextData.put("firstname", user.getFirstname());
-        contextData.put("lastname", user.getLastname());
-        contextData.put("numero", response.getCheckoutId() != null ? response.getCheckoutId() : "");
-        contextData.put("monto", montoFormateado);
-        contextData.put("estado", response.getPaymentStatus() != null ? response.getPaymentStatus() : "");
-        contextData.put("paymentUrl", response.getPaymentUrl() != null ? response.getPaymentUrl() : "");
-
-        SelfServiceNotificationEvent.Type eventType = SelfServiceNotificationEvent.Type.PAYMENT_LINK_CREATED;
-
-        try (NotificationContext.Scope ignored = NotificationContext.bind(eventType.name())) {
-            applicationEventPublisher.publishEvent(
-                    SelfServiceNotificationEvent.withTenantContext(
-                            this,
-                            eventType,
-                            user.getId(),
-                            user.getFirstname(),
-                            user.getLastname(),
-                            user.getUsername(),
-                            user.getEmail(),
-                            mobileNumber,
-                            emailMode,
-                            ipAddress,
-                            httpRequest != null ? httpRequest.getLocale() : null,
-                            contextData));
-            log.info("Payment Link notification published for user: {}", user.getUsername());
-        } catch (Exception e) {
-            log.warn("Failed to publish PAYMENT_LINK_CREATED notification event for user: {}", user.getUsername(), e);
-        }
+    try (NotificationContext.Scope ignored = NotificationContext.bind(eventType.name())) {
+      applicationEventPublisher.publishEvent(
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              eventType,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              ipAddress,
+              httpRequest != null ? httpRequest.getLocale() : null,
+              contextData));
+      log.info("Payment Link notification published for user: {}", user.getUsername());
+    } catch (Exception e) {
+      log.warn(
+          "Failed to publish PAYMENT_LINK_CREATED notification event for user: {}",
+          user.getUsername(),
+          e);
     }
+  }
 
-    private String extractClientIp(HttpServletRequest httpRequest) {
-        if (httpRequest == null) {
-            return null;
-        }
-        String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
-        if (StringUtils.isNotBlank(xForwardedFor)) {
-            String firstToken = xForwardedFor.split(",")[0].trim();
-            if (StringUtils.isNotBlank(firstToken)) {
-                return firstToken;
-            }
-        }
-        String realIp = httpRequest.getHeader("X-Real-Ip");
-        if (StringUtils.isNotBlank(realIp)) {
-            return realIp.trim();
-        }
-        return httpRequest.getRemoteAddr();
+  private String extractClientIp(HttpServletRequest httpRequest) {
+    if (httpRequest == null) {
+      return null;
     }
+    String xForwardedFor = httpRequest.getHeader("X-Forwarded-For");
+    if (StringUtils.isNotBlank(xForwardedFor)) {
+      String firstToken = xForwardedFor.split(",")[0].trim();
+      if (StringUtils.isNotBlank(firstToken)) {
+        return firstToken;
+      }
+    }
+    String realIp = httpRequest.getHeader("X-Real-Ip");
+    if (StringUtils.isNotBlank(realIp)) {
+      return realIp.trim();
+    }
+    return httpRequest.getRemoteAddr();
+  }
 
-    private String extractMobile(AppSelfServiceUser user) {
-        if (user == null || user.getAppUserClientMappings() == null) {
-            return null;
-        }
-        return user.getAppUserClientMappings().stream()
-                .map(AppSelfServiceUserClientMapping::getClient)
-                .filter(Objects::nonNull)
-                .map(Client::getMobileNo)
-                .filter(StringUtils::isNotBlank)
-                .findFirst()
-                .orElse(null);
+  private String extractMobile(AppSelfServiceUser user) {
+    if (user == null || user.getAppUserClientMappings() == null) {
+      return null;
     }
+    return user.getAppUserClientMappings().stream()
+        .map(AppSelfServiceUserClientMapping::getClient)
+        .filter(Objects::nonNull)
+        .map(Client::getMobileNo)
+        .filter(StringUtils::isNotBlank)
+        .findFirst()
+        .orElse(null);
+  }
 }

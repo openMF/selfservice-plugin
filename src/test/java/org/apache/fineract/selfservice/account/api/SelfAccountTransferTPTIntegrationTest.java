@@ -552,7 +552,7 @@ class SelfAccountTransferTPTIntegrationTest extends SelfServiceIntegrationTestBa
                 "find { it.name == '" + SelfServiceApiConstants.SELF_SERVICE_USER_ROLE + "' }.id");
 
     executeSqlInPostgres(
-        """
+"""
 SELECT setval(
     pg_get_serial_sequence('m_appuser', 'id'),
     GREATEST(

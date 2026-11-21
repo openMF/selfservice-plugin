@@ -39,7 +39,8 @@ public class ExpiredTokenPurgeConfiguration {
   @Bean
   @ConditionalOnMissingBean(ExpiredTokenPurgeService.class)
   public ExpiredTokenPurgeService expiredTokenPurgeService(
-      SelfServiceRegistrationRepository repository, JdbcTemplate jdbcTemplate,
+      SelfServiceRegistrationRepository repository,
+      JdbcTemplate jdbcTemplate,
       TransactionDateUtil transactionDateUtil) {
     return new ExpiredTokenPurgeService(repository, jdbcTemplate, transactionDateUtil);
   }

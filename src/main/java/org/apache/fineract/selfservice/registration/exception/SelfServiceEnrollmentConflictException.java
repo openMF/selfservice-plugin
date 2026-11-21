@@ -115,7 +115,8 @@ public class SelfServiceEnrollmentConflictException extends RuntimeException {
                 + externalId
                 + "' already exists (clientId="
                 + clientId
-                + "). Use this clientId to continue entity registration with the legal representative."
+                + "). Use this clientId to continue entity registration with the legal"
+                + " representative."
             : "A client with externalId '" + externalId + "' already exists.";
     return new SelfServiceEnrollmentConflictException(
         "error.msg.client.duplicate.externalId",
@@ -128,17 +129,23 @@ public class SelfServiceEnrollmentConflictException extends RuntimeException {
         externalId);
   }
 
-  /** @return the request parameter associated with the conflict */
+  /**
+   * @return the request parameter associated with the conflict
+   */
   public String getParameterName() {
     return parameterName;
   }
 
-  /** @return the globalization code describing the conflict */
+  /**
+   * @return the globalization code describing the conflict
+   */
   public String getUserMessageGlobalisationCode() {
     return userMessageGlobalisationCode;
   }
 
-  /** @return existing self-service user id when resolved for duplicate username; otherwise null */
+  /**
+   * @return existing self-service user id when resolved for duplicate username; otherwise null
+   */
   public Long getUserId() {
     return userId;
   }
@@ -151,7 +158,9 @@ public class SelfServiceEnrollmentConflictException extends RuntimeException {
     return pendingConfirmation;
   }
 
-  /** @return onboarding progress for the existing user, or null if not loaded */
+  /**
+   * @return onboarding progress for the existing user, or null if not loaded
+   */
   public OnboardingProgressData getOnboarding() {
     return onboarding;
   }
@@ -164,7 +173,9 @@ public class SelfServiceEnrollmentConflictException extends RuntimeException {
     return clientId;
   }
 
-  /** @return the conflicting external identifier, or null if not applicable */
+  /**
+   * @return the conflicting external identifier, or null if not applicable
+   */
   public String getExternalId() {
     return externalId;
   }

@@ -5,5 +5,4 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SelfServicePucAddAccountAuditRepository
-        extends JpaRepository<SelfServicePucAddAccountAudit, Long> {
-}
+    extends JpaRepository<SelfServicePucAddAccountAudit, Long> {}

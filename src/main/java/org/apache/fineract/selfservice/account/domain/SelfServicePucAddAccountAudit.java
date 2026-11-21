@@ -28,43 +28,43 @@ import lombok.Setter;
 @Builder
 public class SelfServicePucAddAccountAudit {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    @Column(name = "client_id")
-    private Long clientId;
+  @Column(name = "client_id")
+  private Long clientId;
 
-    @Column(name = "account_number", nullable = false, length = 34)
-    private String accountNumber;
+  @Column(name = "account_number", nullable = false, length = 34)
+  private String accountNumber;
 
-    @Column(name = "account_type", nullable = false, length = 50)
-    private String accountType;
+  @Column(name = "account_type", nullable = false, length = 50)
+  private String accountType;
 
-    @Column(name = "holder_id", nullable = false, length = 50)
-    private String holderId;
+  @Column(name = "holder_id", nullable = false, length = 50)
+  private String holderId;
 
-    @Column(name = "holder_id_type", nullable = false, length = 20)
-    private String holderIdType;
+  @Column(name = "holder_id_type", nullable = false, length = 20)
+  private String holderIdType;
 
-    @Column(name = "holder", nullable = false, length = 200)
-    private String holder;
+  @Column(name = "holder", nullable = false, length = 200)
+  private String holder;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode;
+  @Column(name = "currency_code", nullable = false, length = 3)
+  private String currencyCode;
 
-    @Column(name = "ip_number", length = 45)
-    private String ipNumber;
+  @Column(name = "ip_number", length = 45)
+  private String ipNumber;
 
-    @Column(name = "operation_id", length = 64)
-    private String operationId;
+  @Column(name = "operation_id", length = 64)
+  private String operationId;
 
-    @Column(name = "successful", nullable = false)
-    private Boolean successful;
+  @Column(name = "successful", nullable = false)
+  private Boolean successful;
 
-    @Column(name = "reject_description", length = 500)
-    private String rejectDescription;
+  @Column(name = "reject_description", length = 500)
+  private String rejectDescription;
 
-    @Column(name = "created_on_utc", nullable = false)
-    private OffsetDateTime createdOnUtc;
+  @Column(name = "created_on_utc", nullable = false)
+  private OffsetDateTime createdOnUtc;
 }

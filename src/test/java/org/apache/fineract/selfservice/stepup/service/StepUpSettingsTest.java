@@ -143,22 +143,22 @@ class StepUpSettingsTest {
 
   @Test
   void totpIssuer_isCleanedForTheAuthenticatorLabel() {
+    assertEquals("Mifos", StepUpSettings.fromProperties(Map.of("totpIssuer", "  ")).totpIssuer());
     assertEquals(
-        "Mifos", StepUpSettings.fromProperties(Map.of("totpIssuer", "  ")).totpIssuer());
-    assertEquals(
-        "BadIssuer", StepUpSettings.fromProperties(Map.of("totpIssuer", "Bad:Issuer")).totpIssuer());
+        "BadIssuer",
+        StepUpSettings.fromProperties(Map.of("totpIssuer", "Bad:Issuer")).totpIssuer());
     assertEquals(
         "Bank", StepUpSettings.fromProperties(Map.of("totpIssuer", "Ba\nnk")).totpIssuer());
     assertEquals(
-        40, StepUpSettings.fromProperties(Map.of("totpIssuer", "x".repeat(80))).totpIssuer().length());
+        40,
+        StepUpSettings.fromProperties(Map.of("totpIssuer", "x".repeat(80))).totpIssuer().length());
   }
 
   @Test
   void managingTheAuthenticator_isProtectedWheneverItIsOn_evenWithACustomList() {
     final StepUpSettings custom =
         StepUpSettings.fromProperties(
-            Map.of(
-                "enabled", "true", "totpEnabled", "true", "protectedActions", "TPT_TRANSFER"));
+            Map.of("enabled", "true", "totpEnabled", "true", "protectedActions", "TPT_TRANSFER"));
     assertTrue(custom.isProtected(StepUpAction.MANAGE_AUTHENTICATOR));
     assertFalse(custom.isProtected(StepUpAction.CHANGE_PASSWORD));
   }
@@ -183,8 +183,10 @@ class StepUpSettingsTest {
     final String text =
         StepUpSettings.fromProperties(
                 Map.of(
-                    "hmacSecret", "h".repeat(40),
-                    "totpEncryptionKey", "UNIQUE-TOTP-KEY-" + "k".repeat(30)))
+                    "hmacSecret",
+                    "h".repeat(40),
+                    "totpEncryptionKey",
+                    "UNIQUE-TOTP-KEY-" + "k".repeat(30)))
             .toString();
     assertFalse(text.contains("UNIQUE-TOTP-KEY"));
     assertFalse(text.contains("hhhhhhhh"));

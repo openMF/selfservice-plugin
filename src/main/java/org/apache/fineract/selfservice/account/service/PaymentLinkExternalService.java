@@ -97,7 +97,7 @@ public class PaymentLinkExternalService {
     externalPaymentLinkRequest.setCustomerName(request.getPayerName());
     externalPaymentLinkRequest.setCustomerEmail(request.getPayerEmail());
     externalPaymentLinkRequest.setCustomerPhone(request.getPayerPhone());
-    externalPaymentLinkRequest.setAmount(request.getAmount());    
+    externalPaymentLinkRequest.setAmount(request.getAmount());
     externalPaymentLinkRequest.setDescription(request.getDescription());
     externalPaymentLinkRequest.setCurrency(savingsAccount.getCurrency().getCode());
     externalPaymentLinkRequest.setCustomerAccount(savingsAccount.getId());

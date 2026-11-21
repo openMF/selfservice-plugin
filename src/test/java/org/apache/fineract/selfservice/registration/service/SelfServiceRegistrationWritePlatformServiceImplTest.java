@@ -69,8 +69,10 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
 
   @Mock private SelfServiceRegistrationRepository selfServiceRegistrationRepository;
   @Mock private FromJsonHelper fromApiJsonHelper;
+
   @Mock
   private SelfServiceRegistrationReadPlatformService selfServiceRegistrationReadPlatformService;
+
   @Mock private ClientRepositoryWrapper clientRepository;
   @Mock private PasswordValidationPolicyRepository passwordValidationPolicyRepository;
   @Mock private SelfServiceUserDomainService userDomainService;

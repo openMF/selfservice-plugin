@@ -505,7 +505,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     try {
       JsonObject prettyJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-      log.info(">>> Self-Enrollment Payload (Pretty):\n{}", new GsonBuilder().setPrettyPrinting().create().toJson(prettyJson));
+      log.info(
+          ">>> Self-Enrollment Payload (Pretty):\n{}",
+          new GsonBuilder().setPrettyPrinting().create().toJson(prettyJson));
     } catch (Exception e) {
       log.info(">>> Self-Enrollment RAW Payload: {}", apiRequestBodyAsJson);
     }
@@ -687,8 +689,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
               ? client.getFirstname()
               : StringUtils.defaultIfBlank(client.getDisplayName(), username);
       String regMiddleName = client.getMiddlename();
-      String regLastName =
-          StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
+      String regLastName = StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
 
       SelfServiceRegistration registration =
           SelfServiceRegistration.instance(
@@ -776,7 +777,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         errors.add(
             ApiParameterError.parameterError(
                 "error.msg.password.reset.confirm.user.already.activated",
-                "Password-reset token cannot be used on confirm-enrollment because the user is already activated. Use /self/password/renew instead.",
+                "Password-reset token cannot be used on confirm-enrollment because the user is"
+                    + " already activated. Use /self/password/renew instead.",
                 SelfServiceApiConstants.externalAuthenticationTokenParamName));
         throw new PlatformApiDataValidationException(errors);
       }
@@ -1133,7 +1135,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String externalId) {
     Long clientId = resolveClientIdByExternalId(externalId);
     log.info(
-        "Self-enrollment: duplicate externalId='{}' → existing clientId={} (legal representative / prior client)",
+        "Self-enrollment: duplicate externalId='{}' → existing clientId={} (legal representative /"
+            + " prior client)",
         externalId,
         clientId);
     return SelfServiceEnrollmentConflictException.duplicateExternalId(externalId, clientId);
@@ -1294,7 +1297,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           SelfServiceApiConstants.clientNonPersonDetailsParamName,
           SelfServiceApiConstants.clientNonPersonDetailsParamName);
       log.info(
-          "Self-enrollment ENTITY payload: legalFormId=2, fullname='{}', hasClientNonPersonDetails={}",
+          "Self-enrollment ENTITY payload: legalFormId=2, fullname='{}',"
+              + " hasClientNonPersonDetails={}",
           entityFullName.trim(),
           originalJson.has(SelfServiceApiConstants.clientNonPersonDetailsParamName));
     } else {
@@ -1318,7 +1322,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           SelfServiceApiConstants.lastnameParamName,
           SelfServiceApiConstants.lastNameParamName);
       log.info(
-          "Self-enrollment PERSON payload: legalFormId={}, firstname present={}, lastname present={}",
+          "Self-enrollment PERSON payload: legalFormId={}, firstname present={}, lastname"
+              + " present={}",
           legalFormId,
           sanitizedJson.has(SelfServiceApiConstants.firstnameParamName),
           sanitizedJson.has(SelfServiceApiConstants.lastnameParamName));
@@ -1427,7 +1432,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     // --- Centralized date override (ignore any date submitted by the REST API) ---
     if (StringUtils.isNotBlank(clientSubmittedOnDate)) {
       log.info(
-          "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant date",
+          "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant"
+              + " date",
           clientSubmittedOnDate);
       TransactionDateRequest dateRequest =
           new TransactionDateRequest(clientSubmittedOnDate, clientDateFormat, locale);
@@ -1445,7 +1451,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
 
     log.info(
-        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}', legalFormId={}, isEntity={})",
+        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}',"
+            + " legalFormId={}, isEntity={})",
         tenantToday,
         clientDateFormat,
         locale,
@@ -1603,13 +1610,15 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return;
     }
 
-    Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
+    Long documentTypeId =
+        extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
 
     if (documentTypeId == null || !isValidDocumentTypeId(documentTypeId)) {
       Long resolved = resolveDefaultDocumentTypeId();
       if (resolved != null) {
         log.info(
-            "Self-enrollment: documentTypeId missing/invalid, using resolved Customer Identifier id={}",
+            "Self-enrollment: documentTypeId missing/invalid, using resolved Customer Identifier"
+                + " id={}",
             resolved);
         documentTypeId = resolved;
       } else {
@@ -1647,7 +1656,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
 
       log.info(
-          "Self-enrollment: client identifier created clientId={}, documentTypeId={}, documentKey={}, resourceId={}",
+          "Self-enrollment: client identifier created clientId={}, documentTypeId={},"
+              + " documentKey={}, resourceId={}",
           clientId,
           documentTypeId,
           documentKey,
@@ -1655,7 +1665,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return true;
     } catch (Exception e) {
       log.error(
-          "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={}, documentKey={}",
+          "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={},"
+              + " documentKey={}",
           clientId,
           documentTypeId,
           documentKey,

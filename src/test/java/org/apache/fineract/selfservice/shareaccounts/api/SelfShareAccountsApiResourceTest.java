@@ -31,7 +31,7 @@ import org.apache.fineract.portfolio.accounts.api.AccountsApiResource;
 import org.apache.fineract.portfolio.accounts.constants.ShareAccountApiConstants;
 import org.apache.fineract.portfolio.accounts.data.AccountData;
 import org.apache.fineract.portfolio.accounts.data.request.AccountRequest;
-import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
+import org.apache.fineract.portfolio.charge.service.ChargeReadService;
 import org.apache.fineract.portfolio.products.service.ShareProductReadPlatformService;
 import org.apache.fineract.portfolio.shareaccounts.service.ShareAccountReadPlatformService;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
@@ -54,7 +54,7 @@ class SelfShareAccountsApiResourceTest {
   @Mock private ApiRequestParameterHelper apiRequestParameterHelper;
   @Mock private SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   @Mock private ShareProductReadPlatformService shareProductReadPlatformService;
-  @Mock private ChargeReadPlatformService chargeReadPlatformService;
+  @Mock private ChargeReadService chargeReadPlatformService;
 
   private SelfShareAccountsApiResource resource;
 

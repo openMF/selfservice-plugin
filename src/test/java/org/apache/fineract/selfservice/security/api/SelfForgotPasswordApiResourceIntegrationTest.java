@@ -29,18 +29,18 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
 
   private void enrollUser(String username, String password, String email, String mobileNumber) {
     String payload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Reset",
-              "lastName": "Target",
-              "mobileNumber": "%s",
-              "email": "%s",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Reset",
+          "lastName": "Target",
+          "mobileNumber": "%s",
+          "email": "%s",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, mobileNumber, email);
 
     // Step 1: Create client + disabled user
@@ -71,9 +71,9 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    { "externalAuthenticationToken": "%s" }
-                    """
+                """
+                { "externalAuthenticationToken": "%s" }
+                """
                     .formatted(enrollmentToken))
             .when()
             .post("/fineract-provider/api/v1/self/registration/client-user/confirm")
@@ -152,12 +152,12 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response requestResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    {
-                      "username": "%s",
-                      "authenticationMode": "email"
-                    }
-                    """
+                """
+                {
+                  "username": "%s",
+                  "authenticationMode": "email"
+                }
+                """
                     .formatted(username))
             .when()
             .post(SelfServiceTestUtils.SELF_PASSWORD_REQUEST_PATH)
@@ -185,13 +185,13 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response renewResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    {
-                      "externalAuthenticationToken": "%s",
-                      "password": "%s",
-                      "repeatPassword": "%s"
-                    }
-                    """
+                """
+                {
+                  "externalAuthenticationToken": "%s",
+                  "password": "%s",
+                  "repeatPassword": "%s"
+                }
+                """
                     .formatted(externalToken, newPassword, newPassword))
             .when()
             .post(SelfServiceTestUtils.SELF_PASSWORD_RENEW_PATH)
@@ -210,13 +210,13 @@ class SelfForgotPasswordApiResourceIntegrationTest extends SelfServiceIntegratio
     Response reuseResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    {
-                      "externalAuthenticationToken": "%s",
-                      "password": "%s",
-                      "repeatPassword": "%s"
-                    }
-                    """
+                """
+                {
+                  "externalAuthenticationToken": "%s",
+                  "password": "%s",
+                  "repeatPassword": "%s"
+                }
+                """
                     .formatted(externalToken, newPassword, newPassword))
             .when()
             .post(SelfServiceTestUtils.SELF_PASSWORD_RENEW_PATH)

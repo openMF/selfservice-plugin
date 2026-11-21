@@ -85,10 +85,7 @@ public class SelfServiceDeviceFingerprintService {
           cause.getMessage());
       return null;
     } catch (Exception e) {
-      log.warn(
-          "Could not persist device fingerprint for userId={} (non-fatal)",
-          appUserId,
-          e);
+      log.warn("Could not persist device fingerprint for userId={} (non-fatal)", appUserId, e);
       return null;
     }
   }

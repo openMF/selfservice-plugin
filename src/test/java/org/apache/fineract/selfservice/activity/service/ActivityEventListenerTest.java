@@ -325,8 +325,7 @@ class ActivityEventListenerTest {
     listener.onTotpEvent(totp(TotpEvent.Type.LOCKED, 7L));
 
     final ArgumentCaptor<Map<String, Object>> source = ArgumentCaptor.forClass(Map.class);
-    verify(activityLogService)
-        .record(any(), any(), eq(7L), isNull(), source.capture());
+    verify(activityLogService).record(any(), any(), eq(7L), isNull(), source.capture());
     assertTrue(source.getValue().isEmpty());
   }
 

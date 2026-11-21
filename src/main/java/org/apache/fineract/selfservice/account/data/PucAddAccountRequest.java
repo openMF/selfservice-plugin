@@ -5,17 +5,17 @@ import lombok.Data;
 @Data
 public class PucAddAccountRequest {
 
-    private String accountNumber;
+  private String accountNumber;
 
-    private String accountType;
+  private String accountType;
 
-    private String holderId;
+  private String holderId;
 
-    private String holderIdType;
+  private String holderIdType;
 
-    private String holder;
+  private String holder;
 
-    private String currencyCode;
+  private String currencyCode;
 
-    private String ipNumber;
+  private String ipNumber;
 }

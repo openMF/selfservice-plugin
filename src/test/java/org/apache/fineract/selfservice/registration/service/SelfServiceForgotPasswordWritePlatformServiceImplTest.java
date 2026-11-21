@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -125,8 +124,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     stubResetRequest(createdAt, expectedExpiry);
 
     // When
-    SelfServiceRegistration result =
-        service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
+    SelfServiceRegistration result = service.createForgotPasswordRequest("{\"username\":\"jdoe\"}");
 
     // Then
     assertNotNull(result);
@@ -161,11 +159,12 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     ArgumentCaptor<SelfServiceNotificationEvent> eventCaptor =
         ArgumentCaptor.forClass(SelfServiceNotificationEvent.class);
     verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
-    assertEquals(
-        expectedMinutes, eventCaptor.getValue().getContextData().get("expirationMinutes"));
+    assertEquals(expectedMinutes, eventCaptor.getValue().getContextData().get("expirationMinutes"));
   }
 
-  /** Stubs a reset request for user "jdoe" whose token is created and expires at the given times. */
+  /**
+   * Stubs a reset request for user "jdoe" whose token is created and expires at the given times.
+   */
   private void stubResetRequest(LocalDateTime createdAt, LocalDateTime expiry) {
     when(dataValidator.validateAndExtractUsername("{\"username\":\"jdoe\"}")).thenReturn("jdoe");
     when(selfServiceAuthorizationTokenService.generateToken()).thenReturn("123456");
@@ -197,8 +196,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
   void createForgotPasswordRequest_throwsUserNotFoundWhenUserMissing() {
     when(dataValidator.validateAndExtractUsername("{\"username\":\"nonexistent\"}"))
         .thenReturn("nonexistent");
-    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("nonexistent"))
-        .thenReturn(null);
+    when(appSelfServiceUserRepository.findAppSelfServiceUserByName("nonexistent")).thenReturn(null);
 
     assertThrows(
         SelfServiceUserNotFoundException.class,
@@ -345,15 +343,13 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "invalid-token");
     when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
-        .thenReturn(null);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(null);
 
     when(selfServiceRegistrationRepository.getRequestByExternalAuthorizationToken(
             "invalid-token", SelfServiceRequestType.PASSWORD_RESET))
         .thenReturn(null);
 
-    assertThrows(
-        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
+    assertThrows(SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
 
     verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
   }
@@ -376,8 +372,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
     when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
-        .thenReturn(null);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(null);
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.isConsumed()).thenReturn(true);
@@ -385,8 +380,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
             "external-token", SelfServiceRequestType.PASSWORD_RESET))
         .thenReturn(request);
 
-    assertThrows(
-        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
+    assertThrows(SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
 
     verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
   }
@@ -397,8 +391,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
         new RenewPasswordData("Strong#Abc123", "Strong#Abc123", "external-token");
     when(dataValidator.validateForRenew("{}")).thenReturn(data);
 
-    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy())
-        .thenReturn(null);
+    when(passwordValidationPolicyRepository.findActivePasswordValidationPolicy()).thenReturn(null);
 
     SelfServiceRegistration request = mock(SelfServiceRegistration.class);
     when(request.isConsumed()).thenReturn(false);
@@ -409,8 +402,7 @@ class SelfServiceForgotPasswordWritePlatformServiceImplTest {
     when(transactionDateUtil.getCurrentTenantLocalDateTime())
         .thenReturn(LocalDateTime.of(2026, 4, 13, 12, 0, 0));
 
-    assertThrows(
-        SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
+    assertThrows(SelfServicePasswordResetTokenException.class, () -> service.renewPassword("{}"));
 
     verify(appSelfServiceUserRepository, never()).saveAndFlush(any());
   }

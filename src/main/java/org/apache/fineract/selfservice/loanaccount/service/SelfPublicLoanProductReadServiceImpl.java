@@ -61,8 +61,7 @@ public class SelfPublicLoanProductReadServiceImpl implements SelfPublicLoanProdu
       implements RowMapper<SelfPublicLoanProductData> {
 
     public String schema() {
-      return
-      """
+      return """
       lp.id as id,
       lp.name as name,
       lp.short_name as shortName,

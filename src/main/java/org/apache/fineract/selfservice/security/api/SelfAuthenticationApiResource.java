@@ -102,8 +102,7 @@ public class SelfAuthenticationApiResource {
     public String password;
   }
 
-  @Qualifier("selfServiceAuthenticationProvider")
-  private final DaoAuthenticationProvider customAuthenticationProvider;
+  @Qualifier("selfServiceAuthenticationProvider") private final DaoAuthenticationProvider customAuthenticationProvider;
 
   private final ToApiJsonSerializer<AppSelfServiceUserData> apiJsonSerializerService;
   private final PlatformSelfServiceSecurityContext springSecurityPlatformSecurityContext;
@@ -152,7 +151,9 @@ public class SelfAuthenticationApiResource {
                       implementation =
                           SelfAuthenticationApiResourceSwagger.PostSelfAuthenticationResponse
                               .class)))
-  @ApiResponse(responseCode = "400", description = "Invalid or missing request body, or blank username/password")
+  @ApiResponse(
+      responseCode = "400",
+      description = "Invalid or missing request body, or blank username/password")
   @ApiResponse(responseCode = "403", description = "Password reset required")
   public String authenticate(
       @Parameter(hidden = true) final String apiRequestBodyAsJson,
@@ -359,8 +360,7 @@ public class SelfAuthenticationApiResource {
         return progress;
       }
     } catch (Exception e) {
-      log.warn(
-          "LOGIN: Could not load onboarding progress for userId={} (non-fatal)", userId, e);
+      log.warn("LOGIN: Could not load onboarding progress for userId={} (non-fatal)", userId, e);
     }
     return emptyOnboardingProgress();
   }
@@ -394,18 +394,16 @@ public class SelfAuthenticationApiResource {
             signals.ipAddress());
 
         Map<String, Object> contextData = new HashMap<>();
-        contextData.put(
-            "ipAddress", StringUtils.defaultIfBlank(signals.ipAddress(), "Unknown"));
-        contextData.put(
-            "userAgent", StringUtils.defaultIfBlank(signals.userAgent(), "Unknown"));
+        contextData.put("ipAddress", StringUtils.defaultIfBlank(signals.ipAddress(), "Unknown"));
+        contextData.put("userAgent", StringUtils.defaultIfBlank(signals.userAgent(), "Unknown"));
         contextData.put(
             "deviceLabel", StringUtils.defaultIfBlank(signals.deviceLabel(), "Unknown"));
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
         contextData.put(
-                "loginTime",
-                transactionDateUtil.getCurrentTenantLocalDateTime() != null
-                        ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
-                        : "");
+            "loginTime",
+            transactionDateUtil.getCurrentTenantLocalDateTime() != null
+                ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
+                : "");
 
         publishNotificationEvent(
             SelfServiceNotificationEvent.Type.LOGIN_UNKNOWN_DEVICE,
@@ -468,14 +466,14 @@ public class SelfAuthenticationApiResource {
     }
     contextData.putIfAbsent("ipAddress", StringUtils.defaultIfBlank(ipAddress, "Unknown"));
     contextData.putIfAbsent("username", username);
-    contextData.putIfAbsent("firstname",user.getFirstname());
-    contextData.putIfAbsent("lastname",user.getLastname());
+    contextData.putIfAbsent("firstname", user.getFirstname());
+    contextData.putIfAbsent("lastname", user.getLastname());
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
     contextData.put(
-            "loginTime",
-            transactionDateUtil.getCurrentTenantLocalDateTime() != null
-                    ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
-                    : "");
+        "loginTime",
+        transactionDateUtil.getCurrentTenantLocalDateTime() != null
+            ? transactionDateUtil.getCurrentTenantLocalDateTime().format(dateTimeFormatter)
+            : "");
 
     try (NotificationContext.Scope ignored = NotificationContext.bind(type.name())) {
       applicationEventPublisher.publishEvent(
@@ -515,16 +513,13 @@ public class SelfAuthenticationApiResource {
 
   private SelfServiceAuthenticatedUserKycData getKycStatusForUser(
       final Long clientId, final OnboardingProgressData onboarding) {
-    final boolean onboardingComplete =
-        onboarding != null && onboarding.isOnboardingComplete();
+    final boolean onboardingComplete = onboarding != null && onboarding.isOnboardingComplete();
     final boolean kycStepsComplete = isKycGroupComplete(onboarding);
     return kycFeatureStatusReadService.getKycFeatureStatusOrOnboardingFallback(
         clientId, onboardingComplete, kycStepsComplete);
   }
 
-  /**
-   * True when every required onboarding step in group {@code KYC} is {@code COMPLETED}.
-   */
+  /** True when every required onboarding step in group {@code KYC} is {@code COMPLETED}. */
   private boolean isKycGroupComplete(final OnboardingProgressData onboarding) {
     if (onboarding == null || onboarding.getSteps() == null || onboarding.getSteps().isEmpty()) {
       return false;
@@ -534,8 +529,7 @@ public class SelfAuthenticationApiResource {
       if (step == null) {
         continue;
       }
-      final String group =
-          step.getGroupCode() != null ? step.getGroupCode() : "";
+      final String group = step.getGroupCode() != null ? step.getGroupCode() : "";
       if (!"KYC".equalsIgnoreCase(group.trim())) {
         continue;
       }

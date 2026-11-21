@@ -99,8 +99,7 @@ class SelfLoansDataValidatorTest {
   @ParameterizedTest
   @ValueSource(strings = {"", "   ", "[]", "[{\"clientId\": 1}]", "\"x\"", "123", "null", "true"})
   void validateModifyLoanApplication_shouldThrowOnBlankOrNonObjectJson(String json) {
-    assertThrows(
-        InvalidJsonException.class, () -> validator.validateModifyLoanApplication(json));
+    assertThrows(InvalidJsonException.class, () -> validator.validateModifyLoanApplication(json));
   }
 
   // --- MX-525: a loan cannot be attached to a group ---

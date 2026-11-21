@@ -12,13 +12,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface SelfServiceRemittanceRepository extends JpaRepository<SelfServiceRemittance, Long> {
+public interface SelfServiceRemittanceRepository
+    extends JpaRepository<SelfServiceRemittance, Long> {
 
   Optional<SelfServiceRemittance> findByExternalId(String externalId);
 
   Optional<SelfServiceRemittance> findByPinAndVendor(String pin, String vendor);
 
-  List<SelfServiceRemittance> findByAppSelfServiceUserIdOrderByCreatedOnDesc(Long appSelfServiceUserId);
+  List<SelfServiceRemittance> findByAppSelfServiceUserIdOrderByCreatedOnDesc(
+      Long appSelfServiceUserId);
 
   List<SelfServiceRemittance> findByClientIdOrderByCreatedOnDesc(Long clientId);
 

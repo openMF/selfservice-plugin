@@ -6,8 +6,6 @@
  */
 package org.apache.fineract.selfservice.registration.starter;
 
-import jakarta.annotation.Nullable;
-import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignDropdownReadPlatformService;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
@@ -80,7 +78,8 @@ public class SelfRegistrationConfiguration {
       PlatformPasswordEncoder platformPasswordEncoder,
       AppSelfServiceUserRepository appSelfServiceUserRepository,
       SelfServiceAuthorizationTokenService selfServiceAuthorizationTokenService,
-      ApplicationEventPublisher applicationEventPublisher,TransactionDateUtil transactionDateUtil,
+      ApplicationEventPublisher applicationEventPublisher,
+      TransactionDateUtil transactionDateUtil,
       TransactionDateManagementService transactionDateManagementService,
       ClientIdentifierWritePlatformService clientIdentifierWritePlatformService,
       SelfServiceDeviceFingerprintService deviceFingerprintService,
@@ -124,7 +123,7 @@ public class SelfRegistrationConfiguration {
       Environment env,
       TransactionDateUtil transactionDateUtil,
       NotificationDeliveryModeUtil notificationDeliveryModeUtil,
-     NotificationCooldownCache notificationCooldownCache,
+      NotificationCooldownCache notificationCooldownCache,
       StepUpSettingsProvider stepUpSettingsProvider,
       SelfServiceAuthenticationTokenService authenticationTokenService) {
 

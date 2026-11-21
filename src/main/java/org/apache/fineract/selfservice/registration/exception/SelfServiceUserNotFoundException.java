@@ -9,8 +9,8 @@ package org.apache.fineract.selfservice.registration.exception;
 import org.apache.fineract.infrastructure.core.exception.AbstractPlatformResourceNotFoundException;
 
 /**
- * Thrown when a self-service password-reset request is made for a username that does not exist
- * in the current tenant.
+ * Thrown when a self-service password-reset request is made for a username that does not exist in
+ * the current tenant.
  *
  * <p>Mapped by Fineract's exception handling to HTTP 404.
  */

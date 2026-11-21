@@ -8,8 +8,8 @@ The **Mifos Self Service Plugin** is a Spring Boot plugin that extends Apache Fi
 
 ### Architecture
 
-- **Framework**: Spring Boot 3 with Java 21
-- **Integration**: Apache Fineract 1.15.0-SNAPSHOT
+- **Framework**: Spring Boot 4.1.1 with Java 25
+- **Integration**: Apache Fineract 0.0.1706-5309ee1
 - **Security**: Spring Security with Basic Auth and OAuth2 support
 - **Database**: PostgreSQL/MySQL with JPA/EclipseLink
 - **API**: RESTful endpoints under `/v1/self`
@@ -25,21 +25,25 @@ The **Mifos Self Service Plugin** is a Spring Boot plugin that extends Apache Fi
 ## Development Environment Setup
 
 ### Prerequisites
-- Java 21
+- Java 25 (Zulu25 recommended: `/usr/lib/jvm/zulu25-ca-amd64`)
 - Maven 3.6+
 - PostgreSQL or MySQL database
 - Apache Fineract instance
 
 ### Build Commands
 ```bash
-# Build the plugin
-./mvnw clean package -Dmaven.test.skip=true
+# Build the plugin (exact JDK required)
+JAVA_HOME=/usr/lib/jvm/zulu25-ca-amd64 ./mvnw --no-transfer-progress clean package -Dmaven.test.skip=true
 
 # Run tests
-./mvnw test
+JAVA_HOME=/usr/lib/jvm/zulu25-ca-amd64 ./mvnw --no-transfer-progress test
 
-# Run integration tests
-./mvnw verify
+# Run integration tests (Failsafe)
+JAVA_HOME=/usr/lib/jvm/zulu25-ca-amd64 ./mvnw --no-transfer-progress clean verify \
+    -Dsurefire.skip=true -Dspotless.check.skip=true
+
+# Full build
+JAVA_HOME=/usr/lib/jvm/zulu25-ca-amd64 ./mvnw --no-transfer-progress clean install
 ```
 
 ### Database Setup
@@ -152,6 +156,26 @@ public class ExampleDataValidator {
 - Uses multi-tenant architecture
 - Security is critical - handle with care
 - Follow Fineract coding conventions
+
+### Critical: Fineract version and IT image must stay in sync
+
+The plugin compiles against `${fineract.version}` and runs inside a Testcontainers
+Fineract image (`${fineract.it.image}`). These must be compatible because the
+plugin's classes must exist in the image's `/app/libs`.
+
+- `fineract.version` is currently `0.0.1706-5309ee1`
+- `fineract.it.image` is currently `apache/fineract:develop`
+
+When bumping `fineract.version`, verify that every Fineract class the plugin
+imports (e.g. `ChargeReadService`, `ShareAccountApiConstants`,
+`ShareAccountNotFoundException`, `AccountTransferEnumerations`,
+`AccountTransfersWritePlatformService`) still exists in the new artifact's jars,
+then bump `fineract.it.image` to an image whose `/app/libs/` contains matching
+versions.
+
+`ChargeReadPlatformService` was renamed to `ChargeReadService` between
+`0.0.1704-246e08a` and `0.0.1706-5309ee1`. Do not reintroduce
+`ChargeReadPlatformService` references — they will not resolve at runtime.
 
 ## Debugging Tips
 
