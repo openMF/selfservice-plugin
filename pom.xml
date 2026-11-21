@@ -23,7 +23,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <fineract.version>0.0.1628-bc1c598</fineract.version>
+    <fineract.version>0.0.1704-246e08a</fineract.version>
     <mifos.version>1.16.0-SNAPSHOT</mifos.version>
     <eclipselink.version>5.0.1</eclipselink.version>
     <truth.version>1.4.5</truth.version>    
@@ -271,6 +271,30 @@
     <dependency>
       <groupId>org.apache.fineract</groupId>
       <artifactId>fineract-savings</artifactId>
+      <version>${fineract.version}</version>
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.fineract</groupId>
+          <artifactId>fineract-avro-schemas</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.fineract</groupId>
+      <artifactId>fineract-account-transfer</artifactId>
+      <version>${fineract.version}</version>
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.fineract</groupId>
+          <artifactId>fineract-avro-schemas</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.fineract</groupId>
+      <artifactId>fineract-shares</artifactId>
       <version>${fineract.version}</version>
       <scope>compile</scope>
       <exclusions>
