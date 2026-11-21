@@ -7,9 +7,9 @@
 package org.apache.fineract.infrastructure.core.domain;
 
 import jakarta.persistence.*;
+import java.time.OffsetDateTime;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "m_selfservice_tenant_date_preferences")

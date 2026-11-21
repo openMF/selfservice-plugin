@@ -27,8 +27,8 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SelfRunReportApiResourceTest {
 

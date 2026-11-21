@@ -6,6 +6,9 @@
  */
 package org.apache.fineract.selfservice.account.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
@@ -18,11 +21,6 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFee;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferFeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Optional;
-import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 
 @Service
 @RequiredArgsConstructor

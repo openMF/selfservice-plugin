@@ -6,6 +6,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.selfservice.registration.exception.SelfServiceEnrollmentConflictException;
@@ -15,10 +18,6 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 
 @Component
 @Order(-200) // Runs before Spring Security's default filter chain (which is typically -100)
