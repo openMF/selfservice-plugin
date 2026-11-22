@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -215,7 +215,9 @@ class SelfPublicLoanSimulationApiResourceTest {
     verify(dataValidator).validatePublicSimulationRequest("calculateLoanSchedule", json);
     var order = inOrder(productLimitsValidator, loanScheduleAssembler);
     order.verify(productLimitsValidator).validateWithinProductLimits(jsonElement);
-    order.verify(loanScheduleAssembler).assembleLoanScheduleFrom(any(com.google.gson.JsonElement.class));
+    order
+        .verify(loanScheduleAssembler)
+        .assembleLoanScheduleFrom(any(com.google.gson.JsonElement.class));
   }
 
   @Test

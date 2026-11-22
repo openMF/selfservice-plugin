@@ -38,7 +38,8 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
   /**
    * The only request fields the limits are checked against. Fineract's validator also reads
    * minPrincipal, maxPrincipal, the repayment and rate bounds and isLinkedToFloatingInterestRates
-   * from the request (it is shared with the loan product form), so a caller could send wider limits.
+   * from the request (it is shared with the loan product form), so a caller could send wider
+   * limits.
    */
   private static final List<String> SIMULATION_INPUTS =
       List.of("principal", "numberOfRepayments", "interestRatePerPeriod", "locale");
@@ -51,8 +52,8 @@ public class SelfPublicLoanSimulationProductLimitsValidator {
   private final LoanProductDataValidator loanProductDataValidator;
 
   /**
-   * @throws PlatformApiDataValidationException if {@code productId} is missing or a value is outside
-   *     the product's limits
+   * @throws PlatformApiDataValidationException if {@code productId} is missing or a value is
+   *     outside the product's limits
    * @throws ResourceNotFoundException if the product does not exist or is not active (only active
    *     products can be simulated, as on the products and template endpoints)
    */

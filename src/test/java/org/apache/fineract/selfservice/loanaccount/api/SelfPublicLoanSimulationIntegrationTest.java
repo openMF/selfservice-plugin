@@ -503,8 +503,7 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
         .body(
             simulationRequest(LIMITED_PRODUCT_ID, "10000", 12, "2")
                 .replace(
-                    "\"locale\": \"en\"",
-                    "\"locale\": \"en\", \"interestRateFrequencyType\": 3"))
+                    "\"locale\": \"en\"", "\"locale\": \"en\", \"interestRateFrequencyType\": 3"))
         .when()
         .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
         .then()
@@ -521,8 +520,7 @@ class SelfPublicLoanSimulationIntegrationTest extends SelfServiceIntegrationTest
         .body(
             simulationRequest(LIMITED_PRODUCT_ID, "10000", 12, "2")
                 .replace(
-                    "\"locale\": \"en\"",
-                    "\"locale\": \"en\", \"interestRateFrequencyType\": 2"))
+                    "\"locale\": \"en\"", "\"locale\": \"en\", \"interestRateFrequencyType\": 2"))
         .when()
         .post(SelfServiceTestUtils.SELF_LOAN_SIMULATION_PATH)
         .then()
