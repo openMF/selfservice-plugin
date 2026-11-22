@@ -55,8 +55,8 @@ public class RemittanceService {
     return externalService.getCountries(vendor, acceptLanguage);
   }
 
-  public String getDeliveryMethods(String vendor, String countryAbbrev, String productId,
-      String acceptLanguage) {
+  public String getDeliveryMethods(
+      String vendor, String countryAbbrev, String productId, String acceptLanguage) {
     return externalService.getDeliveryMethods(vendor, countryAbbrev, productId, acceptLanguage);
   }
 
@@ -72,13 +72,15 @@ public class RemittanceService {
     String raw = externalService.findTransaction(vendor, id);
     JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
 
-    RemittanceResponse.RemittanceResponseBuilder builder = RemittanceResponse.builder()
-        .vendor(vendor)
-        .pin(json.has("pin") ? json.get("pin").getAsString() : id)
-        .status(json.has("status") ? json.get("status").getAsString() : "UNKNOWN")
-        .senderName(json.has("senderName") ? json.get("senderName").getAsString() : null)
-        .recipientName(json.has("recipientName") ? json.get("recipientName").getAsString() : null)
-        .message("Transaction found");
+    RemittanceResponse.RemittanceResponseBuilder builder =
+        RemittanceResponse.builder()
+            .vendor(vendor)
+            .pin(json.has("pin") ? json.get("pin").getAsString() : id)
+            .status(json.has("status") ? json.get("status").getAsString() : "UNKNOWN")
+            .senderName(json.has("senderName") ? json.get("senderName").getAsString() : null)
+            .recipientName(
+                json.has("recipientName") ? json.get("recipientName").getAsString() : null)
+            .message("Transaction found");
 
     if (json.has("receivingAmount")) {
       builder.receivingAmount(json.get("receivingAmount").getAsBigDecimal());
@@ -95,41 +97,47 @@ public class RemittanceService {
 
     // Persist / update local audit if not exists. PINs are only unique per vendor, so match on
     // both, the same way updateLocalStatus does.
-    remittanceRepository.findByPinAndVendor(id, vendor).orElseGet(() -> {
-      SelfServiceRemittance entity = new SelfServiceRemittance();
-      AppSelfServiceUser user = context.authenticatedSelfServiceUser();
-      Client client = linkedClientOf(user);
-      entity.setAppSelfServiceUserId(user.getId());
-      entity.setClientId(client.getId());
-      entity.setVendor(vendor);
-      entity.setOperationType("PAYOUT");
-      entity.setPin(id);
-      entity.setStatus(builder.build().getStatus());
-      entity.setSenderName(builder.build().getSenderName());
-      entity.setRecipientName(builder.build().getRecipientName());
-      entity.setReceivingAmount(builder.build().getReceivingAmount());
-      entity.setReceivingCurrency(builder.build().getReceivingCurrency());
-      entity.setCreatedOn(LocalDateTime.now());
-      entity.setExternalResponse(raw);
-      return remittanceRepository.save(entity);
-    });
+    remittanceRepository
+        .findByPinAndVendor(id, vendor)
+        .orElseGet(
+            () -> {
+              SelfServiceRemittance entity = new SelfServiceRemittance();
+              AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+              Client client = linkedClientOf(user);
+              entity.setAppSelfServiceUserId(user.getId());
+              entity.setClientId(client.getId());
+              entity.setVendor(vendor);
+              entity.setOperationType("PAYOUT");
+              entity.setPin(id);
+              entity.setStatus(builder.build().getStatus());
+              entity.setSenderName(builder.build().getSenderName());
+              entity.setRecipientName(builder.build().getRecipientName());
+              entity.setReceivingAmount(builder.build().getReceivingAmount());
+              entity.setReceivingCurrency(builder.build().getReceivingCurrency());
+              entity.setCreatedOn(LocalDateTime.now());
+              entity.setExternalResponse(raw);
+              return remittanceRepository.save(entity);
+            });
 
     return builder.build();
   }
 
-  public String validateRecipient(String vendor, String transactionId,
-      RemittanceRecipientRequest request) {
+  public String validateRecipient(
+      String vendor, String transactionId, RemittanceRecipientRequest request) {
     return externalService.validateRecipient(vendor, transactionId, request);
   }
 
   @Transactional
-  public RemittanceResponse assignPayout(String vendor, String transactionId,
-      RemittancePayoutRequest request) {
+  public RemittanceResponse assignPayout(
+      String vendor, String transactionId, RemittancePayoutRequest request) {
     Map<String, Object> body = new HashMap<>();
     body.put("agent", request.getAgent() != null ? request.getAgent() : "SELF_SERVICE");
     Map<String, String> additional = new HashMap<>();
-    additional.put("comment", request.getAdditionalInfoComment() != null
-        ? request.getAdditionalInfoComment() : "Payout assignment from Self Service");
+    additional.put(
+        "comment",
+        request.getAdditionalInfoComment() != null
+            ? request.getAdditionalInfoComment()
+            : "Payout assignment from Self Service");
     body.put("additionalInfo", additional);
 
     String raw = externalService.assignPayout(vendor, transactionId, body);
@@ -144,12 +152,12 @@ public class RemittanceService {
   }
 
   @Transactional
-  public RemittanceResponse confirmPayout(String vendor, String transactionId,
-      RemittancePayoutRequest request) {
-      
+  public RemittanceResponse confirmPayout(
+      String vendor, String transactionId, RemittancePayoutRequest request) {
+
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
     Client client = linkedClientOf(user);
-    
+
     Long clientId = client.getId();
     if (request.getClientIdMifos() != null) {
       // the payout goes to this client, so it has to be one of the caller's own
@@ -159,8 +167,11 @@ public class RemittanceService {
 
     Map<String, Object> body = new HashMap<>();
     Map<String, String> additional = new HashMap<>();
-    additional.put("comment", request.getAdditionalInfoComment() != null
-        ? request.getAdditionalInfoComment() : "Payout confirmed from Self Service");
+    additional.put(
+        "comment",
+        request.getAdditionalInfoComment() != null
+            ? request.getAdditionalInfoComment()
+            : "Payout confirmed from Self Service");
     body.put("additionalInfo", additional);
 
     String raw =
@@ -176,8 +187,8 @@ public class RemittanceService {
   }
 
   @Transactional
-  public RemittanceResponse unassignPayout(String vendor, String transactionId,
-      RemittancePayoutRequest request) {
+  public RemittanceResponse unassignPayout(
+      String vendor, String transactionId, RemittancePayoutRequest request) {
     Map<String, Object> body = new HashMap<>();
     body.put("reason", request.getReason() != null ? request.getReason() : "UNASSIGNED_PAYOUT");
 
@@ -193,12 +204,14 @@ public class RemittanceService {
   }
 
   @Transactional
-  public RemittanceResponse rejectPayout(String vendor, String transactionId,
-      RemittancePayoutRequest request) {
+  public RemittanceResponse rejectPayout(
+      String vendor, String transactionId, RemittancePayoutRequest request) {
     Map<String, Object> body = new HashMap<>();
-    body.put("reasonCode", request.getReasonCode() != null
-        ? request.getReasonCode() : "PAYERS-API.REJECT.UNKNOWN");
-    body.put("reason", request.getReason() != null ? request.getReason() : "Rejected from Self Service");
+    body.put(
+        "reasonCode",
+        request.getReasonCode() != null ? request.getReasonCode() : "PAYERS-API.REJECT.UNKNOWN");
+    body.put(
+        "reason", request.getReason() != null ? request.getReason() : "Rejected from Self Service");
     // Instant is always UTC (ISO-8601 with a trailing Z), whatever zone the server runs in
     body.put("clientTimestampUtc", Instant.now().toString());
 
@@ -213,9 +226,7 @@ public class RemittanceService {
         .build();
   }
 
-  /**
-   * Prepare a quote / fee calculation for a SEND remittance (mirrors PaymentLink prepare).
-   */
+  /** Prepare a quote / fee calculation for a SEND remittance (mirrors PaymentLink prepare). */
   public RemittanceResponse prepareRemittance(RemittancePrepareRequest request) {
     // For now return a local quote structure; full quote may call external if MS exposes it
     AppSelfServiceUser user = context.authenticatedSelfServiceUser();
@@ -226,7 +237,8 @@ public class RemittanceService {
     entity.setClientId(client.getId());
     entity.setSavingsAccountId(request.getSavingsAccountId());
     entity.setVendor(request.getVendor() != null ? request.getVendor() : "RIA");
-    entity.setOperationType(request.getOperationType() != null ? request.getOperationType() : "SEND");
+    entity.setOperationType(
+        request.getOperationType() != null ? request.getOperationType() : "SEND");
     entity.setStatus("PREPARED");
     entity.setSendingAmount(request.getAmount());
     entity.setSendingCurrency(request.getCurrency());
@@ -235,10 +247,12 @@ public class RemittanceService {
     entity.setDeliveryMethod(request.getDeliveryMethod());
     entity.setProductId(request.getProductId());
     entity.setSenderName(
-        (request.getSenderFirstName() != null ? request.getSenderFirstName() : "") + " "
+        (request.getSenderFirstName() != null ? request.getSenderFirstName() : "")
+            + " "
             + (request.getSenderLastName() != null ? request.getSenderLastName() : ""));
     entity.setRecipientName(
-        (request.getRecipientFirstName() != null ? request.getRecipientFirstName() : "") + " "
+        (request.getRecipientFirstName() != null ? request.getRecipientFirstName() : "")
+            + " "
             + (request.getRecipientLastName() != null ? request.getRecipientLastName() : ""));
     entity.setCreatedOn(LocalDateTime.now());
     entity = remittanceRepository.save(entity);
@@ -283,7 +297,8 @@ public class RemittanceService {
     entity.setClientId(client.getId());
     entity.setSavingsAccountId(request.getSavingsAccountId());
     entity.setVendor(request.getVendor() != null ? request.getVendor() : "RIA");
-    entity.setOperationType(request.getOperationType() != null ? request.getOperationType() : "SEND");
+    entity.setOperationType(
+        request.getOperationType() != null ? request.getOperationType() : "SEND");
     entity.setStatus("POSTED");
     entity.setSendingAmount(request.getAmount());
     entity.setSendingCurrency(request.getCurrency());
@@ -292,10 +307,12 @@ public class RemittanceService {
     entity.setDeliveryMethod(request.getDeliveryMethod());
     entity.setProductId(request.getProductId());
     entity.setSenderName(
-        (request.getSenderFirstName() != null ? request.getSenderFirstName() : "") + " "
+        (request.getSenderFirstName() != null ? request.getSenderFirstName() : "")
+            + " "
             + (request.getSenderLastName() != null ? request.getSenderLastName() : ""));
     entity.setRecipientName(
-        (request.getRecipientFirstName() != null ? request.getRecipientFirstName() : "") + " "
+        (request.getRecipientFirstName() != null ? request.getRecipientFirstName() : "")
+            + " "
             + (request.getRecipientLastName() != null ? request.getRecipientLastName() : ""));
     entity.setCreatedOn(LocalDateTime.now());
     entity.setExternalResponse(raw);
@@ -377,12 +394,15 @@ public class RemittanceService {
   }
 
   private void updateLocalStatus(String pin, String vendor, String status, String rawResponse) {
-    remittanceRepository.findByPinAndVendor(pin, vendor).ifPresent(entity -> {
-      entity.setStatus(status);
-      entity.setUpdatedOn(LocalDateTime.now());
-      entity.setExternalResponse(rawResponse);
-      remittanceRepository.save(entity);
-    });
+    remittanceRepository
+        .findByPinAndVendor(pin, vendor)
+        .ifPresent(
+            entity -> {
+              entity.setStatus(status);
+              entity.setUpdatedOn(LocalDateTime.now());
+              entity.setExternalResponse(rawResponse);
+              remittanceRepository.save(entity);
+            });
   }
 
   private Map<String, Object> buildCreatePayload(RemittanceConfirmRequest request) {

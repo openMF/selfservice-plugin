@@ -33,8 +33,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * MX-515: an external beneficiary (SINPE, SINPE_MOVIL, PIN) is stored with the destination the client gave in
- * destinationIban or phoneNumber, the same value the validator checked.
+ * MX-515: an external beneficiary (SINPE, SINPE_MOVIL, PIN) is stored with the destination the
+ * client gave in destinationIban or phoneNumber, the same value the validator checked.
  */
 class SelfBeneficiariesTPTWritePlatformServiceImplTest {
 
@@ -78,7 +78,8 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
   }
 
   private SelfBeneficiariesTPT saved() {
-    ArgumentCaptor<SelfBeneficiariesTPT> captor = ArgumentCaptor.forClass(SelfBeneficiariesTPT.class);
+    ArgumentCaptor<SelfBeneficiariesTPT> captor =
+        ArgumentCaptor.forClass(SelfBeneficiariesTPT.class);
     verify(repository).saveAndFlush(captor.capture());
     return captor.getValue();
   }
@@ -94,7 +95,8 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
   void theIbanWinsOverAnAccountNumberSentWithIt() {
     service.add(
         command(
-            external("PIN", "\"accountNumber\":\"000000999\",\"destinationIban\":\"" + IBAN + "\"")));
+            external(
+                "PIN", "\"accountNumber\":\"000000999\",\"destinationIban\":\"" + IBAN + "\"")));
 
     assertEquals(IBAN, saved().getCustomAccountNumber());
   }

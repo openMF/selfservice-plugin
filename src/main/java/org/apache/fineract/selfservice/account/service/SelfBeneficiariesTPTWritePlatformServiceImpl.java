@@ -56,428 +56,442 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class SelfBeneficiariesTPTWritePlatformServiceImpl
-        implements SelfBeneficiariesTPTWritePlatformService {
+    implements SelfBeneficiariesTPTWritePlatformService {
 
-    private final PlatformSelfServiceSecurityContext context;
-    private final SelfBeneficiariesTPTRepository repository;
-    private final SelfBeneficiariesTPTDataValidator validator;
-    private final LoanRepositoryWrapper loanRepositoryWrapper;
-    private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
-    private final LoanRepository loanRepository;
-    private final SavingsAccountRepository savingsAccountRepository;
+  private final PlatformSelfServiceSecurityContext context;
+  private final SelfBeneficiariesTPTRepository repository;
+  private final SelfBeneficiariesTPTDataValidator validator;
+  private final LoanRepositoryWrapper loanRepositoryWrapper;
+  private final SavingsAccountRepositoryWrapper savingRepositoryWrapper;
+  private final LoanRepository loanRepository;
+  private final SavingsAccountRepository savingsAccountRepository;
 
-    /**
-     * Adds a new self-service beneficiary.
-     *
-     * @param command the JSON command containing beneficiary details
-     * @return the result containing the generated entity ID
-     */
-    @Transactional
-    @Override
-    public CommandProcessingResult add(JsonCommand command) {
-        // Validator ensures paymentType is "SAME_BANK", "SINPE", or "PIN" and validates lengths/formats
-        Map<String, Object> params = this.validator.validateForCreate(command.json());
+  /**
+   * Adds a new self-service beneficiary.
+   *
+   * @param command the JSON command containing beneficiary details
+   * @return the result containing the generated entity ID
+   */
+  @Transactional
+  @Override
+  public CommandProcessingResult add(JsonCommand command) {
+    // Validator ensures paymentType is "SAME_BANK", "SINPE", or "PIN" and validates lengths/formats
+    Map<String, Object> params = this.validator.validateForCreate(command.json());
 
-        String name = (String) params.get(NAME_PARAM_NAME);
-        Integer accountType = (Integer) params.get(ACCOUNT_TYPE_PARAM_NAME);
-        String accountNumber = (String) params.get(ACCOUNT_NUMBER_PARAM_NAME);
-        String officeName = (String) params.get(OFFICE_NAME_PARAM_NAME);
-        Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
-        String paymentType = (String) params.get(PAYMENT_TYPE_PARAM_NAME);
-        String currency = (String) params.get(CURRENCY_PARAM_NAME);
-        // For external beneficiaries the validator resolves the destination from destinationIban (SINPE, PIN) or
-        // phoneNumber (SINPE_MOVIL), falling back to accountNumber.
-        String externalAccountNumber = (String) params.get("customAccountNumber");
+    String name = (String) params.get(NAME_PARAM_NAME);
+    Integer accountType = (Integer) params.get(ACCOUNT_TYPE_PARAM_NAME);
+    String accountNumber = (String) params.get(ACCOUNT_NUMBER_PARAM_NAME);
+    String officeName = (String) params.get(OFFICE_NAME_PARAM_NAME);
+    Long transferLimit = (Long) params.get(TRANSFER_LIMIT_PARAM_NAME);
+    String paymentType = (String) params.get(PAYMENT_TYPE_PARAM_NAME);
+    String currency = (String) params.get(CURRENCY_PARAM_NAME);
+    // For external beneficiaries the validator resolves the destination from destinationIban
+    // (SINPE, PIN) or
+    // phoneNumber (SINPE_MOVIL), falling back to accountNumber.
+    String externalAccountNumber = (String) params.get("customAccountNumber");
 
-        log.info(
-                "Creating TPT beneficiary: name={}, paymentType={}, currency={}, accountType={}, transferLimit={}",
-                name,
-                paymentType,
-                currency,
-                accountType,
-                transferLimit);
-        log.info(
-                "Beneficiary create request details: officeName={}, accountNumberLength={}",
-                officeName,
-                accountNumber != null ? accountNumber.length() : 0);
+    log.info(
+        "Creating TPT beneficiary: name={}, paymentType={}, currency={}, accountType={},"
+            + " transferLimit={}",
+        name,
+        paymentType,
+        currency,
+        accountType,
+        transferLimit);
+    log.info(
+        "Beneficiary create request details: officeName={}, accountNumberLength={}",
+        officeName,
+        accountNumber != null ? accountNumber.length() : 0);
 
-        Long accountId = null;
-        Long clientId = null;
-        Long officeId = null;
-        boolean validAccountDetails = true;
+    Long accountId = null;
+    Long clientId = null;
+    Long officeId = null;
+    boolean validAccountDetails = true;
 
-        // Route logic based on explicit paymentType rather than magic numbers
-        if ("SAME_BANK".equals(paymentType)) {
-            log.info("Resolving SAME_BANK beneficiary against internal Fineract accounts");
-            if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
-                // 1. Try standard account number lookup
-                Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
-                // 2. Fallback to externalId lookup if not found
-                if (loan == null) {
-                    loan = this.loanRepository
-                            .findByExternalId(ExternalIdFactory.produce(accountNumber))
-                            .orElse(null);
-                }
-                if (loan != null
-                        && loan.getClientId() != null
-                        && loan.getOffice().getName().equals(officeName)) {
-                    accountId = loan.getId();
-                    officeId = loan.getOfficeId();
-                    clientId = loan.getClientId();
-                    log.info(
-                            "Resolved loan beneficiary: loanId={}, clientId={}, officeId={}",
-                            accountId,
-                            clientId,
-                            officeId);
-                } else {
-                    validAccountDetails = false;
-                    log.warn(
-                            "SAME_BANK loan lookup failed for accountNumber (len={}), officeName={}",
-                            accountNumber != null ? accountNumber.length() : 0,
-                            officeName);
-                }
-            } else {
-                // Savings (and any non-loan SAME_BANK account type)
-                // 1. Try standard account number lookup
-                SavingsAccount savings =
-                        this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
-
-                // 2. Fallback to externalId lookup if not found by accountNumber
-                if (savings == null) {
-                    log.info(
-                            "SAME_BANK savings accountNumber lookup missed; trying externalId={}",
-                            accountNumber);
-                    savings = this.savingsAccountRepository.findByExternalId(
-                            ExternalIdFactory.produce(accountNumber));
-
-                    // getStatus() returns SavingsAccountStatusType (enum), NOT Integer.
-                    // Use domain helpers to mirror non-closed semantics of findNonClosedAccountByAccountNumber.
-                    if (savings != null && !isNonClosedSavings(savings)) {
-                        log.warn(
-                                "SAME_BANK savings found by externalId but status is closed/invalid: savingsId={}, status={}",
-                                savings.getId(),
-                                savings.getStatus());
-                        savings = null;
-                    }
-                }
-
-                if (savings != null
-                        && savings.getClient() != null
-                        && savings.getClient().getOffice() != null
-                        && officeName != null
-                        && officeName.equals(savings.getClient().getOffice().getName())) {
-                    accountId = savings.getId();
-                    clientId = savings.getClient().getId();
-                    officeId = savings.getClient().getOffice().getId();
-                    log.info(
-                            "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}, status={}",
-                            accountId,
-                            clientId,
-                            officeId,
-                            savings.getStatus());
-                } else {
-                    validAccountDetails = false;
-                    if (savings != null) {
-                        String actualOffice =
-                                savings.getClient() != null && savings.getClient().getOffice() != null
-                                        ? savings.getClient().getOffice().getName()
-                                        : null;
-                        log.warn(
-                                "SAME_BANK savings resolved but office mismatch: expectedOfficeName={}, actualOfficeName={}, savingsId={}",
-                                officeName,
-                                actualOffice,
-                                savings.getId());
-                    } else {
-                        log.warn(
-                                "SAME_BANK savings lookup failed for accountNumber (len={}), officeName={}",
-                                accountNumber != null ? accountNumber.length() : 0,
-                                officeName);
-                    }
-                }
-            }
-        } else if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
-            // External beneficiaries: SelfBeneficiariesTPTDataValidator checks the IBAN (SINPE, PIN) or phone number
-            // (SINPE_MOVIL) format when one is given; here it only has to be present
-            validAccountDetails = (externalAccountNumber != null && !externalAccountNumber.trim().isEmpty());
-            log.info(
-                    "Processing external {} beneficiary, accountNumber present={}",
-                    paymentType,
-                    validAccountDetails);
-
-            // Use 0L for internal IDs to satisfy legacy NOT NULL constraints on external beneficiaries
-            officeId = 0L;
-            clientId = 0L;
-            accountId = 0L;
+    // Route logic based on explicit paymentType rather than magic numbers
+    if ("SAME_BANK".equals(paymentType)) {
+      log.info("Resolving SAME_BANK beneficiary against internal Fineract accounts");
+      if (accountType.equals(PortfolioAccountType.LOAN.getValue())) {
+        // 1. Try standard account number lookup
+        Loan loan = this.loanRepositoryWrapper.findNonClosedLoanByAccountNumber(accountNumber);
+        // 2. Fallback to externalId lookup if not found
+        if (loan == null) {
+          loan =
+              this.loanRepository
+                  .findByExternalId(ExternalIdFactory.produce(accountNumber))
+                  .orElse(null);
+        }
+        if (loan != null
+            && loan.getClientId() != null
+            && loan.getOffice().getName().equals(officeName)) {
+          accountId = loan.getId();
+          officeId = loan.getOfficeId();
+          clientId = loan.getClientId();
+          log.info(
+              "Resolved loan beneficiary: loanId={}, clientId={}, officeId={}",
+              accountId,
+              clientId,
+              officeId);
         } else {
-            validAccountDetails = false;
-            log.warn("Unsupported paymentType received: {}", paymentType);
+          validAccountDetails = false;
+          log.warn(
+              "SAME_BANK loan lookup failed for accountNumber (len={}), officeName={}",
+              accountNumber != null ? accountNumber.length() : 0,
+              officeName);
         }
+      } else {
+        // Savings (and any non-loan SAME_BANK account type)
+        // 1. Try standard account number lookup
+        SavingsAccount savings =
+            this.savingRepositoryWrapper.findNonClosedAccountByAccountNumber(accountNumber);
 
-        if (!validAccountDetails) {
-            log.warn(
-                    "Rejecting beneficiary create due to invalid account details: paymentType={}, officeName={}",
-                    paymentType,
-                    officeName);
-            throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
-        }
-
-        try {
-            AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-            Long appUserId = user.getId();
-            log.info("Authenticated self-service userId={} creating beneficiary", appUserId);
-
-            // Constructor now includes paymentType and currency
-            SelfBeneficiariesTPT beneficiary =
-                    new SelfBeneficiariesTPT(
-                            appUserId,
-                            name,
-                            officeId,
-                            clientId,
-                            accountId,
-                            accountType,
-                            transferLimit,
-                            paymentType,
-                            currency);
-
-            // Populate external-specific fields only when applicable
-            if ("SINPE".equals(paymentType) || "SINPE_MOVIL".equals(paymentType) || "PIN".equals(paymentType)) {
-                beneficiary.setCustomAccountNumber(externalAccountNumber);
-                beneficiary.setHolderName((String) params.get("holderName"));
-                beneficiary.setHolderId((String) params.get("holderId"));
-                beneficiary.setHolderIdType((Integer) params.get("holderIdType"));
-                beneficiary.setCurrencyCode((String) params.get("currencyCode"));
-                beneficiary.setEntityCode((String) params.get("entityCode"));
-                beneficiary.setEntityName((String) params.get("entityName"));
-                log.info(
-                        "Populated external fields for {}: entityCode={}, currencyCode={}",
-                        paymentType,
-                        params.get("entityCode"),
-                        params.get("currencyCode"));
-            }
-
-            beneficiary.setActive(true);
-            this.repository.saveAndFlush(beneficiary);
-
-            log.info(
-                    "Successfully created TPT beneficiary id={}, name={}, paymentType={}, userId={}",
-                    beneficiary.getId(),
-                    name,
-                    paymentType,
-                    appUserId);
-
-            return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-
-        } catch (DataAccessException dae) {
-            log.error(
-                    "Data integrity failure while creating beneficiary name={}, paymentType={}",
-                    name,
-                    paymentType,
-                    dae);
-            handleDataIntegrityIssues(command, dae);
-        }
-
-        // Fallback exception (should ideally not be reached due to prior checks)
-        log.error(
-                "Unexpected fallback path reached for beneficiary create: name={}, paymentType={}",
-                name,
-                paymentType);
-        throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
-    }
-
-    /**
-     * Updates an existing self-service beneficiary.
-     *
-     * @param beneficiaryId the ID of the beneficiary to update
-     * @param command the JSON command containing the fields to update
-     * @return the result containing the entity ID and the changes made
-     */
-    @Transactional
-    @Override
-    public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
-        log.info("Updating TPT beneficiary id={}", beneficiaryId);
-
-        Map<String, Object> params = this.validator.validateForUpdate(command.json());
-        AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-
-        // Java 21 idiomatic retrieval with immediate security validation
-        SelfBeneficiariesTPT beneficiary =
-                this.repository
-                        .findByIdForUpdate(beneficiaryId)
-                        .orElseThrow(
-                                () -> {
-                                    log.warn("Beneficiary not found for update: id={}", beneficiaryId);
-                                    return new InvalidBeneficiaryException(beneficiaryId);
-                                });
-
-        if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
-            log.warn(
-                    "User id={} attempted to update beneficiary id={} owned by userId={}",
-                    user.getId(),
-                    beneficiaryId,
-                    beneficiary.getAppSelfServiceUserId());
-            throw new InvalidBeneficiaryException(beneficiaryId);
-        }
-
-        // A deleted beneficiary is hidden from every read, so it can't be updated either
-        if (!beneficiary.isActive()) {
-            log.warn("Beneficiary id={} is soft-deleted and cannot be updated", beneficiaryId);
-            throw new InvalidBeneficiaryException(beneficiaryId);
-        }
-
-        // Only the fields in the request change. A field that was not sent keeps its value: a rename must
-        // not drop the transfer limit (no limit lets any amount through), and a new limit must not empty the name.
-        String name =
-                params.containsKey(NAME_PARAM_NAME)
-                        ? (String) params.get(NAME_PARAM_NAME)
-                        : beneficiary.getName();
-        Long transferLimit =
-                params.containsKey(TRANSFER_LIMIT_PARAM_NAME)
-                        ? (Long) params.get(TRANSFER_LIMIT_PARAM_NAME)
-                        : beneficiary.getTransferLimit();
-        log.info(
-                "Update payload for beneficiary id={}: name={}, transferLimit={}",
-                beneficiaryId,
-                name,
-                transferLimit);
-
-        Map<String, Object> changes = beneficiary.update(name, transferLimit);
-        if (!changes.isEmpty()) {
-            try {
-                this.repository.saveAndFlush(beneficiary);
-                log.info(
-                        "Successfully updated TPT beneficiary id={}, changes={}",
-                        beneficiary.getId(),
-                        changes.keySet());
-                return new CommandProcessingResultBuilder()
-                        .withEntityId(beneficiary.getId())
-                        .with(changes)
-                        .build();
-            } catch (DataAccessException dae) {
-                log.error(
-                        "Data integrity failure while updating beneficiary id={}",
-                        beneficiaryId,
-                        dae);
-                handleDataIntegrityIssues(command, dae);
-            }
-        } else {
-            log.info("No changes detected for beneficiary id={}", beneficiaryId);
-        }
-
-        return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-    }
-
-    /**
-     * Deallocates or softly deletes a self-service beneficiary.
-     *
-     * @param beneficiaryId the ID of the beneficiary to delete
-     * @param command the JSON command requesting deletion
-     * @return the result containing the deleted entity ID
-     */
-    @Transactional
-    @Override
-    public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
-        log.info("Soft-deleting TPT beneficiary id={}", beneficiaryId);
-
-        AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-
-        SelfBeneficiariesTPT beneficiary =
-                this.repository
-                        .findByIdForUpdate(beneficiaryId)
-                        .orElseThrow(
-                                () -> {
-                                    log.warn("Beneficiary not found for delete: id={}", beneficiaryId);
-                                    return new InvalidBeneficiaryException(beneficiaryId);
-                                });
-
-        if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
-            log.warn(
-                    "User id={} attempted to delete beneficiary id={} owned by userId={}",
-                    user.getId(),
-                    beneficiaryId,
-                    beneficiary.getAppSelfServiceUserId());
-            throw new InvalidBeneficiaryException(beneficiaryId);
-        }
-
-        // Early return if already soft-deleted to prevent redundant DB calls
-        if (!beneficiary.isActive()) {
-            log.info("Beneficiary id={} is already soft-deleted", beneficiaryId);
-            return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-        }
-
-        // Prevent unique constraint violation on (name, app_selfservice_user_id, is_active)
-        // by appending a unique suffix to the name upon soft deletion. 
-        // This allows users to delete and later recreate a beneficiary with the same original name.
-        String originalName = beneficiary.getName();
-        String uniqueDeletedName = originalName + "_deleted_" + beneficiary.getId() + "_" + System.currentTimeMillis();
-        
-        beneficiary.setName(uniqueDeletedName);
-        beneficiary.setActive(false);
-        
-        this.repository.save(beneficiary);
-
-        log.info(
-                "Successfully soft-deleted TPT beneficiary id={}, originalName={}, userId={}",
-                beneficiary.getId(),
-                originalName,
-                user.getId());
-
-        return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
-    }
-
-    /**
-     * Returns true when the savings account is in a non-closed status, matching the statuses used by
-     * {@code SavingsAccountRepository.findNonClosedAccountByAccountNumber}:
-     * SUBMITTED_AND_PENDING_APPROVAL (100), APPROVED (200), ACTIVE (300),
-     * TRANSFER_IN_PROGRESS (303), TRANSFER_ON_HOLD (304).
-     *
-     * <p>{@link SavingsAccount#getStatus()} returns {@link SavingsAccountStatusType} (enum), not Integer.
-     */
-    private boolean isNonClosedSavings(SavingsAccount savings) {
+        // 2. Fallback to externalId lookup if not found by accountNumber
         if (savings == null) {
-            return false;
+          log.info(
+              "SAME_BANK savings accountNumber lookup missed; trying externalId={}", accountNumber);
+          savings =
+              this.savingsAccountRepository.findByExternalId(
+                  ExternalIdFactory.produce(accountNumber));
+
+          // getStatus() returns SavingsAccountStatusType (enum), NOT Integer.
+          // Use domain helpers to mirror non-closed semantics of
+          // findNonClosedAccountByAccountNumber.
+          if (savings != null && !isNonClosedSavings(savings)) {
+            log.warn(
+                "SAME_BANK savings found by externalId but status is closed/invalid: savingsId={},"
+                    + " status={}",
+                savings.getId(),
+                savings.getStatus());
+            savings = null;
+          }
         }
-        if (savings.isClosed()) {
-            return false;
+
+        if (savings != null
+            && savings.getClient() != null
+            && savings.getClient().getOffice() != null
+            && officeName != null
+            && officeName.equals(savings.getClient().getOffice().getName())) {
+          accountId = savings.getId();
+          clientId = savings.getClient().getId();
+          officeId = savings.getClient().getOffice().getId();
+          log.info(
+              "Resolved savings beneficiary: savingsId={}, clientId={}, officeId={}, status={}",
+              accountId,
+              clientId,
+              officeId,
+              savings.getStatus());
+        } else {
+          validAccountDetails = false;
+          if (savings != null) {
+            String actualOffice =
+                savings.getClient() != null && savings.getClient().getOffice() != null
+                    ? savings.getClient().getOffice().getName()
+                    : null;
+            log.warn(
+                "SAME_BANK savings resolved but office mismatch: expectedOfficeName={},"
+                    + " actualOfficeName={}, savingsId={}",
+                officeName,
+                actualOffice,
+                savings.getId());
+          } else {
+            log.warn(
+                "SAME_BANK savings lookup failed for accountNumber (len={}), officeName={}",
+                accountNumber != null ? accountNumber.length() : 0,
+                officeName);
+          }
         }
-        SavingsAccountStatusType status = savings.getStatus();
-        if (status == null) {
-            return false;
-        }
-        return status.isSubmittedAndPendingApproval()
-                || status.isApproved()
-                || status.isActive()
-                || status.isTransferInProgress()
-                || status.isTransferOnHold();
+      }
+    } else if ("SINPE".equals(paymentType)
+        || "SINPE_MOVIL".equals(paymentType)
+        || "PIN".equals(paymentType)) {
+      // External beneficiaries: SelfBeneficiariesTPTDataValidator checks the IBAN (SINPE, PIN) or
+      // phone number
+      // (SINPE_MOVIL) format when one is given; here it only has to be present
+      validAccountDetails =
+          (externalAccountNumber != null && !externalAccountNumber.trim().isEmpty());
+      log.info(
+          "Processing external {} beneficiary, accountNumber present={}",
+          paymentType,
+          validAccountDetails);
+
+      // Use 0L for internal IDs to satisfy legacy NOT NULL constraints on external beneficiaries
+      officeId = 0L;
+      clientId = 0L;
+      accountId = 0L;
+    } else {
+      validAccountDetails = false;
+      log.warn("Unsupported paymentType received: {}", paymentType);
     }
 
-    private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
-        final Throwable realCause = dae.getMostSpecificCause();
-        String message = realCause.getMessage();
-
-        if (message != null
-                && (message.contains("name")
-                        || message.contains("uk_m_selfservice_beneficiaries_tpt_name"))) {
-            String name = "unknown";
-            try {
-                if (command != null && command.json() != null) {
-                    name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
-                }
-            } catch (Exception e) {
-                log.info("Could not extract name from JSON command during integrity handling", e);
-            }
-
-            log.warn("Duplicate beneficiary name detected: name={}", name);
-            throw new PlatformDataIntegrityException(
-                    "error.msg.beneficiary.duplicate.name",
-                    "Beneficiary with name `" + name + "` already exists for this user.",
-                    NAME_PARAM_NAME,
-                    name);
-        }
-
-        log.error("Unexpected data integrity issue with beneficiary", dae);
-        throw ErrorHandler.getMappable(
-                dae,
-                "error.msg.beneficiary.unknown.data.integrity.issue",
-                "Unknown data integrity issue with beneficiary resource.");
+    if (!validAccountDetails) {
+      log.warn(
+          "Rejecting beneficiary create due to invalid account details: paymentType={},"
+              + " officeName={}",
+          paymentType,
+          officeName);
+      throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
     }
+
+    try {
+      AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+      Long appUserId = user.getId();
+      log.info("Authenticated self-service userId={} creating beneficiary", appUserId);
+
+      // Constructor now includes paymentType and currency
+      SelfBeneficiariesTPT beneficiary =
+          new SelfBeneficiariesTPT(
+              appUserId,
+              name,
+              officeId,
+              clientId,
+              accountId,
+              accountType,
+              transferLimit,
+              paymentType,
+              currency);
+
+      // Populate external-specific fields only when applicable
+      if ("SINPE".equals(paymentType)
+          || "SINPE_MOVIL".equals(paymentType)
+          || "PIN".equals(paymentType)) {
+        beneficiary.setCustomAccountNumber(externalAccountNumber);
+        beneficiary.setHolderName((String) params.get("holderName"));
+        beneficiary.setHolderId((String) params.get("holderId"));
+        beneficiary.setHolderIdType((Integer) params.get("holderIdType"));
+        beneficiary.setCurrencyCode((String) params.get("currencyCode"));
+        beneficiary.setEntityCode((String) params.get("entityCode"));
+        beneficiary.setEntityName((String) params.get("entityName"));
+        log.info(
+            "Populated external fields for {}: entityCode={}, currencyCode={}",
+            paymentType,
+            params.get("entityCode"),
+            params.get("currencyCode"));
+      }
+
+      beneficiary.setActive(true);
+      this.repository.saveAndFlush(beneficiary);
+
+      log.info(
+          "Successfully created TPT beneficiary id={}, name={}, paymentType={}, userId={}",
+          beneficiary.getId(),
+          name,
+          paymentType,
+          appUserId);
+
+      return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+
+    } catch (DataAccessException dae) {
+      log.error(
+          "Data integrity failure while creating beneficiary name={}, paymentType={}",
+          name,
+          paymentType,
+          dae);
+      handleDataIntegrityIssues(command, dae);
+    }
+
+    // Fallback exception (should ideally not be reached due to prior checks)
+    log.error(
+        "Unexpected fallback path reached for beneficiary create: name={}, paymentType={}",
+        name,
+        paymentType);
+    throw new InvalidAccountInformationException(officeName, accountNumber, paymentType);
+  }
+
+  /**
+   * Updates an existing self-service beneficiary.
+   *
+   * @param beneficiaryId the ID of the beneficiary to update
+   * @param command the JSON command containing the fields to update
+   * @return the result containing the entity ID and the changes made
+   */
+  @Transactional
+  @Override
+  public CommandProcessingResult update(Long beneficiaryId, JsonCommand command) {
+    log.info("Updating TPT beneficiary id={}", beneficiaryId);
+
+    Map<String, Object> params = this.validator.validateForUpdate(command.json());
+    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    // Java 21 idiomatic retrieval with immediate security validation
+    SelfBeneficiariesTPT beneficiary =
+        this.repository
+            .findByIdForUpdate(beneficiaryId)
+            .orElseThrow(
+                () -> {
+                  log.warn("Beneficiary not found for update: id={}", beneficiaryId);
+                  return new InvalidBeneficiaryException(beneficiaryId);
+                });
+
+    if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+      log.warn(
+          "User id={} attempted to update beneficiary id={} owned by userId={}",
+          user.getId(),
+          beneficiaryId,
+          beneficiary.getAppSelfServiceUserId());
+      throw new InvalidBeneficiaryException(beneficiaryId);
+    }
+
+    // A deleted beneficiary is hidden from every read, so it can't be updated either
+    if (!beneficiary.isActive()) {
+      log.warn("Beneficiary id={} is soft-deleted and cannot be updated", beneficiaryId);
+      throw new InvalidBeneficiaryException(beneficiaryId);
+    }
+
+    // Only the fields in the request change. A field that was not sent keeps its value: a rename
+    // must
+    // not drop the transfer limit (no limit lets any amount through), and a new limit must not
+    // empty the name.
+    String name =
+        params.containsKey(NAME_PARAM_NAME)
+            ? (String) params.get(NAME_PARAM_NAME)
+            : beneficiary.getName();
+    Long transferLimit =
+        params.containsKey(TRANSFER_LIMIT_PARAM_NAME)
+            ? (Long) params.get(TRANSFER_LIMIT_PARAM_NAME)
+            : beneficiary.getTransferLimit();
+    log.info(
+        "Update payload for beneficiary id={}: name={}, transferLimit={}",
+        beneficiaryId,
+        name,
+        transferLimit);
+
+    Map<String, Object> changes = beneficiary.update(name, transferLimit);
+    if (!changes.isEmpty()) {
+      try {
+        this.repository.saveAndFlush(beneficiary);
+        log.info(
+            "Successfully updated TPT beneficiary id={}, changes={}",
+            beneficiary.getId(),
+            changes.keySet());
+        return new CommandProcessingResultBuilder()
+            .withEntityId(beneficiary.getId())
+            .with(changes)
+            .build();
+      } catch (DataAccessException dae) {
+        log.error("Data integrity failure while updating beneficiary id={}", beneficiaryId, dae);
+        handleDataIntegrityIssues(command, dae);
+      }
+    } else {
+      log.info("No changes detected for beneficiary id={}", beneficiaryId);
+    }
+
+    return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+  }
+
+  /**
+   * Deallocates or softly deletes a self-service beneficiary.
+   *
+   * @param beneficiaryId the ID of the beneficiary to delete
+   * @param command the JSON command requesting deletion
+   * @return the result containing the deleted entity ID
+   */
+  @Transactional
+  @Override
+  public CommandProcessingResult delete(Long beneficiaryId, JsonCommand command) {
+    log.info("Soft-deleting TPT beneficiary id={}", beneficiaryId);
+
+    AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
+
+    SelfBeneficiariesTPT beneficiary =
+        this.repository
+            .findByIdForUpdate(beneficiaryId)
+            .orElseThrow(
+                () -> {
+                  log.warn("Beneficiary not found for delete: id={}", beneficiaryId);
+                  return new InvalidBeneficiaryException(beneficiaryId);
+                });
+
+    if (!beneficiary.getAppSelfServiceUserId().equals(user.getId())) {
+      log.warn(
+          "User id={} attempted to delete beneficiary id={} owned by userId={}",
+          user.getId(),
+          beneficiaryId,
+          beneficiary.getAppSelfServiceUserId());
+      throw new InvalidBeneficiaryException(beneficiaryId);
+    }
+
+    // Early return if already soft-deleted to prevent redundant DB calls
+    if (!beneficiary.isActive()) {
+      log.info("Beneficiary id={} is already soft-deleted", beneficiaryId);
+      return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+    }
+
+    // Prevent unique constraint violation on (name, app_selfservice_user_id, is_active)
+    // by appending a unique suffix to the name upon soft deletion.
+    // This allows users to delete and later recreate a beneficiary with the same original name.
+    String originalName = beneficiary.getName();
+    String uniqueDeletedName =
+        originalName + "_deleted_" + beneficiary.getId() + "_" + System.currentTimeMillis();
+
+    beneficiary.setName(uniqueDeletedName);
+    beneficiary.setActive(false);
+
+    this.repository.save(beneficiary);
+
+    log.info(
+        "Successfully soft-deleted TPT beneficiary id={}, originalName={}, userId={}",
+        beneficiary.getId(),
+        originalName,
+        user.getId());
+
+    return new CommandProcessingResultBuilder().withEntityId(beneficiary.getId()).build();
+  }
+
+  /**
+   * Returns true when the savings account is in a non-closed status, matching the statuses used by
+   * {@code SavingsAccountRepository.findNonClosedAccountByAccountNumber}:
+   * SUBMITTED_AND_PENDING_APPROVAL (100), APPROVED (200), ACTIVE (300), TRANSFER_IN_PROGRESS (303),
+   * TRANSFER_ON_HOLD (304).
+   *
+   * <p>{@link SavingsAccount#getStatus()} returns {@link SavingsAccountStatusType} (enum), not
+   * Integer.
+   */
+  private boolean isNonClosedSavings(SavingsAccount savings) {
+    if (savings == null) {
+      return false;
+    }
+    if (savings.isClosed()) {
+      return false;
+    }
+    SavingsAccountStatusType status = savings.getStatus();
+    if (status == null) {
+      return false;
+    }
+    return status.isSubmittedAndPendingApproval()
+        || status.isApproved()
+        || status.isActive()
+        || status.isTransferInProgress()
+        || status.isTransferOnHold();
+  }
+
+  private void handleDataIntegrityIssues(final JsonCommand command, final DataAccessException dae) {
+    final Throwable realCause = dae.getMostSpecificCause();
+    String message = realCause.getMessage();
+
+    if (message != null
+        && (message.contains("name")
+            || message.contains("uk_m_selfservice_beneficiaries_tpt_name"))) {
+      String name = "unknown";
+      try {
+        if (command != null && command.json() != null) {
+          name = command.stringValueOfParameterNamed(NAME_PARAM_NAME);
+        }
+      } catch (Exception e) {
+        log.info("Could not extract name from JSON command during integrity handling", e);
+      }
+
+      log.warn("Duplicate beneficiary name detected: name={}", name);
+      throw new PlatformDataIntegrityException(
+          "error.msg.beneficiary.duplicate.name",
+          "Beneficiary with name `" + name + "` already exists for this user.",
+          NAME_PARAM_NAME,
+          name);
+    }
+
+    log.error("Unexpected data integrity issue with beneficiary", dae);
+    throw ErrorHandler.getMappable(
+        dae,
+        "error.msg.beneficiary.unknown.data.integrity.issue",
+        "Unknown data integrity issue with beneficiary resource.");
+  }
 }

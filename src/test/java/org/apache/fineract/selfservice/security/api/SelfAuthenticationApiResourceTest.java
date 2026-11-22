@@ -112,8 +112,7 @@ class SelfAuthenticationApiResourceTest {
     assertThrows(
         InvalidJsonException.class, () -> resource.authenticate("", true, httpServletRequest));
     assertThrows(
-        InvalidJsonException.class,
-        () -> resource.authenticate("null", true, httpServletRequest));
+        InvalidJsonException.class, () -> resource.authenticate("null", true, httpServletRequest));
   }
 
   @Test

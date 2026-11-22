@@ -16,12 +16,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * MX-516: an external beneficiary is only listed with account type 3 or 4, and a same-bank one points
- * to a loan (1) or savings (2) account, so other combinations must be rejected instead of being saved
- * as beneficiaries the user can never see.
+ * MX-516: an external beneficiary is only listed with account type 3 or 4, and a same-bank one
+ * points to a loan (1) or savings (2) account, so other combinations must be rejected instead of
+ * being saved as beneficiaries the user can never see.
  *
- * <p>MX-519: the destination of an external beneficiary must be a Costa Rican IBAN (SINPE, PIN) or an
- * 8-digit phone number (SINPE_MOVIL).
+ * <p>MX-519: the destination of an external beneficiary must be a Costa Rican IBAN (SINPE, PIN) or
+ * an 8-digit phone number (SINPE_MOVIL).
  */
 class SelfBeneficiariesTPTDataValidatorTest {
 
@@ -97,7 +97,8 @@ class SelfBeneficiariesTPTDataValidatorTest {
     PlatformApiDataValidationException error =
         assertThrows(
             PlatformApiDataValidationException.class,
-            () -> validator.validateForCreate(external(paymentType, destinationParam, destination)));
+            () ->
+                validator.validateForCreate(external(paymentType, destinationParam, destination)));
     assertEquals(destinationParam, error.getErrors().get(0).getParameterName());
   }
 

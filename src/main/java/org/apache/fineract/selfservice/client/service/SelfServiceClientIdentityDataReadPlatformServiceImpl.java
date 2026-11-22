@@ -97,9 +97,7 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
     if (isExternalErrorPayload(body)) {
       final String description = extractErrorDescription(body);
       log.warn(
-          "External identity system reported ERROR for externalId={}: {}",
-          externalId,
-          description);
+          "External identity system reported ERROR for externalId={}: {}", externalId, description);
       throw new SelfServiceExternalIdentityNotFoundException(externalId, description);
     }
 
@@ -122,8 +120,7 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
 
   private void validateRequest(final SelfServiceRetrieveIdentityRequest request) {
     final List<ApiParameterError> errors = new ArrayList<>();
-    final DataValidatorBuilder validator =
-        new DataValidatorBuilder(errors).resource(RESOURCE_NAME);
+    final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource(RESOURCE_NAME);
 
     final String externalId = request != null ? request.getExternalId() : null;
     validator.reset().parameter(PARAM_EXTERNAL_ID).value(externalId).notBlank();
@@ -138,8 +135,7 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
    *
    * <pre>{@code { "status": "ERROR", "descripcion": "..." }}</pre>
    *
-   * Also treats an empty object / missing person fields after an explicit error status as an
-   * error.
+   * Also treats an empty object / missing person fields after an explicit error status as an error.
    */
   private boolean isExternalErrorPayload(final JsonNode body) {
     if (body == null || body.isNull()) {
@@ -170,7 +166,8 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
       return null;
     }
     // Preferred field from the CrediD / national-ID provider
-    for (String field : new String[] {"descripcion", "description", "message", "mensaje", "error"}) {
+    for (String field :
+        new String[] {"descripcion", "description", "message", "mensaje", "error"}) {
       final JsonNode node = body.get(field);
       if (node != null && node.isTextual() && StringUtils.isNotBlank(node.asText())) {
         return node.asText().trim();
@@ -184,9 +181,9 @@ public class SelfServiceClientIdentityDataReadPlatformServiceImpl
   // -------------------------------------------------------------------------
 
   /**
-   * Resolves local self-service user linked to client.external_id and enriches the identity
-   * payload with userId / username / pendingConfirmation / onboarding / email / mobileNo.
-   * Failures are non-fatal so external identity data is still returned.
+   * Resolves local self-service user linked to client.external_id and enriches the identity payload
+   * with userId / username / pendingConfirmation / onboarding / email / mobileNo. Failures are
+   * non-fatal so external identity data is still returned.
    */
   private void enrichWithLocalData(final PersonIdentityData data, final String externalId) {
     if (data == null || StringUtils.isBlank(externalId)) {

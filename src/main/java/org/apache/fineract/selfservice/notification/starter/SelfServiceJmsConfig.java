@@ -20,9 +20,8 @@ import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.util.StringUtils;
 
 /**
- * Self-contained JMS configuration for the Self-Service Plugin.
- * Creates its own ActiveMQ ConnectionFactory so a durable consumer
- * always appears on the topic fineract.external.events.
+ * Self-contained JMS configuration for the Self-Service Plugin. Creates its own ActiveMQ
+ * ConnectionFactory so a durable consumer always appears on the topic fineract.external.events.
  */
 @Slf4j
 @Configuration
@@ -49,7 +48,7 @@ public class SelfServiceJmsConfig {
   /** Must be unique per JVM. Matches the value you set in docker-compose. */
   @Value("${fineract.external.events.jms.client-id:selfservice-plugin-external-events}")
   private String clientId;
-  
+
   @Value("${fineract.external.events.jms.concurrency:1}")
   private String concurrency;
 
@@ -64,8 +63,8 @@ public class SelfServiceJmsConfig {
   // -------------------------------------------------------------------------
 
   /**
-   * Dedicated ConnectionFactory. Using a separate clientId keeps the durable
-   * subscription independent of Fineract’s own producer connection.
+   * Dedicated ConnectionFactory. Using a separate clientId keeps the durable subscription
+   * independent of Fineract’s own producer connection.
    */
   @Bean(name = "selfServiceJmsConnectionFactory")
   public ConnectionFactory selfServiceJmsConnectionFactory() {
@@ -108,8 +107,8 @@ public class SelfServiceJmsConfig {
   }
 
   /**
-   * Topic listener container factory with durable subscription.
-   * This is the bean that the @JmsListener references via containerFactory="...".
+   * Topic listener container factory with durable subscription. This is the bean that
+   * the @JmsListener references via containerFactory="...".
    */
   @Bean(name = "topicJmsListenerContainerFactory")
   public JmsListenerContainerFactory<?> topicJmsListenerContainerFactory(
@@ -144,8 +143,9 @@ public class SelfServiceJmsConfig {
     log.info("  cacheLevel           = CACHE_SESSION");
     log.info("  recoveryInterval     = {} ms", recoveryInterval);
     log.info("  autoStartup          = true");
-    log.info("topicJmsListenerContainerFactory is ready – "
-        + "a durable consumer should now appear on topic fineract.external.events");
+    log.info(
+        "topicJmsListenerContainerFactory is ready – "
+            + "a durable consumer should now appear on topic fineract.external.events");
 
     return factory;
   }

@@ -78,8 +78,7 @@ public class SelfScorecardApiResource {
   @Operation(
       summary = "Create a Scorecard",
       description =
-          "Submits a scorecard entry for the specified survey.\n\n"
-              + "Mandatory Fields: clientId")
+          "Submits a scorecard entry for the specified survey.\n\n" + "Mandatory Fields: clientId")
   @ApiResponses({
     @ApiResponse(responseCode = "200", description = "OK"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),

@@ -29,9 +29,9 @@ import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 @Table(
     name = "m_selfservice_beneficiaries_tpt",
     uniqueConstraints = {
-        @UniqueConstraint(
-            columnNames = {"name", "app_selfservice_user_id", "is_active"},
-            name = "uk_m_selfservice_beneficiaries_tpt_name") 
+      @UniqueConstraint(
+          columnNames = {"name", "app_selfservice_user_id", "is_active"},
+          name = "uk_m_selfservice_beneficiaries_tpt_name")
     })
 public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
 
@@ -94,7 +94,7 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
 
   @Column(name = "entity_name", length = 150, nullable = true) // Nombre del banco / financiera
   private String entityName;
-  
+
   @Column(name = "payment_type", length = 20, nullable = false)
   private String paymentType;
 
@@ -112,8 +112,8 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
       Long clientId,
       Long accountId,
       Integer accountType,
-      Long transferLimit, 
-      String paymentType, 
+      Long transferLimit,
+      String paymentType,
       String currency) {
     this.appSelfServiceUserId = appSelfServiceUserId;
     this.name = name;
@@ -225,13 +225,22 @@ public class SelfBeneficiariesTPT extends AbstractPersistableCustom<Long> {
   public String getEntityName() {
     return this.entityName;
   }
-  
-  public void setPaymentType(String paymentType) { this.paymentType = paymentType; }
-  public String getPaymentType() { return this.paymentType; }
-    
-  public void setCurrency(String currency) { this.currency = currency; }
-  public String getCurrency() { return this.currency; }
 
+  public void setPaymentType(String paymentType) {
+    this.paymentType = paymentType;
+  }
+
+  public String getPaymentType() {
+    return this.paymentType;
+  }
+
+  public void setCurrency(String currency) {
+    this.currency = currency;
+  }
+
+  public String getCurrency() {
+    return this.currency;
+  }
 
   public Map<String, Object> update(String newName, Long newTransferLimit) {
     Map<String, Object> changes = new HashMap<>();

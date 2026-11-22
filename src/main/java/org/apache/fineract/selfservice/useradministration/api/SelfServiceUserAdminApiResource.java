@@ -131,8 +131,7 @@ public class SelfServiceUserAdminApiResource {
   /**
    * Removes the authenticator app and the recovery codes of a visible self-service user who lost
    * the phone and the recovery codes. The user falls back to SMS or e-mail codes and can pair a new
-   * app. The change shows in the user's activity history (without the address of the staff
-   * member).
+   * app. The change shows in the user's activity history (without the address of the staff member).
    *
    * @param userId self-service user identifier
    * @return {@code {"removed": true|false}}; requires {@code UPDATE_SELFSERVICEUSER}

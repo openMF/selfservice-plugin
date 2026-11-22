@@ -46,7 +46,7 @@ import org.apache.fineract.portfolio.accounts.constants.ShareAccountApiConstants
 import org.apache.fineract.portfolio.accounts.data.AccountData;
 import org.apache.fineract.portfolio.accounts.data.request.AccountRequest;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
-import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
+import org.apache.fineract.portfolio.charge.service.ChargeReadService;
 import org.apache.fineract.portfolio.products.data.ProductData;
 import org.apache.fineract.portfolio.products.service.ShareProductReadPlatformService;
 import org.apache.fineract.portfolio.shareaccounts.data.ShareAccountData;
@@ -70,7 +70,7 @@ public class SelfShareAccountsApiResource {
   private final SelfServiceOwnershipGuard selfServiceOwnershipGuard;
   private final SelfShareAccountsDataValidator selfShareAccountsDataValidator;
   private final ShareProductReadPlatformService shareProductReadPlatformService;
-  private final ChargeReadPlatformService chargeReadPlatformService;
+  private final ChargeReadService chargeReadPlatformService;
 
   @GET
   @Path("template")

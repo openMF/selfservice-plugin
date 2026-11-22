@@ -51,18 +51,18 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Durable JMS topic listener that consumes Fineract external business events
- * ({@code SavingsDepositBusinessEvent} / {@code SavingsWithdrawalBusinessEvent})
- * and turns them into {@link SelfServiceNotificationEvent} instances.
+ * Durable JMS topic listener that consumes Fineract external business events ({@code
+ * SavingsDepositBusinessEvent} / {@code SavingsWithdrawalBusinessEvent}) and turns them into {@link
+ * SelfServiceNotificationEvent} instances.
  *
- * <p>Fully multi-tenant: restores the correct {@link FineractPlatformTenant} from the Avro
- * envelope before any database access and always clears the {@code ThreadLocal} afterwards.
+ * <p>Fully multi-tenant: restores the correct {@link FineractPlatformTenant} from the Avro envelope
+ * before any database access and always clears the {@code ThreadLocal} afterwards.
  *
- * <p>JMS listener threads have no HTTP security context. Core read services such as
- * {@link ClientReadPlatformService#retrieveOne} call {@code officeHierarchy()}, which requires
- * an authenticated {@link AppUser}. This listener therefore installs a system/audit user
- * (default username {@code mifos}) into {@link SecurityContextHolder} for the duration of
- * message processing — the same pattern used by self-service enrollment.
+ * <p>JMS listener threads have no HTTP security context. Core read services such as {@link
+ * ClientReadPlatformService#retrieveOne} call {@code officeHierarchy()}, which requires an
+ * authenticated {@link AppUser}. This listener therefore installs a system/audit user (default
+ * username {@code mifos}) into {@link SecurityContextHolder} for the duration of message processing
+ * — the same pattern used by self-service enrollment.
  */
 @Component
 @ConditionalOnProperty(
@@ -83,21 +83,19 @@ public class SelfServiceSavingsEventNotificationListener {
   private final JdbcTemplate jdbcTemplate;
 
   /**
-   * Destination = the topic name published by Fineract core.
-   * Official property: {@code fineract.events.external.producer.jms.event-topic-name}
+   * Destination = the topic name published by Fineract core. Official property: {@code
+   * fineract.events.external.producer.jms.event-topic-name}
    */
   @Value("${fineract.events.external.producer.jms.event-topic-name:fineract.external.events}")
   private String eventTopicName;
 
-  /**
-   * Durable subscription name – matches the value already set in docker-compose.
-   */
+  /** Durable subscription name – matches the value already set in docker-compose. */
   @Value("${fineract.external.events.jms.subscription-name:selfservice-savings-notifications}")
   private String subscriptionName;
 
   /**
-   * System/audit username used when processing background JMS events (no HTTP principal).
-   * Must exist in {@code m_appuser}. Defaults to {@code mifos} (standard Fineract bootstrap user).
+   * System/audit username used when processing background JMS events (no HTTP principal). Must
+   * exist in {@code m_appuser}. Defaults to {@code mifos} (standard Fineract bootstrap user).
    */
   @Value("${fineract.selfservice.events.system-user:mifos}")
   private String systemUsername;
@@ -222,10 +220,10 @@ public class SelfServiceSavingsEventNotificationListener {
   }
 
   /**
-   * Loads the configured system/audit {@link AppUser} and places it in the current thread's
-   * {@link SecurityContextHolder}. Required so that core platform read services can call
-   * {@code authenticatedUser()} / {@code officeHierarchy()} without throwing
-   * {@code UnAuthenticatedUserException}.
+   * Loads the configured system/audit {@link AppUser} and places it in the current thread's {@link
+   * SecurityContextHolder}. Required so that core platform read services can call {@code
+   * authenticatedUser()} / {@code officeHierarchy()} without throwing {@code
+   * UnAuthenticatedUserException}.
    */
   private void establishSystemSecurityContext() {
     AppUser systemUser = resolveSystemUser(systemUsername);
@@ -370,8 +368,8 @@ public class SelfServiceSavingsEventNotificationListener {
         holderIdType = mapToPucHolderIdType(idTypeDescription);
       } catch (Exception e) {
         log.warn(
-            "Could not load client identifier for clientId={}. Using externalId/holderIdType=FISICA."
-                + " Cause: {}",
+            "Could not load client identifier for clientId={}. Using"
+                + " externalId/holderIdType=FISICA. Cause: {}",
             accountData.getClientId(),
             e.getMessage());
       }
@@ -418,8 +416,7 @@ public class SelfServiceSavingsEventNotificationListener {
     // Avro field is "accountId", NOT "savingsAccountId"
     Long savingsAccountId = txnData.getAccountId();
     BigDecimal amount = txnData.getAmount() != null ? txnData.getAmount() : BigDecimal.ZERO;
-    String currencyCode =
-        txnData.getCurrency() != null ? txnData.getCurrency().getCode() : "XXX";
+    String currencyCode = txnData.getCurrency() != null ? txnData.getCurrency().getCode() : "XXX";
     LocalDate transactionDate =
         txnData.getDate() != null
             ? LocalDate.parse(txnData.getDate().toString())
@@ -443,13 +440,18 @@ public class SelfServiceSavingsEventNotificationListener {
 
     if (clientId == null) {
       log.warn(
-          "No clientId resolved for savingsAccountId={}. Skipping notification.",
-          savingsAccountId);
+          "No clientId resolved for savingsAccountId={}. Skipping notification.", savingsAccountId);
       return;
     }
 
     triggerNotification(
-        clientId, savingsAccountId, accountNumber, amount, currencyCode, transactionDate, eventType);
+        clientId,
+        savingsAccountId,
+        accountNumber,
+        amount,
+        currencyCode,
+        transactionDate,
+        eventType);
   }
 
   private void triggerNotification(
@@ -558,12 +560,14 @@ public class SelfServiceSavingsEventNotificationListener {
    * Maps Fineract document type labels (m_code_value.code_value) to PUC holderIdType enums.
    *
    * <p>Known Fineract values:
+   *
    * <ul>
    *   <li>Persona Física Nacional → FISICA
    *   <li>Persona Jurídica Nacional → JURIDICA
    *   <li>DIMEX → DIMEX
    *   <li>Pasaporte → PASAPORTE
    * </ul>
+   *
    * Allowed by PUC: FISICA, JURIDICA, PASAPORTE, DIMEX, DIDI.
    */
   private String mapToPucHolderIdType(String codeValueOrDescription) {
@@ -633,9 +637,7 @@ public class SelfServiceSavingsEventNotificationListener {
     return "FISICA";
   }
 
-  /**
-   * Extrae de forma segura el valor en String de un objeto ExternalId o String.
-   */
+  /** Extrae de forma segura el valor en String de un objeto ExternalId o String. */
   private String extractExternalIdValue(Object externalIdObj) {
     if (externalIdObj == null) {
       return "";

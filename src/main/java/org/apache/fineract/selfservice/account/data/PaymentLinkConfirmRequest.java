@@ -11,15 +11,15 @@ import lombok.Data;
 
 @Data
 public class PaymentLinkConfirmRequest {
-    private String clientAccount;
-    private BigDecimal amount;   // Required to calculate the fee dynamically 
-    private String currency;     // Required to calculate the fee dynamically
-    private String transferType; // Required to calculate the fee dynamically
-    private String transferMode; // Required to calculate the fee dynamically
-    private String description;
-    
-    // Payer details for the external payment gateway
-    private String payerName;
-    private String payerEmail;
-    private String payerPhone;
+  private String clientAccount;
+  private BigDecimal amount; // Required to calculate the fee dynamically
+  private String currency; // Required to calculate the fee dynamically
+  private String transferType; // Required to calculate the fee dynamically
+  private String transferMode; // Required to calculate the fee dynamically
+  private String description;
+
+  // Payer details for the external payment gateway
+  private String payerName;
+  private String payerEmail;
+  private String payerPhone;
 }

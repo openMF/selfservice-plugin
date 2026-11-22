@@ -88,7 +88,7 @@ class SelfLoansApiResourceTest {
             selfServiceOwnershipGuard,
             dataValidator,
             guarantorsApiResource,
-            applicationEventPublisher, 
+            applicationEventPublisher,
             env,
             notificationDeliveryModeUtil,
             loanRepositoryWrapper);

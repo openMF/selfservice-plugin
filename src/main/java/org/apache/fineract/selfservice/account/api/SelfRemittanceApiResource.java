@@ -32,7 +32,11 @@ import org.springframework.stereotype.Component;
 
 @Path("/v1/self/remittance")
 @Component
-@Tag(name = "Self Remittance", description = "Remittance send and payout operations via external remittance providers (RIA, TRANZMIT, etc.)")
+@Tag(
+    name = "Self Remittance",
+    description =
+        "Remittance send and payout operations via external remittance providers (RIA, TRANZMIT,"
+            + " etc.)")
 @RequiredArgsConstructor
 public class SelfRemittanceApiResource {
 
@@ -44,10 +48,12 @@ public class SelfRemittanceApiResource {
   @GET
   @Path("/vendors")
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Get available remittance vendors",
+  @Operation(
+      summary = "Get available remittance vendors",
       description = "Returns list of configured vendors for SEND or PAYOUT operations.")
   public String getVendors(
-      @QueryParam("operationType") @Parameter(description = "SEND or PAYOUT") String operationType) {
+      @QueryParam("operationType") @Parameter(description = "SEND or PAYOUT")
+          String operationType) {
     context.authenticatedSelfServiceUser().validateHasReadPermission("ACCOUNTTRANSFER");
     return remittanceService.getAvailableVendors(operationType);
   }
@@ -57,8 +63,7 @@ public class SelfRemittanceApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(summary = "Get product types")
   public String getProducts(
-      @QueryParam("vendor") String vendor,
-      @QueryParam("acceptLanguage") String acceptLanguage) {
+      @QueryParam("vendor") String vendor, @QueryParam("acceptLanguage") String acceptLanguage) {
     context.authenticatedSelfServiceUser().validateHasReadPermission("ACCOUNTTRANSFER");
     return remittanceService.getProducts(vendor, acceptLanguage);
   }
@@ -68,8 +73,7 @@ public class SelfRemittanceApiResource {
   @Produces({MediaType.APPLICATION_JSON})
   @Operation(summary = "Get supported countries")
   public String getCountries(
-      @QueryParam("vendor") String vendor,
-      @QueryParam("acceptLanguage") String acceptLanguage) {
+      @QueryParam("vendor") String vendor, @QueryParam("acceptLanguage") String acceptLanguage) {
     context.authenticatedSelfServiceUser().validateHasReadPermission("ACCOUNTTRANSFER");
     return remittanceService.getCountries(vendor, acceptLanguage);
   }
@@ -91,7 +95,8 @@ public class SelfRemittanceApiResource {
   @Path("/prepare")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Prepare remittance (quote/fee)",
+  @Operation(
+      summary = "Prepare remittance (quote/fee)",
       description = "Prepares a SEND remittance, calculates fees if applicable. OTP not required.")
   public String prepare(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
@@ -105,7 +110,8 @@ public class SelfRemittanceApiResource {
   @Path("/confirm")
   @Consumes({MediaType.APPLICATION_JSON})
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Confirm / create remittance",
+  @Operation(
+      summary = "Confirm / create remittance",
       description = "Confirms and submits a SEND remittance to the external provider.")
   public String confirm(final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
@@ -118,11 +124,10 @@ public class SelfRemittanceApiResource {
   @GET
   @Path("/{vendor}/transactions/{id}")
   @Produces({MediaType.APPLICATION_JSON})
-  @Operation(summary = "Find remittance by PIN / ID",
+  @Operation(
+      summary = "Find remittance by PIN / ID",
       description = "Looks up a remittance transaction (typically for PAYOUT flow).")
-  public String find(
-      @PathParam("vendor") String vendor,
-      @PathParam("id") String id) {
+  public String find(@PathParam("vendor") String vendor, @PathParam("id") String id) {
     context.authenticatedSelfServiceUser().validateHasReadPermission("ACCOUNTTRANSFER");
     RemittanceResponse response = remittanceService.findRemittance(vendor, id);
     return toApiJsonSerializer.serialize(response);
@@ -186,7 +191,9 @@ public class SelfRemittanceApiResource {
       final String apiRequestBodyAsJson) {
     context.authenticatedSelfServiceUser().validateHasCreatePermission("ACCOUNTTRANSFER");
     RemittancePayoutRequest request =
-        gson.fromJson(apiRequestBodyAsJson != null ? apiRequestBodyAsJson : "{}", RemittancePayoutRequest.class);
+        gson.fromJson(
+            apiRequestBodyAsJson != null ? apiRequestBodyAsJson : "{}",
+            RemittancePayoutRequest.class);
     RemittanceResponse response = remittanceService.unassignPayout(vendor, id, request);
     return toApiJsonSerializer.serialize(response);
   }

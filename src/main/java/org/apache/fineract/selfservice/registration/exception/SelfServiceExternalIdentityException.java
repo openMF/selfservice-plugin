@@ -16,8 +16,7 @@ import org.apache.fineract.infrastructure.core.exception.AbstractPlatformDomainR
  */
 public class SelfServiceExternalIdentityException extends AbstractPlatformDomainRuleException {
 
-  public static final String GLOBALISATION_CODE =
-      "error.msg.self.service.external.identity.failed";
+  public static final String GLOBALISATION_CODE = "error.msg.self.service.external.identity.failed";
 
   public SelfServiceExternalIdentityException(final String externalId, final String detail) {
     super(

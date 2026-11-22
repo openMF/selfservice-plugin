@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class PucGetAccountByIbanRequest {
 
-    private String accountNumber;
+  private String accountNumber;
 
-    private String ipNumber;
+  private String ipNumber;
 }

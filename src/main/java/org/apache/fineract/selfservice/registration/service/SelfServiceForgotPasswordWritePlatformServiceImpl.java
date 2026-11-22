@@ -14,10 +14,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
-import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
-import java.util.List;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
@@ -54,8 +51,8 @@ import org.springframework.transaction.annotation.Transactional;
  * respected.
  *
  * <p>All input validation is performed by {@link SelfServiceForgotPasswordDataValidator} and
- * surfaced via {@code PlatformApiDataValidationException}. Business-rule failures use
- * {@code AbstractPlatformDomainRuleException} subclasses.
+ * surfaced via {@code PlatformApiDataValidationException}. Business-rule failures use {@code
+ * AbstractPlatformDomainRuleException} subclasses.
  */
 @Slf4j
 @Service

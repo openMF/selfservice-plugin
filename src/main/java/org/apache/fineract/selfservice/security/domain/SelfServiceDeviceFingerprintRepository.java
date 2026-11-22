@@ -17,7 +17,7 @@ public interface SelfServiceDeviceFingerprintRepository
       Long appUserId, String fingerprintHash);
 
   List<SelfServiceDeviceFingerprint> findByAppUserIdOrderByLastSeenAtDesc(Long appUserId);
-  
+
   long countByAppUserId(Long appUserId);
 
   boolean existsByAppUserIdAndFingerprintHash(Long appUserId, String fingerprintHash);

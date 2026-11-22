@@ -168,7 +168,8 @@ public class SelfBeneficiariesTPTDataValidator {
             ACCOUNT_TYPE_PARAM_NAME,
             element,
             this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject()));
-    // Same-bank beneficiaries point to a loan or savings account; external ones (SINPE, SINPE_MOVIL,
+    // Same-bank beneficiaries point to a loan or savings account; external ones (SINPE,
+    // SINPE_MOVIL,
     // PIN) are only listed and offered for transfers with account type 3 or 4, so any other value
     // would save a beneficiary the user can never see or use.
     final Object[] allowedAccountTypes =
