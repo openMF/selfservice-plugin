@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -25,6 +26,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.ResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -36,6 +39,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.data.LoanScheduleD
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleAssembler;
 import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanProductData;
 import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanSimulationDataValidator;
+import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanSimulationProductLimitsValidator;
 import org.apache.fineract.selfservice.loanaccount.service.SelfPublicLoanProductReadService;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +58,7 @@ class SelfPublicLoanSimulationApiResourceTest {
   @Mock private LoanScheduleAssembler loanScheduleAssembler;
   @Mock private DefaultToApiJsonSerializer<LoanScheduleData> loanScheduleSerializer;
   @Mock private FromJsonHelper fromJsonHelper;
+  @Mock private SelfPublicLoanSimulationProductLimitsValidator productLimitsValidator;
   @Mock private UriInfo uriInfo;
 
   private SelfPublicLoanSimulationApiResource resource;
@@ -67,7 +72,8 @@ class SelfPublicLoanSimulationApiResourceTest {
             dataValidator,
             loanScheduleAssembler,
             loanScheduleSerializer,
-            fromJsonHelper);
+            fromJsonHelper,
+            productLimitsValidator);
 
     Mockito.lenient().when(uriInfo.getQueryParameters()).thenReturn(new MultivaluedHashMap<>());
     Mockito.lenient()
@@ -207,7 +213,32 @@ class SelfPublicLoanSimulationApiResourceTest {
         () -> resource.calculateLoanSchedule("calculateLoanSchedule", uriInfo, json));
 
     verify(dataValidator).validatePublicSimulationRequest("calculateLoanSchedule", json);
-    verify(loanScheduleAssembler).assembleLoanScheduleFrom(any(com.google.gson.JsonElement.class));
+    var order = inOrder(productLimitsValidator, loanScheduleAssembler);
+    order.verify(productLimitsValidator).validateWithinProductLimits(jsonElement);
+    order
+        .verify(loanScheduleAssembler)
+        .assembleLoanScheduleFrom(any(com.google.gson.JsonElement.class));
+  }
+
+  @Test
+  void calculateSchedule_outsideProductLimits_doesNotCalculate() {
+    String json = "{\"productId\": 1, \"numberOfRepayments\": 60}";
+    var jsonElement = mock(com.google.gson.JsonElement.class);
+    when(fromJsonHelper.parse(json)).thenReturn(jsonElement);
+    doThrow(
+            new PlatformApiDataValidationException(
+                List.of(
+                    ApiParameterError.parameterError(
+                        "validation.msg.loan.numberOfRepayments.is.not.within.expected.range",
+                        "The parameter `numberOfRepayments` must be between 8 and 12.",
+                        "numberOfRepayments"))))
+        .when(productLimitsValidator)
+        .validateWithinProductLimits(jsonElement);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> resource.calculateLoanSchedule("calculateLoanSchedule", uriInfo, json));
+    verifyNoInteractions(loanScheduleAssembler);
   }
 
   @Test
