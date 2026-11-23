@@ -73,6 +73,8 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransfe
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApproval;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApprovalRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
+import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
+import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
@@ -1931,6 +1933,135 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void retrievePendingApprovals_forANonSignatory_isEmpty() {
     assertEquals("[]", service.retrievePendingApprovals());
     verifyNoInteractions(transferApprovalRepository);
+  }
+
+  // --- Transfer limits on the confirmed and approved paths ---
+
+  private static final Long DESTINATION_ID = 88L;
+
+  /** A SAME_BANK transfer of 10 from the user's savings to account 88 of the given client. */
+  private AccountTransferConfirmRequest sameBankTransferTo(Client destinationOwner) {
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    numericSourceAccount(
+        DESTINATION_ID, savingsAccount(DESTINATION_ID, destinationOwner, BigDecimal.ZERO));
+    AccountTransferConfirmRequest request = confirmRequest("SAME_BANK");
+    request.setToAccount(String.valueOf(DESTINATION_ID));
+    return request;
+  }
+
+  private void beneficiaryLimit(Long limit) {
+    when(tptBeneficiaryReadPlatformService.getTransferLimit(USER_ID, DESTINATION_ID, 2))
+        .thenReturn(limit);
+  }
+
+  private void dailyTptLimit(long limit, String transferredToday) {
+    when(configurationDomainService.isDailyTPTLimitEnabled()).thenReturn(true);
+    when(configurationDomainService.getDailyTPTLimit()).thenReturn(limit);
+    when(accountTransfersReadPlatformService.getTotalTransactionAmount(
+            SAVINGS_ID, 2, TEST_NOW.toLocalDate()))
+        .thenReturn(new BigDecimal(transferredToday));
+  }
+
+  @Test
+  void confirmTransfer_overTheBeneficiaryLimit_isRefusedBeforeTheOtpIsUsed() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(5L);
+
+    assertThrows(
+        BeneficiaryTransferLimitExceededException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verifyNoInteractions(registrationRepository, accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void confirmTransfer_overTheDailyTptLimit_isRefusedBeforeTheOtpIsUsed() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(null);
+    dailyTptLimit(100L, "95");
+
+    assertThrows(
+        DailyTPTTransactionAmountLimitExceededException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verifyNoInteractions(registrationRepository, accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void confirmTransfer_withinTheLimits_goesOnToTheOtp() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(10L);
+    dailyTptLimit(100L, "90");
+
+    // No OTP was issued, so the confirmation stops there
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verify(registrationRepository)
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+  }
+
+  @Test
+  void confirmTransfer_toTheUsersOwnAccount_hasNoThirdPartyLimits() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(ownClient);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verify(registrationRepository)
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+    verifyNoInteractions(tptBeneficiaryReadPlatformService, accountTransfersReadPlatformService);
+  }
+
+  @Test
+  void confirmTransfer_pinChannel_keepsItsOwnRules() {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyNoInteractions(tptBeneficiaryReadPlatformService, accountTransfersReadPlatformService);
+  }
+
+  @Test
+  void approveTransfer_overTheBeneficiaryLimit_isRefusedBeforeTheApprovalOrOtpIsUsed() {
+    approverOtpProtected(true);
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    initiator(true);
+    AccountTransferConfirmRequest held = sameBankTransferTo(foreignClient);
+    held.setOtp(null);
+    approvalExists(
+        SelfServiceTransferApproval.builder()
+            .id(APPROVAL_ID)
+            .clientId(OWN_CLIENT_ID)
+            .requestedBy(INITIATOR_ID)
+            .status(SelfServiceTransferApproval.Status.PENDING)
+            .transferAmount(BigDecimal.TEN)
+            .currencyCode("CRC")
+            .requestJson(new com.google.gson.Gson().toJson(held))
+            .createdAt(TEST_NOW)
+            .build());
+    when(tptBeneficiaryReadPlatformService.getTransferLimit(INITIATOR_ID, DESTINATION_ID, 2))
+        .thenReturn(5L);
+
+    assertThrows(
+        BeneficiaryTransferLimitExceededException.class,
+        () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    verify(stepUpGuard, never()).requireIfProtected(any(), any(), any());
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+    verifyNoInteractions(accountTransfersWritePlatformService);
   }
 
   private static String errorCodes(PlatformApiDataValidationException ex) {

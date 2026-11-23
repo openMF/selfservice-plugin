@@ -17,6 +17,7 @@ package org.apache.fineract.selfservice.account.service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.List;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransferEnumerations;
@@ -285,8 +286,11 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
     sqlBuilder.append(" and b.account_type = ? ");
     sqlBuilder.append(" and b.is_active = true ");
 
-    return this.jdbcTemplate.queryForObject(
-        sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
+    // A confirmed transfer may go to an account that isn't a beneficiary: then there is no limit
+    final List<Long> limits =
+        this.jdbcTemplate.queryForList(
+            sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
+    return limits.isEmpty() ? null : limits.getFirst();
   }
 
   @Override
