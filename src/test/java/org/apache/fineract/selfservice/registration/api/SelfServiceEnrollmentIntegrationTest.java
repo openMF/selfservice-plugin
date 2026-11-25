@@ -179,21 +179,7 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
    * @return the new client's account number
    */
   private String enrollClientWithUser(String id) {
-    String payload =
-        """
-        {
-          "username": "owner_%s",
-          "password": "Strong#Abc123",
-          "firstName": "Test",
-          "lastName": "User",
-          "mobileNumber": "555%s",
-          "email": "owner%s@fineract.test",
-          "authenticationMode": "email",
-          "active": true
-        }
-        """
-            .formatted(id, id, id);
-    Response response = executeSelfEnrollment(payload, null);
+    Response response = executeSelfEnrollment(enrollmentPayload(id), null);
     assertEquals(
         200,
         response.getStatusCode(),
@@ -202,6 +188,23 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
         querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
     assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
     return accountNumber;
+  }
+
+  /** Builds a self-enrollment request for the client "Test User" with this unique suffix. */
+  private static String enrollmentPayload(String id) {
+    return """
+    {
+      "username": "owner_%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "mobileNumber": "555%s",
+      "email": "owner%s@fineract.test",
+      "authenticationMode": "email",
+      "active": true
+    }
+    """
+        .formatted(id, id, id);
   }
 
   /** Builds a registration request (email mode) for the client "Test User" with this account. */
