@@ -465,6 +465,37 @@ class SelfLoansApiResourceTest {
 
     assertEquals(updated, resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request));
     verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+    verify(selfServiceOwnershipGuard, never()).validateSavingsOwnership(any());
+  }
+
+  @Test
+  void updateGuarantor_withVictimSavingsId_throwsSavingsAccountNotFoundException() {
+    mockLoanPendingApproval(true);
+    final Long victimSavingsId = 999L;
+    GuarantorsRequest request = guarantor(victimSavingsId);
+    org.mockito.Mockito.doThrow(new SavingsAccountNotFoundException(victimSavingsId))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(victimSavingsId);
+
+    assertThrows(
+        SavingsAccountNotFoundException.class,
+        () -> resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(victimSavingsId);
+    verify(guarantorsApiResource, never()).updateGuarantor(any(), any(), any());
+  }
+
+  @Test
+  void updateGuarantor_withOwnSavingsId_succeeds() {
+    mockLoanPendingApproval(true);
+    GuarantorsRequest request = guarantor(SAVINGS_ID);
+    CommandProcessingResult updated = CommandProcessingResult.resourceResult(GUARANTOR_ID);
+    when(guarantorsApiResource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request)).thenReturn(updated);
+
+    assertEquals(updated, resource.updateGuarantor(LOAN_ID, GUARANTOR_ID, request));
+    verify(selfServiceOwnershipGuard).validateLoanOwnership(LOAN_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(SAVINGS_ID);
+    verify(guarantorsApiResource).updateGuarantor(LOAN_ID, GUARANTOR_ID, request);
   }
 
   @Test

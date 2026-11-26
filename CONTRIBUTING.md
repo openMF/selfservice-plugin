@@ -10,10 +10,10 @@ Thank you for your interest in contributing! This guide will get you set up and 
 
 | Requirement | Version |
 |---|---|
-| Java (JDK) | **21** |
+| Java (JDK) | **25** |
 | Maven | 3.6+ (or use the included `./mvnw` wrapper) |
 | Docker | Required for integration tests ([Testcontainers](https://www.testcontainers.org/)) |
-| Apache Fineract | **1.15.0-SNAPSHOT** (`develop` branch) |
+| Apache Fineract | **1.16.0-SNAPSHOT** (`develop` branch) |
 
 ### Build
 
@@ -34,13 +34,13 @@ If you're building a project that depends on this plugin:
 <dependency>
     <groupId>community.mifos</groupId>
     <artifactId>selfservice-plugin</artifactId>
-    <version>1.15.0-SNAPSHOT</version>
+    <version>1.16.0-SNAPSHOT</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'community.mifos:selfservice-plugin:1.15.0-SNAPSHOT'
+implementation 'community.mifos:selfservice-plugin:1.16.0-SNAPSHOT'
 ```
 
 ---

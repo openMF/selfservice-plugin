@@ -278,12 +278,16 @@ public class SelfBeneficiariesTPTReadPlatformServiceImpl
 
   @Override
   public Long getTransferLimit(Long appUserId, Long accountId, Integer accountType) {
-    final StringBuilder sqlBuilder = new StringBuilder("select b.transfer_limit ");
+    // Several active beneficiaries (with different names) can point to the same account: the
+    // strictest of their limits applies. A limit of 0 means no limit. No matching beneficiary, as
+    // on a confirmed transfer to an account that isn't one, gives null: no limit.
+    final StringBuilder sqlBuilder = new StringBuilder("select min(b.transfer_limit) ");
     sqlBuilder.append(" from m_selfservice_beneficiaries_tpt as b ");
     sqlBuilder.append(" where b.app_selfservice_user_id = ? ");
     sqlBuilder.append(" and b.account_id = ? ");
     sqlBuilder.append(" and b.account_type = ? ");
     sqlBuilder.append(" and b.is_active = true ");
+    sqlBuilder.append(" and b.transfer_limit > 0 ");
 
     return this.jdbcTemplate.queryForObject(
         sqlBuilder.toString(), Long.class, appUserId, accountId, accountType);
