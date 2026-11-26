@@ -26,8 +26,9 @@
     <fineract.version>0.0.1706-5309ee1</fineract.version>
     <!-- IT container image. Must be compatible with fineract.version above:
          the plugin's classes (e.g. ChargeReadService) must exist in the image's /app/libs.
+         This digest was published for Fineract commit f8f1da6042.
          Bump both together when upgrading Fineract. -->
-    <fineract.it.image>apache/fineract:develop</fineract.it.image>
+    <fineract.it.image>apache/fineract@sha256:149e2a77cf08b1638f3a1fdee3f85254a40ea4be06f444de2209256ce734f77d</fineract.it.image>
     <mifos.version>1.16.0-SNAPSHOT</mifos.version>
     <eclipselink.version>5.0.1</eclipselink.version>
     <truth.version>1.4.5</truth.version>    

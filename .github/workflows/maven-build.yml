@@ -74,9 +74,12 @@ jobs:
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         run: echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
-      # Pre-pull the Fineract image — fail early if the image is unavailable
+      # Pre-pull the same Fineract image that Failsafe passes to Testcontainers.
       - name: Pre-pull Fineract Image
-        run: docker pull apache/fineract:develop
+        run: |
+          image=$(python3 -c 'import xml.etree.ElementTree as ET; print(ET.parse("pom.xml").findtext("{*}properties/{*}fineract.it.image"))')
+          printf 'FINERACT_IT_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
+          docker pull "$image"
 
       # -Dsurefire.skip=true: compile + run only Failsafe, don't re-run unit tests
       - name: Run Integration Tests
@@ -108,10 +111,12 @@ jobs:
           echo "=== docker ps -a ==="
           docker ps -a || true
           echo "=== Docker logs for apache/fineract containers ==="
-          for id in $(docker ps -a -q --filter ancestor=apache/fineract:develop); do
-            echo "=== logs for container $id ==="
-            docker logs "$id" || true
-          done
+          if [ -n "${FINERACT_IT_IMAGE:-}" ]; then
+            for id in $(docker ps -a -q --filter "ancestor=$FINERACT_IT_IMAGE"); do
+              echo "=== logs for container $id ==="
+              docker logs "$id" || true
+            done
+          fi
         continue-on-error: true
 
   # ── Job 3: Coverage Gate — merges both .exec files before enforcing ───────
