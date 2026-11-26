@@ -595,6 +595,9 @@ public class SelfLoansApiResource {
       final GuarantorsRequest guarantorsRequest) {
     validateAppSelfServiceUserLoanMapping(loanId);
     validateGuarantorsCanBeChanged(loanId, "update");
+    if (guarantorsRequest != null && guarantorsRequest.getSavingsId() != null) {
+      this.selfServiceOwnershipGuard.validateSavingsOwnership(guarantorsRequest.getSavingsId());
+    }
     return this.guarantorsApiResource.updateGuarantor(loanId, guarantorId, guarantorsRequest);
   }
 
