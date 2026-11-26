@@ -327,6 +327,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
         validateSourceAccountOwnership(
             user, request.getFromAccount(), request.getFromAccountType());
 
+    // Checked before the OTP, so a transfer over a limit doesn't use it up
+    checkLimitsOfConfirmedTransfer(request, user, sourceSavingsAccount);
+
     Client sourceClient = sourceSavingsAccount.getClient();
     // MX-488: with step-up enabled for CONFIRM_TRANSFER the in-line OTP is replaced by a
     // single-use step-up token bound to this exact transfer; otherwise the legacy OTP applies.
@@ -581,6 +584,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         transfer.source(),
         transfer.request().getTransferAmount(),
         feeForBalanceCheck(transfer.request(), transfer.source().getClient()));
+    checkLimitsOfConfirmedTransfer(transfer.request(), transfer.initiator(), transfer.source());
     stepUpGuard.requireIfProtected(
         StepUpAction.APPROVE_SECOND_SIGNATURE,
         httpRequest,
@@ -2268,10 +2272,64 @@ public class SelfAccountTransferWritePlatformServiceImpl
     LocalDate transactionDate = (LocalDate) params.get("transactionDate");
     BigDecimal transactionAmount = (BigDecimal) params.get("transactionAmount");
 
-    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    enforceTptLimits(
+        context.authenticatedSelfServiceUser(),
+        fromAccount.getAccountId(),
+        fromAccount.getAccountType(),
+        toAccount.getAccountId(),
+        toAccount.getAccountType(),
+        transactionDate,
+        transactionAmount);
+  }
+
+  /**
+   * A confirmed SAME_BANK transfer to another client's account has the limits of a legacy tpt
+   * transfer. A transfer between the user's own accounts has none, and PIN and SINPE Movil have
+   * their own channel rules.
+   */
+  private void checkLimitsOfConfirmedTransfer(
+      AccountTransferConfirmRequest request, AppSelfServiceUser user, SavingsAccount source) {
+    if ("PIN".equalsIgnoreCase(request.getTransferType())
+        || "SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+      return;
+    }
+    // Resolved as executeInternalTransfer resolves it, which always credits a savings account
+    Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
+    SavingsAccount destination =
+        savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
+    if (isOwnClient(user, destination.getClient())) {
+      return;
+    }
+    enforceTptLimits(
+        user,
+        source.getId(),
+        PortfolioAccountType.SAVINGS.getValue(),
+        toAccountId,
+        PortfolioAccountType.SAVINGS.getValue(),
+        transactionDateUtil.getCurrentTenantLocalDateTime().toLocalDate(),
+        request.getTransferAmount());
+  }
+
+  private boolean isOwnClient(AppSelfServiceUser user, Client client) {
+    return client != null
+        && user.getAppUserClientMappings() != null
+        && user.getAppUserClientMappings().stream()
+            .map(AppSelfServiceUserClientMapping::getClient)
+            .anyMatch(own -> own != null && Objects.equals(own.getId(), client.getId()));
+  }
+
+  /** The beneficiary's transfer limit and the tenant's daily third-party transfer limit. */
+  private void enforceTptLimits(
+      AppSelfServiceUser user,
+      Long fromAccountId,
+      Integer fromAccountType,
+      Long toAccountId,
+      Integer toAccountType,
+      LocalDate transactionDate,
+      BigDecimal transactionAmount) {
     Long transferLimit =
         tptBeneficiaryReadPlatformService.getTransferLimit(
-            user.getId(), toAccount.getAccountId(), toAccount.getAccountType());
+            user.getId(), toAccountId, toAccountType);
     if (transferLimit != null
         && transferLimit > 0
         && transactionAmount.compareTo(new BigDecimal(transferLimit)) > 0) {
@@ -2284,13 +2342,12 @@ public class SelfAccountTransferWritePlatformServiceImpl
         BigDecimal dailyTPTLimitBD = new BigDecimal(dailyTPTLimit);
         BigDecimal totTransactionAmount =
             accountTransfersReadPlatformService.getTotalTransactionAmount(
-                fromAccount.getAccountId(), fromAccount.getAccountType(), transactionDate);
+                fromAccountId, fromAccountType, transactionDate);
         BigDecimal totalSoFar =
             totTransactionAmount == null ? BigDecimal.ZERO : totTransactionAmount;
         if (dailyTPTLimitBD.compareTo(totalSoFar) <= 0
             || dailyTPTLimitBD.compareTo(totalSoFar.add(transactionAmount)) < 0) {
-          throw new DailyTPTTransactionAmountLimitExceededException(
-              fromAccount.getAccountId(), fromAccount.getAccountType());
+          throw new DailyTPTTransactionAmountLimitExceededException(fromAccountId, fromAccountType);
         }
       }
     }
