@@ -110,7 +110,7 @@ cd selfservice-plugin
 ./mvnw clean package -Dmaven.test.skip=true
 ```
 
-This produces a JAR at `target/selfservice-plugin-1.15.0-SNAPSHOT.jar`.
+This produces a JAR at `target/selfservice-plugin-1.16.0-SNAPSHOT.jar`.
 
 ### Deploy with Fineract (Docker)
 
@@ -213,7 +213,7 @@ agent's documented skill location and were not run against this skill.
 
 Pre-built snapshots are published to JFrog Artifactory:
 
-👉 [Download latest JAR](https://mifos.jfrog.io/ui/native/libs-snapshot-local/community/mifos/selfservice-plugin/1.15.0-SNAPSHOT/)
+👉 [Download latest JAR](https://mifos.jfrog.io/ui/native/libs-snapshot-local/community/mifos/selfservice-plugin/1.16.0-SNAPSHOT/)
 
 ## API Reference
 
