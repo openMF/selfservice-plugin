@@ -172,6 +172,58 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   }
 
   /**
+   * Self-enrolls a new client "Test User", which creates the client together with its self-service
+   * user.
+   *
+   * @param id unique suffix for the username, mobile number and email
+   * @return the new client's account number
+   */
+  private String enrollClientWithUser(String id) {
+    Response response = executeSelfEnrollment(enrollmentPayload(id), null);
+    assertEquals(
+        200,
+        response.getStatusCode(),
+        "Enrollment must succeed. Body: " + response.body().asString());
+    String accountNumber =
+        querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
+    assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
+    return accountNumber;
+  }
+
+  /** Builds a self-enrollment request for the client "Test User" with this unique suffix. */
+  private static String enrollmentPayload(String id) {
+    return """
+    {
+      "username": "owner_%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "mobileNumber": "555%s",
+      "email": "owner%s@fineract.test",
+      "authenticationMode": "email",
+      "active": true
+    }
+    """
+        .formatted(id, id, id);
+  }
+
+  /** Builds a registration request (email mode) for the client "Test User" with this account. */
+  private static String registrationPayload(String username, String accountNumber) {
+    return """
+    {
+      "username": "%s",
+      "accountNumber": "%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "%s@fineract.test",
+      "authenticationMode": "email"
+    }
+    """
+        .formatted(username, accountNumber, username);
+  }
+
+  /**
    * Verifies the full 2-step enrollment flow: 1. POST /client-user → 200 + disabled user created 2.
    * Query token from DB 3. User cannot login (disabled) 4. POST /client-user/confirm → 200 + user
    * enabled 5. User can login
@@ -420,5 +472,32 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     } finally {
       executor.shutdownNow();
     }
+  }
+
+  /**
+   * Verifies that registering a second self-service user for an existing client is rejected with a
+   * 409 before any registration request is created.
+   */
+  @Test
+  @DisplayName("Registration for a client that already has a self-service user returns 409")
+  void testRegistrationForClientWithSelfServiceUserReturnsConflict() {
+    String id = numericId();
+    String accountNumber = enrollClientWithUser(id);
+    String secondUsername = "second_" + id;
+
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .body(registrationPayload(secondUsername, accountNumber))
+        .when()
+        .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
+        .then()
+        .statusCode(409)
+        .body(
+            "userMessageGlobalisationCode",
+            equalTo("error.msg.self.service.client.already.linked"));
+
+    assertEquals(
+        0L,
+        queryCount("select count(*) from request_audit_table where username = ?", secondUsername),
+        "No registration request may be created for a client that already has a user");
   }
 }
