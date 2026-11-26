@@ -7,15 +7,20 @@
 package org.apache.fineract.selfservice.account.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
+import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
@@ -127,8 +132,35 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
     SelfBeneficiariesTPT beneficiary =
         new SelfBeneficiariesTPT(7L, "Ana", 1L, 2L, 3L, 2, 1000L, "SAME_BANK", "CRC");
     beneficiary.setActive(active);
+    setId(beneficiary, 5L);
     when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(beneficiary));
     return beneficiary;
+  }
+
+  private SelfBeneficiariesTPT existingWithName(final String name, final Long id) {
+    SelfBeneficiariesTPT beneficiary =
+        new SelfBeneficiariesTPT(7L, name, 1L, 2L, 3L, 2, 1000L, "SAME_BANK", "CRC");
+    beneficiary.setActive(true);
+    setId(beneficiary, id);
+    when(repository.findByIdForUpdate(id)).thenReturn(Optional.of(beneficiary));
+    return beneficiary;
+  }
+
+  private void setId(Object entity, Long id) {
+    Class<?> clazz = entity.getClass();
+    while (clazz != null) {
+      try {
+        Field idField = clazz.getDeclaredField("id");
+        idField.setAccessible(true);
+        idField.set(entity, id);
+        return;
+      } catch (NoSuchFieldException e) {
+        clazz = clazz.getSuperclass();
+      } catch (IllegalAccessException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+    throw new IllegalStateException("Field 'id' not found on " + entity.getClass());
   }
 
   // MX-518: a deleted beneficiary is hidden from every read, so it can't be updated either.
@@ -183,5 +215,104 @@ class SelfBeneficiariesTPTWritePlatformServiceImplTest {
     service.update(5L, command("{\"name\":\"Ana\"}"));
 
     verify(repository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void deleteBeneficiary_with50CharacterName_shouldSoftDeleteSuccessfully() {
+    String name50 = "A".repeat(50);
+    SelfBeneficiariesTPT beneficiary = existingWithName(name50, 5L);
+
+    CommandProcessingResult result = service.delete(5L, command("{}"));
+
+    assertEquals(5L, result.getResourceId());
+    assertFalse(beneficiary.isActive());
+    verify(repository).save(beneficiary);
+  }
+
+  @Test
+  void deleteBeneficiary_verifyDatabaseNameDoesNotExceed50Chars() {
+    String name50 = "A".repeat(50);
+    existingWithName(name50, 5L);
+
+    service.delete(5L, command("{}"));
+
+    ArgumentCaptor<SelfBeneficiariesTPT> captor =
+        ArgumentCaptor.forClass(SelfBeneficiariesTPT.class);
+    verify(repository).save(captor.capture());
+    SelfBeneficiariesTPT saved = captor.getValue();
+
+    assertNotNull(saved.getName());
+    assertTrue(
+        saved.getName().length() <= 50,
+        "Saved beneficiary name must not exceed 50 characters, but was: "
+            + saved.getName().length());
+    assertTrue(saved.getName().contains("_del_5_"));
+    assertTrue(saved.getName().startsWith("A"));
+    assertFalse(saved.isActive());
+  }
+
+  @Test
+  void deleteBeneficiary_withLargeIdAnd50CharName_doesNotExceed50Chars() {
+    String name50 = "B".repeat(50);
+    existingWithName(name50, 9876543210L);
+
+    service.delete(9876543210L, command("{}"));
+
+    ArgumentCaptor<SelfBeneficiariesTPT> captor =
+        ArgumentCaptor.forClass(SelfBeneficiariesTPT.class);
+    verify(repository).save(captor.capture());
+    SelfBeneficiariesTPT saved = captor.getValue();
+
+    assertTrue(
+        saved.getName().length() <= 50,
+        "Saved beneficiary name must not exceed 50 characters, but was: "
+            + saved.getName().length());
+    assertTrue(saved.getName().contains("_del_9876543210_"));
+    assertFalse(saved.isActive());
+  }
+
+  @Test
+  void deleteBeneficiary_withShortName_preservesFullOriginalName() {
+    existingWithName("Ana", 5L);
+
+    service.delete(5L, command("{}"));
+
+    ArgumentCaptor<SelfBeneficiariesTPT> captor =
+        ArgumentCaptor.forClass(SelfBeneficiariesTPT.class);
+    verify(repository).save(captor.capture());
+    SelfBeneficiariesTPT saved = captor.getValue();
+
+    assertTrue(saved.getName().startsWith("Ana_del_5_"));
+    assertTrue(saved.getName().length() <= 50);
+    assertFalse(saved.isActive());
+  }
+
+  @Test
+  void deleteBeneficiary_alreadySoftDeleted_returnsEarlyWithoutSaving() {
+    existing(false);
+
+    CommandProcessingResult result = service.delete(5L, command("{}"));
+
+    assertEquals(5L, result.getResourceId());
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void deleteBeneficiary_ownedByDifferentUser_throwsInvalidBeneficiaryException() {
+    SelfBeneficiariesTPT beneficiary =
+        new SelfBeneficiariesTPT(99L, "Ana", 1L, 2L, 3L, 2, 1000L, "SAME_BANK", "CRC");
+    setId(beneficiary, 5L);
+    when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(beneficiary));
+
+    assertThrows(InvalidBeneficiaryException.class, () -> service.delete(5L, command("{}")));
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void deleteBeneficiary_notFound_throwsInvalidBeneficiaryException() {
+    when(repository.findByIdForUpdate(999L)).thenReturn(Optional.empty());
+
+    assertThrows(InvalidBeneficiaryException.class, () -> service.delete(999L, command("{}")));
+    verify(repository, never()).save(any());
   }
 }
