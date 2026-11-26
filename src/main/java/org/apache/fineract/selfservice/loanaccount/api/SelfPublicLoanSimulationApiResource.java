@@ -45,6 +45,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanSchedul
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleAssembler;
 import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanProductData;
 import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanSimulationDataValidator;
+import org.apache.fineract.selfservice.loanaccount.data.SelfPublicLoanSimulationProductLimitsValidator;
 import org.apache.fineract.selfservice.loanaccount.service.SelfPublicLoanProductReadService;
 import org.springframework.stereotype.Component;
 
@@ -94,6 +95,7 @@ public class SelfPublicLoanSimulationApiResource {
   private final LoanScheduleAssembler loanScheduleAssembler;
   private final DefaultToApiJsonSerializer<LoanScheduleData> loanScheduleSerializer;
   private final FromJsonHelper fromJsonHelper;
+  private final SelfPublicLoanSimulationProductLimitsValidator productLimitsValidator;
 
   /**
    * Retrieves all active loan products with simulation-relevant fields (currency, principal ranges,
@@ -253,6 +255,8 @@ public class SelfPublicLoanSimulationApiResource {
     // clientId — a field that must not be present in public simulation requests.
     // The assembler is auth-free and does not enforce clientId.
     final JsonElement jsonElement = this.fromJsonHelper.parse(apiRequestBodyAsJson);
+    // Skipping LoanApplicationValidator also skipped the product's limits
+    this.productLimitsValidator.validateWithinProductLimits(jsonElement);
 
     final LoanScheduleModel loanSchedule =
         this.loanScheduleAssembler.assembleLoanScheduleFrom(jsonElement);

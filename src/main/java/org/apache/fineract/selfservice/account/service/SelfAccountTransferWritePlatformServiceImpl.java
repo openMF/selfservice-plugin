@@ -48,7 +48,6 @@ import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.LegalForm;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
-import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -86,12 +85,12 @@ import org.apache.fineract.selfservice.notification.util.NotificationDeliveryMod
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
 import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
 import org.apache.fineract.selfservice.stepup.service.StepUpTransferPayloads;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -168,11 +167,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private final TransactionDateManagementService transactionDateManagementService;
 
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
-  
+
   private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
-  
+
   private final PaymentDetailService paymentDetailService;
-  
+
   // =====================================================================
   //  PREPARE
   // =====================================================================
@@ -190,18 +189,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
     final String currencyCode = request.getCurrencyCode();
     final String transferDescription = buildTransferDescription(request);
     final String reference = request.getReference();
-    
-    if (transferAmount == null || transferAmount.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new IllegalArgumentException(
-          "The transfer amount (transferAmount) must be greater than zero.");
-    }
-    if (toAccount == null || toAccount.isBlank()) {
-      throw new IllegalArgumentException(
-          "The destination account or number (toAccount) is required.");
-    }
-    if (fromAccount == null || fromAccount.isBlank()) {
-      throw new IllegalArgumentException("The source account (fromAccount) is required.");
-    }
+
+    validatePrepareRequest(request);
 
     SavingsAccount sourceSavingsAccount =
         validateSourceAccountOwnership(currentUser, fromAccount, request.getFromAccountType());
@@ -251,6 +240,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
   @Transactional
   public Object quoteTransfer(final AccountTransferPrepareRequest request) {
     log.info("QUOTE: Starting quote for channel: {}", request.getTransferType());
+
+    validateQuoteRequest(request);
 
     final AppSelfServiceUser currentUser = this.context.authenticatedSelfServiceUser();
     SavingsAccount sourceSavingsAccount =
@@ -336,6 +327,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
         validateSourceAccountOwnership(
             user, request.getFromAccount(), request.getFromAccountType());
 
+    // Checked before the OTP, so a transfer over a limit doesn't use it up
+    checkLimitsOfConfirmedTransfer(request, user, sourceSavingsAccount);
+
     Client sourceClient = sourceSavingsAccount.getClient();
     // MX-488: with step-up enabled for CONFIRM_TRANSFER the in-line OTP is replaced by a
     // single-use step-up token bound to this exact transfer; otherwise the legacy OTP applies.
@@ -418,11 +412,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
   // =====================================================================
 
   /**
-   * True when the tenant has dual approval enabled, the source client is an ENTITY with an
-   * approval threshold for the source account's currency, and {@code amount} (fee excluded) is
-   * greater than or equal to it. The currency comes from the account, never from the request, so
-   * it cannot be changed to dodge the threshold. Switch off or no threshold row means no dual
-   * approval, which keeps the existing flow for every other tenant and client.
+   * True when the tenant has dual approval enabled, the source client is an ENTITY with an approval
+   * threshold for the source account's currency, and {@code amount} (fee excluded) is greater than
+   * or equal to it. The currency comes from the account, never from the request, so it cannot be
+   * changed to dodge the threshold. Switch off or no threshold row means no dual approval, which
+   * keeps the existing flow for every other tenant and client.
    */
   private boolean requiresDualApproval(SavingsAccount sourceSavingsAccount, BigDecimal amount) {
     Client client = sourceSavingsAccount.getClient();
@@ -590,6 +584,7 @@ public class SelfAccountTransferWritePlatformServiceImpl
         transfer.source(),
         transfer.request().getTransferAmount(),
         feeForBalanceCheck(transfer.request(), transfer.source().getClient()));
+    checkLimitsOfConfirmedTransfer(transfer.request(), transfer.initiator(), transfer.source());
     stepUpGuard.requireIfProtected(
         StepUpAction.APPROVE_SECOND_SIGNATURE,
         httpRequest,
@@ -855,7 +850,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private String getTransferDateForApacheFineract(AccountTransferConfirmRequest request) {
     if (request != null && StringUtils.isNotBlank(request.getTransferDate())) {
       log.info(
-          "CONFIRM: discarding client-submitted transferDate='{}' (format='{}') in favour of tenant date",
+          "CONFIRM: discarding client-submitted transferDate='{}' (format='{}') in favour of tenant"
+              + " date",
           request.getTransferDate(),
           request.getDateFormat());
       try {
@@ -866,7 +862,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
                 FINERACT_TRANSFER_LOCALE);
         OffsetDateTime processed =
             transactionDateManagementService.processAndValidateTransactionDate(dateRequest);
-        log.debug("Client transferDate processed via TransactionDateManagementService → {}", processed);
+        log.debug(
+            "Client transferDate processed via TransactionDateManagementService → {}", processed);
       } catch (Exception e) {
         log.debug("Client transferDate could not be processed (non-fatal): {}", e.getMessage());
       }
@@ -997,22 +994,21 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     String internalRefNumber =
         generateInternalRefNumber(processingDate, fromOfficeId, result.getResourceId());
-    
+
     SavingsTxnPair savingxTxnPair = this.resolveSavingsTransactionIds(result.getResourceId());
 
     SavingsAccountTransactionData transactionData = null;
     if (savingxTxnPair.fromId != null) {
-        transactionData = this.savingsAccountReadPlatformService.retrieveSavingsTransaction(
-            fromAccountId,
-            savingxTxnPair.fromId,
-            DepositAccountType.SAVINGS_DEPOSIT
-        );
+      transactionData =
+          this.savingsAccountReadPlatformService.retrieveSavingsTransaction(
+              fromAccountId, savingxTxnPair.fromId, DepositAccountType.SAVINGS_DEPOSIT);
     }
-    
+
     Long paymentDetailId = resolvePaymentDetailId(savingxTxnPair.fromId, transactionData);
     if (paymentDetailId != null) {
-        PaymentDetailUpdateRequest updateReq = new PaymentDetailUpdateRequest(paymentDetailId, internalRefNumber);
-        paymentDetailService.updateRoutingCode(updateReq);
+      PaymentDetailUpdateRequest updateReq =
+          new PaymentDetailUpdateRequest(paymentDetailId, internalRefNumber);
+      paymentDetailService.updateRoutingCode(updateReq);
     }
 
     String fromAccountIdentifier =
@@ -1124,45 +1120,50 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
     return wrappedResponse;
   }
-  
-    /**
-    * Resolves the real m_payment_detail.id for a savings transaction.
-    * The read-platform DTO mapper sometimes aliases the transaction ID into
-    * PaymentDetailData.id, so we prefer the entity or a direct JDBC lookup.
-    */
-   private Long resolvePaymentDetailId(Long savingsTransactionId, SavingsAccountTransactionData transactionData) {
-       // 1st choice: load the transaction entity and navigate to its PaymentDetail
-       if (savingsTransactionId != null) {
-           try {
-               SavingsAccountTransaction txn = savingsAccountTransactionRepository.findById(savingsTransactionId).orElse(null);
-               if (txn != null && txn.getPaymentDetail() != null) {
-                   return txn.getPaymentDetail().getId();
-               }
-           } catch (Exception e) {
-               log.warn("Could not load transaction entity to resolve paymentDetailId", e);
-           }
-       }
 
-       // 2nd choice: direct SQL (avoids any mapper bug)
-       if (savingsTransactionId != null) {
-           try {
-               String sql = "SELECT payment_detail_id FROM m_savings_account_transaction WHERE id = ?";
-               return jdbcTemplate.queryForObject(sql, Long.class, savingsTransactionId);
-           } catch (Exception e) {
-               log.warn("JDBC fallback failed to resolve payment_detail_id for txn {}", savingsTransactionId, e);
-           }
-       }
+  /**
+   * Resolves the real m_payment_detail.id for a savings transaction. The read-platform DTO mapper
+   * sometimes aliases the transaction ID into PaymentDetailData.id, so we prefer the entity or a
+   * direct JDBC lookup.
+   */
+  private Long resolvePaymentDetailId(
+      Long savingsTransactionId, SavingsAccountTransactionData transactionData) {
+    // 1st choice: load the transaction entity and navigate to its PaymentDetail
+    if (savingsTransactionId != null) {
+      try {
+        SavingsAccountTransaction txn =
+            savingsAccountTransactionRepository.findById(savingsTransactionId).orElse(null);
+        if (txn != null && txn.getPaymentDetail() != null) {
+          return txn.getPaymentDetail().getId();
+        }
+      } catch (Exception e) {
+        log.warn("Could not load transaction entity to resolve paymentDetailId", e);
+      }
+    }
 
-       // 3rd choice: use the DTO only if the ID is sane (does not equal the transaction ID)
-       if (transactionData != null && transactionData.getPaymentDetailData() != null) {
-           Long dtoId = transactionData.getPaymentDetailData().getId();
-           if (dtoId != null && !dtoId.equals(savingsTransactionId)) {
-               return dtoId;
-           }
-       }
+    // 2nd choice: direct SQL (avoids any mapper bug)
+    if (savingsTransactionId != null) {
+      try {
+        String sql = "SELECT payment_detail_id FROM m_savings_account_transaction WHERE id = ?";
+        return jdbcTemplate.queryForObject(sql, Long.class, savingsTransactionId);
+      } catch (Exception e) {
+        log.warn(
+            "JDBC fallback failed to resolve payment_detail_id for txn {}",
+            savingsTransactionId,
+            e);
+      }
+    }
 
-       return null;
-   }
+    // 3rd choice: use the DTO only if the ID is sane (does not equal the transaction ID)
+    if (transactionData != null && transactionData.getPaymentDetailData() != null) {
+      Long dtoId = transactionData.getPaymentDetailData().getId();
+      if (dtoId != null && !dtoId.equals(savingsTransactionId)) {
+        return dtoId;
+      }
+    }
+
+    return null;
+  }
 
   private record SavingsTxnPair(Long fromId, Long toId) {}
 
@@ -1235,13 +1236,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
     if (toClient != null && toClient.getId() != null) {
       try {
         final String sql =
-            "SELECT COALESCE(ci.document_key, '') AS document_key, "
-                + "COALESCE(CAST(cv.order_position AS VARCHAR), '0') AS id_type, "
-                + "COALESCE(cv.code_value, 'Persona Física Nacional (Cédula)') AS id_type_description "
-                + "FROM m_client_identifier ci "
-                + "LEFT JOIN m_code_value cv ON ci.document_type_id = cv.id "
-                + "WHERE ci.client_id = ? "
-                + "ORDER BY ci.id ASC LIMIT 1";
+            "SELECT COALESCE(ci.document_key, '') AS document_key, COALESCE(CAST(cv.order_position"
+                + " AS VARCHAR), '0') AS id_type, COALESCE(cv.code_value, 'Persona Física Nacional"
+                + " (Cédula)') AS id_type_description FROM m_client_identifier ci LEFT JOIN"
+                + " m_code_value cv ON ci.document_type_id = cv.id WHERE ci.client_id = ? ORDER BY"
+                + " ci.id ASC LIMIT 1";
         Map<String, Object> row = jdbcTemplate.queryForMap(sql, toClient.getId());
         documentKey = String.valueOf(row.getOrDefault("document_key", ""));
         idType = String.valueOf(row.getOrDefault("id_type", "0"));
@@ -1387,10 +1386,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
               rejectDescription,
               registrationDate,
               processingDate,
-              fromSavingsTransactionId, 
+              fromSavingsTransactionId,
               toSavingsTransactionId);
 
-      // Requires entity fields + Liquibase 069 (from_savings_transaction_id / to_savings_transaction_id)
+      // Requires entity fields + Liquibase 069 (from_savings_transaction_id /
+      // to_savings_transaction_id)
       audit.setFromSavingsTransactionId(fromSavingsTransactionId);
       audit.setToSavingsTransactionId(toSavingsTransactionId);
 
@@ -1631,11 +1631,11 @@ public class SelfAccountTransferWritePlatformServiceImpl
   //  NOTIFICATION PUBLISHERS
   // =====================================================================
   private void publishFastPaymentTransferEvent(
-          CommandProcessingResult result,
-          AccountTransferConfirmRequest request,
-          AppSelfServiceUser user,
-          Client sourceClient,
-          HttpServletRequest httpRequest) {
+      CommandProcessingResult result,
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      Client sourceClient,
+      HttpServletRequest httpRequest) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1644,25 +1644,23 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String ipAddress = extractClientIp(httpRequest);
 
       String transferId =
-              result != null && result.getResourceId() != null
-                      ? result.getResourceId().toString()
-                      : "N/A";
+          result != null && result.getResourceId() != null
+              ? result.getResourceId().toString()
+              : "N/A";
 
       String resolvedCurrencyCode =
-              StringUtils.isNotBlank(request.getCurrencyCode())
-                      ? request.getCurrencyCode()
-                      : "CRC";
+          StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "CRC";
 
       String externalTransactionId = transferId;
       if (result != null && result.getResourceId() != null) {
         try {
           final String routingSql =
-                  "SELECT pd.routing_code "
-                          + "FROM m_account_transfer_transaction att "
-                          + "JOIN m_savings_account_transaction sat ON att.from_savings_transaction_id = sat.id "
-                          + "JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id "
-                          + "WHERE att.id = ? LIMIT 1";
-          List<String> codes = jdbcTemplate.queryForList(routingSql, String.class, result.getResourceId());
+              "SELECT pd.routing_code FROM m_account_transfer_transaction att JOIN"
+                  + " m_savings_account_transaction sat ON att.from_savings_transaction_id = sat.id"
+                  + " JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id WHERE att.id = ?"
+                  + " LIMIT 1";
+          List<String> codes =
+              jdbcTemplate.queryForList(routingSql, String.class, result.getResourceId());
           if (!codes.isEmpty() && StringUtils.isNotBlank(codes.get(0))) {
             externalTransactionId = codes.get(0);
           }
@@ -1671,17 +1669,19 @@ public class SelfAccountTransferWritePlatformServiceImpl
         }
       }
 
-      // Obtención segura de toClientName mediante consulta SQL directa para no alterar entidades JPA ni estados
+      // Obtención segura de toClientName mediante consulta SQL directa para no alterar entidades
+      // JPA ni estados
       String toClientName = "N/A";
       try {
         if (StringUtils.isNotBlank(request.getToAccount())) {
           final String sql =
-                  "SELECT COALESCE(c.display_name, c.fullname, 'N/A') "
-                          + "FROM m_savings_account sa "
-                          + "JOIN m_client c ON sa.client_id = c.id "
-                          + "WHERE sa.account_no = ? OR sa.external_id = ? LIMIT 1";
+              "SELECT COALESCE(c.display_name, c.fullname, 'N/A') "
+                  + "FROM m_savings_account sa "
+                  + "JOIN m_client c ON sa.client_id = c.id "
+                  + "WHERE sa.account_no = ? OR sa.external_id = ? LIMIT 1";
           String accountClean = request.getToAccount().replaceAll("\\s+", "");
-          List<String> names = jdbcTemplate.queryForList(sql, String.class, accountClean, accountClean);
+          List<String> names =
+              jdbcTemplate.queryForList(sql, String.class, accountClean, accountClean);
           if (!names.isEmpty() && StringUtils.isNotBlank(names.get(0))) {
             toClientName = names.get(0);
           }
@@ -1692,34 +1692,36 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-              "transactionAmount",
-              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+          "transactionAmount",
+          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-              "fromAccountNumber",
-              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+          "fromAccountNumber",
+          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-              "toAccountNumber",
-              StringUtils.isNotBlank(request.getToAccount())
-                      ? request.getToAccount()
-                      : (StringUtils.isNotBlank(request.getToPhoneNumber())
-                      ? request.getToPhoneNumber()
-                      : "N/A"));
+          "toAccountNumber",
+          StringUtils.isNotBlank(request.getToAccount())
+              ? request.getToAccount()
+              : (StringUtils.isNotBlank(request.getToPhoneNumber())
+                  ? request.getToPhoneNumber()
+                  : "N/A"));
       contextData.put("transferId", transferId);
       contextData.put(
-              "transactionDate",
-              transactionDateUtil.getCurrentDateForFineract(
-                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+          "transactionDate",
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
 
       contextData.put("toClientName", toClientName);
       contextData.put(
-              "fromOfficeName",
-              sourceClient != null && sourceClient.getOffice() != null && StringUtils.isNotBlank(sourceClient.getOffice().getName())
-                      ? sourceClient.getOffice().getName()
-                      : "N/A");
+          "fromOfficeName",
+          sourceClient != null
+                  && sourceClient.getOffice() != null
+                  && StringUtils.isNotBlank(sourceClient.getOffice().getName())
+              ? sourceClient.getOffice().getName()
+              : "N/A");
       contextData.put("toOfficeName", "N/A");
 
       // Campos adicionados
@@ -1728,36 +1730,37 @@ public class SelfAccountTransferWritePlatformServiceImpl
       contextData.put("externalTransactionId", externalTransactionId);
 
       log.info(
-              "publishFastPaymentTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
-              resolvedCurrencyCode,
-              toClientName,
-              externalTransactionId);
+          "publishFastPaymentTransferEvent contextData -> currencyCode: {}, toClientName: {},"
+              + " externalTransactionId: {}",
+          resolvedCurrencyCode,
+          toClientName,
+          externalTransactionId);
 
       applicationEventPublisher.publishEvent(
-              SelfServiceNotificationEvent.withTenantContext(
-                      this,
-                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-                      user.getId(),
-                      user.getFirstname(),
-                      user.getLastname(),
-                      user.getUsername(),
-                      user.getEmail(),
-                      mobileNumber,
-                      emailMode,
-                      ipAddress,
-                      LocaleContextHolder.getLocale(),
-                      contextData));
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              ipAddress,
+              LocaleContextHolder.getLocale(),
+              contextData));
     } catch (Exception e) {
       log.warn("Failed to publish transfer notification event", e);
     }
   }
 
   private void publishSinpeTransferEvent(
-          AccountTransferConfirmRequest request,
-          AppSelfServiceUser user,
-          Client sourceClient,
-          HttpServletRequest httpRequest,
-          Map<String, Object> externalData) {
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      Client sourceClient,
+      HttpServletRequest httpRequest,
+      Map<String, Object> externalData) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1767,15 +1770,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-              "transactionAmount",
-              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+          "transactionAmount",
+          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-              "fromAccountNumber",
-              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+          "fromAccountNumber",
+          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-              "toAccountNumber",
-              StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+          "toAccountNumber",
+          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
 
       String transferId = "N/A";
       if (externalData != null) {
@@ -1789,9 +1792,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
       contextData.put("transferId", transferId);
       contextData.put(
-              "transactionDate",
-              transactionDateUtil.getCurrentDateForFineract(
-                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+          "transactionDate",
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1801,7 +1804,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
       try {
         if (StringUtils.isNotBlank(request.getToAccount())) {
           Object phoneInfo = sinpeExternalApiClient.getPhoneInfo(request.getToAccount());
-          String jsonInfo = phoneInfo instanceof String ? (String) phoneInfo : gson.toJson(phoneInfo);
+          String jsonInfo =
+              phoneInfo instanceof String ? (String) phoneInfo : gson.toJson(phoneInfo);
           if (StringUtils.isNotBlank(jsonInfo)) {
             Map<String, Object> infoMap = gson.fromJson(jsonInfo, Map.class);
             if (infoMap != null && infoMap.get("holder") != null) {
@@ -1819,46 +1823,47 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       // Campos adicionados
       String currencyCode =
-              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
-      contextData.put("currencyCode",currencyCode);
-      contextData.put("currency",currencyCode);
+          StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
+      contextData.put("currencyCode", currencyCode);
+      contextData.put("currency", currencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
-              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
-              currencyCode,
-              toClientName,
-              transferId);
+          "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {},"
+              + " externalTransactionId: {}",
+          currencyCode,
+          toClientName,
+          transferId);
 
       applicationEventPublisher.publishEvent(
-              SelfServiceNotificationEvent.withTenantContext(
-                      this,
-                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-                      user.getId(),
-                      user.getFirstname(),
-                      user.getLastname(),
-                      user.getUsername(),
-                      user.getEmail(),
-                      mobileNumber,
-                      emailMode,
-                      ipAddress,
-                      LocaleContextHolder.getLocale(),
-                      contextData));
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              ipAddress,
+              LocaleContextHolder.getLocale(),
+              contextData));
 
       log.info(
-              "CONFIRM SINPE_MOVIL: Notification event published successfully for user {}",
-              user.getId());
+          "CONFIRM SINPE_MOVIL: Notification event published successfully for user {}",
+          user.getId());
     } catch (Exception e) {
       log.warn("Failed to publish SINPE_MOVIL transfer notification event", e);
     }
   }
 
   private void publishPinTransferEvent(
-          AccountTransferConfirmRequest request,
-          AppSelfServiceUser user,
-          Client sourceClient,
-          HttpServletRequest httpRequest,
-          Map<String, Object> externalData) {
+      AccountTransferConfirmRequest request,
+      AppSelfServiceUser user,
+      Client sourceClient,
+      HttpServletRequest httpRequest,
+      Map<String, Object> externalData) {
     try {
       releaseTransferSuccessCooldown(user);
 
@@ -1868,15 +1873,15 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       Map<String, Object> contextData = new HashMap<>();
       contextData.put(
-              "transactionAmount",
-              request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
+          "transactionAmount",
+          request.getTransferAmount() != null ? request.getTransferAmount().toString() : "N/A");
       contextData.put("transferDescription", buildTransferDescription(request));
       contextData.put(
-              "fromAccountNumber",
-              StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
+          "fromAccountNumber",
+          StringUtils.isNotBlank(request.getFromAccount()) ? request.getFromAccount() : "N/A");
       contextData.put(
-              "toAccountNumber",
-              StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
+          "toAccountNumber",
+          StringUtils.isNotBlank(request.getToAccount()) ? request.getToAccount() : "N/A");
 
       String transferId = "N/A";
       if (externalData != null) {
@@ -1890,9 +1895,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
       }
       contextData.put("transferId", transferId);
       contextData.put(
-              "transactionDate",
-              transactionDateUtil.getCurrentDateForFineract(
-                      FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
+          "transactionDate",
+          transactionDateUtil.getCurrentDateForFineract(
+              FINERACT_TRANSFER_DATE_FORMAT, FINERACT_TRANSFER_LOCALE));
       contextData.put("ipAddress", StringUtils.isNotBlank(ipAddress) ? ipAddress : "Unknown");
 
       contextData.put("fromClientName", displayNameOrUnknown(sourceClient));
@@ -1901,7 +1906,9 @@ public class SelfAccountTransferWritePlatformServiceImpl
       String toClientName = "N/A";
       try {
         if (StringUtils.isNotBlank(request.getToAccount())) {
-          String infoJsonResponse = pinExternalTransferService.getAccountInfo(request.getToAccount().replaceAll("\\s+", ""));
+          String infoJsonResponse =
+              pinExternalTransferService.getAccountInfo(
+                  request.getToAccount().replaceAll("\\s+", ""));
           if (StringUtils.isNotBlank(infoJsonResponse)) {
             Map<String, Object> infoMap = gson.fromJson(infoJsonResponse, Map.class);
             if (infoMap != null && infoMap.get("holder") != null) {
@@ -1920,31 +1927,32 @@ public class SelfAccountTransferWritePlatformServiceImpl
 
       // Campos adicionados
       String currencyCode =
-              StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
+          StringUtils.isNotBlank(request.getCurrencyCode()) ? request.getCurrencyCode() : "N/A";
       contextData.put("currencyCode", currencyCode);
       contextData.put("currency", currencyCode);
       contextData.put("externalTransactionId", transferId);
 
       log.info(
-              "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {}, externalTransactionId: {}",
-              currencyCode,
-              toClientName,
-              transferId);
+          "publishSinpeTransferEvent contextData -> currencyCode: {}, toClientName: {},"
+              + " externalTransactionId: {}",
+          currencyCode,
+          toClientName,
+          transferId);
 
       applicationEventPublisher.publishEvent(
-              SelfServiceNotificationEvent.withTenantContext(
-                      this,
-                      SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
-                      user.getId(),
-                      user.getFirstname(),
-                      user.getLastname(),
-                      user.getUsername(),
-                      user.getEmail(),
-                      mobileNumber,
-                      emailMode,
-                      ipAddress,
-                      LocaleContextHolder.getLocale(),
-                      contextData));
+          SelfServiceNotificationEvent.withTenantContext(
+              this,
+              SelfServiceNotificationEvent.Type.TRANSFER_SUCCESS,
+              user.getId(),
+              user.getFirstname(),
+              user.getLastname(),
+              user.getUsername(),
+              user.getEmail(),
+              mobileNumber,
+              emailMode,
+              ipAddress,
+              LocaleContextHolder.getLocale(),
+              contextData));
 
       log.info("CONFIRM PIN: Notification event published successfully for user {}", user.getId());
     } catch (Exception e) {
@@ -2264,10 +2272,64 @@ public class SelfAccountTransferWritePlatformServiceImpl
     LocalDate transactionDate = (LocalDate) params.get("transactionDate");
     BigDecimal transactionAmount = (BigDecimal) params.get("transactionAmount");
 
-    AppSelfServiceUser user = context.authenticatedSelfServiceUser();
+    enforceTptLimits(
+        context.authenticatedSelfServiceUser(),
+        fromAccount.getAccountId(),
+        fromAccount.getAccountType(),
+        toAccount.getAccountId(),
+        toAccount.getAccountType(),
+        transactionDate,
+        transactionAmount);
+  }
+
+  /**
+   * A confirmed SAME_BANK transfer to another client's account has the limits of a legacy tpt
+   * transfer. A transfer between the user's own accounts has none, and PIN and SINPE Movil have
+   * their own channel rules.
+   */
+  private void checkLimitsOfConfirmedTransfer(
+      AccountTransferConfirmRequest request, AppSelfServiceUser user, SavingsAccount source) {
+    if ("PIN".equalsIgnoreCase(request.getTransferType())
+        || "SINPE_MOVIL".equalsIgnoreCase(request.getTransferType())) {
+      return;
+    }
+    // Resolved as executeInternalTransfer resolves it, which always credits a savings account
+    Long toAccountId = resolveAccountId(request.getToAccount(), request.getToAccountType());
+    SavingsAccount destination =
+        savingsAccountRepositoryWrapper.findOneWithNotFoundDetection(toAccountId);
+    if (isOwnClient(user, destination.getClient())) {
+      return;
+    }
+    enforceTptLimits(
+        user,
+        source.getId(),
+        PortfolioAccountType.SAVINGS.getValue(),
+        toAccountId,
+        PortfolioAccountType.SAVINGS.getValue(),
+        transactionDateUtil.getCurrentTenantLocalDateTime().toLocalDate(),
+        request.getTransferAmount());
+  }
+
+  private boolean isOwnClient(AppSelfServiceUser user, Client client) {
+    return client != null
+        && user.getAppUserClientMappings() != null
+        && user.getAppUserClientMappings().stream()
+            .map(AppSelfServiceUserClientMapping::getClient)
+            .anyMatch(own -> own != null && Objects.equals(own.getId(), client.getId()));
+  }
+
+  /** The beneficiary's transfer limit and the tenant's daily third-party transfer limit. */
+  private void enforceTptLimits(
+      AppSelfServiceUser user,
+      Long fromAccountId,
+      Integer fromAccountType,
+      Long toAccountId,
+      Integer toAccountType,
+      LocalDate transactionDate,
+      BigDecimal transactionAmount) {
     Long transferLimit =
         tptBeneficiaryReadPlatformService.getTransferLimit(
-            user.getId(), toAccount.getAccountId(), toAccount.getAccountType());
+            user.getId(), toAccountId, toAccountType);
     if (transferLimit != null
         && transferLimit > 0
         && transactionAmount.compareTo(new BigDecimal(transferLimit)) > 0) {
@@ -2280,13 +2342,12 @@ public class SelfAccountTransferWritePlatformServiceImpl
         BigDecimal dailyTPTLimitBD = new BigDecimal(dailyTPTLimit);
         BigDecimal totTransactionAmount =
             accountTransfersReadPlatformService.getTotalTransactionAmount(
-                fromAccount.getAccountId(), fromAccount.getAccountType(), transactionDate);
+                fromAccountId, fromAccountType, transactionDate);
         BigDecimal totalSoFar =
             totTransactionAmount == null ? BigDecimal.ZERO : totTransactionAmount;
         if (dailyTPTLimitBD.compareTo(totalSoFar) <= 0
             || dailyTPTLimitBD.compareTo(totalSoFar.add(transactionAmount)) < 0) {
-          throw new DailyTPTTransactionAmountLimitExceededException(
-              fromAccount.getAccountId(), fromAccount.getAccountType());
+          throw new DailyTPTTransactionAmountLimitExceededException(fromAccountId, fromAccountType);
         }
       }
     }
@@ -2413,83 +2474,83 @@ public class SelfAccountTransferWritePlatformServiceImpl
   }
 
   private void generateAndSendOtpForQuote(
-        AppSelfServiceUser user,
-        Client sourceClient,
-        String destinationTarget,
-        BigDecimal transferAmount) {
+      AppSelfServiceUser user,
+      Client sourceClient,
+      String destinationTarget,
+      BigDecimal transferAmount) {
 
-      String otp = String.format("%06d", new SecureRandom().nextInt(999999));
-      LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
+    String otp = String.format("%06d", new SecureRandom().nextInt(999999));
+    LocalDateTime expiry = transactionDateUtil.getCurrentTenantLocalDateTime().plusMinutes(10);
 
-      // ENTITY clients often have null firstname/lastname — resolve safe non-null values
-      String firstName = resolveNonBlank(
-          sourceClient != null ? sourceClient.getFirstname() : null,
-          user.getFirstname(),
-          sourceClient != null ? sourceClient.getDisplayName() : null,
-          sourceClient != null ? sourceClient.getFullname() : null,
-          "Entity");
+    // ENTITY clients often have null firstname/lastname — resolve safe non-null values
+    String firstName =
+        resolveNonBlank(
+            sourceClient != null ? sourceClient.getFirstname() : null,
+            user.getFirstname(),
+            sourceClient != null ? sourceClient.getDisplayName() : null,
+            sourceClient != null ? sourceClient.getFullname() : null,
+            "Entity");
 
-      String lastName = resolveNonBlank(
-          sourceClient != null ? sourceClient.getLastname() : null,
-          user.getLastname(),
-          "-");
+    String lastName =
+        resolveNonBlank(
+            sourceClient != null ? sourceClient.getLastname() : null, user.getLastname(), "-");
 
-      String middleName = sourceClient != null ? sourceClient.getMiddlename() : null;
+    String middleName = sourceClient != null ? sourceClient.getMiddlename() : null;
 
-      SelfServiceRegistration registration =
-          SelfServiceRegistration.instance(
-              sourceClient,
-              sourceClient != null ? sourceClient.getAccountNumber() : null,
-              firstName,
-              middleName,
-              lastName,
-              destinationTarget,
-              user.getEmail(),
-              otp,
-              otp,
-              user.getUsername(),
-              "TRANSFER_OTP",
-              SelfServiceRequestType.ACCOUNT_TRANSFER,
-              expiry);
+    SelfServiceRegistration registration =
+        SelfServiceRegistration.instance(
+            sourceClient,
+            sourceClient != null ? sourceClient.getAccountNumber() : null,
+            firstName,
+            middleName,
+            lastName,
+            destinationTarget,
+            user.getEmail(),
+            otp,
+            otp,
+            user.getUsername(),
+            "TRANSFER_OTP",
+            SelfServiceRequestType.ACCOUNT_TRANSFER,
+            expiry);
 
-      this.registrationRepository.saveAndFlush(registration);
+    this.registrationRepository.saveAndFlush(registration);
 
-      Map<String, Object> contextData = new HashMap<>();
-      contextData.put("authCode", otp);
-      contextData.put("expirationMinutes", 10);
-      contextData.put("transferAmount", transferAmount != null ? transferAmount.toString() : "N/A");
+    Map<String, Object> contextData = new HashMap<>();
+    contextData.put("authCode", otp);
+    contextData.put("expirationMinutes", 10);
+    contextData.put("transferAmount", transferAmount != null ? transferAmount.toString() : "N/A");
 
-      this.applicationEventPublisher.publishEvent(
-          SelfServiceNotificationEvent.withTenantContext(
-              this,
-              SelfServiceNotificationEvent.Type.TRANSFER_OTP,
-              user.getId(),
-              user.getFirstname(),
-              user.getLastname(),
-              user.getUsername(),
-              user.getEmail(),
-              extractMobile(user, sourceClient),
-              notificationDeliveryModeUtil.determineMode(
-                  user.getEmail(), extractMobile(user, sourceClient)),
-              "Unknown IP (Quote Phase)",
-              LocaleContextHolder.getLocale(),
-              contextData));
+    this.applicationEventPublisher.publishEvent(
+        SelfServiceNotificationEvent.withTenantContext(
+            this,
+            SelfServiceNotificationEvent.Type.TRANSFER_OTP,
+            user.getId(),
+            user.getFirstname(),
+            user.getLastname(),
+            user.getUsername(),
+            user.getEmail(),
+            extractMobile(user, sourceClient),
+            notificationDeliveryModeUtil.determineMode(
+                user.getEmail(), extractMobile(user, sourceClient)),
+            "Unknown IP (Quote Phase)",
+            LocaleContextHolder.getLocale(),
+            contextData));
 
-      log.info("QUOTE: OTP successfully registered and event published for destination target.");
-    }
+    log.info("QUOTE: OTP successfully registered and event published for destination target.");
+  }
 
-    /** Returns the first non-blank value, or the final fallback if everything is blank/null. */
-    private static String resolveNonBlank(String... candidates) {
-      if (candidates == null) {
-        return "N/A";
-      }
-      for (String c : candidates) {
-        if (StringUtils.isNotBlank(c)) {
-          return c.trim();
-        }
-      }
+  /** Returns the first non-blank value, or the final fallback if everything is blank/null. */
+  private static String resolveNonBlank(String... candidates) {
+    if (candidates == null) {
       return "N/A";
     }
+    for (String c : candidates) {
+      if (StringUtils.isNotBlank(c)) {
+        return c.trim();
+      }
+    }
+    return "N/A";
+  }
 
   private void executeFeeTransaction(
       AccountTransferConfirmRequest request, SavingsAccount sourceSavingsAccount) {
@@ -3020,6 +3081,48 @@ public class SelfAccountTransferWritePlatformServiceImpl
         .collect(Collectors.toSet());
   }
 
+  /**
+   * Rejects a prepare request with a missing, zero or negative transferAmount, or a missing
+   * toAccount or fromAccount. Every invalid field is reported at once.
+   */
+  private void validatePrepareRequest(final AccountTransferPrepareRequest request) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    final DataValidatorBuilder base = new DataValidatorBuilder(errors).resource("accounttransfer");
+    validateTransferAmount(base, request.getTransferAmount());
+    base.reset().parameter("toAccount").value(request.getToAccount()).notBlank();
+    base.reset().parameter("fromAccount").value(request.getFromAccount()).notBlank();
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  /**
+   * Rejects a quote request with a missing, zero or negative transferAmount. toAccount is not
+   * required here: the fee does not depend on it, and SINPE Movil sends toPhoneNumber instead.
+   */
+  private void validateQuoteRequest(final AccountTransferPrepareRequest request) {
+    final List<ApiParameterError> errors = new ArrayList<>();
+    validateTransferAmount(
+        new DataValidatorBuilder(errors).resource("accounttransfer"), request.getTransferAmount());
+    if (!errors.isEmpty()) {
+      throw new PlatformApiDataValidationException(errors);
+    }
+  }
+
+  // Uses signum() instead of DataValidatorBuilder.positiveAmount(), which converts the amount to a
+  // double and throws for values beyond the double range.
+  private static void validateTransferAmount(
+      final DataValidatorBuilder base, final BigDecimal transferAmount) {
+    base.reset().parameter("transferAmount").value(transferAmount).notNull();
+    if (transferAmount != null && transferAmount.signum() <= 0) {
+      base.reset()
+          .parameter("transferAmount")
+          .value(transferAmount)
+          .failWithCode(
+              "not.greater.than.zero", "The parameter `transferAmount` must be greater than 0.");
+    }
+  }
+
   private PlatformApiDataValidationException invalidSourceAccountException() {
     final List<ApiParameterError> errors = new ArrayList<>();
     final DataValidatorBuilder base = new DataValidatorBuilder(errors).resource("accounttransfer");
@@ -3070,7 +3173,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
   private String buildTransferDescription(AccountTransferConfirmRequest request) {
     if (request == null) {
       log.warn(
-          "buildTransferDescription[CONFIRM]: request is null — falling back to default description 'Transfer'");
+          "buildTransferDescription[CONFIRM]: request is null — falling back to default description"
+              + " 'Transfer'");
       return String.format("%-15s", "Transfer");
     }
 
@@ -3079,7 +3183,8 @@ public class SelfAccountTransferWritePlatformServiceImpl
     if (StringUtils.isBlank(mode)) {
       mode = request.getTransferType();
       log.info(
-          "buildTransferDescription[CONFIRM]: transferMode blank — falling back to transferType='{}'",
+          "buildTransferDescription[CONFIRM]: transferMode blank — falling back to"
+              + " transferType='{}'",
           mode);
     }
 

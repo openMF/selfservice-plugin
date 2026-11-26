@@ -72,8 +72,9 @@ class SelfServiceSinpeEnrollmentWritePlatformServiceImplTest {
 
     SelfServiceRegistration registration = mock(SelfServiceRegistration.class);
     when(registration.getMobileNumber()).thenReturn(PHONE);
-    when(registrationRepository.findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
-            OWN_CLIENT_ID, SelfServiceRequestType.SINPE_ENROLLMENT, OTP))
+    when(registrationRepository
+            .findTopByClient_IdAndRequestTypeAndAuthenticationTokenOrderByCreatedAtDesc(
+                OWN_CLIENT_ID, SelfServiceRequestType.SINPE_ENROLLMENT, OTP))
         .thenReturn(Optional.of(registration));
   }
 

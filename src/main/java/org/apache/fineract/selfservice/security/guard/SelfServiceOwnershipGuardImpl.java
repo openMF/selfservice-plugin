@@ -212,10 +212,10 @@ public class SelfServiceOwnershipGuardImpl implements SelfServiceOwnershipGuard 
     final Boolean isOwned =
         jdbcTemplate.queryForObject(
             """
-                SELECT CASE WHEN (COUNT(*) > 0) THEN TRUE ELSE FALSE END
-                FROM m_selfservice_beneficiaries_tpt
-                WHERE id = ? AND app_user_id = ? AND is_active = TRUE
-                """,
+            SELECT CASE WHEN (COUNT(*) > 0) THEN TRUE ELSE FALSE END
+            FROM m_selfservice_beneficiaries_tpt
+            WHERE id = ? AND app_user_id = ? AND is_active = TRUE
+            """,
             Boolean.class,
             beneficiaryId,
             user.getId());
@@ -246,11 +246,11 @@ public class SelfServiceOwnershipGuardImpl implements SelfServiceOwnershipGuard 
     final Boolean isOwned =
         jdbcTemplate.queryForObject(
             """
-                SELECT CASE WHEN (COUNT(*) > 0) THEN TRUE ELSE FALSE END
-                FROM m_pocket_accounts_mapping pam
-                JOIN m_pocket p ON p.id = pam.pocket_id
-                WHERE pam.id = ? AND p.app_user_id = ?
-                """,
+            SELECT CASE WHEN (COUNT(*) > 0) THEN TRUE ELSE FALSE END
+            FROM m_pocket_accounts_mapping pam
+            JOIN m_pocket p ON p.id = pam.pocket_id
+            WHERE pam.id = ? AND p.app_user_id = ?
+            """,
             Boolean.class,
             mappingId,
             user.getId());

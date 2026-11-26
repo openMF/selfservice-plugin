@@ -461,7 +461,7 @@ class SelfTransferExternalGatewayIntegrationTest extends SelfServiceIntegrationT
   private static String insertSelfServiceUser(Integer clientId, Integer officeId) {
     String username = "ssgw_" + UUID.randomUUID().toString().substring(0, 8);
     executeSqlInPostgres(
-        """
+"""
 SELECT setval(
     pg_get_serial_sequence('m_appuser', 'id'),
     GREATEST(

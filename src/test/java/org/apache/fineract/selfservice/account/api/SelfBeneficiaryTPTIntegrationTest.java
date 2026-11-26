@@ -152,7 +152,7 @@ public class SelfBeneficiaryTPTIntegrationTest extends SelfServiceIntegrationTes
     String username = "ssuser_" + uniqueSuffix;
 
     executeSqlInPostgres(
-            """
+"""
 SELECT setval(
     pg_get_serial_sequence('m_appuser', 'id'),
     GREATEST(

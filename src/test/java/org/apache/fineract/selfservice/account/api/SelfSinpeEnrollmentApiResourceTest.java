@@ -81,8 +81,7 @@ class SelfSinpeEnrollmentApiResourceTest {
 
   @Test
   void requestEnrollment_nullMobileNumber_isRejected() {
-    assertFieldErrors(
-        () -> resource.requestEnrollment("{\"mobileNumber\":null}"), "mobileNumber");
+    assertFieldErrors(() -> resource.requestEnrollment("{\"mobileNumber\":null}"), "mobileNumber");
   }
 
   @Test

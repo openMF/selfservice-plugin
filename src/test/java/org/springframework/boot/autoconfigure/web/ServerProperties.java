@@ -14,4 +14,5 @@ package org.springframework.boot.autoconfigure.web;
  * NoClassDefFoundError}). Remove this class when the Fineract dependency is built against Spring
  * Boot 4.
  */
-public class ServerProperties extends org.springframework.boot.web.server.autoconfigure.ServerProperties {}
+public class ServerProperties
+    extends org.springframework.boot.web.server.autoconfigure.ServerProperties {}

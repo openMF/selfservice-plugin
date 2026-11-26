@@ -145,10 +145,7 @@ public class StepUpException extends RuntimeException {
   /** Confirming without having asked for a secret first (or the request was replaced). */
   public static StepUpException totpNoPendingEnrollment() {
     return new StepUpException(
-        "totp.enrollment.missing",
-        400,
-        "Start the authenticator setup first.",
-        details());
+        "totp.enrollment.missing", 400, "Start the authenticator setup first.", details());
   }
 
   /** A TOTP challenge has no code that could be sent again. */

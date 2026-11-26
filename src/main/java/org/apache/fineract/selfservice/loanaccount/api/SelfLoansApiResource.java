@@ -50,7 +50,6 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.portfolio.client.domain.Client;
-import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.api.LoanChargesApiResource;
 import org.apache.fineract.portfolio.loanaccount.api.LoanTransactionsApiResource;
@@ -62,7 +61,6 @@ import org.apache.fineract.portfolio.loanaccount.guarantor.api.GuarantorsApiReso
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorData;
 import org.apache.fineract.portfolio.loanaccount.guarantor.data.GuarantorsRequest;
 import org.apache.fineract.selfservice.loanaccount.data.SelfLoansDataValidator;
-import org.apache.fineract.selfservice.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
@@ -91,7 +89,7 @@ public class SelfLoansApiResource {
 
   private final ApplicationEventPublisher applicationEventPublisher;
   private final Environment env;
-  
+
   private final NotificationDeliveryModeUtil notificationDeliveryModeUtil;
   private final LoanRepositoryWrapper loanRepositoryWrapper;
 
@@ -519,11 +517,13 @@ public class SelfLoansApiResource {
 
   /**
    * Once a loan is approved the guarantors are part of the bank's security for it (approved and
-   * disbursed loans may hold guarantee funds). The borrower may change or remove them only while the
-   * application is waiting for approval; after that, bank staff do it.
+   * disbursed loans may hold guarantee funds). The borrower may change or remove them only while
+   * the application is waiting for approval; after that, bank staff do it.
    */
   private void validateGuarantorsCanBeChanged(final Long loanId, final String action) {
-    if (!this.loanRepositoryWrapper.findOneWithNotFoundDetection(loanId).isSubmittedAndPendingApproval()) {
+    if (!this.loanRepositoryWrapper
+        .findOneWithNotFoundDetection(loanId)
+        .isSubmittedAndPendingApproval()) {
       throw new GeneralPlatformDomainRuleException(
           "error.msg.selfservice.loan.guarantor." + action + ".not.pending.approval",
           "Guarantors can only be changed or removed while the loan application is waiting for"
@@ -595,6 +595,9 @@ public class SelfLoansApiResource {
       final GuarantorsRequest guarantorsRequest) {
     validateAppSelfServiceUserLoanMapping(loanId);
     validateGuarantorsCanBeChanged(loanId, "update");
+    if (guarantorsRequest != null && guarantorsRequest.getSavingsId() != null) {
+      this.selfServiceOwnershipGuard.validateSavingsOwnership(guarantorsRequest.getSavingsId());
+    }
     return this.guarantorsApiResource.updateGuarantor(loanId, guarantorId, guarantorsRequest);
   }
 

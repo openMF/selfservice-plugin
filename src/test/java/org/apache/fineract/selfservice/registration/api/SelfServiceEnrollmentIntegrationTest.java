@@ -69,19 +69,18 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
    */
   private String generateDuplicateMobilePayload(String phone) {
     String id = numericId();
-    return
-        """
-        {
-          "username": "diffuser_%s",
-          "password": "Strong#Abc123",
-          "firstName": "Test",
-          "lastName": "User",
-          "mobileNumber": "555%s",
-          "email": "diff%s@fineract.test",
-          "authenticationMode": "email",
-          "active": true
-        }
-        """
+    return """
+    {
+      "username": "diffuser_%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "mobileNumber": "555%s",
+      "email": "diff%s@fineract.test",
+      "authenticationMode": "email",
+      "active": true
+    }
+    """
         .formatted(id, phone, id);
   }
 
@@ -117,9 +116,9 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   private Response confirmEnrollment(String token) {
     return given(SelfServiceTestUtils.requestSpec(getFineractPort()))
         .body(
-                """
-                { "externalAuthenticationToken": "%s" }
-                """
+            """
+            { "externalAuthenticationToken": "%s" }
+            """
                 .formatted(token))
         .when()
         .post(CONFIRM_PATH)
@@ -173,6 +172,58 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   }
 
   /**
+   * Self-enrolls a new client "Test User", which creates the client together with its self-service
+   * user.
+   *
+   * @param id unique suffix for the username, mobile number and email
+   * @return the new client's account number
+   */
+  private String enrollClientWithUser(String id) {
+    Response response = executeSelfEnrollment(enrollmentPayload(id), null);
+    assertEquals(
+        200,
+        response.getStatusCode(),
+        "Enrollment must succeed. Body: " + response.body().asString());
+    String accountNumber =
+        querySingleValue("select account_no from m_client where mobile_no = ?", "555" + id);
+    assertFalse(accountNumber.isBlank(), "Enrolled client must have an account number");
+    return accountNumber;
+  }
+
+  /** Builds a self-enrollment request for the client "Test User" with this unique suffix. */
+  private static String enrollmentPayload(String id) {
+    return """
+    {
+      "username": "owner_%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "mobileNumber": "555%s",
+      "email": "owner%s@fineract.test",
+      "authenticationMode": "email",
+      "active": true
+    }
+    """
+        .formatted(id, id, id);
+  }
+
+  /** Builds a registration request (email mode) for the client "Test User" with this account. */
+  private static String registrationPayload(String username, String accountNumber) {
+    return """
+    {
+      "username": "%s",
+      "accountNumber": "%s",
+      "password": "Strong#Abc123",
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "%s@fineract.test",
+      "authenticationMode": "email"
+    }
+    """
+        .formatted(username, accountNumber, username);
+  }
+
+  /**
    * Verifies the full 2-step enrollment flow: 1. POST /client-user → 200 + disabled user created 2.
    * Query token from DB 3. User cannot login (disabled) 4. POST /client-user/confirm → 200 + user
    * enabled 5. User can login
@@ -184,18 +235,18 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     String username = "user_" + id;
     String password = "Strong#Abc123";
     String payload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Test",
-              "lastName": "User",
-              "mobileNumber": "555%s",
-              "email": "test%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "test%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, id, id);
 
     // Step 1: Enroll — should succeed but user is disabled
@@ -217,7 +268,9 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     Response disabledLogin =
         SelfServiceTestUtils.authenticate(getFineractPort(), username, password);
     assertEquals(
-        200, disabledLogin.getStatusCode(), "Disabled user must not be able to authenticate and return the onboarding status ");
+        200,
+        disabledLogin.getStatusCode(),
+        "Disabled user must not be able to authenticate and return the onboarding status ");
 
     // Step 2: Query the enrollment token from DB
     String token = queryEnrollmentToken(username);
@@ -248,8 +301,8 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
   }
 
   /**
-   * Verifies that attempting to enroll with an existing username returns a 409 Conflict 
-   * and includes the user's onboarding progress in the response body.
+   * Verifies that attempting to enroll with an existing username returns a 409 Conflict and
+   * includes the user's onboarding progress in the response body.
    */
   @Test
   @DisplayName("Duplicate username returns 409 Conflict with onboarding status")
@@ -258,18 +311,18 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     String username = "dupuser_" + id;
     String password = "Strong#Abc123";
     String payload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Test",
-              "lastName": "User",
-              "mobileNumber": "555%s",
-              "email": "dup%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "dup%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, id, id);
 
     // Step 1: Initial enrollment should succeed (200 OK)
@@ -290,18 +343,18 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     // Step 2: Attempt to enroll again with the SAME username but different mobile/email
     String id2 = numericId();
     String duplicatePayload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Test2",
-              "lastName": "User2",
-              "mobileNumber": "555%s",
-              "email": "dup2_%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Test2",
+          "lastName": "User2",
+          "mobileNumber": "555%s",
+          "email": "dup2_%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, id2, id2);
 
     // Step 3 & 4: Assert 409 Conflict and verify onboarding fields in response
@@ -329,18 +382,18 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     String phone = numericId();
     String id1 = numericId();
     String payload1 =
-            """
-            {
-              "username": "user1_%s",
-              "password": "Strong#Abc123",
-              "firstName": "Test",
-              "lastName": "User",
-              "mobileNumber": "555%s",
-              "email": "test1%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "user1_%s",
+          "password": "Strong#Abc123",
+          "firstName": "Test",
+          "lastName": "User",
+          "mobileNumber": "555%s",
+          "email": "test1%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(id1, phone, id1);
 
     // First enroll should succeed
@@ -419,5 +472,32 @@ public class SelfServiceEnrollmentIntegrationTest extends SelfServiceIntegration
     } finally {
       executor.shutdownNow();
     }
+  }
+
+  /**
+   * Verifies that registering a second self-service user for an existing client is rejected with a
+   * 409 before any registration request is created.
+   */
+  @Test
+  @DisplayName("Registration for a client that already has a self-service user returns 409")
+  void testRegistrationForClientWithSelfServiceUserReturnsConflict() {
+    String id = numericId();
+    String accountNumber = enrollClientWithUser(id);
+    String secondUsername = "second_" + id;
+
+    given(SelfServiceTestUtils.requestSpec(getFineractPort()))
+        .body(registrationPayload(secondUsername, accountNumber))
+        .when()
+        .post(SelfServiceTestUtils.SELF_REGISTRATION_PATH)
+        .then()
+        .statusCode(409)
+        .body(
+            "userMessageGlobalisationCode",
+            equalTo("error.msg.self.service.client.already.linked"));
+
+    assertEquals(
+        0L,
+        queryCount("select count(*) from request_audit_table where username = ?", secondUsername),
+        "No registration request may be created for a client that already has a user");
   }
 }

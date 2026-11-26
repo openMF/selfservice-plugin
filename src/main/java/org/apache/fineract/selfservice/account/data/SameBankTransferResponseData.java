@@ -55,7 +55,7 @@ public class SameBankTransferResponseData {
 
   /** Rejection reason. Empty string when the transfer is successful. */
   private String rejectDescription;
-  
+
   /** Channel Ref Number. Empty string when the transfer is successful. */
   private String channelRefNumber;
 
@@ -72,9 +72,8 @@ public class SameBankTransferResponseData {
   private boolean successful;
 
   private int stateCode;
-  
-  private Integer rejectCode;
-  
-  private String sinpeRefNumber;
 
+  private Integer rejectCode;
+
+  private String sinpeRefNumber;
 }

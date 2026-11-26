@@ -84,7 +84,7 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
 
   @Column(name = "created_on_utc", nullable = false)
   private OffsetDateTime createdOnUtc;
-  
+
   @Column(name = "from_savings_transaction_id")
   private Long fromSavingsTransactionId;
 
@@ -111,7 +111,7 @@ public class SelfServiceSameBankTransferAudit extends AbstractPersistableCustom<
       final String rejectDescription,
       final OffsetDateTime registrationDate,
       final OffsetDateTime processingDate,
-      final Long fromSavingsTransactionId, 
+      final Long fromSavingsTransactionId,
       final Long toSavingsTransactionId) {
 
     SelfServiceSameBankTransferAudit audit = new SelfServiceSameBankTransferAudit();

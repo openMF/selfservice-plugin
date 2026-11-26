@@ -27,8 +27,8 @@ import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceU
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SelfRunReportApiResourceTest {
 
@@ -36,7 +36,8 @@ class SelfRunReportApiResourceTest {
   void runReport_deniesWhenNotAllowlisted() {
     PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
     RunreportsApiResource core = mock(RunreportsApiResource.class);
-    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
+    SelfRunReportApiResource resource =
+        new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
     ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "");
 
     when(ctx.authenticatedSelfServiceUser()).thenReturn(mock(AppSelfServiceUser.class));
@@ -50,7 +51,8 @@ class SelfRunReportApiResourceTest {
   void runReport_preservesReportParamsAndInjectsMappedClientId() {
     PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
     RunreportsApiResource core = mock(RunreportsApiResource.class);
-    SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
+    SelfRunReportApiResource resource =
+        new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
     ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "Client Details");
 
     // The authenticated user is mapped to client 123.
@@ -95,42 +97,44 @@ class SelfRunReportApiResourceTest {
     assertEquals("2026-01-31", forwarded.getFirst("R_endDate"));
     assertEquals("true", forwarded.getFirst("exportCSV"));
   }
+
   @Test
-void runReport_preservesPdfExportParameters() {
-  PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
-  RunreportsApiResource core = mock(RunreportsApiResource.class);
-  SelfRunReportApiResource resource = new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
-  ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "Client Details");
+  void runReport_preservesPdfExportParameters() {
+    PlatformSelfServiceSecurityContext ctx = mock(PlatformSelfServiceSecurityContext.class);
+    RunreportsApiResource core = mock(RunreportsApiResource.class);
+    SelfRunReportApiResource resource =
+        new SelfRunReportApiResource(ctx, core, mock(JdbcTemplate.class));
+    ReflectionTestUtils.setField(resource, "allowlistedReportsCsv", "Client Details");
 
-  Client client = mock(Client.class);
-  when(client.getId()).thenReturn(123L);
+    Client client = mock(Client.class);
+    when(client.getId()).thenReturn(123L);
 
-  AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
-  when(mapping.getClient()).thenReturn(client);
+    AppSelfServiceUserClientMapping mapping = mock(AppSelfServiceUserClientMapping.class);
+    when(mapping.getClient()).thenReturn(client);
 
-  AppSelfServiceUser user = mock(AppSelfServiceUser.class);
-  when(user.getAppUserClientMappings()).thenReturn(java.util.Set.of(mapping));
-  when(ctx.authenticatedSelfServiceUser()).thenReturn(user);
+    AppSelfServiceUser user = mock(AppSelfServiceUser.class);
+    when(user.getAppUserClientMappings()).thenReturn(java.util.Set.of(mapping));
+    when(ctx.authenticatedSelfServiceUser()).thenReturn(user);
 
-  MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
-  qp.putSingle("output-type", "PDF");
-  qp.putSingle("R_startDate", "2026-01-01");
+    MultivaluedMap<String, String> qp = new MultivaluedHashMap<>();
+    qp.putSingle("output-type", "PDF");
+    qp.putSingle("R_startDate", "2026-01-01");
 
-  UriInfo uriInfo = mock(UriInfo.class);
-  when(uriInfo.getQueryParameters(true)).thenReturn(qp);
+    UriInfo uriInfo = mock(UriInfo.class);
+    when(uriInfo.getQueryParameters(true)).thenReturn(qp);
 
-  Response expected = mock(Response.class);
-  when(core.runReport(eq("Client Details"), any(UriInfo.class))).thenReturn(expected);
+    Response expected = mock(Response.class);
+    when(core.runReport(eq("Client Details"), any(UriInfo.class))).thenReturn(expected);
 
-  assertSame(expected, resource.runReport("Client Details", uriInfo));
+    assertSame(expected, resource.runReport("Client Details", uriInfo));
 
-  ArgumentCaptor<UriInfo> captor = ArgumentCaptor.forClass(UriInfo.class);
-  verify(core).runReport(eq("Client Details"), captor.capture());
+    ArgumentCaptor<UriInfo> captor = ArgumentCaptor.forClass(UriInfo.class);
+    verify(core).runReport(eq("Client Details"), captor.capture());
 
-  MultivaluedMap<String, String> forwarded = captor.getValue().getQueryParameters(true);
+    MultivaluedMap<String, String> forwarded = captor.getValue().getQueryParameters(true);
 
-  assertEquals("PDF", forwarded.getFirst("output-type"));
-  assertEquals("2026-01-01", forwarded.getFirst("R_startDate"));
-  assertEquals("123", forwarded.getFirst("R_clientId"));
-}
+    assertEquals("PDF", forwarded.getFirst("output-type"));
+    assertEquals("2026-01-01", forwarded.getFirst("R_startDate"));
+    assertEquals("123", forwarded.getFirst("R_clientId"));
+  }
 }

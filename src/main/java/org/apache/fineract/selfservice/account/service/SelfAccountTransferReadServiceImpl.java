@@ -189,59 +189,35 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
    */
   private Map<String, Object> loadFeeFromSavingsTransaction(Long accountId, String txnId) {
     final String sql =
-        "SELECT "
-            + "  sat.id                    AS sat_id, "
-            + "  sat.amount                AS amount, "
-            + "  sat.transaction_date      AS transaction_date, "
-            + "  sat.created_date          AS created_date, "
-            + "  sat.is_reversed           AS is_reversed, "
-            + "  sat.ref_no                AS ref_no, "
-            + "  sa.currency_code          AS currency_code, "
-            + "  sa.account_no             AS from_account_no, "
-            + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS from_iban, "
-            + "  pd.id                     AS payment_detail_id, "
-            + "  pd.routing_code           AS routing_code, "
-            + "  pd.receipt_number         AS receipt_number, "
-            + "  pt.value                  AS payment_type_name, "
-            + "  att.id                    AS transfer_txn_id, "
-            + "  att.description           AS transfer_description, "
-            + "  atd.to_savings_account_id AS to_savings_account_id, "
-            + "  to_sa.account_no          AS to_account_no, "
-            + "  COALESCE(NULLIF(to_sa.external_id, ''), to_sa.account_no) AS to_iban, "
-            + "  to_c.display_name         AS to_client_name, "
-            + "  COALESCE(to_c.email_address, '') AS to_client_email, "
-            + "  COALESCE( "
-            + "    (SELECT ci.document_key FROM m_client_identifier ci "
-            + "      WHERE ci.client_id = to_c.id ORDER BY ci.id LIMIT 1), '') AS to_client_document "
-            + "FROM m_savings_account_transaction sat "
-            + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
-            + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
-            + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
-            + "LEFT JOIN m_account_transfer_transaction att "
-            + "       ON att.from_savings_transaction_id = sat.id "
-            + "LEFT JOIN m_account_transfer_details atd "
-            + "       ON atd.id = att.account_transfer_details_id "
-            + "LEFT JOIN m_savings_account to_sa "
-            + "       ON to_sa.id = atd.to_savings_account_id "
-            + "LEFT JOIN m_client to_c ON to_c.id = to_sa.client_id "
-            + "WHERE sat.savings_account_id = ? "
-            + "  AND ( "
-            + "        CAST(sat.id AS VARCHAR) = ? "
-            + "     OR sat.ref_no = ? "
-            + "     OR CAST(pd.id AS VARCHAR) = ? "
-            + "  ) "
-            + "ORDER BY sat.id DESC "
-            + "LIMIT 1";
+        "SELECT   sat.id                    AS sat_id,   sat.amount                AS amount,  "
+            + " sat.transaction_date      AS transaction_date,   sat.created_date          AS"
+            + " created_date,   sat.is_reversed           AS is_reversed,   sat.ref_no             "
+            + "   AS ref_no,   sa.currency_code          AS currency_code,   sa.account_no         "
+            + "    AS from_account_no,   COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS"
+            + " from_iban,   pd.id                     AS payment_detail_id,   pd.routing_code     "
+            + "      AS routing_code,   pd.receipt_number         AS receipt_number,   pt.value    "
+            + "              AS payment_type_name,   att.id                    AS transfer_txn_id, "
+            + "  att.description           AS transfer_description,   atd.to_savings_account_id AS"
+            + " to_savings_account_id,   to_sa.account_no          AS to_account_no,  "
+            + " COALESCE(NULLIF(to_sa.external_id, ''), to_sa.account_no) AS to_iban,  "
+            + " to_c.display_name         AS to_client_name,   COALESCE(to_c.email_address, '') AS"
+            + " to_client_email,   COALESCE(     (SELECT ci.document_key FROM m_client_identifier"
+            + " ci       WHERE ci.client_id = to_c.id ORDER BY ci.id LIMIT 1), '') AS"
+            + " to_client_document FROM m_savings_account_transaction sat INNER JOIN"
+            + " m_savings_account sa ON sa.id = sat.savings_account_id LEFT JOIN m_payment_detail"
+            + " pd ON pd.id = sat.payment_detail_id LEFT JOIN m_payment_type pt ON pt.id ="
+            + " pd.payment_type_id LEFT JOIN m_account_transfer_transaction att        ON"
+            + " att.from_savings_transaction_id = sat.id LEFT JOIN m_account_transfer_details atd  "
+            + "      ON atd.id = att.account_transfer_details_id LEFT JOIN m_savings_account to_sa "
+            + "       ON to_sa.id = atd.to_savings_account_id LEFT JOIN m_client to_c ON to_c.id ="
+            + " to_sa.client_id WHERE sat.savings_account_id = ?   AND (         CAST(sat.id AS"
+            + " VARCHAR) = ?      OR sat.ref_no = ?      OR CAST(pd.id AS VARCHAR) = ?   ) ORDER BY"
+            + " sat.id DESC LIMIT 1";
 
     try {
       List<Map<String, Object>> rows =
           this.jdbcTemplate.query(
-              sql,
-              (rs, rowNum) -> mapFeeLedgerRow(rs, accountId),
-              accountId,
-              txnId,
-              txnId,
-              txnId);
+              sql, (rs, rowNum) -> mapFeeLedgerRow(rs, accountId), accountId, txnId, txnId, txnId);
 
       if (rows == null || rows.isEmpty() || rows.get(0) == null) {
         return null;
@@ -290,16 +266,14 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         created != null
             ? created.toInstant().toString()
             : (txnDate != null ? txnDate.toLocalDate().toString() : "");
-    String processingDate =
-        txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
+    String processingDate = txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
     String fromAccount = !fromIban.isEmpty() ? fromIban : String.valueOf(accountId);
     Map<String, Object> originCustomer = getOriginCustomerInfoByAccount(fromAccount);
 
     Map<String, Object> destinationCustomer = new HashMap<>();
     if (!toIban.isEmpty() || !toClientName.isEmpty()) {
-      destinationCustomer.put(
-          "name", !toClientName.isEmpty() ? toClientName : "APOLO CAPITAL");
+      destinationCustomer.put("name", !toClientName.isEmpty() ? toClientName : "APOLO CAPITAL");
       destinationCustomer.put("iban", toIban);
       destinationCustomer.put("id", toClientDoc);
       destinationCustomer.put("email", toClientEmail);
@@ -379,9 +353,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
   }
 
   /**
-   * Prefer payment-detail routing/receipt when it looks SINPE-like (from fee write path).
-   * Else parent PIN/SINPE routing on same account/day with sequence + 1.
-   * Else fall back to internal ref.
+   * Prefer payment-detail routing/receipt when it looks SINPE-like (from fee write path). Else
+   * parent PIN/SINPE routing on same account/day with sequence + 1. Else fall back to internal ref.
    */
   private String resolveFeeDisplayReference(
       Long accountId,
@@ -397,8 +370,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       return receiptNumber;
     }
 
-    String fromParent =
-        resolveFeeSinpeLikeReferenceFromParent(accountId, feeSatId, feeTxnDate);
+    String fromParent = resolveFeeSinpeLikeReferenceFromParent(accountId, feeSatId, feeTxnDate);
     if (!fromParent.isEmpty()) {
       return fromParent;
     }
@@ -439,12 +411,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
             + "LIMIT 1";
     try {
       String parentRouting =
-          this.jdbcTemplate.queryForObject(
-              sql, String.class, accountId, feeSatId, feeTxnDate);
+          this.jdbcTemplate.queryForObject(sql, String.class, accountId, feeSatId, feeTxnDate);
       return incrementSinpeSequence(nullToEmpty(parentRouting));
     } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-      log.debug(
-          "FEE: no parent PIN/SINPE routing for accountId={} satId={}", accountId, feeSatId);
+      log.debug("FEE: no parent PIN/SINPE routing for accountId={} satId={}", accountId, feeSatId);
       return "";
     } catch (Exception e) {
       log.warn(
@@ -490,8 +460,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     rawData.put("debitedAmount", audit.getTransferAmount());
     rawData.put("debitCurrencyCode", audit.getCurrencyCode());
     rawData.put(
-        "commissionAmount",
-        audit.getFeeAmount() != null ? audit.getFeeAmount() : BigDecimal.ZERO);
+        "commissionAmount", audit.getFeeAmount() != null ? audit.getFeeAmount() : BigDecimal.ZERO);
     rawData.put("commissionCurrency", audit.getCurrencyCode());
     rawData.put("exchangeRate", 0);
     rawData.put(
@@ -610,9 +579,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String internalRef =
         !receipt.isEmpty()
             ? receipt
-            : (!routing.isEmpty()
-                ? routing
-                : (!refNo.isEmpty() ? refNo : String.valueOf(satId)));
+            : (!routing.isEmpty() ? routing : (!refNo.isEmpty() ? refNo : String.valueOf(satId)));
 
     java.sql.Timestamp created = rs.getTimestamp("created_date");
     java.sql.Date txnDate = rs.getDate("transaction_date");
@@ -620,12 +587,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         created != null
             ? created.toInstant().toString()
             : (txnDate != null ? txnDate.toLocalDate().toString() : "");
-    String processingDate =
-        txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
+    String processingDate = txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
     Map<String, Object> destinationCustomer =
-        getDestinationCustomerInfoByAccount(
-            !toAccountNumber.isEmpty() ? toAccountNumber : null);
+        getDestinationCustomerInfoByAccount(!toAccountNumber.isEmpty() ? toAccountNumber : null);
 
     String targetAccount = !toAccountNumber.isEmpty() ? toAccountNumber : fromIban;
     Map<String, String> bankDetails = resolveDestinationDetails(targetAccount);
@@ -648,8 +613,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     customData.put(
         "fromAccountIdentifier", !fromIban.isEmpty() ? fromIban : String.valueOf(accountId));
     customData.put("toAccountIdentifier", toAccountNumber);
-    customData.put(
-        "transferDescription", !paymentType.isEmpty() ? paymentType : "SAME_BANK");
+    customData.put("transferDescription", !paymentType.isEmpty() ? paymentType : "SAME_BANK");
     customData.put("reference", !checkNumber.isEmpty() ? checkNumber : internalRef);
     customData.put("originCustomer", originCustomer);
     customData.put("destinationCustomer", destinationCustomer);
@@ -726,22 +690,15 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         if (phoneData != null) {
           details.put(
               "entityCode",
-              phoneData.get("entityCode") != null
-                  ? phoneData.get("entityCode").toString()
-                  : "");
+              phoneData.get("entityCode") != null ? phoneData.get("entityCode").toString() : "");
           details.put(
               "entityName",
-              phoneData.get("entityName") != null
-                  ? phoneData.get("entityName").toString()
-                  : "");
+              phoneData.get("entityName") != null ? phoneData.get("entityName").toString() : "");
           details.put(
-              "holder",
-              phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
+              "holder", phoneData.get("holder") != null ? phoneData.get("holder").toString() : "");
           details.put(
               "holderId",
-              phoneData.get("holderId") != null
-                  ? phoneData.get("holderId").toString()
-                  : "");
+              phoneData.get("holderId") != null ? phoneData.get("holderId").toString() : "");
         }
       }
     } catch (Exception e) {
@@ -772,7 +729,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
           loadExternalFromSavingsTransaction(accountId, txnId, transferType, null);
       if (fromLedger != null) {
         log.info(
-            "FETCH DETAILS: {} resolved from internal ledger (no external ref) accountId={} txnId={}",
+            "FETCH DETAILS: {} resolved from internal ledger (no external ref) accountId={}"
+                + " txnId={}",
             transferType,
             accountId,
             txnId);
@@ -799,7 +757,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       throw e;
     } catch (Exception e) {
       log.warn(
-          "External {} lookup failed for ref={} ({}). Falling back to internal ledger. accountId={} txnId={}",
+          "External {} lookup failed for ref={} ({}). Falling back to internal ledger. accountId={}"
+              + " txnId={}",
           transferType,
           externalRef,
           e.getMessage(),
@@ -810,7 +769,8 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
           loadExternalFromSavingsTransaction(accountId, txnId, transferType, externalRef);
       if (fromLedger != null) {
         log.info(
-            "FETCH DETAILS: {} resolved from internal ledger after external failure accountId={} txnId={} ref={}",
+            "FETCH DETAILS: {} resolved from internal ledger after external failure accountId={}"
+                + " txnId={} ref={}",
             transferType,
             accountId,
             txnId,
@@ -827,78 +787,48 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       Long accountId, String txnId, String transferType, String knownExternalRef) {
 
     final String sql =
-        "SELECT "
-            + "  sat.id                      AS sat_id, "
-            + "  sat.transaction_type_enum   AS transaction_type_enum, "
-            + "  sat.amount                  AS amount, "
-            + "  sat.transaction_date        AS transaction_date, "
-            + "  sat.created_date            AS created_date, "
-            + "  sat.is_reversed             AS is_reversed, "
-            + "  sat.ref_no                  AS ref_no, "
-            + "  sa.currency_code            AS currency_code, "
-            + "  sa.account_no               AS from_account_no, "
-            + "  COALESCE(NULLIF(sa.external_id, ''), sa.account_no) AS local_iban, "
-            + "  c.display_name              AS local_client_name, "
-            + "  c.fullname                  AS local_fullname, "
-            + "  COALESCE(c.email_address, '') AS local_email, "
-            + "  COALESCE( "
-            + "    (SELECT ci.document_key FROM m_client_identifier ci "
-            + "      WHERE ci.client_id = c.id ORDER BY ci.id LIMIT 1), '') AS local_document, "
-            + "  pd.id                       AS payment_detail_id, "
-            + "  pd.account_number           AS pd_account_number, "
-            + "  pd.check_number             AS check_number, "
-            + "  pd.routing_code             AS routing_code, "
-            + "  pd.receipt_number           AS receipt_number, "
-            + "  pd.bank_number              AS bank_number, "
-            + "  pt.value                    AS payment_type_name, "
-            + "  sp_cp.code                  AS cp_code, "
-            + "  sp_cp.description           AS cp_name, "
-            + "  sp_local.code               AS local_code, "
-            + "  sp_local.description        AS local_entity_name, "
-            + "  vc.\"IDENTIFICACION\"         AS vc_identificacion, "
-            + "  vc.\"CUENTA_IBAN\"            AS vc_iban, "
-            + "  vc.\"ID_RELACION_CLIENTE\"    AS vc_relacion, "
-            + "  vc.\"NOMBRE_ORIGEN\"          AS vc_nombre_origen, "
-            + "  vc.\"DESCRIPCION\"            AS vc_descripcion, "
-            + "  vd.\"IDENTIFICACION\"         AS vd_identificacion, "
-            + "  vd.\"CUENTA_IBAN\"            AS vd_iban, "
-            + "  vd.\"CODIGO_REFERENCIA\"      AS vd_ref "
-            + "FROM m_savings_account_transaction sat "
-            + "INNER JOIN m_savings_account sa ON sa.id = sat.savings_account_id "
-            + "INNER JOIN m_client c ON c.id = sa.client_id "
-            + "LEFT JOIN m_payment_detail pd ON pd.id = sat.payment_detail_id "
-            + "LEFT JOIN m_payment_type pt ON pt.id = pd.payment_type_id "
-            + "LEFT JOIN m_sinpe_participant sp_cp "
-            + "       ON sp_cp.is_active = true "
-            + "      AND ( "
-            + "            sp_cp.code = TRIM(COALESCE(pd.bank_number, '')) "
-            + "         OR sp_cp.code = lpad(TRIM(COALESCE(pd.bank_number, '')), 4, '0') "
-            + "          ) "
-            + "LEFT JOIN m_sinpe_participant sp_local "
-            + "       ON sp_local.is_active = true "
-            + "      AND ( "
-            + "            sp_local.code = substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3) "
-            + "         OR sp_local.code = lpad(substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3), 4, '0') "
-            + "          ) "
-            + "LEFT JOIN \"VALIDA_CREDITO\" vc "
-            + "       ON (vc.savings_transaction_id = sat.id "
-            + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.receipt_number "
-            + "        OR vc.\"ID_RELACION_CLIENTE\" = pd.routing_code "
-            + "        OR vc.\"CHANNEL_REF_NUMBER\" = pd.routing_code) "
-            + "LEFT JOIN \"VALIDA_DEBITO\" vd "
-            + "       ON (vd.savings_transaction_id = sat.id "
-            + "        OR vd.\"CODIGO_REFERENCIA\" = pd.routing_code "
-            + "        OR vd.\"CHANNEL_REF_NUMBER\" = pd.routing_code) "
-            + "WHERE sat.savings_account_id = ? "
-            + "  AND ( "
-            + "        CAST(sat.id AS VARCHAR) = ? "
-            + "     OR sat.ref_no = ? "
-            + "     OR CAST(pd.id AS VARCHAR) = ? "
-            + "     OR pd.receipt_number = ? "
-            + "     OR pd.routing_code = ? "
-            + "  ) "
-            + "ORDER BY sat.id DESC "
-            + "LIMIT 1";
+        "SELECT   sat.id                      AS sat_id,   sat.transaction_type_enum   AS"
+            + " transaction_type_enum,   sat.amount                  AS amount,  "
+            + " sat.transaction_date        AS transaction_date,   sat.created_date            AS"
+            + " created_date,   sat.is_reversed             AS is_reversed,   sat.ref_no           "
+            + "       AS ref_no,   sa.currency_code            AS currency_code,   sa.account_no   "
+            + "            AS from_account_no,   COALESCE(NULLIF(sa.external_id, ''),"
+            + " sa.account_no) AS local_iban,   c.display_name              AS local_client_name,  "
+            + " c.fullname                  AS local_fullname,   COALESCE(c.email_address, '') AS"
+            + " local_email,   COALESCE(     (SELECT ci.document_key FROM m_client_identifier ci   "
+            + "    WHERE ci.client_id = c.id ORDER BY ci.id LIMIT 1), '') AS local_document,  "
+            + " pd.id                       AS payment_detail_id,   pd.account_number           AS"
+            + " pd_account_number,   pd.check_number             AS check_number,   pd.routing_code"
+            + "             AS routing_code,   pd.receipt_number           AS receipt_number,  "
+            + " pd.bank_number              AS bank_number,   pt.value                    AS"
+            + " payment_type_name,   sp_cp.code                  AS cp_code,   sp_cp.description   "
+            + "        AS cp_name,   sp_local.code               AS local_code,  "
+            + " sp_local.description        AS local_entity_name,   vc.\"IDENTIFICACION\"        "
+            + " AS vc_identificacion,   vc.\"CUENTA_IBAN\"            AS vc_iban,  "
+            + " vc.\"ID_RELACION_CLIENTE\"    AS vc_relacion,   vc.\"NOMBRE_ORIGEN\"          AS"
+            + " vc_nombre_origen,   vc.\"DESCRIPCION\"            AS vc_descripcion,  "
+            + " vd.\"IDENTIFICACION\"         AS vd_identificacion,   vd.\"CUENTA_IBAN\"           "
+            + " AS vd_iban,   vd.\"CODIGO_REFERENCIA\"      AS vd_ref FROM"
+            + " m_savings_account_transaction sat INNER JOIN m_savings_account sa ON sa.id ="
+            + " sat.savings_account_id INNER JOIN m_client c ON c.id = sa.client_id LEFT JOIN"
+            + " m_payment_detail pd ON pd.id = sat.payment_detail_id LEFT JOIN m_payment_type pt ON"
+            + " pt.id = pd.payment_type_id LEFT JOIN m_sinpe_participant sp_cp        ON"
+            + " sp_cp.is_active = true       AND (             sp_cp.code ="
+            + " TRIM(COALESCE(pd.bank_number, ''))          OR sp_cp.code ="
+            + " lpad(TRIM(COALESCE(pd.bank_number, '')), 4, '0')           ) LEFT JOIN"
+            + " m_sinpe_participant sp_local        ON sp_local.is_active = true       AND (       "
+            + "      sp_local.code = substring(replace(COALESCE(sa.external_id, ''), ' ', '') from"
+            + " 5 for 3)          OR sp_local.code ="
+            + " lpad(substring(replace(COALESCE(sa.external_id, ''), ' ', '') from 5 for 3), 4,"
+            + " '0')           ) LEFT JOIN \"VALIDA_CREDITO\" vc        ON"
+            + " (vc.savings_transaction_id = sat.id         OR vc.\"ID_RELACION_CLIENTE\" ="
+            + " pd.receipt_number         OR vc.\"ID_RELACION_CLIENTE\" = pd.routing_code        "
+            + " OR vc.\"CHANNEL_REF_NUMBER\" = pd.routing_code) LEFT JOIN \"VALIDA_DEBITO\" vd     "
+            + "   ON (vd.savings_transaction_id = sat.id         OR vd.\"CODIGO_REFERENCIA\" ="
+            + " pd.routing_code         OR vd.\"CHANNEL_REF_NUMBER\" = pd.routing_code) WHERE"
+            + " sat.savings_account_id = ?   AND (         CAST(sat.id AS VARCHAR) = ?      OR"
+            + " sat.ref_no = ?      OR CAST(pd.id AS VARCHAR) = ?      OR pd.receipt_number = ?    "
+            + "  OR pd.routing_code = ?   ) ORDER BY sat.id DESC LIMIT 1";
 
     try {
       List<Map<String, Object>> rows =
@@ -959,8 +889,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         created != null
             ? created.toInstant().toString()
             : (txnDate != null ? txnDate.toLocalDate().toString() : "");
-    String processingDate =
-        txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
+    String processingDate = txnDate != null ? txnDate.toLocalDate().toString() : registrationDate;
 
     String localName =
         firstNonBlank(
@@ -996,15 +925,10 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
     String extName = firstNonBlank(vcName, externalPerson.get("name"), "");
     String extId =
-        firstNonBlank(
-            isCredit ? vcId : firstNonBlank(vdId, vcId),
-            externalPerson.get("id"),
-            "");
+        firstNonBlank(isCredit ? vcId : firstNonBlank(vdId, vcId), externalPerson.get("id"), "");
     String extIban =
         firstNonBlank(
-            isCredit ? "" : firstNonBlank(vdIban, vcIban),
-            externalPerson.get("iban"),
-            "");
+            isCredit ? "" : firstNonBlank(vdIban, vcIban), externalPerson.get("iban"), "");
     String extEmail = firstNonBlank(externalPerson.get("email"), "");
 
     if (!extIban.isEmpty()) {
@@ -1060,9 +984,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       origin.put("idTypeDescription", "Persona Jurídica Nacional");
 
       dest.put("name", extName);
-      dest.put(
-          "iban",
-          firstNonBlank(extIban, nullToEmpty(rs.getString("pd_account_number"))));
+      dest.put("iban", firstNonBlank(extIban, nullToEmpty(rs.getString("pd_account_number"))));
       dest.put("id", extId);
       dest.put("email", extEmail);
       dest.put("entityCode", cpCode);
@@ -1139,19 +1061,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
         return out;
       }
       out.put(
-          "name",
-          extractTag(body, "OriginCustomerName", "originCustomerName", "holder", "nombre"));
+          "name", extractTag(body, "OriginCustomerName", "originCustomerName", "holder", "nombre"));
       out.put(
-          "iban",
-          extractTag(body, "OriginCustomerIBAN", "originCustomerIBAN", "iban", "cuenta"));
+          "iban", extractTag(body, "OriginCustomerIBAN", "originCustomerIBAN", "iban", "cuenta"));
       out.put(
           "id",
-          extractTag(
-              body,
-              "OriginCustomerId",
-              "originCustomerId",
-              "holderId",
-              "identificacion"));
+          extractTag(body, "OriginCustomerId", "originCustomerId", "holderId", "identificacion"));
       out.put("email", extractTag(body, "email", "correo"));
     } catch (Exception e) {
       log.warn("loadExternalPersonFromAudit failed satId={}: {}", satId, e.getMessage());
@@ -1275,19 +1190,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
 
   private String getExternalReceiptNumber(Long accountId, String txnId) {
     String sql =
-        "SELECT COALESCE(NULLIF(pd.routing_code, ''), NULLIF(pd.receipt_number, '')) AS external_ref "
-            + "FROM m_savings_account_transaction sat "
-            + "INNER JOIN m_payment_detail pd ON sat.payment_detail_id = pd.id "
-            + "WHERE sat.savings_account_id = ? "
-            + "  AND ( "
-            + "        CAST(sat.id AS VARCHAR) = ? "
-            + "     OR sat.ref_no = ? "
-            + "     OR CAST(pd.id AS VARCHAR) = ? "
-            + "     OR pd.receipt_number = ? "
-            + "     OR pd.routing_code = ? "
-            + "  ) "
-            + "ORDER BY sat.id DESC "
-            + "LIMIT 1";
+        "SELECT COALESCE(NULLIF(pd.routing_code, ''), NULLIF(pd.receipt_number, '')) AS"
+            + " external_ref FROM m_savings_account_transaction sat INNER JOIN m_payment_detail pd"
+            + " ON sat.payment_detail_id = pd.id WHERE sat.savings_account_id = ?   AND (        "
+            + " CAST(sat.id AS VARCHAR) = ?      OR sat.ref_no = ?      OR CAST(pd.id AS VARCHAR) ="
+            + " ?      OR pd.receipt_number = ?      OR pd.routing_code = ?   ) ORDER BY sat.id"
+            + " DESC LIMIT 1";
     try {
       return this.jdbcTemplate.queryForObject(
           sql, String.class, accountId, txnId, txnId, txnId, txnId, txnId);
@@ -1319,46 +1227,34 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
                 && data.get("operationId") != null
                 && !data.get("operationId").toString().isEmpty()
             ? data.get("operationId").toString()
-            : (resultObj.get("cbTrxNumber") != null
-                ? resultObj.get("cbTrxNumber").toString()
-                : "");
+            : (resultObj.get("cbTrxNumber") != null ? resultObj.get("cbTrxNumber").toString() : "");
 
     String internalRef =
-        data.get("internalRefNumber") != null
-                && !data.get("internalRefNumber").toString().isEmpty()
+        data.get("internalRefNumber") != null && !data.get("internalRefNumber").toString().isEmpty()
             ? data.get("internalRefNumber").toString()
-            : (data.get("channelRefNumber") != null
-                ? data.get("channelRefNumber").toString()
-                : "");
+            : (data.get("channelRefNumber") != null ? data.get("channelRefNumber").toString() : "");
 
     String channelRef =
-        data.get("channelRefNumber") != null
-                && !data.get("channelRefNumber").toString().isEmpty()
+        data.get("channelRefNumber") != null && !data.get("channelRefNumber").toString().isEmpty()
             ? data.get("channelRefNumber").toString()
             : internalRef;
 
     String sinpeRef =
         resultObj.containsKey("sinpeRefNumber") && resultObj.get("sinpeRefNumber") != null
             ? resultObj.get("sinpeRefNumber").toString()
-            : (data.get("sinpeRefNumber") != null
-                ? data.get("sinpeRefNumber").toString()
-                : "");
+            : (data.get("sinpeRefNumber") != null ? data.get("sinpeRefNumber").toString() : "");
 
     Object rawDebited =
         resultObj.get("debitedAmount") != null
             ? resultObj.get("debitedAmount")
-            : (data.get("debitedAmount") != null
-                ? data.get("debitedAmount")
-                : data.get("amount"));
+            : (data.get("debitedAmount") != null ? data.get("debitedAmount") : data.get("amount"));
     BigDecimal debitedAmount =
         rawDebited != null ? new BigDecimal(rawDebited.toString()) : fallbackAmount;
 
     String debitCurrencyCode =
         data.get("debitCurrencyCode") != null
             ? data.get("debitCurrencyCode").toString()
-            : (data.get("currency") != null
-                ? data.get("currency").toString()
-                : fallbackCurrency);
+            : (data.get("currency") != null ? data.get("currency").toString() : fallbackCurrency);
 
     Object rawCommission =
         resultObj.get("commissionAmount") != null
@@ -1382,16 +1278,12 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String registrationDate =
         resultObj.containsKey("registrationDate") && resultObj.get("registrationDate") != null
             ? resultObj.get("registrationDate").toString()
-            : (data.get("registrationDate") != null
-                ? data.get("registrationDate").toString()
-                : "");
+            : (data.get("registrationDate") != null ? data.get("registrationDate").toString() : "");
 
     String processingDate =
         resultObj.containsKey("processingDate") && resultObj.get("processingDate") != null
             ? resultObj.get("processingDate").toString()
-            : (data.get("processingDate") != null
-                ? data.get("processingDate").toString()
-                : "");
+            : (data.get("processingDate") != null ? data.get("processingDate").toString() : "");
 
     Integer stateCode = 32;
     Object rawState =
@@ -1406,9 +1298,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
     String stateDescription =
         resultObj.containsKey("stateDescription") && resultObj.get("stateDescription") != null
             ? resultObj.get("stateDescription").toString()
-            : (stateCode == 32
-                ? "Completed"
-                : (stateCode == 128 ? "Rejected" : "Pending"));
+            : (stateCode == 32 ? "Completed" : (stateCode == 128 ? "Rejected" : "Pending"));
 
     Integer rejectCode = 0;
     Object rawReject =
@@ -1605,8 +1495,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
           result.getOrDefault("idTypeDescription", "Persona Física Nacional (Cédula)"));
     } catch (Exception e) {
       log.warn(
-          "Could not find destination customer info for accountIdentifier: {}",
-          accountIdentifier);
+          "Could not find destination customer info for accountIdentifier: {}", accountIdentifier);
       destinationCustomer.put("name", "");
       destinationCustomer.put("email", "");
       destinationCustomer.put("iban", accountIdentifier);
@@ -1654,8 +1543,7 @@ public class SelfAccountTransferReadServiceImpl implements SelfAccountTransferRe
       originCustomer.put("idType", result.getOrDefault("idType", ""));
       originCustomer.put("idTypeDescription", result.getOrDefault("idTypeDescription", ""));
     } catch (Exception e) {
-      log.warn(
-          "Could not find origin customer info for accountIdentifier: {}", accountIdentifier);
+      log.warn("Could not find origin customer info for accountIdentifier: {}", accountIdentifier);
       originCustomer.put("name", "");
       originCustomer.put("email", "");
       originCustomer.put("iban", accountIdentifier);

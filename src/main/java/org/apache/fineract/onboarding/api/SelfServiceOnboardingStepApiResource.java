@@ -40,7 +40,9 @@ import org.springframework.stereotype.Component;
  */
 @Path("/v1/self/onboarding/steps")
 @Component
-@Tag(name = "Self Service Onboarding Steps", description = "Track and update enrollment step status")
+@Tag(
+    name = "Self Service Onboarding Steps",
+    description = "Track and update enrollment step status")
 @RequiredArgsConstructor
 @Slf4j
 public class SelfServiceOnboardingStepApiResource {
@@ -63,8 +65,7 @@ public class SelfServiceOnboardingStepApiResource {
   })
   public String getProgress() {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
-    OnboardingProgressData progress =
-        this.onboardingStepService.getOrInitProgress(user.getId());
+    OnboardingProgressData progress = this.onboardingStepService.getOrInitProgress(user.getId());
     return this.toApiJsonSerializer.serialize(progress);
   }
 
@@ -101,8 +102,7 @@ public class SelfServiceOnboardingStepApiResource {
     AppSelfServiceUser user = this.context.authenticatedSelfServiceUser();
     UpdateOnboardingStepRequest request =
         this.gson.fromJson(apiRequestBodyAsJson, UpdateOnboardingStepRequest.class);
-    OnboardingProgressData progress =
-        this.onboardingStepService.updateStep(user.getId(), request);
+    OnboardingProgressData progress = this.onboardingStepService.updateStep(user.getId(), request);
     return this.toApiJsonSerializer.serialize(progress);
   }
 }

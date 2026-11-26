@@ -95,14 +95,17 @@ public class SinpeExternalApiClient {
       headers.set(headerName, headerValue);
       log.info("Custom API header applied: name='{}' (value redacted)", headerName);
     } else {
-      log.info("No custom API header configured (header={}, headerValue present={})",
-          headerName, headerValue != null);
+      log.info(
+          "No custom API header configured (header={}, headerValue present={})",
+          headerName,
+          headerValue != null);
     }
     return headers;
   }
 
   public void createSubscription(SinpeSubscriptionRequest request) {
-    log.info("createSubscription START phone={}", request != null ? request.getPhoneNumber() : null);
+    log.info(
+        "createSubscription START phone={}", request != null ? request.getPhoneNumber() : null);
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
       log.warn(
@@ -247,8 +250,8 @@ public class SinpeExternalApiClient {
     Map<String, String> props = getServiceProperties();
     if (!isEnabled(props)) {
       log.warn(
-              "SinpeService is disabled in c_external_service. Skipping getPhoneInfo for phone: {}",
-              phoneNumber);
+          "SinpeService is disabled in c_external_service. Skipping getPhoneInfo for phone: {}",
+          phoneNumber);
       return null;
     }
     String url = getHost(props) + "/phone/" + phoneNumber;
@@ -256,11 +259,11 @@ public class SinpeExternalApiClient {
     HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(props));
     try {
       ResponseEntity<String> response =
-              restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+          restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
       log.info(
-              "getPhoneInfo HTTP status={}, body (truncated): {}",
-              response.getStatusCode(),
-              truncate(response.getBody(), 500));
+          "getPhoneInfo HTTP status={}, body (truncated): {}",
+          response.getStatusCode(),
+          truncate(response.getBody(), 500));
       log.info("SINPE phone details fetched successfully for phone: {}", phoneNumber);
       log.info("getPhoneInfo END phoneNumber={}", phoneNumber);
       return response.getBody();

@@ -23,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Implementation of {@link SelfServiceAccessAuditService}.
  *
- * <p>Audit writes are asynchronous. Rate-limit checks are synchronous (they gate the request).
- * The nightly purge iterates every tenant so the job is multi-tenant safe.
+ * <p>Audit writes are asynchronous. Rate-limit checks are synchronous (they gate the request). The
+ * nightly purge iterates every tenant so the job is multi-tenant safe.
  */
 @Service
 @RequiredArgsConstructor
@@ -72,15 +72,11 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
       final Long appUserId, final SelfServiceAccessAudit.ResourceType resourceType) {
     try {
       OffsetDateTime windowStart =
-          DateUtils.getOffsetDateTimeOfTenant()
-              .minusMinutes(rateLimitProperties.windowMinutes());
+          DateUtils.getOffsetDateTimeOfTenant().minusMinutes(rateLimitProperties.windowMinutes());
 
       long deniedCount =
           auditRepository.countByUserResourceTypeAndResult(
-              appUserId,
-              resourceType,
-              SelfServiceAccessAudit.AccessResult.DENIED,
-              windowStart);
+              appUserId, resourceType, SelfServiceAccessAudit.AccessResult.DENIED, windowStart);
 
       return deniedCount >= rateLimitProperties.perResource();
     } catch (Exception e) {
@@ -98,8 +94,7 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
   public boolean isGlobalRateLimitExceeded(final Long appUserId) {
     try {
       OffsetDateTime windowStart =
-          DateUtils.getOffsetDateTimeOfTenant()
-              .minusMinutes(rateLimitProperties.windowMinutes());
+          DateUtils.getOffsetDateTimeOfTenant().minusMinutes(rateLimitProperties.windowMinutes());
 
       long deniedCount =
           auditRepository.countByUserAndResult(
@@ -118,16 +113,15 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
   // -------------------------------------------------------------------------
 
   /**
-   * Runs once per day at 02:00. Iterates every tenant so the job is fully multi-tenant.
-   * Failures in one tenant never abort the others.
+   * Runs once per day at 02:00. Iterates every tenant so the job is fully multi-tenant. Failures in
+   * one tenant never abort the others.
    */
   @Scheduled(cron = "0 0 2 * * ?")
   public void purgeExpiredAuditRecords() {
     final int retentionDays = rateLimitProperties.retentionDays(); // isolated lookup
     final OffsetDateTime cutoff = OffsetDateTime.now().minusDays(retentionDays);
 
-    log.info(
-        "Starting access-audit purge (retention={} days, cutoff={})", retentionDays, cutoff);
+    log.info("Starting access-audit purge (retention={} days, cutoff={})", retentionDays, cutoff);
 
     List<FineractPlatformTenant> tenants;
     try {
@@ -143,9 +137,7 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
         purgeForCurrentTenant(cutoff, retentionDays);
       } catch (Exception e) {
         log.error(
-            "Failed to purge access-audit records for tenant {}",
-            tenant.getTenantIdentifier(),
-            e);
+            "Failed to purge access-audit records for tenant {}", tenant.getTenantIdentifier(), e);
       } finally {
         ThreadLocalContextUtil.clearTenant();
       }
@@ -155,8 +147,8 @@ public class SelfServiceAccessAuditServiceImpl implements SelfServiceAccessAudit
   }
 
   /**
-   * Performs the actual delete for the tenant currently set in ThreadLocalContextUtil.
-   * Runs in its own transaction.
+   * Performs the actual delete for the tenant currently set in ThreadLocalContextUtil. Runs in its
+   * own transaction.
    */
   @Transactional
   protected void purgeForCurrentTenant(OffsetDateTime cutoff, int retentionDays) {

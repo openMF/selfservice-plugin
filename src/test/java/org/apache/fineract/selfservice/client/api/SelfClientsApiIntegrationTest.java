@@ -123,7 +123,7 @@ class SelfClientsApiIntegrationTest extends SelfServiceIntegrationTestBase {
     assertThat(clientId).as("Created clientId must be present").isNotNull();
 
     executeSqlInPostgres(
-            """
+"""
 WITH new_self_user AS (
     INSERT INTO m_appselfservice_user(
         office_id, username, password, email, firstname, lastname, is_deleted,

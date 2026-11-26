@@ -19,10 +19,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.selfservice.security.exception.SelfServiceAccessDeniedException;
-import org.apache.fineract.spm.api.ScorecardApiResource;
-import org.apache.fineract.spm.data.ScorecardData;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
+import org.apache.fineract.spm.api.ScorecardApiResource;
+import org.apache.fineract.spm.data.ScorecardData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -82,7 +82,8 @@ class SelfScorecardApiResourceTest {
   @Test
   void createScorecard_emptyBody_throwsInvalidJsonException() {
     assertThrows(
-        InvalidJsonException.class, () -> resource.createScorecard(SURVEY_ID, (ScorecardData) null));
+        InvalidJsonException.class,
+        () -> resource.createScorecard(SURVEY_ID, (ScorecardData) null));
 
     verifyNoInteractions(selfServiceOwnershipGuard, scorecardApiResource);
   }

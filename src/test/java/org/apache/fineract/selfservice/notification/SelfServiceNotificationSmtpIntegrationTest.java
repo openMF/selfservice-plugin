@@ -83,18 +83,18 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
 
     // Step 1: Enroll
     String payload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Notif",
-              "lastName": "Test",
-              "mobileNumber": "555%s",
-              "email": "notif%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Notif",
+          "lastName": "Test",
+          "mobileNumber": "555%s",
+          "email": "notif%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, id, id);
 
     Response enrollResponse =
@@ -119,9 +119,9 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    { "externalAuthenticationToken": "%s" }
-                    """
+                """
+                { "externalAuthenticationToken": "%s" }
+                """
                     .formatted(token))
             .when()
             .post(CONFIRM_PATH)
@@ -162,18 +162,18 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
 
     // Enroll + confirm
     String payload =
-            """
-            {
-              "username": "%s",
-              "password": "%s",
-              "firstName": "Repeat",
-              "lastName": "Test",
-              "mobileNumber": "555%s",
-              "email": "repeat%s@fineract.test",
-              "authenticationMode": "email",
-              "active": true
-            }
-            """
+        """
+        {
+          "username": "%s",
+          "password": "%s",
+          "firstName": "Repeat",
+          "lastName": "Test",
+          "mobileNumber": "555%s",
+          "email": "repeat%s@fineract.test",
+          "authenticationMode": "email",
+          "active": true
+        }
+        """
             .formatted(username, password, id, id);
 
     Response enrollResponse =
@@ -190,9 +190,9 @@ public class SelfServiceNotificationSmtpIntegrationTest extends SelfServiceInteg
     Response confirmResponse =
         given(SelfServiceTestUtils.requestSpec(getFineractPort()))
             .body(
-                    """
-                    { "externalAuthenticationToken": "%s" }
-                    """
+                """
+                { "externalAuthenticationToken": "%s" }
+                """
                     .formatted(token))
             .when()
             .post(CONFIRM_PATH)

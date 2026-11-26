@@ -25,15 +25,14 @@ import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
-import java.util.function.Supplier;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
@@ -66,6 +65,7 @@ import org.apache.fineract.selfservice.account.data.AccountTransferQuoteResponse
 import org.apache.fineract.selfservice.account.data.FeeCollectionRequest;
 import org.apache.fineract.selfservice.account.data.FeeCollectionResult;
 import org.apache.fineract.selfservice.account.data.ResendOtpRequest;
+import org.apache.fineract.selfservice.account.data.SelfAccountTemplateData;
 import org.apache.fineract.selfservice.account.data.SelfAccountTransferDataValidator;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountForFeesRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceAccountTransferRepository;
@@ -73,18 +73,20 @@ import org.apache.fineract.selfservice.account.domain.SelfServiceSameBankTransfe
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApproval;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferApprovalRepository;
 import org.apache.fineract.selfservice.account.domain.SelfServiceTransferAuditRepository;
+import org.apache.fineract.selfservice.account.exception.BeneficiaryTransferLimitExceededException;
+import org.apache.fineract.selfservice.account.exception.DailyTPTTransactionAmountLimitExceededException;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistrationRepository;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRequestType;
+import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.stepup.domain.StepUpAction;
 import org.apache.fineract.selfservice.stepup.exception.StepUpException;
+import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
 import org.apache.fineract.selfservice.stepup.service.StepUpPayloadHasher;
 import org.apache.fineract.selfservice.stepup.service.StepUpTransferPayloads;
-import org.apache.fineract.selfservice.stepup.service.StepUpGuard;
-import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUser;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserClientMapping;
 import org.apache.fineract.selfservice.useradministration.domain.AppSelfServiceUserRepository;
@@ -233,8 +235,12 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void prepareTransfer_rejectsMissingSourceBeforeAccountResolutionOrSideEffects() throws Exception {
     AccountTransferPrepareRequest request = prepareRequest(null);
 
-    assertThrows(IllegalArgumentException.class, () -> service.prepareTransfer(request));
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
 
+    assertEquals(
+        "validation.msg.accounttransfer.fromAccount.cannot.be.blank", errorCodes(exception));
     verifyNoInteractions(
         savingsAccountAssembler,
         savingsAccountRepositoryWrapper,
@@ -242,6 +248,132 @@ class SelfAccountTransferWritePlatformServiceImplTest {
         registrationRepository,
         accountTransfersWritePlatformService,
         applicationEventPublisher);
+  }
+
+  @Test
+  void prepareTransfer_rejectsMissingZeroOrNegativeAmountBeforeAccountResolution() {
+    PlatformApiDataValidationException missing =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(null)));
+    PlatformApiDataValidationException zero =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(BigDecimal.ZERO)));
+    PlatformApiDataValidationException negative =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.prepareTransfer(requestWithAmount(new BigDecimal("-5"))));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank", errorCodes(missing));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero", errorCodes(zero));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(negative));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void prepareTransfer_rejectsBlankDestinationBeforeAccountResolution() {
+    AccountTransferPrepareRequest request = prepareRequest(String.valueOf(SAVINGS_ID));
+    request.setToAccount("   ");
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals("validation.msg.accounttransfer.toAccount.cannot.be.blank", errorCodes(exception));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void prepareTransfer_reportsEveryInvalidFieldAtOnce() {
+    AccountTransferPrepareRequest request = prepareRequest(null);
+    request.setToAccount(null);
+    request.setTransferAmount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.toAccount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.fromAccount.cannot.be.blank",
+        errorCodes(exception));
+  }
+
+  @Test
+  void prepareTransfer_reportsEveryBlankFieldAtOnce() {
+    AccountTransferPrepareRequest request = prepareRequest(" ");
+    request.setToAccount("");
+    request.setTransferAmount(BigDecimal.ZERO);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero,"
+            + "validation.msg.accounttransfer.toAccount.cannot.be.blank,"
+            + "validation.msg.accounttransfer.fromAccount.cannot.be.blank",
+        errorCodes(exception));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void prepareTransfer_acceptsAnAmountBeyondTheDoubleRange() {
+    // DataValidatorBuilder.positiveAmount() would throw a NumberFormatException for this amount.
+    AccountTransferPrepareRequest request = requestWithAmount(new BigDecimal("1E+400"));
+    request.setToAccount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.prepareTransfer(request));
+
+    assertEquals("validation.msg.accounttransfer.toAccount.cannot.be.blank", errorCodes(exception));
+  }
+
+  @Test
+  void quoteTransfer_rejectsMissingZeroOrNegativeAmountBeforeFeeCalculation() {
+    PlatformApiDataValidationException missing =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(null)));
+    PlatformApiDataValidationException zero =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(BigDecimal.ZERO)));
+    PlatformApiDataValidationException negative =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> service.quoteTransfer(requestWithAmount(new BigDecimal("-5"))));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.cannot.be.blank", errorCodes(missing));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero", errorCodes(zero));
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(negative));
+    verifyNoInteractions(savingsAccountAssembler, savingsAccountRepositoryWrapper, quoteService);
+  }
+
+  @Test
+  void quoteTransfer_doesNotRequireToAccount() {
+    // SINPE Movil quotes send the destination in toPhoneNumber, so toAccount stays optional.
+    AccountTransferPrepareRequest request = requestWithAmount(new BigDecimal("-5"));
+    request.setToAccount(null);
+
+    PlatformApiDataValidationException exception =
+        assertThrows(
+            PlatformApiDataValidationException.class, () -> service.quoteTransfer(request));
+
+    assertEquals(
+        "validation.msg.accounttransfer.transferAmount.not.greater.than.zero",
+        errorCodes(exception));
   }
 
   @Test
@@ -991,8 +1123,7 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     when(dataValidator.validateCreate(eq(""), anyString()))
         .thenReturn(transferParams(1L, 2L, "100.00"));
     numericSourceAccount(1L, savingsAccount(1L, ownClient, BigDecimal.TEN));
-    when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any()))
-        .thenReturn("Rent");
+    when(fromApiJsonHelper.extractStringNamed(eq("transferDescription"), any())).thenReturn("Rent");
     CommandProcessingResult result = mock(CommandProcessingResult.class);
     when(result.getResourceId()).thenReturn(77L);
     when(accountTransfersWritePlatformService.create(any())).thenReturn(result);
@@ -1047,6 +1178,12 @@ class SelfAccountTransferWritePlatformServiceImplTest {
     request.setTransferAmount(BigDecimal.TEN);
     request.setTransferType("SAME_BANK");
     request.setCurrencyCode("CRC");
+    return request;
+  }
+
+  private AccountTransferPrepareRequest requestWithAmount(BigDecimal transferAmount) {
+    AccountTransferPrepareRequest request = prepareRequest(String.valueOf(SAVINGS_ID));
+    request.setTransferAmount(transferAmount);
     return request;
   }
 
@@ -1796,6 +1933,135 @@ class SelfAccountTransferWritePlatformServiceImplTest {
   void retrievePendingApprovals_forANonSignatory_isEmpty() {
     assertEquals("[]", service.retrievePendingApprovals());
     verifyNoInteractions(transferApprovalRepository);
+  }
+
+  // --- Transfer limits on the confirmed and approved paths ---
+
+  private static final Long DESTINATION_ID = 88L;
+
+  /** A SAME_BANK transfer of 10 from the user's savings to account 88 of the given client. */
+  private AccountTransferConfirmRequest sameBankTransferTo(Client destinationOwner) {
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+    numericSourceAccount(
+        DESTINATION_ID, savingsAccount(DESTINATION_ID, destinationOwner, BigDecimal.ZERO));
+    AccountTransferConfirmRequest request = confirmRequest("SAME_BANK");
+    request.setToAccount(String.valueOf(DESTINATION_ID));
+    return request;
+  }
+
+  private void beneficiaryLimit(Long limit) {
+    when(tptBeneficiaryReadPlatformService.getTransferLimit(USER_ID, DESTINATION_ID, 2))
+        .thenReturn(limit);
+  }
+
+  private void dailyTptLimit(long limit, String transferredToday) {
+    when(configurationDomainService.isDailyTPTLimitEnabled()).thenReturn(true);
+    when(configurationDomainService.getDailyTPTLimit()).thenReturn(limit);
+    when(accountTransfersReadPlatformService.getTotalTransactionAmount(
+            SAVINGS_ID, 2, TEST_NOW.toLocalDate()))
+        .thenReturn(new BigDecimal(transferredToday));
+  }
+
+  @Test
+  void confirmTransfer_overTheBeneficiaryLimit_isRefusedBeforeTheOtpIsUsed() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(5L);
+
+    assertThrows(
+        BeneficiaryTransferLimitExceededException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verifyNoInteractions(registrationRepository, accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void confirmTransfer_overTheDailyTptLimit_isRefusedBeforeTheOtpIsUsed() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(null);
+    dailyTptLimit(100L, "95");
+
+    assertThrows(
+        DailyTPTTransactionAmountLimitExceededException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verifyNoInteractions(registrationRepository, accountTransfersWritePlatformService);
+  }
+
+  @Test
+  void confirmTransfer_withinTheLimits_goesOnToTheOtp() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(foreignClient);
+    beneficiaryLimit(10L);
+    dailyTptLimit(100L, "90");
+
+    // No OTP was issued, so the confirmation stops there
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verify(registrationRepository)
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+  }
+
+  @Test
+  void confirmTransfer_toTheUsersOwnAccount_hasNoThirdPartyLimits() {
+    stepUpProtectsConfirmation(false);
+    AccountTransferConfirmRequest request = sameBankTransferTo(ownClient);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(request, httpRequest));
+
+    verify(registrationRepository)
+        .findUserOtps(OWN_CLIENT_ID, "selfuser", SelfServiceRequestType.ACCOUNT_TRANSFER, OTP);
+    verifyNoInteractions(tptBeneficiaryReadPlatformService, accountTransfersReadPlatformService);
+  }
+
+  @Test
+  void confirmTransfer_pinChannel_keepsItsOwnRules() {
+    stepUpProtectsConfirmation(false);
+    SavingsAccount ownSavings = savingsAccount(SAVINGS_ID, ownClient, new BigDecimal("100.00"));
+    numericSourceAccount(SAVINGS_ID, ownSavings);
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> service.confirmTransfer(confirmRequest("PIN"), httpRequest));
+
+    verifyNoInteractions(tptBeneficiaryReadPlatformService, accountTransfersReadPlatformService);
+  }
+
+  @Test
+  void approveTransfer_overTheBeneficiaryLimit_isRefusedBeforeTheApprovalOrOtpIsUsed() {
+    approverOtpProtected(true);
+    callerIsActiveSignatory(true);
+    decisionWins(true);
+    initiator(true);
+    AccountTransferConfirmRequest held = sameBankTransferTo(foreignClient);
+    held.setOtp(null);
+    approvalExists(
+        SelfServiceTransferApproval.builder()
+            .id(APPROVAL_ID)
+            .clientId(OWN_CLIENT_ID)
+            .requestedBy(INITIATOR_ID)
+            .status(SelfServiceTransferApproval.Status.PENDING)
+            .transferAmount(BigDecimal.TEN)
+            .currencyCode("CRC")
+            .requestJson(new com.google.gson.Gson().toJson(held))
+            .createdAt(TEST_NOW)
+            .build());
+    when(tptBeneficiaryReadPlatformService.getTransferLimit(INITIATOR_ID, DESTINATION_ID, 2))
+        .thenReturn(5L);
+
+    assertThrows(
+        BeneficiaryTransferLimitExceededException.class,
+        () -> service.approveTransfer(APPROVAL_ID, httpRequest));
+
+    verify(stepUpGuard, never()).requireIfProtected(any(), any(), any());
+    verify(transferApprovalRepository, never()).decide(any(), any(), any(), any(), any());
+    verifyNoInteractions(accountTransfersWritePlatformService);
   }
 
   private static String errorCodes(PlatformApiDataValidationException ex) {

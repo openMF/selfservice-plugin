@@ -343,8 +343,7 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
     executeSqlInPostgres(
         "INSERT INTO m_selfservice_entity_signatory (client_id, appuser_id, is_active, created_at)"
             + " VALUES (%s, %s, true, CURRENT_TIMESTAMP);",
-        company.account().clientId(),
-        secondApprover.userId());
+        company.account().clientId(), secondApprover.userId());
     long approvalId = holdPin(company, "100.00");
     String firstToken = approvalToken(company.approver(), approvalId);
     String secondToken = approvalToken(secondApprover, approvalId);
@@ -825,7 +824,7 @@ class SelfTransferDualApprovalIntegrationTest extends SelfServiceIntegrationTest
   private static String insertSelfServiceUser(Integer clientId, Integer officeId) {
     String username = "ssda_" + UUID.randomUUID().toString().substring(0, 8);
     executeSqlInPostgres(
-        """
+"""
 SELECT setval(
     pg_get_serial_sequence('m_appuser', 'id'),
     GREATEST(

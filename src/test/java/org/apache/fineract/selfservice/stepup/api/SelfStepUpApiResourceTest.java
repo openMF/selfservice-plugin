@@ -275,7 +275,10 @@ class SelfStepUpApiResourceTest {
     when(settingsProvider.current()).thenReturn(totpSettings("protectedActions", "TPT_TRANSFER"));
     final String json = resource.config(request);
     final String actions =
-        JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("protectedActions").toString();
+        JsonParser.parseString(json)
+            .getAsJsonObject()
+            .getAsJsonArray("protectedActions")
+            .toString();
     assertTrue(actions.contains("MANAGE_AUTHENTICATOR"));
     assertTrue(actions.contains("TPT_TRANSFER"));
     assertFalse(actions.contains("CHANGE_PASSWORD"));
@@ -312,8 +315,7 @@ class SelfStepUpApiResourceTest {
     assertThrows(
         org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException.class,
         () ->
-            resource.verify(
-                5L, "{\"otp\":\"123456\",\"recoveryCode\":\"ABCDE-FGHJK\"}", request));
+            resource.verify(5L, "{\"otp\":\"123456\",\"recoveryCode\":\"ABCDE-FGHJK\"}", request));
     verify(challengeService, never()).verify(any(), any(), any(), any(), any(), any());
   }
 }

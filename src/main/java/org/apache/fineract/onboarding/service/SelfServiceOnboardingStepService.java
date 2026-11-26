@@ -1,9 +1,8 @@
 /**
  * Copyright since 2026 Mifos Initiative
  *
- * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
- * If a copy of the MPL was not distributed with this file, You can obtain one at
- * http://mozilla.org/MPL/2.0/.
+ * <p>This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy
+ * of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 package org.apache.fineract.onboarding.service;
 
@@ -46,8 +45,8 @@ public class SelfServiceOnboardingStepService {
   private final AppSelfServiceUserClientMappingRepository userClientMappingRepository;
 
   /**
-   * Resolves the self-service app user id mapped to a Fineract client.
-   * Multi-tenant: mapping lives in the tenant schema.
+   * Resolves the self-service app user id mapped to a Fineract client. Multi-tenant: mapping lives
+   * in the tenant schema.
    */
   public Long resolveAppUserIdByClientId(final Long clientId) {
     if (clientId == null) {
@@ -56,8 +55,7 @@ public class SelfServiceOnboardingStepService {
     final AppSelfServiceUserClientMapping mapping =
         userClientMappingRepository.fetchByClientId(clientId);
     if (mapping == null || mapping.getAppUser() == null) {
-      throw validationError(
-          "clientId", "No self-service user mapped to clientId=" + clientId);
+      throw validationError("clientId", "No self-service user mapped to clientId=" + clientId);
     }
     return mapping.getAppUser().getId();
   }
@@ -79,8 +77,8 @@ public class SelfServiceOnboardingStepService {
   }
 
   /**
-   * Completes all steps with order ≤ target for the user mapped to {@code clientId}.
-   * Returns full progress for the API response.
+   * Completes all steps with order ≤ target for the user mapped to {@code clientId}. Returns full
+   * progress for the API response.
    */
   @Transactional
   public OnboardingProgressData completeStepsUpToByClientId(
@@ -89,7 +87,6 @@ public class SelfServiceOnboardingStepService {
     completeStepsUpTo(appUserId, upToStepCode);
     return getProgress(appUserId);
   }
-
 
   /** Creates progress rows for every active step definition (idempotent). */
   @Transactional
@@ -163,7 +160,8 @@ public class SelfServiceOnboardingStepService {
     SelfServiceOnboardingStepDef def =
         stepDefRepository
             .findByStepCodeAndActiveTrue(code)
-            .orElseThrow(() -> validationError("stepCode", "Unknown or inactive stepCode: " + code));
+            .orElseThrow(
+                () -> validationError("stepCode", "Unknown or inactive stepCode: " + code));
 
     OnboardingStepStatus newStatus;
     try {
@@ -225,8 +223,7 @@ public class SelfServiceOnboardingStepService {
     List<SelfServiceOnboardingStepDef> defs =
         stepDefRepository.findByActiveTrueOrderByStepOrderAsc();
     List<SelfServiceOnboardingStep> existing = stepRepository.findByAppUserIdOrdered(appUserId);
-    Set<Long> have =
-        existing.stream().map(s -> s.getStepDef().getId()).collect(Collectors.toSet());
+    Set<Long> have = existing.stream().map(s -> s.getStepDef().getId()).collect(Collectors.toSet());
     LocalDateTime now = transactionDateUtil.getCurrentTenantLocalDateTime();
     List<SelfServiceOnboardingStep> toAdd = new ArrayList<>();
     for (SelfServiceOnboardingStepDef def : defs) {

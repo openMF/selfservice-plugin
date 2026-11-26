@@ -147,6 +147,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
   /** Fineract legal form id for Entity (non-person). */
   private static final int LEGAL_FORM_ENTITY = 2;
 
+  /** Unique constraint that allows only one self-service user per client. */
+  private static final String CLIENT_MAPPING_UNIQUE_CONSTRAINT = "unique_self_client";
+
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
     Gson gson = new Gson();
@@ -247,14 +250,11 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .notBlank()
         .notExceedingLengthOf(100);
 
-    // The notBlank() error above is only thrown further down, so a missing authenticationMode must
-    // not be dereferenced here or the request ends in a 500 instead of that 400.
     boolean isEmailAuthenticationMode =
-        authenticationMode != null
-            && authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
+        SelfServiceApiConstants.emailModeParamName.equalsIgnoreCase(authenticationMode);
 
     String mobileNumber = null;
-    if (!isEmailAuthenticationMode) {
+    if (SelfServiceApiConstants.mobileModeParamName.equalsIgnoreCase(authenticationMode)) {
       mobileNumber =
           this.fromApiJsonHelper.extractStringNamed(
               SelfServiceApiConstants.mobileNumberParamName, element);
@@ -262,15 +262,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           .reset()
           .parameter(SelfServiceApiConstants.mobileNumberParamName)
           .value(mobileNumber)
-          .notNull();
-      // validatePhoneNumber() dereferences the value, so only run it when a number was sent
-      if (mobileNumber != null) {
-        baseDataValidator
-            .reset()
-            .parameter(SelfServiceApiConstants.mobileNumberParamName)
-            .value(mobileNumber)
-            .validatePhoneNumber();
-      }
+          .notNull()
+          .ignoreIfNull()
+          .validatePhoneNumber();
     }
     // Report bad input as a 400 before the duplicate-username check can turn it into a 409
     if (!dataValidationErrors.isEmpty()) {
@@ -278,20 +272,19 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
     validateForDuplicateUsername(username);
 
-    throwExceptionIfValidationError(
-        dataValidationErrors,
-        accountNumber,
-        firstName,
-        middleName,
-        lastName,
-        mobileNumber,
-        isEmailAuthenticationMode);
+    validateClientExists(
+        accountNumber, firstName, middleName, lastName, mobileNumber, isEmailAuthenticationMode);
+
+    // Only checked once the caller has matched the client, so an account number alone doesn't
+    // reveal whether the client has a self-service user.
+    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
+    if (this.appUserClientMappingRepository.existsByClientId(client.getId())) {
+      throw buildClientAlreadyRegisteredConflict();
+    }
 
     String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
     // Tenant-aware clock — never system LocalDateTime.now()
     LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
-
-    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
 
     SelfServiceRegistration selfServiceRegistration =
         SelfServiceRegistration.instance(
@@ -365,17 +358,24 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         onboarding);
   }
 
-  private void throwExceptionIfValidationError(
-      final List<ApiParameterError> dataValidationErrors,
+  /**
+   * A client can have only one self-service user. The caller isn't logged in, so the message names
+   * neither the client nor its existing user.
+   */
+  private SelfServiceEnrollmentConflictException buildClientAlreadyRegisteredConflict() {
+    return new SelfServiceEnrollmentConflictException(
+        "error.msg.self.service.client.already.linked",
+        "This client already has a self-service user.",
+        SelfServiceApiConstants.accountNumberParamName);
+  }
+
+  private void validateClientExists(
       String accountNumber,
       String firstName,
       String middleName,
       String lastName,
       String mobileNumber,
       boolean isEmailAuthenticationMode) {
-    if (!dataValidationErrors.isEmpty()) {
-      throw new PlatformApiDataValidationException(dataValidationErrors);
-    }
     boolean isClientExist =
         this.selfServiceRegistrationReadPlatformService.isClientExist(
             accountNumber,
@@ -506,6 +506,11 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       if (normalizedMessage.contains("username") || normalizedMessage.contains("username_org")) {
         throw buildDuplicateUsernameConflict(username);
       }
+      // A registration created before the client got its user, or two registrations for the same
+      // client at once, pass the check in createRegistrationRequest and only fail here.
+      if (normalizedMessage.contains(CLIENT_MAPPING_UNIQUE_CONSTRAINT)) {
+        throw buildClientAlreadyRegisteredConflict();
+      }
     }
     throw ErrorHandler.getMappable(
         dve,
@@ -519,7 +524,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String apiRequestBodyAsJson, HttpServletRequest httpRequest) {
     try {
       JsonObject prettyJson = JsonParser.parseString(apiRequestBodyAsJson).getAsJsonObject();
-      log.info(">>> Self-Enrollment Payload (Pretty):\n{}", new GsonBuilder().setPrettyPrinting().create().toJson(prettyJson));
+      log.info(
+          ">>> Self-Enrollment Payload (Pretty):\n{}",
+          new GsonBuilder().setPrettyPrinting().create().toJson(prettyJson));
     } catch (Exception e) {
       log.info(">>> Self-Enrollment RAW Payload: {}", apiRequestBodyAsJson);
     }
@@ -701,8 +708,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
               ? client.getFirstname()
               : StringUtils.defaultIfBlank(client.getDisplayName(), username);
       String regMiddleName = client.getMiddlename();
-      String regLastName =
-          StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
+      String regLastName = StringUtils.isNotBlank(client.getLastname()) ? client.getLastname() : "";
 
       SelfServiceRegistration registration =
           SelfServiceRegistration.instance(
@@ -790,7 +796,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         errors.add(
             ApiParameterError.parameterError(
                 "error.msg.password.reset.confirm.user.already.activated",
-                "Password-reset token cannot be used on confirm-enrollment because the user is already activated. Use /self/password/renew instead.",
+                "Password-reset token cannot be used on confirm-enrollment because the user is"
+                    + " already activated. Use /self/password/renew instead.",
                 SelfServiceApiConstants.externalAuthenticationTokenParamName));
         throw new PlatformApiDataValidationException(errors);
       }
@@ -1147,7 +1154,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String externalId) {
     Long clientId = resolveClientIdByExternalId(externalId);
     log.info(
-        "Self-enrollment: duplicate externalId='{}' → existing clientId={} (legal representative / prior client)",
+        "Self-enrollment: duplicate externalId='{}' → existing clientId={} (legal representative /"
+            + " prior client)",
         externalId,
         clientId);
     return SelfServiceEnrollmentConflictException.duplicateExternalId(externalId, clientId);
@@ -1308,7 +1316,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           SelfServiceApiConstants.clientNonPersonDetailsParamName,
           SelfServiceApiConstants.clientNonPersonDetailsParamName);
       log.info(
-          "Self-enrollment ENTITY payload: legalFormId=2, fullname='{}', hasClientNonPersonDetails={}",
+          "Self-enrollment ENTITY payload: legalFormId=2, fullname='{}',"
+              + " hasClientNonPersonDetails={}",
           entityFullName.trim(),
           originalJson.has(SelfServiceApiConstants.clientNonPersonDetailsParamName));
     } else {
@@ -1332,7 +1341,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           SelfServiceApiConstants.lastnameParamName,
           SelfServiceApiConstants.lastNameParamName);
       log.info(
-          "Self-enrollment PERSON payload: legalFormId={}, firstname present={}, lastname present={}",
+          "Self-enrollment PERSON payload: legalFormId={}, firstname present={}, lastname"
+              + " present={}",
           legalFormId,
           sanitizedJson.has(SelfServiceApiConstants.firstnameParamName),
           sanitizedJson.has(SelfServiceApiConstants.lastnameParamName));
@@ -1441,7 +1451,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     // --- Centralized date override (ignore any date submitted by the REST API) ---
     if (StringUtils.isNotBlank(clientSubmittedOnDate)) {
       log.info(
-          "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant date",
+          "Self-enrollment: discarding client-submitted submittedOnDate='{}' in favour of tenant"
+              + " date",
           clientSubmittedOnDate);
       TransactionDateRequest dateRequest =
           new TransactionDateRequest(clientSubmittedOnDate, clientDateFormat, locale);
@@ -1459,7 +1470,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
 
     log.info(
-        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}', legalFormId={}, isEntity={})",
+        "Self-enrollment client payload dates forced to tenant date='{}' (format='{}', locale='{}',"
+            + " legalFormId={}, isEntity={})",
         tenantToday,
         clientDateFormat,
         locale,
@@ -1617,13 +1629,15 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return;
     }
 
-    Long documentTypeId = extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
+    Long documentTypeId =
+        extractLong(originalJson, SelfServiceApiConstants.documentTypeIdParamName);
 
     if (documentTypeId == null || !isValidDocumentTypeId(documentTypeId)) {
       Long resolved = resolveDefaultDocumentTypeId();
       if (resolved != null) {
         log.info(
-            "Self-enrollment: documentTypeId missing/invalid, using resolved Customer Identifier id={}",
+            "Self-enrollment: documentTypeId missing/invalid, using resolved Customer Identifier"
+                + " id={}",
             resolved);
         documentTypeId = resolved;
       } else {
@@ -1661,7 +1675,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
 
       log.info(
-          "Self-enrollment: client identifier created clientId={}, documentTypeId={}, documentKey={}, resourceId={}",
+          "Self-enrollment: client identifier created clientId={}, documentTypeId={},"
+              + " documentKey={}, resourceId={}",
           clientId,
           documentTypeId,
           documentKey,
@@ -1669,7 +1684,8 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       return true;
     } catch (Exception e) {
       log.error(
-          "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={}, documentKey={}",
+          "Self-enrollment: failed to create client identifier for clientId={}, documentTypeId={},"
+              + " documentKey={}",
           clientId,
           documentTypeId,
           documentKey,

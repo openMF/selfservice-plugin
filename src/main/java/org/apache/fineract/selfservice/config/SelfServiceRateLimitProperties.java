@@ -9,11 +9,10 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Configuration properties for self-service rate limiting.
- * Fetches values dynamically from the c_external_service tables when available,
- * otherwise falls back to safe defaults.  All lookups are performed in a
- * completely independent transaction so a missing table can never abort the
- * caller’s transaction.
+ * Configuration properties for self-service rate limiting. Fetches values dynamically from the
+ * c_external_service tables when available, otherwise falls back to safe defaults. All lookups are
+ * performed in a completely independent transaction so a missing table can never abort the caller’s
+ * transaction.
  */
 @Component
 @RequiredArgsConstructor
@@ -40,29 +39,35 @@ public class SelfServiceRateLimitProperties {
   }
 
   /**
-   * Runs in its own transaction (REQUIRES_NEW) so any SQLException
-   * (missing table, wrong tenant, etc.) is completely isolated.
+   * Runs in its own transaction (REQUIRES_NEW) so any SQLException (missing table, wrong tenant,
+   * etc.) is completely isolated.
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
   protected int getIntProperty(String key, int defaultValue) {
     try {
       ExternalServiceConfigurationData config =
           externalServiceConfigurationService.getConfiguration(SERVICE_NAME);
-      if (config != null && config.getProperties() != null && config.getProperties().containsKey(key)) {
+      if (config != null
+          && config.getProperties() != null
+          && config.getProperties().containsKey(key)) {
         int parsedValue = Integer.parseInt(config.get(key));
         if (parsedValue > 0) {
           return parsedValue;
         }
         log.warn(
             "Rate limit property '{}' must be > 0 but was {}. Falling back to default {}",
-            key, parsedValue, defaultValue);
+            key,
+            parsedValue,
+            defaultValue);
       }
     } catch (Exception e) {
       // Table may not exist, tenant context may be missing, etc.
       log.warn(
           "Failed to fetch rate-limit property '{}' from external service configuration "
               + "(falling back to default {}). Cause: {}",
-          key, defaultValue, e.getMessage());
+          key,
+          defaultValue,
+          e.getMessage());
     }
     return defaultValue;
   }

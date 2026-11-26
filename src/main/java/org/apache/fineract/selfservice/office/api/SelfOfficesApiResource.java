@@ -151,12 +151,9 @@ public class SelfOfficesApiResource {
     final String fields = uriInfo.getQueryParameters().getFirst("fields");
 
     final Set<String> requestedFields =
-        fields == null || fields.isBlank()
-            ? null
-            : new HashSet<>(Arrays.asList(fields.split(",")));
+        fields == null || fields.isBlank() ? null : new HashSet<>(Arrays.asList(fields.split(",")));
 
-    final boolean includeAddress =
-        requestedFields == null || requestedFields.contains("address");
+    final boolean includeAddress = requestedFields == null || requestedFields.contains("address");
 
     final boolean includeGeolocation =
         requestedFields == null || requestedFields.contains("geolocation");
@@ -206,8 +203,7 @@ public class SelfOfficesApiResource {
           if (address != null) {
             officeJson.set(
                 "address",
-                OBJECT_MAPPER.valueToTree(
-                    officeSwaggerMapper.toGetOfficeAddressResponse(address)));
+                OBJECT_MAPPER.valueToTree(officeSwaggerMapper.toGetOfficeAddressResponse(address)));
           }
         }
 
@@ -268,9 +264,7 @@ public class SelfOfficesApiResource {
     return toApiJsonSerializer.serialize(settings, office, RESPONSE_DATA_PARAMETERS);
   }
 
-  /**
-   * Retrieves a single office by its database identifier.
-   */
+  /** Retrieves a single office by its database identifier. */
   @GET
   @Path("{officeId}")
   @Produces({MediaType.APPLICATION_JSON})
@@ -308,9 +302,7 @@ public class SelfOfficesApiResource {
     return toApiJsonSerializer.serialize(settings, office, RESPONSE_DATA_PARAMETERS);
   }
 
-  /**
-   * Retrieves a single office by its external identifier.
-   */
+  /** Retrieves a single office by its external identifier. */
   @GET
   @Path("/external-id/{externalId}")
   @Produces({MediaType.APPLICATION_JSON})
@@ -342,9 +334,7 @@ public class SelfOfficesApiResource {
     return officeSwaggerMapper.toGetOfficesResponse(office);
   }
 
-  /**
-   * Retrieves the id, name, and external id of a specific office.
-   */
+  /** Retrieves the id, name, and external id of a specific office. */
   @GET
   @Path("{officeId}/details")
   @Produces({MediaType.APPLICATION_JSON})
@@ -374,9 +364,7 @@ public class SelfOfficesApiResource {
     return toApiJsonSerializer.serializeResult(data);
   }
 
-  /**
-   * Retrieves the list of services offered by a specific office.
-   */
+  /** Retrieves the list of services offered by a specific office. */
   @GET
   @Path("{officeId}/services")
   @Produces({MediaType.APPLICATION_JSON})
@@ -408,9 +396,7 @@ public class SelfOfficesApiResource {
     return toApiJsonSerializer.serializeResult(data);
   }
 
-  /**
-   * Retrieves the latitude and longitude of a specific office.
-   */
+  /** Retrieves the latitude and longitude of a specific office. */
   @GET
   @Path("{officeId}/geolocation")
   @Produces({MediaType.APPLICATION_JSON})
@@ -440,9 +426,7 @@ public class SelfOfficesApiResource {
     return toApiJsonSerializer.serializeResult(data);
   }
 
-  /**
-   * Retrieves the physical address of a specific office.
-   */
+  /** Retrieves the physical address of a specific office. */
   @GET
   @Path("{officeId}/address")
   @Produces({MediaType.APPLICATION_JSON})

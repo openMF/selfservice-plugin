@@ -23,12 +23,13 @@ import org.springframework.util.StringUtils;
  * Builds {@code kycValidations} for self-service authentication.
  *
  * <p>Resolution order:
+ *
  * <ol>
- *   <li>Feature status with {@code kycStatus = Approved}</li>
- *   <li>Any verification with {@code kycStatus = Approved} (forces all flags true)</li>
- *   <li>Latest feature status for the client</li>
- *   <li>Latest verification status for the client</li>
- *   <li>Default Pending / all false</li>
+ *   <li>Feature status with {@code kycStatus = Approved}
+ *   <li>Any verification with {@code kycStatus = Approved} (forces all flags true)
+ *   <li>Latest feature status for the client
+ *   <li>Latest verification status for the client
+ *   <li>Default Pending / all false
  * </ol>
  */
 @Service
@@ -109,8 +110,8 @@ public class KycFeatureStatusReadService {
 
       // 5) Legacy feature lookup
       final Optional<KycFeatureStatus> legacy =
-          kycFeatureStatusRepository.findFirstByKycVerification_ClientIdOrderByKycVerification_IdDesc(
-              clientId);
+          kycFeatureStatusRepository
+              .findFirstByKycVerification_ClientIdOrderByKycVerification_IdDesc(clientId);
       if (legacy.isPresent()) {
         return toData(legacy.get());
       }
@@ -158,7 +159,8 @@ public class KycFeatureStatusReadService {
     }
     if (onboardingComplete || kycStepsComplete) {
       LOG.info(
-          "KYC auth: clientId={} DB Pending/empty but onboardingComplete={} kycStepsComplete={} → Approved",
+          "KYC auth: clientId={} DB Pending/empty but onboardingComplete={} kycStepsComplete={} →"
+              + " Approved",
           clientId,
           onboardingComplete,
           kycStepsComplete);

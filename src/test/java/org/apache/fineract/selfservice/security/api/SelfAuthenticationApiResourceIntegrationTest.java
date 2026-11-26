@@ -24,7 +24,8 @@ class SelfAuthenticationApiResourceIntegrationTest extends SelfServiceIntegratio
   @Test
   @DisplayName("POST /v1/self/authentication with missing credentials returns 400")
   void authenticate_missingCredentials_returns400() {
-    // Proves the web server is up and the endpoint rejects empty credentials with a validation error
+    // Proves the web server is up and the endpoint rejects empty credentials with a validation
+    // error
     String emptyBody = "{}";
 
     given(SelfServiceTestUtils.requestSpec(getFineractPort()))
