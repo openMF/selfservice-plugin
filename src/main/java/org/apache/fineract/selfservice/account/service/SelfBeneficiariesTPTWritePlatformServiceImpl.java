@@ -418,12 +418,15 @@ public class SelfBeneficiariesTPTWritePlatformServiceImpl
 
     // Prevent unique constraint violation on (name, app_selfservice_user_id, is_active)
     // by appending a unique suffix to the name upon soft deletion.
+    // Truncate base name if needed so that baseName + suffix never exceeds column length of 50.
     // This allows users to delete and later recreate a beneficiary with the same original name.
-    String originalName = beneficiary.getName();
-    String uniqueDeletedName =
-        originalName + "_deleted_" + beneficiary.getId() + "_" + System.currentTimeMillis();
+    String originalName = beneficiary.getName() != null ? beneficiary.getName() : "";
+    String suffix = "_del_" + beneficiary.getId() + "_" + (System.currentTimeMillis() % 100000);
+    int maxBaseLen = 50 - suffix.length();
+    String baseName =
+        originalName.length() > maxBaseLen ? originalName.substring(0, maxBaseLen) : originalName;
 
-    beneficiary.setName(uniqueDeletedName);
+    beneficiary.setName(baseName + suffix);
     beneficiary.setActive(false);
 
     this.repository.save(beneficiary);
