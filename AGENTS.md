@@ -164,7 +164,7 @@ Fineract image (`${fineract.it.image}`). These must be compatible because the
 plugin's classes must exist in the image's `/app/libs`.
 
 - `fineract.version` is currently `0.0.1706-5309ee1`
-- `fineract.it.image` is pinned to a compatible Fineract image digest in `pom.xml`.
+- `fineract.it.image` is currently `apache/fineract:develop`
 
 When bumping `fineract.version`, verify that every Fineract class the plugin
 imports (e.g. `ChargeReadService`, `ShareAccountApiConstants`,
