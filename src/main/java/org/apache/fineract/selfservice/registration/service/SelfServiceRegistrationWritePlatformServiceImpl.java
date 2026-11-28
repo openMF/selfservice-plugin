@@ -32,6 +32,7 @@ import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
@@ -43,10 +44,12 @@ import org.apache.fineract.infrastructure.security.domain.BasicPasswordEncodable
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.onboarding.domain.OnboardingProgressData;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
+import org.apache.fineract.portfolio.client.command.ClientIdentifierCreateCommand;
+import org.apache.fineract.portfolio.client.data.ClientIdentifierCreateRequest;
+import org.apache.fineract.portfolio.client.data.ClientIdentifierCreateResponse;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
-import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.api.data.TransactionDateRequest;
 import org.apache.fineract.selfservice.notification.SelfServiceNotificationEvent;
@@ -123,7 +126,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
    */
   private final TransactionDateManagementService transactionDateManagementService;
 
-  private final ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
+  private final CommandDispatcher commandDispatcher;
 
   private final SelfServiceDeviceFingerprintService deviceFingerprintService;
 
@@ -146,6 +149,9 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
 
   /** Fineract legal form id for Entity (non-person). */
   private static final int LEGAL_FORM_ENTITY = 2;
+
+  /** Unique constraint that allows only one self-service user per client. */
+  private static final String CLIENT_MAPPING_UNIQUE_CONSTRAINT = "unique_self_client";
 
   @Override
   public SelfServiceRegistration createRegistrationRequest(String apiRequestBodyAsJson) {
@@ -273,11 +279,16 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         mobileNumber,
         isEmailAuthenticationMode);
 
+    // Only checked once the caller has matched the client, so an account number alone doesn't
+    // reveal whether the client has a self-service user.
+    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
+    if (this.appUserClientMappingRepository.existsByClientId(client.getId())) {
+      throw buildClientAlreadyRegisteredConflict();
+    }
+
     String authenticationToken = selfServiceAuthorizationTokenService.generateToken();
     // Tenant-aware clock — never system LocalDateTime.now()
     LocalDateTime createdAt = transactionDateUtil.getCurrentTenantLocalDateTime();
-
-    Client client = this.clientRepository.getClientByAccountNumber(accountNumber);
 
     SelfServiceRegistration selfServiceRegistration =
         SelfServiceRegistration.instance(
@@ -349,6 +360,17 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         userId,
         pendingConfirmation,
         onboarding);
+  }
+
+  /**
+   * A client can have only one self-service user. The caller isn't logged in, so the message names
+   * neither the client nor its existing user.
+   */
+  private SelfServiceEnrollmentConflictException buildClientAlreadyRegisteredConflict() {
+    return new SelfServiceEnrollmentConflictException(
+        "error.msg.self.service.client.already.linked",
+        "This client already has a self-service user.",
+        SelfServiceApiConstants.accountNumberParamName);
   }
 
   private void throwExceptionIfValidationError(
@@ -491,6 +513,11 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
       String normalizedMessage = realCause.getMessage().toLowerCase();
       if (normalizedMessage.contains("username") || normalizedMessage.contains("username_org")) {
         throw buildDuplicateUsernameConflict(username);
+      }
+      // A registration created before the client got its user, or two registrations for the same
+      // client at once, pass the check in createRegistrationRequest and only fail here.
+      if (normalizedMessage.contains(CLIENT_MAPPING_UNIQUE_CONSTRAINT)) {
+        throw buildClientAlreadyRegisteredConflict();
       }
     }
     throw ErrorHandler.getMappable(
@@ -1643,17 +1670,20 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
     }
 
     try {
-      JsonObject identifierJson = new JsonObject();
-      identifierJson.addProperty("documentTypeId", documentTypeId);
-      identifierJson.addProperty("documentKey", documentKey);
-      identifierJson.addProperty("status", "Active");
-      identifierJson.addProperty("description", "");
+      ClientIdentifierCreateRequest request =
+          ClientIdentifierCreateRequest.builder()
+              .clientId(clientId)
+              .documentTypeId(documentTypeId)
+              .documentKey(documentKey)
+              .status("Active")
+              .description("")
+              .build();
 
-      JsonCommand identifierCommand =
-          JsonCommand.fromJsonElement(clientId, identifierJson, this.fromApiJsonHelper);
+      ClientIdentifierCreateCommand command = new ClientIdentifierCreateCommand();
+      command.setPayload(request);
 
-      CommandProcessingResult identifierResult =
-          clientIdentifierWritePlatformService.addClientIdentifier(clientId, identifierCommand);
+      ClientIdentifierCreateResponse response =
+          (ClientIdentifierCreateResponse) commandDispatcher.dispatch(command).get();
 
       log.info(
           "Self-enrollment: client identifier created clientId={}, documentTypeId={},"
@@ -1661,7 +1691,7 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           clientId,
           documentTypeId,
           documentKey,
-          identifierResult != null ? identifierResult.getResourceId() : null);
+          response != null ? response.getResourceId() : null);
       return true;
     } catch (Exception e) {
       log.error(
