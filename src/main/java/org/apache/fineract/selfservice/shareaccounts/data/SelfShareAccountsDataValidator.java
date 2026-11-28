@@ -67,6 +67,13 @@ public class SelfShareAccountsDataValidator {
     HashMap<String, Object> retAttr = new HashMap<>();
     retAttr.put(ShareAccountApiConstants.clientid_paramname, Long.parseLong(clientId));
 
+    final Long savingsAccountId =
+        this.fromApiJsonHelper.extractLongNamed(
+            ShareAccountApiConstants.savingsaccountid_paramname, element);
+    if (savingsAccountId != null) {
+      retAttr.put(ShareAccountApiConstants.savingsaccountid_paramname, savingsAccountId);
+    }
+
     return retAttr;
   }
 }

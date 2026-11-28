@@ -45,5 +45,14 @@ class SelfShareAccountsDataValidatorTest {
     String json = "{\"clientId\": \"15\"}";
     HashMap<String, Object> result = validator.validateShareAccountApplication(json);
     assertEquals(15L, result.get("clientId"));
+    assertNull(result.get("savingsAccountId"));
+  }
+
+  @Test
+  void validateShareAccountApplication_shouldExtractSavingsAccountIdWhenPresent() {
+    String json = "{\"clientId\": \"15\", \"savingsAccountId\": 25}";
+    HashMap<String, Object> result = validator.validateShareAccountApplication(json);
+    assertEquals(15L, result.get("clientId"));
+    assertEquals(25L, result.get("savingsAccountId"));
   }
 }
