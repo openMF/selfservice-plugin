@@ -182,6 +182,11 @@ public class SelfShareAccountsApiResource {
             toApiJsonSerializer.serialize(apiRequestBodyAsJson));
     final Long clientId = (Long) attr.get(ShareAccountApiConstants.clientid_paramname);
     validateAppuserClientsMapping(clientId);
+    final Long savingsAccountId =
+        attr.containsKey(ShareAccountApiConstants.savingsaccountid_paramname)
+            ? (Long) attr.get(ShareAccountApiConstants.savingsaccountid_paramname)
+            : apiRequestBodyAsJson.getSavingsAccountId();
+    validateAppuserSavingsAccountMapping(savingsAccountId);
     String accountType = ShareAccountApiConstants.shareEntityType;
     return accountsApiResource.createAccount(accountType, apiRequestBodyAsJson);
   }
@@ -210,5 +215,9 @@ public class SelfShareAccountsApiResource {
 
   private void validateAppuserClientsMapping(final Long clientId) {
     this.selfServiceOwnershipGuard.validateClientOwnership(clientId);
+  }
+
+  private void validateAppuserSavingsAccountMapping(final Long savingsAccountId) {
+    this.selfServiceOwnershipGuard.validateSavingsOwnership(savingsAccountId);
   }
 }
