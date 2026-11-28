@@ -52,6 +52,7 @@ public class SelfServiceDeviceFingerprint {
   private LocalDateTime lastSeenAt;
 
   @Column(name = "trusted", nullable = false)
+  @Builder.Default
   private boolean trusted = true;
 
   public void touch(LocalDateTime now) {

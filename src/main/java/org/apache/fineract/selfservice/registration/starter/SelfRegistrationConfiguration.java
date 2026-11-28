@@ -6,13 +6,13 @@
  */
 package org.apache.fineract.selfservice.registration.starter;
 
+import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
-import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.notification.NotificationCooldownCache;
 import org.apache.fineract.selfservice.notification.util.NotificationDeliveryModeUtil;
@@ -81,7 +81,7 @@ public class SelfRegistrationConfiguration {
       ApplicationEventPublisher applicationEventPublisher,
       TransactionDateUtil transactionDateUtil,
       TransactionDateManagementService transactionDateManagementService,
-      ClientIdentifierWritePlatformService clientIdentifierWritePlatformService,
+      CommandDispatcher commandDispatcher,
       SelfServiceDeviceFingerprintService deviceFingerprintService,
       SelfServiceOnboardingStepService onboardingStepService) {
 
@@ -105,7 +105,7 @@ public class SelfRegistrationConfiguration {
         applicationEventPublisher,
         transactionDateUtil,
         transactionDateManagementService,
-        clientIdentifierWritePlatformService,
+        commandDispatcher,
         deviceFingerprintService,
         onboardingStepService);
   }
