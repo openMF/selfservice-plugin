@@ -23,7 +23,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <fineract.version>0.0.1706-5309ee1</fineract.version>
+    <fineract.version>0.0.1748-ae8cc63</fineract.version>
     <!-- IT container image. Must be compatible with fineract.version above:
          the plugin's classes (e.g. ChargeReadService) must exist in the image's /app/libs.
          Bump both together when upgrading Fineract. -->
