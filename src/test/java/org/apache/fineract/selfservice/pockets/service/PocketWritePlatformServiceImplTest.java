@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.gson.JsonElement;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import org.apache.fineract.infrastructure.accountnumberformat.domain.EntityAccountType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.selfservice.pockets.api.PocketApiConstants;
@@ -61,14 +63,17 @@ class PocketWritePlatformServiceImplTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new PocketWritePlatformServiceImpl(
-            context,
-            pocketDataValidator,
-            accountEntityServiceFactory,
-            pocketRepositoryWrapper,
-            pocketAccountMappingRepositoryWrapper,
-            pocketAccountMappingReadPlatformService);
+    service = createService(pocketDataValidator);
+  }
+
+  private PocketWritePlatformServiceImpl createService(PocketDataValidator validator) {
+    return new PocketWritePlatformServiceImpl(
+        context,
+        validator,
+        accountEntityServiceFactory,
+        pocketRepositoryWrapper,
+        pocketAccountMappingRepositoryWrapper,
+        pocketAccountMappingReadPlatformService);
   }
 
   private void mockAuthenticatedUser() {
@@ -216,5 +221,17 @@ class PocketWritePlatformServiceImplTest {
     assertEquals(POCKET_ID, result.getResourceId());
     verify(pocketDataValidator).validateForDeLinkingAccounts(any());
     verify(pocketAccountMappingRepositoryWrapper).delete(List.of(mapping10, mapping11));
+  }
+
+  @Test
+  void delinkAccounts_mixedValidAndInvalidIds_leavesAllMappingsLinked() {
+    PocketWritePlatformServiceImpl serviceWithValidation =
+        createService(new PocketDataValidator(fromJsonHelper));
+    JsonCommand request = command("{\"pocketAccountMappingIds\":[10,11.5]}");
+
+    assertThrows(
+        PlatformApiDataValidationException.class,
+        () -> serviceWithValidation.delinkAccounts(request));
+    verifyNoInteractions(pocketRepositoryWrapper, pocketAccountMappingRepositoryWrapper);
   }
 }

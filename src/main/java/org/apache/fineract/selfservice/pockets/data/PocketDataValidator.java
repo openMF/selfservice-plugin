@@ -151,20 +151,21 @@ public class PocketDataValidator {
 
     if (pocketAccountMappingList != null) {
       for (JsonElement pocketAccountMapping : pocketAccountMappingList) {
-
-        // Guard against non-numeric elements (e.g. {}, null, "abc") so a malformed payload
-        // surfaces as a client validation error instead of a runtime getAsLong() failure.
-        Long mappingId = null;
-        if (pocketAccountMapping != null
-            && pocketAccountMapping.isJsonPrimitive()
-            && pocketAccountMapping.getAsJsonPrimitive().isNumber()) {
-          mappingId = pocketAccountMapping.getAsLong();
+        final DataValidatorBuilder mappingValidator =
+            baseDataValidator.reset().parameter(PocketApiConstants.pocketAccountMappingId);
+        if (pocketAccountMapping == null
+            || !pocketAccountMapping.isJsonPrimitive()
+            || !pocketAccountMapping.getAsJsonPrimitive().isNumber()) {
+          mappingValidator.value(null).notBlank();
+          continue;
         }
-        baseDataValidator
-            .reset()
-            .parameter(PocketApiConstants.pocketAccountMappingId)
-            .value(mappingId)
-            .notBlank();
+
+        try {
+          pocketAccountMapping.getAsBigDecimal().longValueExact();
+        } catch (ArithmeticException | NumberFormatException e) {
+          mappingValidator.failWithCodeAndMessage(
+              "invalid.integer", "Each pocket account mapping ID must be a signed 64-bit integer.");
+        }
       }
     }
 
