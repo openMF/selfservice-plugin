@@ -490,6 +490,10 @@ public class SelfSavingsAccountApiResource {
     if (WITHDRAWN_BY_APPLICANT.equalsIgnoreCase(StringUtils.trimToEmpty(commandParam))) {
       return withdrawApplication(accountId, apiRequestBodyAsJson, httpRequest);
     }
+    if (StringUtils.isNotBlank(commandParam)) {
+      throw new UnrecognizedQueryParamException("command", commandParam);
+    }
+
     HashMap<String, Object> attr =
         this.dataValidator.validateSavingsApplication(apiRequestBodyAsJson);
     // Fineract moves the account to the client (or group) given in the body, so the client must be
@@ -502,7 +506,7 @@ public class SelfSavingsAccountApiResource {
     rejectGroupId(apiRequestBodyAsJson);
 
     String responseJson =
-        this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, commandParam);
+        this.savingsAccountsApiResource.update(accountId, apiRequestBodyAsJson, null);
 
     Map<String, Object> contextData = new HashMap<>();
     try {
