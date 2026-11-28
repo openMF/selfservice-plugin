@@ -17,6 +17,8 @@ import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterExc
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class PocketDataValidatorTest {
 
@@ -143,8 +145,19 @@ class PocketDataValidatorTest {
 
   @Test
   void validateForDeLinkingAccounts_shouldAcceptValidPayload() {
-    String json = "{\"pocketAccountMappingIds\":[10,11]}";
+    String json = "{\"pocketAccountMappingIds\":[10,11,9223372036854775807]}";
     assertDoesNotThrow(() -> validator.validateForDeLinkingAccounts(json));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"10.9", "18446744073709551626", "-9223372036854775809", "1e2147483648"})
+  void validateForDeLinkingAccounts_shouldRejectIdsThatCannotBeConvertedExactly(String invalidId) {
+    String json = "{\"pocketAccountMappingIds\":[" + invalidId + "]}";
+    PlatformApiDataValidationException error =
+        assertThrows(
+            PlatformApiDataValidationException.class,
+            () -> validator.validateForDeLinkingAccounts(json));
+    assertEquals("pocketAccountMappingId", error.getErrors().getFirst().getParameterName());
   }
 
   @Test
