@@ -254,10 +254,10 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         .notExceedingLengthOf(100);
 
     boolean isEmailAuthenticationMode =
-        authenticationMode.equalsIgnoreCase(SelfServiceApiConstants.emailModeParamName);
+        SelfServiceApiConstants.emailModeParamName.equalsIgnoreCase(authenticationMode);
 
     String mobileNumber = null;
-    if (!isEmailAuthenticationMode) {
+    if (SelfServiceApiConstants.mobileModeParamName.equalsIgnoreCase(authenticationMode)) {
       mobileNumber =
           this.fromApiJsonHelper.extractStringNamed(
               SelfServiceApiConstants.mobileNumberParamName, element);
@@ -266,18 +266,17 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
           .parameter(SelfServiceApiConstants.mobileNumberParamName)
           .value(mobileNumber)
           .notNull()
+          .ignoreIfNull()
           .validatePhoneNumber();
+    }
+    // Report bad input as a 400 before the duplicate-username check can turn it into a 409
+    if (!dataValidationErrors.isEmpty()) {
+      throw new PlatformApiDataValidationException(dataValidationErrors);
     }
     validateForDuplicateUsername(username);
 
-    throwExceptionIfValidationError(
-        dataValidationErrors,
-        accountNumber,
-        firstName,
-        middleName,
-        lastName,
-        mobileNumber,
-        isEmailAuthenticationMode);
+    validateClientExists(
+        accountNumber, firstName, middleName, lastName, mobileNumber, isEmailAuthenticationMode);
 
     // Only checked once the caller has matched the client, so an account number alone doesn't
     // reveal whether the client has a self-service user.
@@ -373,17 +372,13 @@ public class SelfServiceRegistrationWritePlatformServiceImpl
         SelfServiceApiConstants.accountNumberParamName);
   }
 
-  private void throwExceptionIfValidationError(
-      final List<ApiParameterError> dataValidationErrors,
+  private void validateClientExists(
       String accountNumber,
       String firstName,
       String middleName,
       String lastName,
       String mobileNumber,
       boolean isEmailAuthenticationMode) {
-    if (!dataValidationErrors.isEmpty()) {
-      throw new PlatformApiDataValidationException(dataValidationErrors);
-    }
     boolean isClientExist =
         this.selfServiceRegistrationReadPlatformService.isClientExist(
             accountNumber,
