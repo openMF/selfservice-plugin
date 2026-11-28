@@ -33,7 +33,9 @@ import org.apache.fineract.portfolio.accounts.data.AccountData;
 import org.apache.fineract.portfolio.accounts.data.request.AccountRequest;
 import org.apache.fineract.portfolio.charge.service.ChargeReadService;
 import org.apache.fineract.portfolio.products.service.ShareProductReadPlatformService;
+import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.portfolio.shareaccounts.service.ShareAccountReadPlatformService;
+import org.apache.fineract.selfservice.security.exception.SelfServiceAccessDeniedException;
 import org.apache.fineract.selfservice.security.guard.SelfServiceOwnershipGuard;
 import org.apache.fineract.selfservice.security.service.PlatformSelfServiceSecurityContext;
 import org.apache.fineract.selfservice.shareaccounts.data.SelfShareAccountsDataValidator;
@@ -103,6 +105,7 @@ class SelfShareAccountsApiResourceTest {
 
     assertSame(expected, result);
     verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(5L);
   }
 
   @Test
@@ -110,6 +113,7 @@ class SelfShareAccountsApiResourceTest {
     assertThrows(InvalidJsonException.class, () -> resource.createAccount(null));
 
     verify(selfServiceOwnershipGuard, never()).validateClientOwnership(anyLong());
+    verify(selfServiceOwnershipGuard, never()).validateSavingsOwnership(anyLong());
     verify(accountsApiResource, never()).createAccount(anyString(), any());
   }
 
@@ -120,6 +124,7 @@ class SelfShareAccountsApiResourceTest {
 
     assertThrows(PlatformApiDataValidationException.class, () -> resource.createAccount(request));
 
+    verify(selfServiceOwnershipGuard, never()).validateSavingsOwnership(anyLong());
     verify(accountsApiResource, never()).createAccount(anyString(), any());
   }
 
@@ -132,6 +137,64 @@ class SelfShareAccountsApiResourceTest {
 
     assertThrows(NoAuthorizationException.class, () -> resource.createAccount(request));
 
+    verify(selfServiceOwnershipGuard, never()).validateSavingsOwnership(anyLong());
+    verify(accountsApiResource, never()).createAccount(anyString(), any());
+  }
+
+  @Test
+  void createShareAccount_withUnownedSavingsAccount_throwsForbiddenException() {
+    final AccountRequest request = validRequest();
+    doThrow(new NoAuthorizationException("not your savings account"))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(5L);
+
+    assertThrows(NoAuthorizationException.class, () -> resource.createAccount(request));
+
+    verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(5L);
+    verify(accountsApiResource, never()).createAccount(anyString(), any());
+  }
+
+  @Test
+  void createShareAccount_withUnownedSavingsAccount_throwsAccessDeniedException() {
+    final AccountRequest request = validRequest();
+    doThrow(new SelfServiceAccessDeniedException(1L, "SAVINGS_ACCOUNT", 5L))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(5L);
+
+    assertThrows(SelfServiceAccessDeniedException.class, () -> resource.createAccount(request));
+
+    verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(5L);
+    verify(accountsApiResource, never()).createAccount(anyString(), any());
+  }
+
+  @Test
+  void createShareAccount_withUnownedSavingsAccount_throwsSavingsAccountNotFoundException() {
+    final AccountRequest request = validRequest();
+    doThrow(new SavingsAccountNotFoundException(5L))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(5L);
+
+    assertThrows(SavingsAccountNotFoundException.class, () -> resource.createAccount(request));
+
+    verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(5L);
+    verify(accountsApiResource, never()).createAccount(anyString(), any());
+  }
+
+  @Test
+  void createAccount_nullSavingsAccountId_throwsAccessDeniedAndNeverCreatesAccount() {
+    final AccountRequest request = validRequest();
+    request.setSavingsAccountId(null);
+    doThrow(new SelfServiceAccessDeniedException(1L, "SAVINGS_ACCOUNT", (Long) null))
+        .when(selfServiceOwnershipGuard)
+        .validateSavingsOwnership(null);
+
+    assertThrows(SelfServiceAccessDeniedException.class, () -> resource.createAccount(request));
+
+    verify(selfServiceOwnershipGuard).validateClientOwnership(CLIENT_ID);
+    verify(selfServiceOwnershipGuard).validateSavingsOwnership(null);
     verify(accountsApiResource, never()).createAccount(anyString(), any());
   }
 }

@@ -126,7 +126,7 @@ public class PocketWritePlatformServiceImpl implements PocketWritePlatformServic
 
     for (JsonElement mapping : pocketAccountMappingList) {
 
-      final Long mappingId = mapping.getAsLong();
+      final Long mappingId = mapping.getAsBigDecimal().longValueExact();
 
       PocketAccountMapping pocketAccountMapping =
           this.pocketAccountMappingRepositoryWrapper.findByIdAndPocketIdWithNotFoundException(
