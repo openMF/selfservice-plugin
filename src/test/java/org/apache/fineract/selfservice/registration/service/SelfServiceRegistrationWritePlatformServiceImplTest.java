@@ -35,13 +35,13 @@ import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.TransactionDateManagementService;
 import org.apache.fineract.infrastructure.core.util.TransactionDateUtil;
+import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncoder;
 import org.apache.fineract.onboarding.service.SelfServiceOnboardingStepService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
-import org.apache.fineract.portfolio.client.service.ClientIdentifierWritePlatformService;
 import org.apache.fineract.portfolio.client.service.ClientWritePlatformService;
 import org.apache.fineract.selfservice.registration.SelfServiceApiConstants;
 import org.apache.fineract.selfservice.registration.domain.SelfServiceRegistration;
@@ -97,7 +97,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private TransactionDateUtil transactionDateUtil;
   @Mock private TransactionDateManagementService transactionDateManagementService;
-  @Mock private ClientIdentifierWritePlatformService clientIdentifierWritePlatformService;
+  @Mock private CommandDispatcher commandDispatcher;
   @Mock private SelfServiceDeviceFingerprintService deviceFingerprintService;
   @Mock private SelfServiceOnboardingStepService onboardingStepService;
   @Mock private HttpServletRequest httpServletRequest;
@@ -127,7 +127,7 @@ class SelfServiceRegistrationWritePlatformServiceImplTest {
             applicationEventPublisher,
             transactionDateUtil,
             transactionDateManagementService,
-            clientIdentifierWritePlatformService,
+            commandDispatcher,
             deviceFingerprintService,
             onboardingStepService);
 
